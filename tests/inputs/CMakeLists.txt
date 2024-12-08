@@ -1,0 +1,1 @@
+add_mattc_library(mattc_vec vec.mc)

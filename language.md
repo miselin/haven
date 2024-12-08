@@ -221,6 +221,19 @@ Any expression can be used as a statement. They should be terminated by a semico
 
 ```
 
+### Loops
+
+```
+iter <start>..<end>[..<step>] <index-var> { ... } // statement - iterate over a range of integers
+map <array-var> <element-var> { ... } // expression (returns array of block type, which may differ from the input)
+each <array-var> <element-var> { ... } // statement (void block)
+reduce <array-var> <init-value> <accumulator> { ... }
+```
+
 ## Other ideas
 
 first class vector support: `fvec<N>` for floating point vectors, `ivec<N>` for integer vectors
+
+```
+
+```

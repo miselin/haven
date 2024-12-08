@@ -39,12 +39,19 @@ enum token_id {
   TOKEN_COLON,       // :
   TOKEN_PERIOD,      // .
   TOKEN_INTO,        // =>
+  TOKEN_LBRACKET,    // [
+  TOKEN_RBRACKET,    // ]
+  TOKEN_TILDE,       // ~
+  TOKEN_DOTDOT,      // ..
+  TOKEN_LSHIFT,      // <<
+  TOKEN_RSHIFT,      // >>
 
   // keywords
   TOKEN_KW_PUB = 100,  // pub
   TOKEN_KW_FN,         // fn
   TOKEN_KW_MUT,        // mut
   TOKEN_KW_IF,         // if
+  TOKEN_KW_ELSE,       // else
   TOKEN_KW_LET,        // let
   TOKEN_KW_FOR,        // for
   TOKEN_KW_WHILE,      // while
@@ -52,6 +59,12 @@ enum token_id {
   TOKEN_KW_CONTINUE,   // continue
   TOKEN_KW_MATCH,      // match
   TOKEN_KW_AS,         // as
+  TOKEN_KW_NEG,        // neg
+  TOKEN_KW_ITER,       // iter
+  TOKEN_KW_REF,        // ref
+  TOKEN_KW_STORE,      // store
+  TOKEN_KW_LOAD,       // load
+  TOKEN_KW_RETURN,     // ret
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

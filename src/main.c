@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "cfold.h"
 #include "codegen.h"
 #include "lex.h"
 #include "parse.h"
@@ -9,12 +10,27 @@
 #include "utility.h"
 
 int main(int argc, char *argv[]) {
-  UNUSED(argc);
-  UNUSED(argv);
+  FILE *in = stdin;
+  if (argc > 1) {
+    in = fopen(argv[1], "r");
+    if (!in) {
+      perror("fopen");
+      return 1;
+    }
+  }
+
+  FILE *out = stdout;
+  if (argc > 2) {
+    out = fopen(argv[2], "w");
+    if (!out) {
+      perror("fopen");
+      return 1;
+    }
+  }
 
   int rc = 0;
 
-  struct lex_state *lexer = new_lexer(stdin);
+  struct lex_state *lexer = new_lexer(in);
   struct parser *parser = new_parser(lexer);
 
   if (parser_run(parser) < 0) {
@@ -25,20 +41,40 @@ int main(int argc, char *argv[]) {
   destroy_lexer(lexer);
 
   if (rc == 0) {
+    // fprintf(stderr, "== Pre-constant-folding AST ==\n");
+    // dump_ast(parser_get_ast(parser));
+
+    struct cfolder *cfolder = new_cfolder(parser_get_ast(parser));
+    rc = cfolder_run(cfolder);
+    destroy_cfolder(cfolder);
+  }
+
+  if (rc == 0) {
+    fprintf(stderr, "== Pre-typecheck AST ==\n");
+    dump_ast(parser_get_ast(parser));
+
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser));
     rc = typecheck_run(typecheck);
     destroy_typecheck(typecheck);
   }
 
   if (rc == 0) {
+    fprintf(stderr, "== Finalized AST ==\n");
+    dump_ast(parser_get_ast(parser));
+
     struct codegen *codegen = new_codegen(parser_get_ast(parser));
     rc = codegen_run(codegen);
     if (rc == 0) {
       char *ir = codegen_ir(codegen);
-      printf("%s\n", ir);
+      fprintf(out, "%s\n", ir);
       codegen_dispose_ir(ir);
     }
     destroy_codegen(codegen);
+  }
+
+  if (rc) {
+    fprintf(stderr, "== Partial AST after failure ==\n");
+    dump_ast(parser_get_ast(parser));
   }
 
   destroy_parser(parser);

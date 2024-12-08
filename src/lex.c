@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "tokens.h"
@@ -34,6 +35,7 @@ int lexer_eof(struct lex_state *state) {
   return feof(state->stream) && state->buf_head == state->buf_tail;
 }
 
+/*
 static int lex_number(struct lex_state *state, uint64_t *out) {
   uint64_t v = 0;
   char c = lex_getc(state);
@@ -46,6 +48,7 @@ static int lex_number(struct lex_state *state, uint64_t *out) {
   lex_unget(state, c);
   return 0;
 }
+*/
 
 static int lex_integer_type(struct lex_state *state, struct token *token, char c) {
   int is_signed = c == 'i';
@@ -61,6 +64,9 @@ static int lex_integer_type(struct lex_state *state, struct token *token, char c
     bits = bits * 10 + (c - '0');
     c = lex_getc(state);
   }
+
+  // put back the non-digit
+  lex_unget(state, c);
 
   if (!bits) {
     fprintf(stderr, "integer type must have at least 1 bit\n");
@@ -110,8 +116,14 @@ static int lex_integer(struct lex_state *state, struct token *token, char c) {
 
     if (base != 10) {
       c = lex_getc(state);
+    } else {
+      lex_unget(state, c);
+      c = '0';
     }
   }
+
+  char fpbuf[256] = {0};
+  char *buf = &fpbuf[0];
 
   uint64_t vs[2];
   int is_float = 0;
@@ -121,6 +133,7 @@ static int lex_integer(struct lex_state *state, struct token *token, char c) {
     uint64_t v = 0;
     while (isdigit_base(c, base)) {
       v = (v * base) + (c - '0');
+      *buf++ = c;
       c = lex_getc(state);
     }
 
@@ -128,6 +141,7 @@ static int lex_integer(struct lex_state *state, struct token *token, char c) {
 
     if (c == '.') {
       is_float = 1;
+      buf = &fpbuf[128];
       c = lex_getc(state);
     } else {
       break;
@@ -136,7 +150,9 @@ static int lex_integer(struct lex_state *state, struct token *token, char c) {
 
   if (is_float) {
     token->ident = TOKEN_FLOAT;
-    token->value.floatv.length = snprintf(token->value.floatv.buf, 256, "%lu.%lu", vs[0], vs[1]);
+    memset(token->value.floatv.buf, 0, 256);
+    token->value.floatv.length =
+        snprintf(token->value.floatv.buf, 256, "%s.%s", &fpbuf[0], &fpbuf[128]);
   } else {
     token->ident = TOKEN_INTEGER;
     token->value.intv.val = vs[0];
@@ -146,14 +162,15 @@ static int lex_integer(struct lex_state *state, struct token *token, char c) {
   return 0;
 }
 
-static int lex_vector_type(struct lex_state *state, struct token *token) {
+static int lex_vector_type(struct token *token) {
   // already got the fvec part
-  int rc = lex_number(state, &token->value.tyv.dimension);
-  if (rc != 0) {
-    return rc;
+  long dim = strtol(&token->value.identv.ident[4], NULL, 10);
+  if (dim < 0) {
+    fprintf(stderr, "invalid vector dimension %ld\n", dim);
+    return -1;
   }
-
   token->ident = TOKEN_TY_FVEC;
+  token->value.tyv.dimension = dim;
   return 0;
 }
 
@@ -205,9 +222,11 @@ static int lex_string_literal(struct lex_state *state, struct token *token) {
   return 0;
 }
 
-static int lex_maybe_keyword(struct lex_state *state, struct token *token) {
+static int lex_maybe_keyword(struct token *token) {
   if (!strcmp(token->value.identv.ident, "if")) {
     token->ident = TOKEN_KW_IF;
+  } else if (!strcmp(token->value.identv.ident, "else")) {
+    token->ident = TOKEN_KW_ELSE;
   } else if (!strcmp(token->value.identv.ident, "let")) {
     token->ident = TOKEN_KW_LET;
   } else if (!strcmp(token->value.identv.ident, "for")) {
@@ -226,8 +245,20 @@ static int lex_maybe_keyword(struct lex_state *state, struct token *token) {
     token->ident = TOKEN_KW_PUB;
   } else if (!strcmp(token->value.identv.ident, "mut")) {
     token->ident = TOKEN_KW_MUT;
+  } else if (!strcmp(token->value.identv.ident, "neg")) {
+    token->ident = TOKEN_KW_NEG;
   } else if (!strcmp(token->value.identv.ident, "fn")) {
     token->ident = TOKEN_KW_FN;
+  } else if (!strcmp(token->value.identv.ident, "iter")) {
+    token->ident = TOKEN_KW_ITER;
+  } else if (!strcmp(token->value.identv.ident, "ref")) {
+    token->ident = TOKEN_KW_REF;
+  } else if (!strcmp(token->value.identv.ident, "store")) {
+    token->ident = TOKEN_KW_STORE;
+  } else if (!strcmp(token->value.identv.ident, "load")) {
+    token->ident = TOKEN_KW_LOAD;
+  } else if (!strcmp(token->value.identv.ident, "ret")) {
+    token->ident = TOKEN_KW_RETURN;
   } else if (!strcmp(token->value.identv.ident, "float")) {
     token->ident = TOKEN_TY_FLOAT;
   } else if (!strcmp(token->value.identv.ident, "str")) {
@@ -237,7 +268,7 @@ static int lex_maybe_keyword(struct lex_state *state, struct token *token) {
   } else if (!strcmp(token->value.identv.ident, "void")) {
     token->ident = TOKEN_TY_VOID;
   } else if (!strncmp(token->value.identv.ident, "fvec", 4)) {
-    return lex_vector_type(state, token);
+    return lex_vector_type(token);
   }
 
   return 0;
@@ -333,10 +364,42 @@ int lexer_token(struct lex_state *state, struct token *token) {
     case '!':
       return lex_check_either(state, token, '=', TOKEN_NE, TOKEN_NOT);
       break;
-    case '<':
-      return lex_check_either(state, token, '=', TOKEN_LTE, TOKEN_LT);
-    case '>':
-      return lex_check_either(state, token, '=', TOKEN_GTE, TOKEN_GT);
+    case '<': {
+      char next = lex_getc(state);
+      if (next < 0) {
+        token->ident = TOKEN_LT;
+        return 0;
+      }
+
+      if (next == '<') {
+        token->ident = TOKEN_LSHIFT;
+      } else if (next == '=') {
+        token->ident = TOKEN_LTE;
+      } else {
+        token->ident = TOKEN_LT;
+        lex_unget(state, next);
+      }
+
+      return 0;
+    } break;
+    case '>': {
+      char next = lex_getc(state);
+      if (next < 0) {
+        token->ident = TOKEN_GT;
+        return 0;
+      }
+
+      if (next == '>') {
+        token->ident = TOKEN_RSHIFT;
+      } else if (next == '=') {
+        token->ident = TOKEN_GTE;
+      } else {
+        token->ident = TOKEN_GT;
+        lex_unget(state, next);
+      }
+
+      return 0;
+    } break;
     case '^':
       token->ident = TOKEN_BITXOR;
       break;
@@ -347,13 +410,22 @@ int lexer_token(struct lex_state *state, struct token *token) {
       token->ident = TOKEN_COLON;
       break;
     case '.':
-      token->ident = TOKEN_PERIOD;
+      return lex_check_either(state, token, '.', TOKEN_DOTDOT, TOKEN_PERIOD);
       break;
     case '"':
       token->ident = TOKEN_QUOTE;
       break;
     case '\'':
       token->ident = TOKEN_APOSTROPHE;
+      break;
+    case '[':
+      token->ident = TOKEN_LBRACKET;
+      break;
+    case ']':
+      token->ident = TOKEN_RBRACKET;
+      break;
+    case '~':
+      token->ident = TOKEN_TILDE;
       break;
     default: {
       if (!isalpha(c)) {
@@ -387,10 +459,12 @@ int lexer_token(struct lex_state *state, struct token *token) {
 
       // turn identifiers that are keywords into tokens now that we parsed the
       // whole identifier
-      return lex_maybe_keyword(state, token);
+      fprintf(stderr, "lex: ident '%s'\n", token->value.identv.ident);
+      return lex_maybe_keyword(token);
     }
   }
 
+  fprintf(stderr, "lex: %c -> %d\n", c, token->ident);
   return 0;
 }
 

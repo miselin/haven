@@ -50,6 +50,27 @@ void *kv_lookup(struct kv *kv, const char *key) {
   return NULL;
 }
 
+void kv_delete(struct kv *kv, const char *key) {
+  struct kv_node *cur = kv->head;
+  struct kv_node *prev = NULL;
+  while (cur) {
+    if (!strcmp(cur->key, key)) {
+      if (prev) {
+        prev->next = cur->next;
+      } else {
+        kv->head = cur->next;
+      }
+
+      free(cur->key);
+      free(cur);
+      return;
+    }
+
+    prev = cur;
+    cur = cur->next;
+  }
+}
+
 void destroy_kv(struct kv *kv) {
   struct kv_node *cur = kv->head;
   while (cur) {

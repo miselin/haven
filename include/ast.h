@@ -6,6 +6,7 @@
 
 #include "lex.h"
 #include "tokens.h"
+#include "types.h"
 
 #define DECL_FLAG_PUB (1 << 0)
 #define DECL_FLAG_MUT (1 << 1)
@@ -14,6 +15,9 @@
 
 #define AST_STMT_TYPE_EXPR 1
 #define AST_STMT_TYPE_LET 2
+#define AST_STMT_TYPE_ITER 3
+#define AST_STMT_TYPE_STORE 4
+#define AST_STMT_TYPE_RETURN 5
 
 #define AST_EXPR_TYPE_CONSTANT 1
 #define AST_EXPR_TYPE_BLOCK 2
@@ -24,6 +28,14 @@
 #define AST_EXPR_TYPE_DEREF 7
 #define AST_EXPR_TYPE_CALL 8
 #define AST_EXPR_TYPE_VOID 9
+#define AST_EXPR_TYPE_CAST 10
+#define AST_EXPR_TYPE_UNARY 11
+#define AST_EXPR_TYPE_IF 12
+#define AST_EXPR_TYPE_ASSIGN 13
+#define AST_EXPR_TYPE_REF 14
+#define AST_EXPR_TYPE_LOAD 15
+#define AST_EXPR_TYPE_BOOLEAN 16
+#define AST_EXPR_TYPE_ARRAY_INDEX 17
 
 #define AST_BINARY_OP_ADD 1
 #define AST_BINARY_OP_SUB 2
@@ -33,20 +45,15 @@
 #define AST_BINARY_OP_BITOR 6
 #define AST_BINARY_OP_BITAND 7
 #define AST_BINARY_OP_BITXOR 8
+#define AST_BINARY_OP_LSHIFT 9
+#define AST_BINARY_OP_RSHIFT 10
+
+#define AST_UNARY_OP_NEG 1
+#define AST_UNARY_OP_NOT 2
+#define AST_UNARY_OP_COMP 3
 
 #define AST_LOGICAL_OP_OR 1
 #define AST_LOGICAL_OP_AND 2
-
-enum ast_ty {
-  AST_TYPE_ERROR = 0,
-  AST_TYPE_TBD,  // yet to be determined by type checking pass
-  AST_TYPE_INTEGER,
-  AST_TYPE_STRING,
-  AST_TYPE_CHAR,
-  AST_TYPE_FLOAT,
-  AST_TYPE_FVEC,
-  AST_TYPE_VOID,
-};
 
 struct ast_program {
   struct ast_toplevel *decls;
@@ -54,7 +61,7 @@ struct ast_program {
 
 struct ast_vdecl {
   struct token ident;
-  enum ast_ty ty;
+  struct ast_ty ty;
 
   int flags;
 
@@ -63,7 +70,7 @@ struct ast_vdecl {
 
 struct ast_fdecl {
   struct token ident;
-  enum ast_ty retty;
+  struct ast_ty retty;
 
   int flags;
 
@@ -109,7 +116,7 @@ struct ast_expr_variable {
 
 struct ast_expr_deref {
   struct token ident;
-  struct token field;
+  int field;
 };
 
 struct ast_expr_list {
@@ -123,9 +130,50 @@ struct ast_expr_call {
   struct ast_expr_list *args;
 };
 
+struct ast_expr_cast {
+  struct ast_ty ty;
+  struct ast_expr *expr;
+};
+
+struct ast_expr_unary {
+  int op;
+  struct ast_expr *expr;
+};
+
+struct ast_expr_if {
+  struct ast_expr *cond;
+  int has_else;
+  struct ast_block then_block;
+  struct ast_block else_block;
+};
+
+struct ast_expr_assign {
+  struct token ident;
+  struct ast_expr *expr;
+};
+
+struct ast_expr_ref {
+  struct ast_expr *expr;
+};
+
+struct ast_expr_load {
+  struct ast_expr *expr;
+};
+
+struct ast_expr_boolean {
+  int op;
+  struct ast_expr *lhs;
+  struct ast_expr *rhs;
+};
+
+struct ast_expr_array_index {
+  struct token ident;
+  struct ast_expr *index;
+};
+
 struct ast_expr {
   int type;
-  enum ast_ty ty;
+  struct ast_ty ty;
   union {
     struct ast_expr_constant constant;
     struct ast_block block;
@@ -135,7 +183,35 @@ struct ast_expr {
     struct ast_expr_list *list;
     struct ast_expr_deref deref;
     struct ast_expr_call call;
+    struct ast_expr_cast cast;
+    struct ast_expr_unary unary;
+    struct ast_expr_if if_expr;
+    struct ast_expr_assign assign;
+    struct ast_expr_ref ref;
+    struct ast_expr_load load;
+    struct ast_expr_boolean boolean;
+    struct ast_expr_array_index array_index;
   };
+};
+
+struct ast_range {
+  struct ast_expr *start;
+  struct ast_expr *end;
+  struct ast_expr *step;  // if null, step is +1
+};
+
+struct ast_stmt_iter {
+  struct ast_range range;
+  struct ast_expr_variable index;
+  struct ast_block block;
+
+  // only set after typecheck pass
+  struct ast_vdecl *index_vdecl;
+};
+
+struct ast_stmt_store {
+  struct ast_expr *lhs;
+  struct ast_expr *rhs;
 };
 
 struct ast_stmt {
@@ -144,9 +220,13 @@ struct ast_stmt {
   union {
     struct ast_expr *expr;
     struct ast_vdecl let;
+    struct ast_stmt_iter iter;
+    struct ast_stmt_store store;
   };
 
   struct ast_stmt *next;
 };
+
+void dump_ast(struct ast_program *ast);
 
 #endif

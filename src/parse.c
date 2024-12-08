@@ -1,12 +1,15 @@
 #include "parse.h"
 
+#include <ctype.h>
 #include <malloc.h>
 #include <setjmp.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ast.h"
 #include "lex.h"
 #include "tokens.h"
+#include "types.h"
 #include "utility.h"
 
 struct parser {
@@ -27,8 +30,12 @@ static int parser_parse_toplevel(struct parser *parser);
 static int parse_block(struct parser *parser, struct ast_block *into);
 static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi);
 static struct ast_expr *parse_expression(struct parser *parser);
+static struct ast_expr *parse_condition(struct parser *parser);
 
-static enum ast_ty parse_type(struct parser *parser);
+static struct ast_ty parse_type(struct parser *parser);
+static struct ast_range parse_range(struct parser *parser);
+
+static int deref_to_index(const char *deref);
 
 static int binary_op(int token);
 
@@ -111,11 +118,10 @@ static int parser_consume(struct parser *parser, struct token *token, enum token
  * Parse a variable declaration - for use in function parameter lists
  */
 static struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
-  enum ast_ty ty = parse_type(parser);
-  if (ty == AST_TYPE_ERROR) {
+  struct ast_ty ty = parse_type(parser);
+  if (type_is_error(&ty)) {
     return NULL;
   }
-  parser_consume(parser, NULL, parser_peek(parser));
 
   struct ast_vdecl *vdecl = calloc(1, sizeof(struct ast_vdecl));
   vdecl->ty = ty;
@@ -129,10 +135,10 @@ static struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
 
 static int parser_parse_toplevel(struct parser *parser) {
   struct token token;
-  enum token_id tok = parser_peek(parser);
-  if (tok == TOKEN_UNKNOWN) {
+  enum token_id peek = parser_peek(parser);
+  if (peek == TOKEN_UNKNOWN) {
     return -1;
-  } else if (tok == TOKEN_EOF) {
+  } else if (peek == TOKEN_EOF) {
     return 1;
   }
 
@@ -158,12 +164,10 @@ static int parser_parse_toplevel(struct parser *parser) {
     decl->is_fn = 1;
   }
 
-  int peek = parser_peek(parser);
-  enum ast_ty ty = parse_type(parser);
-  if (ty == AST_TYPE_ERROR) {
+  struct ast_ty ty = parse_type(parser);
+  if (type_is_error(&ty)) {
     return -1;
   }
-  parser_consume(parser, NULL, peek);
   if (decl->is_fn) {
     fdecl->retty = ty;
   } else {
@@ -307,11 +311,15 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
 
   switch (parser_peek(parser)) {
     case TOKEN_KW_LET:
-      // let <type> <name> = <expr>;
+      // let [mut] <type>? <name> = <expr>;
       parser_consume(parser, NULL, TOKEN_KW_LET);
-      enum ast_ty ty = AST_TYPE_TBD;
+      if (parser_peek(parser) == TOKEN_KW_MUT) {
+        parser_consume(parser, NULL, TOKEN_KW_MUT);
+        result->let.flags |= DECL_FLAG_MUT;
+      }
+      struct ast_ty ty = type_tbd();
       if (parser_peek(parser) != TOKEN_IDENTIFIER) {
-        // TODO: parse out a type
+        ty = parse_type(parser);
       }
       parser_consume(parser, &token, TOKEN_IDENTIFIER);
       result->type = AST_STMT_TYPE_LET;
@@ -319,6 +327,28 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
       parser_consume(parser, NULL, TOKEN_ASSIGN);
       result->let.init_expr = parse_expression(parser);
       result->let.ty = ty;
+      break;
+
+    case TOKEN_KW_ITER: {
+      parser_consume(parser, NULL, TOKEN_KW_ITER);
+      result->type = AST_STMT_TYPE_ITER;
+      result->iter.range = parse_range(parser);
+      parser_consume(parser, &token, TOKEN_IDENTIFIER);
+      result->iter.index.ident = token;
+      parse_block(parser, &result->iter.block);
+    } break;
+
+    case TOKEN_KW_STORE: {
+      parser_consume(parser, NULL, TOKEN_KW_STORE);
+      result->type = AST_STMT_TYPE_STORE;
+      result->store.lhs = parse_expression(parser);
+      result->store.rhs = parse_expression(parser);
+    } break;
+
+    case TOKEN_KW_RETURN:
+      parser_consume(parser, NULL, TOKEN_KW_RETURN);
+      result->type = AST_STMT_TYPE_RETURN;
+      result->expr = parse_expression(parser);
       break;
 
     default:
@@ -375,6 +405,7 @@ static struct ast_expr_list *parse_expression_list(struct parser *parser,
 
 static struct ast_expr *parse_expression(struct parser *parser) {
   struct ast_expr *result = calloc(1, sizeof(struct ast_expr));
+  result->ty.ty = AST_TYPE_TBD;
   struct token token;
 
   int peek = parser_peek(parser);
@@ -389,21 +420,45 @@ static struct ast_expr *parse_expression(struct parser *parser) {
 
       // constants have a fully resolved type immediately
       if (peek == TOKEN_INTEGER) {
-        result->ty = AST_TYPE_INTEGER;
+        // constants are default i64
+        result->ty.ty = AST_TYPE_INTEGER;
+        result->ty.integer.is_signed = 1;
+        result->ty.integer.width = 64;
       } else if (peek == TOKEN_STRING) {
-        result->ty = AST_TYPE_STRING;
+        result->ty.ty = AST_TYPE_STRING;
       } else if (peek == TOKEN_CHAR) {
-        result->ty = AST_TYPE_CHAR;
+        result->ty.ty = AST_TYPE_CHAR;
       } else if (peek == TOKEN_FLOAT) {
-        result->ty = AST_TYPE_FLOAT;
+        result->ty.ty = AST_TYPE_FLOAT;
       }
+
       break;
+
+    // array literal <ty> { <expr>, <expr>, ... }
+    case TOKEN_TY_CHAR:
+    case TOKEN_TY_FLOAT:
+    case TOKEN_TY_FVEC:
+    case TOKEN_TY_SIGNED:
+    case TOKEN_TY_UNSIGNED:
+    case TOKEN_TY_STR:
+    case TOKEN_TY_VOID: {
+      struct ast_ty element_ty = parse_type(parser);
+      parser_consume(parser, NULL, TOKEN_LBRACE);
+      result->type = AST_EXPR_TYPE_CONSTANT;
+      result->ty.ty = AST_TYPE_ARRAY;
+      result->ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
+      *result->ty.array.element_ty = element_ty;
+      result->list = parse_expression_list(parser, TOKEN_RBRACE);
+      result->ty.array.width = result->list->num_elements;
+      parser_consume(parser, NULL, TOKEN_RBRACE);
+    } break;
 
     case TOKEN_LT: {
       parser_consume(parser, NULL, TOKEN_LT);
       result->type = AST_EXPR_TYPE_CONSTANT;
-      result->ty = AST_TYPE_FVEC;
+      result->ty.ty = AST_TYPE_FVEC;
       result->list = parse_expression_list(parser, TOKEN_GT);
+      result->ty.fvec.width = result->list->num_elements;
       parser_consume(parser, NULL, TOKEN_GT);
     } break;
 
@@ -415,13 +470,30 @@ static struct ast_expr *parse_expression(struct parser *parser) {
 
         result->type = AST_EXPR_TYPE_DEREF;
         result->deref.ident = token;
-        parser_consume(parser, &result->deref.field, TOKEN_IDENTIFIER);
+        parser_consume(parser, &token, TOKEN_IDENTIFIER);
+        int field = deref_to_index(token.value.identv.ident);
+        if (field < 0) {
+          fprintf(stderr, "unknown field %s in deref\n", token.value.identv.ident);
+          longjmp(parser->errbuf, -3);
+        }
+        result->deref.field = field;
+      } else if (parser_peek(parser) == TOKEN_LBRACKET) {
+        parser_consume(parser, NULL, TOKEN_LBRACKET);
+        result->type = AST_EXPR_TYPE_ARRAY_INDEX;
+        result->array_index.ident = token;
+        result->array_index.index = parse_expression(parser);
+        parser_consume(parser, NULL, TOKEN_RBRACKET);
       } else if (parser_peek(parser) == TOKEN_LPAREN) {
         parser_consume(parser, NULL, TOKEN_LPAREN);
         result->type = AST_EXPR_TYPE_CALL;
         result->call.ident = token;
         result->call.args = parse_expression_list(parser, TOKEN_RPAREN);
         parser_consume(parser, NULL, TOKEN_RPAREN);
+      } else if (parser_peek(parser) == TOKEN_ASSIGN) {
+        parser_consume(parser, NULL, TOKEN_ASSIGN);
+        result->type = AST_EXPR_TYPE_ASSIGN;
+        result->assign.ident = token;
+        result->assign.expr = parse_expression(parser);
       } else {
         result->type = AST_EXPR_TYPE_VARIABLE;
         result->variable.ident = token;
@@ -430,9 +502,11 @@ static struct ast_expr *parse_expression(struct parser *parser) {
 
     case TOKEN_LPAREN:
       free(result);
-      parser_consume(parser, &token, TOKEN_LPAREN);
+      parser_consume(parser, NULL, TOKEN_LPAREN);
+      fprintf(stderr, "parsing parenthesized expression\n");
       result = parse_expression(parser);
-      parser_consume(parser, &token, TOKEN_RPAREN);
+      fprintf(stderr, "done!\n");
+      parser_consume(parser, NULL, TOKEN_RPAREN);
       break;
 
     case TOKEN_LBRACE:
@@ -448,6 +522,8 @@ static struct ast_expr *parse_expression(struct parser *parser) {
     case TOKEN_BITOR:
     case TOKEN_BITAND:
     case TOKEN_BITXOR:
+    case TOKEN_LSHIFT:
+    case TOKEN_RSHIFT:
       parser_consume(parser, &token, peek);
       result->type = AST_EXPR_TYPE_BINARY;
       result->binary.op = binary_op(peek);
@@ -458,10 +534,71 @@ static struct ast_expr *parse_expression(struct parser *parser) {
     case TOKEN_AND:
     case TOKEN_OR:
       parser_consume(parser, &token, peek);
+      fprintf(stderr, "seems to be a logical\n");
       result->type = AST_EXPR_TYPE_LOGICAL;
       result->logical.op = peek == TOKEN_AND ? AST_LOGICAL_OP_AND : AST_LOGICAL_OP_OR;
-      result->logical.lhs = parse_expression(parser);
-      result->logical.rhs = parse_expression(parser);
+      fprintf(stderr, "lhs...\n");
+      result->logical.lhs = parse_condition(parser);
+      fprintf(stderr, "rhs...\n");
+      result->logical.rhs = parse_condition(parser);
+      fprintf(stderr, "done logical\n");
+      break;
+
+    case TOKEN_KW_AS:
+      // as <ty> <expr>
+      parser_consume(parser, NULL, TOKEN_KW_AS);
+      result->type = AST_EXPR_TYPE_CAST;
+      result->cast.ty = parse_type(parser);
+      result->cast.expr = parse_expression(parser);
+      break;
+
+    case TOKEN_KW_NEG:
+      parser_consume(parser, NULL, TOKEN_KW_NEG);
+      result->type = AST_EXPR_TYPE_UNARY;
+      result->unary.op = AST_UNARY_OP_NEG;
+      result->unary.expr = parse_expression(parser);
+      break;
+
+    case TOKEN_TILDE:
+      parser_consume(parser, NULL, TOKEN_TILDE);
+      result->type = AST_EXPR_TYPE_UNARY;
+      result->unary.op = AST_UNARY_OP_COMP;
+      result->unary.expr = parse_expression(parser);
+      break;
+
+    case TOKEN_NOT:
+      parser_consume(parser, NULL, TOKEN_NOT);
+      result->type = AST_EXPR_TYPE_UNARY;
+      result->unary.op = AST_UNARY_OP_NOT;
+      result->unary.expr = parse_expression(parser);
+      break;
+
+    case TOKEN_KW_IF:
+      parser_consume(parser, NULL, TOKEN_KW_IF);
+      result->type = AST_EXPR_TYPE_IF;
+      result->if_expr.cond = parse_condition(parser);
+      parse_block(parser, &result->if_expr.then_block);
+      if (parser_peek(parser) == TOKEN_KW_ELSE) {
+        result->if_expr.has_else = 1;
+        parser_consume(parser, NULL, TOKEN_KW_ELSE);
+        parse_block(parser, &result->if_expr.else_block);
+      } else {
+        result->if_expr.has_else = 0;
+      }
+      break;
+
+    case TOKEN_KW_REF:
+      // ref <expr>
+      parser_consume(parser, NULL, TOKEN_KW_REF);
+      result->type = AST_EXPR_TYPE_REF;
+      result->ref.expr = parse_expression(parser);
+      break;
+
+    case TOKEN_KW_LOAD:
+      // load <expr>
+      parser_consume(parser, NULL, TOKEN_KW_LOAD);
+      result->type = AST_EXPR_TYPE_LOAD;
+      result->load.expr = parse_expression(parser);
       break;
 
     default:
@@ -472,23 +609,66 @@ static struct ast_expr *parse_expression(struct parser *parser) {
   return result;
 }
 
-static enum ast_ty parse_type(struct parser *parser) {
+static struct ast_ty parse_type(struct parser *parser) {
+  struct token token;
+
+  struct ast_ty result;
+  memset(&result, 0, sizeof(struct ast_ty));
+  result.ty = AST_TYPE_ERROR;
+
   int peek = parser_peek(parser);
   if (peek == TOKEN_TY_SIGNED || peek == TOKEN_TY_UNSIGNED) {
-    return AST_TYPE_INTEGER;
+    parser_consume(parser, &token, peek);
+
+    result.ty = AST_TYPE_INTEGER;
+    result.integer.is_signed = peek == TOKEN_TY_SIGNED;
+    result.integer.width = token.value.tyv.dimension;
   } else if (peek == TOKEN_TY_STR) {
-    return AST_TYPE_STRING;
+    parser_consume(parser, &token, TOKEN_TY_STR);
+
+    result.ty = AST_TYPE_STRING;
   } else if (peek == TOKEN_TY_CHAR) {
-    return AST_TYPE_CHAR;
+    parser_consume(parser, &token, TOKEN_TY_CHAR);
+
+    result.ty = AST_TYPE_CHAR;
   } else if (peek == TOKEN_TY_FLOAT) {
-    return AST_TYPE_FLOAT;
+    parser_consume(parser, &token, TOKEN_TY_FLOAT);
+
+    result.ty = AST_TYPE_FLOAT;
   } else if (peek == TOKEN_TY_FVEC) {
-    return AST_TYPE_FVEC;
+    parser_consume(parser, &token, TOKEN_TY_FVEC);
+
+    result.ty = AST_TYPE_FVEC;
+    result.fvec.width = token.value.tyv.dimension;
   } else if (peek == TOKEN_TY_VOID) {
-    return AST_TYPE_VOID;
+    parser_consume(parser, &token, TOKEN_TY_VOID);
+
+    result.ty = AST_TYPE_VOID;
+  } else {
+    fprintf(stderr, "unknown type token %d\n", peek);
+    longjmp(parser->errbuf, -3);
   }
 
-  return AST_TYPE_ERROR;
+  if (parser_peek(parser) == TOKEN_ASTERISK) {
+    parser_consume(parser, NULL, TOKEN_ASTERISK);
+    result.flags |= TYPE_FLAG_PTR;
+  }
+
+  fprintf(stderr, "peeked: %d\n", parser_peek(parser));
+  if (parser_peek(parser) == TOKEN_LBRACKET) {
+    fprintf(stderr, "parsing array type\n");
+    parser_consume(parser, NULL, TOKEN_LBRACKET);
+    struct ast_ty *element_ty = calloc(1, sizeof(struct ast_ty));
+    memcpy(element_ty, &result, sizeof(struct ast_ty));
+    result.array.element_ty = element_ty;
+    parser_consume(parser, &token, TOKEN_INTEGER);
+    result.array.width = token.value.tyv.dimension;
+    parser_consume(parser, NULL, TOKEN_RBRACKET);
+
+    result.ty = AST_TYPE_ARRAY;
+  }
+
+  return result;
 }
 
 static int binary_op(int token) {
@@ -509,7 +689,90 @@ static int binary_op(int token) {
       return AST_BINARY_OP_BITAND;
     case TOKEN_BITXOR:
       return AST_BINARY_OP_BITXOR;
+    case TOKEN_LSHIFT:
+      return AST_BINARY_OP_LSHIFT;
+    case TOKEN_RSHIFT:
+      return AST_BINARY_OP_RSHIFT;
     default:
       return -1;
   }
+}
+
+static int deref_to_index(const char *deref) {
+  if (isdigit(*deref)) {
+    // numeric deref
+    return strtol(deref, NULL, 10);
+  }
+
+  if (deref[1] == 0) {
+    // single character deref
+    switch (deref[0]) {
+      // XYZW
+      case 'x':
+      case 'y':
+      case 'z':
+        return deref[0] - 'x';
+      case 'w':
+        return 3;
+
+      // RGBA
+      case 'r':
+        return 0;
+      case 'g':
+        return 1;
+      case 'b':
+        return 2;
+      case 'a':
+        return 3;
+    }
+  }
+
+  return -1;
+}
+
+static struct ast_range parse_range(struct parser *parser) {
+  struct ast_range result;
+
+  result.start = parse_expression(parser);
+  parser_consume(parser, NULL, TOKEN_COLON);
+  result.end = parse_expression(parser);
+
+  if (parser_peek(parser) == TOKEN_COLON) {
+    parser_consume(parser, NULL, TOKEN_COLON);
+    result.step = parse_expression(parser);
+  } else {
+    result.step = NULL;
+  }
+
+  return result;
+}
+
+static struct ast_expr *parse_condition(struct parser *parser) {
+  int peek = parser_peek(parser);
+  switch (peek) {
+    case TOKEN_LPAREN:
+      parser_consume(parser, NULL, TOKEN_LPAREN);
+      struct ast_expr *result = parse_condition(parser);
+      parser_consume(parser, NULL, TOKEN_RPAREN);
+      return result;
+
+    case TOKEN_LT:
+    case TOKEN_LTE:
+    case TOKEN_GT:
+    case TOKEN_GTE:
+    case TOKEN_EQUALS:
+    case TOKEN_NE: {
+      struct ast_expr *result = calloc(1, sizeof(struct ast_expr));
+      result->type = AST_EXPR_TYPE_BOOLEAN;
+      result->boolean.op = peek;
+      parser_consume(parser, NULL, peek);
+      result->boolean.lhs = parse_condition(parser);
+      result->boolean.rhs = parse_condition(parser);
+      return result;
+    } break;
+
+    default:
+      return parse_expression(parser);
+  }
+  return NULL;
 }

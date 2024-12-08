@@ -1,6 +1,7 @@
 #include "scope.h"
 
 #include <malloc.h>
+#include <stdio.h>
 
 #include "kv.h"
 
@@ -24,6 +25,7 @@ struct scope *exit_scope(struct scope *scope) {
 }
 
 void scope_insert(struct scope *scope, const char *name, void *value) {
+  kv_delete(scope->values, name);
   kv_insert(scope->values, name, value);
 }
 
