@@ -2,7 +2,8 @@
 
 #include <glm/glm.hpp>
 
-typedef float float3 __attribute__((vector_size(sizeof(float) * 3)));
+// actually a vec4, due to alignment, but we only use the first 3 components
+typedef float float3 __attribute__((vector_size(sizeof(float) * 4)));
 
 extern "C" float3 vadd(float3 a, float3 b);
 extern "C" float3 vcross(float3 a, float3 b);
@@ -11,7 +12,8 @@ extern "C" float3 vnorm(float3 a);
 extern "C" float3 vscale(float3 a, float s);
 
 static float3 glm2vec(glm::vec3 v) {
-  return {v.x, v.y, v.z};
+  float3 result = {v.x, v.y, v.z, 0.0f};
+  return result;
 }
 
 TEST(VecTest, Add) {

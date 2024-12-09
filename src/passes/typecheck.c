@@ -1,6 +1,7 @@
 #include "typecheck.h"
 
 #include <malloc.h>
+#include <stdarg.h>
 
 #include "ast.h"
 #include "scope.h"

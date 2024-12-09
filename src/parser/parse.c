@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <malloc.h>
 #include <setjmp.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 

@@ -7,7 +7,8 @@ extern float x, y, z;
 static glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
 static glm::vec3 b = glm::vec3(4.0f, 5.0f, 6.0f);
 
-typedef float float3 __attribute__((vector_size(sizeof(float) * 3)));
+// actually a vec4, due to alignment, but we only use the first 3 components
+typedef float float3 __attribute__((vector_size(sizeof(float) * 4)));
 
 static float3 av = {1.0f, 2.0f, 3.0f};
 static float3 bv = {4.0f, 5.0f, 6.0f};

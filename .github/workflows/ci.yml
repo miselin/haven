@@ -1,0 +1,44 @@
+name: Compiler CI
+
+on: [push, pull_request]
+
+env:
+  LLVM_VERSION: "18"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install LLVM
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${LLVM_VERSION}
+
+      - name: Install other dependencies
+        run: sudo apt-get install -y ninja-build libbenchmark-dev googletest libglm-dev doxygen libgtest-dev libzstd-dev libzstd1
+
+      - uses: lukka/get-cmake@latest
+
+      - uses: actions/checkout@v4
+
+      - run: cmake -E make_directory build
+
+      - name: Configure
+        working-directory: build
+        run: cmake ${{ github.workspace }} -DCMAKE_BUILD_TYPE=Debug -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/cmake
+
+      - name: Build
+        working-directory: build
+        run: cmake --build .
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+      - name: Upload coverage data (if any) to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          working-directory: build
