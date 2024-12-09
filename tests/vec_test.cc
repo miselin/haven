@@ -2,13 +2,17 @@
 
 #include <glm/glm.hpp>
 
-extern float x, y, z;
+typedef float float3 __attribute__((vector_size(sizeof(float) * 3)));
 
-extern "C" void test_vadd(float a, float b, float c, float d, float e, float f);
-extern "C" void test_vcross(float a, float b, float c, float d, float e, float f);
-extern "C" void test_vdot(float a, float b, float c, float d, float e, float f);
-extern "C" void test_vnorm(float a, float b, float c);
-extern "C" void test_vscale(float a, float b, float c, float d);
+extern "C" float3 vadd(float3 a, float3 b);
+extern "C" float3 vcross(float3 a, float3 b);
+extern "C" float vdot(float3 a, float3 b);
+extern "C" float3 vnorm(float3 a);
+extern "C" float3 vscale(float3 a, float s);
+
+static float3 glm2vec(glm::vec3 v) {
+  return {v.x, v.y, v.z};
+}
 
 TEST(VecTest, Add) {
   glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
@@ -20,11 +24,11 @@ TEST(VecTest, Add) {
   EXPECT_EQ(c.y, 7.0f);
   EXPECT_EQ(c.z, 9.0f);
 
-  test_vadd(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
+  float3 result = vadd(glm2vec(a), glm2vec(b));
 
-  EXPECT_EQ(x, 5.0f);
-  EXPECT_EQ(y, 7.0f);
-  EXPECT_EQ(z, 9.0f);
+  EXPECT_EQ(result[0], 5.0f);
+  EXPECT_EQ(result[1], 7.0f);
+  EXPECT_EQ(result[2], 9.0f);
 }
 
 TEST(VecTest, Normalize) {
@@ -36,11 +40,11 @@ TEST(VecTest, Normalize) {
   EXPECT_FLOAT_EQ(b.y, 0.534522474f);
   EXPECT_FLOAT_EQ(b.z, 0.801783681f);
 
-  test_vnorm(1.0f, 2.0f, 3.0f);
+  float3 result = vnorm(glm2vec(a));
 
-  EXPECT_FLOAT_EQ(x, 0.267261236f);
-  EXPECT_FLOAT_EQ(y, 0.534522474f);
-  EXPECT_FLOAT_EQ(z, 0.801783681f);
+  EXPECT_FLOAT_EQ(result[0], 0.267261236f);
+  EXPECT_FLOAT_EQ(result[1], 0.534522474f);
+  EXPECT_FLOAT_EQ(result[2], 0.801783681f);
 }
 
 TEST(VecTest, Dot) {
@@ -51,9 +55,9 @@ TEST(VecTest, Dot) {
 
   EXPECT_FLOAT_EQ(c, 32.0f);
 
-  test_vdot(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
+  float result = vdot(glm2vec(a), glm2vec(b));
 
-  EXPECT_FLOAT_EQ(x, 32.0f);
+  EXPECT_FLOAT_EQ(result, 32.0f);
 }
 
 TEST(VecTest, Cross) {
@@ -66,11 +70,11 @@ TEST(VecTest, Cross) {
   EXPECT_FLOAT_EQ(c.y, 6.0f);
   EXPECT_FLOAT_EQ(c.z, -3.0f);
 
-  test_vcross(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
+  float3 result = vcross(glm2vec(a), glm2vec(b));
 
-  EXPECT_FLOAT_EQ(x, -3.0f);
-  EXPECT_FLOAT_EQ(y, 6.0f);
-  EXPECT_FLOAT_EQ(z, -3.0f);
+  EXPECT_FLOAT_EQ(result[0], -3.0f);
+  EXPECT_FLOAT_EQ(result[1], 6.0f);
+  EXPECT_FLOAT_EQ(result[2], -3.0f);
 }
 
 TEST(VecTest, Scale) {
@@ -82,9 +86,9 @@ TEST(VecTest, Scale) {
   EXPECT_FLOAT_EQ(b.y, 4.0f);
   EXPECT_FLOAT_EQ(b.z, 6.0f);
 
-  test_vscale(1.0f, 2.0f, 3.0f, 2.0f);
+  float3 result = vscale(glm2vec(a), 2.0f);
 
-  EXPECT_FLOAT_EQ(x, 2.0f);
-  EXPECT_FLOAT_EQ(y, 4.0f);
-  EXPECT_FLOAT_EQ(z, 6.0f);
+  EXPECT_FLOAT_EQ(result[0], 2.0f);
+  EXPECT_FLOAT_EQ(result[1], 4.0f);
+  EXPECT_FLOAT_EQ(result[2], 6.0f);
 }
