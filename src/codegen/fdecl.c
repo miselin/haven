@@ -21,8 +21,9 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
     for (size_t i = 0; i < fdecl->num_params; i++) {
       param_types[i] = ast_ty_to_llvm_ty(&fdecl->params[i]->ty);
     }
-    LLVMTypeRef ret_type = LLVMFunctionType(ast_ty_to_llvm_ty(&fdecl->retty), param_types,
-                                            fdecl->num_params, fdecl->flags & DECL_FLAG_VARARG);
+    LLVMTypeRef ret_type =
+        LLVMFunctionType(ast_ty_to_llvm_ty(&fdecl->retty), param_types,
+                         (unsigned int)fdecl->num_params, fdecl->flags & DECL_FLAG_VARARG);
     func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, ret_type);
     if (fdecl->flags & DECL_FLAG_PUB) {
       LLVMSetLinkage(func, LLVMExternalLinkage);
@@ -53,11 +54,11 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
     codegen->scope = enter_scope(codegen->scope);
 
     for (size_t i = 0; i < fdecl->num_params; i++) {
-      struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->vdecl = fdecl->params[i];
-      entry->variable_type = param_types[i];
-      entry->ref = LLVMGetParam(func, i);
-      scope_insert(codegen->scope, fdecl->params[i]->ident.value.identv.ident, entry);
+      struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
+      param_entry->vdecl = fdecl->params[i];
+      param_entry->variable_type = param_types[i];
+      param_entry->ref = LLVMGetParam(func, (unsigned int)i);
+      scope_insert(codegen->scope, fdecl->params[i]->ident.value.identv.ident, param_entry);
     }
 
     LLVMValueRef block_result = emit_block(codegen, fdecl->body);

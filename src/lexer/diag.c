@@ -29,5 +29,7 @@ void print_token(struct token *token) {
     case TOKEN_IDENTIFIER:
       fprintf(stderr, " '%s'", token->value.identv.ident);
       break;
+    default:
+      break;
   }
 }

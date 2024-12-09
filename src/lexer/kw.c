@@ -35,7 +35,7 @@ struct lookup {
 int initialize_keyword_trie(struct lex_state *state) {
   state->keywords = new_trie();
   for (size_t i = 0; i < sizeof(keywords) / sizeof(struct lookup); i++) {
-    trie_insert(state->keywords, keywords[i].name, (void *)keywords[i].ident);
+    trie_insert(state->keywords, keywords[i].name, &keywords[i]);
   }
 
   return 0;
@@ -64,9 +64,9 @@ int lex_maybe_keyword_inner(struct lex_state *state, struct token *token, const 
 
 // public for benchmark
 int lex_maybe_keyword_trie_inner(struct lex_state *state, struct token *token, const char *ident) {
-  void *entry = trie_lookup(state->keywords, token->value.identv.ident);
+  struct lookup *entry = trie_lookup(state->keywords, token->value.identv.ident);
   if (entry) {
-    token->ident = (size_t)entry;
+    token->ident = entry->ident;
     return 0;
   }
 

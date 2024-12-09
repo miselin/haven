@@ -8,10 +8,10 @@
 #include "tokens.h"
 #include "types.h"
 
-#define DECL_FLAG_PUB (1 << 0)
-#define DECL_FLAG_MUT (1 << 1)
-#define DECL_FLAG_VARARG (1 << 2)
-#define DECL_FLAG_TEMPORARY (1 << 3)
+#define DECL_FLAG_PUB (1U << 0)
+#define DECL_FLAG_MUT (1U << 1)
+#define DECL_FLAG_VARARG (1U << 2)
+#define DECL_FLAG_TEMPORARY (1U << 3)
 
 #define AST_STMT_TYPE_EXPR 1
 #define AST_STMT_TYPE_LET 2
@@ -72,7 +72,7 @@ struct ast_vdecl {
   struct token ident;
   struct ast_ty ty;
 
-  int flags;
+  uint64_t flags;
 
   struct ast_expr *init_expr;
 };
@@ -81,7 +81,7 @@ struct ast_fdecl {
   struct token ident;
   struct ast_ty retty;
 
-  int flags;
+  uint64_t flags;
 
   struct ast_block *body;
   struct ast_vdecl **params;
@@ -125,7 +125,7 @@ struct ast_expr_variable {
 
 struct ast_expr_deref {
   struct token ident;
-  int field;
+  size_t field;
 };
 
 struct ast_expr_list {

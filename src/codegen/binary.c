@@ -105,7 +105,7 @@ LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *b
   LLVMValueRef rhs = emit_expr(codegen, binary->rhs);
 
   if (ty->ty == AST_TYPE_FVEC) {
-    size_t element_count = ty->fvec.width;
+    unsigned int element_count = (unsigned int)ty->fvec.width;
     if (binary->lhs->ty.ty != binary->rhs->ty.ty) {
       // TODO: order of ops, find which one is the scalar broadcast vector
       LLVMTypeRef vecty = LLVMVectorType(LLVMFloatType(), element_count);

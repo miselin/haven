@@ -29,8 +29,9 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
 
 static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs);
 
-static void typecheck_diag_expr(struct typecheck *typecheck, struct ast_expr *expr, const char *msg,
-                                ...) {
+__attribute__((format(printf, 3, 4))) static void typecheck_diag_expr(struct typecheck *typecheck,
+                                                                      struct ast_expr *expr,
+                                                                      const char *msg, ...) {
   fprintf(stderr, "%s:%zu:%zu: ", expr->loc.file, expr->loc.line, expr->loc.column);
 
   va_list args;
@@ -116,9 +117,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
       // declare the parameters in the function scope
       for (size_t i = 0; i < ast->fdecl.num_params; i++) {
-        struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-        entry->vdecl = ast->fdecl.params[i];
-        scope_insert(typecheck->scope, ast->fdecl.params[i]->ident.value.identv.ident, entry);
+        struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
+        param_entry->vdecl = ast->fdecl.params[i];
+        scope_insert(typecheck->scope, ast->fdecl.params[i]->ident.value.identv.ident, param_entry);
       }
 
       struct ast_ty result = typecheck_block(typecheck, ast->fdecl.body);
@@ -322,6 +323,8 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
             node = node->next;
           }
         } break;
+        default:
+          break;
       }
       return ast->ty;
     } break;
@@ -493,7 +496,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
 
       // can't deref past the width of the vector
       if (ast->deref.field >= entry->vdecl->ty.fvec.width) {
-        fprintf(stderr, "deref %s has field #%d, exceeding vector width of %d\n",
+        fprintf(stderr, "deref %s has field #%zd, exceeding vector width of %zd\n",
                 ast->variable.ident.value.identv.ident, ast->deref.field,
                 entry->vdecl->ty.fvec.width);
         ++typecheck->errors;

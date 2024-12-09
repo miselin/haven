@@ -1,7 +1,7 @@
 #include "internal.h"
 
 char lex_getc(struct lex_state *state) {
-  char c = 0;
+  int c = 0;
   if (state->buf_head != state->buf_tail) {
     char head = state->buf[state->buf_head];
     state->buf_head = (state->buf_head + 1) % LEXER_BUFFER_SIZE;
@@ -18,7 +18,11 @@ char lex_getc(struct lex_state *state) {
     state->loc.column++;
   }
 
-  return c;
+  if (c > 255) {
+    return -1;
+  }
+
+  return (char)c;
 }
 
 void lex_unget(struct lex_state *state, char c) {

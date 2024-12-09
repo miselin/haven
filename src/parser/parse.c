@@ -27,7 +27,8 @@ struct parser {
 
 static enum token_id parser_peek(struct parser *parser);
 
-static int parser_consume(struct parser *parser, struct token *token, enum token_id expected);
+static enum token_id parser_consume(struct parser *parser, struct token *token,
+                                    enum token_id expected);
 
 static int parser_parse_toplevel(struct parser *parser);
 static int parser_parse_preproc(struct parser *parser);
@@ -43,11 +44,12 @@ static struct ast_range parse_range(struct parser *parser);
 
 static int deref_to_index(const char *deref);
 
-static int binary_op(int token);
+static int binary_op(enum token_id token);
 static int binary_op_prec(int token);
 
-static void parser_diag(int fatal, struct parser *parser, struct token *token, const char *msg,
-                        ...) {
+__attribute__((format(printf, 4, 5))) static void parser_diag(int fatal, struct parser *parser,
+                                                              struct token *token, const char *msg,
+                                                              ...) {
   if (token) {
     char locbuf[256] = {0};
     lexer_locate_str(parser->lexer, locbuf, 256);
@@ -120,19 +122,20 @@ static enum token_id parser_peek(struct parser *parser) {
   return parser->peek.ident;
 }
 
-static int parser_consume(struct parser *parser, struct token *token, enum token_id expected) {
-  int rc = parser_peek(parser);
-  if (rc < 0) {
+static enum token_id parser_consume(struct parser *parser, struct token *token,
+                                    enum token_id expected) {
+  enum token_id rc = parser_peek(parser);
+  if (rc == TOKEN_UNKNOWN) {
     return rc;
   }
 
   if (parser->peek.ident <= 0) {
     parser_diag(1, parser, NULL, "unexpected EOF or other error in token stream\n");
-    return -1;
+    return TOKEN_UNKNOWN;
   } else if (parser->peek.ident != expected) {
     parser_diag(1, parser, &parser->peek, "unexpected token %s, wanted %s\n",
                 token_id_to_string(parser->peek.ident), token_id_to_string(expected));
-    return -1;
+    return TOKEN_UNKNOWN;
   }
 
   // fprintf(stderr, "consume: %s\n", token_id_to_string(parser->peek.ident));
@@ -141,8 +144,9 @@ static int parser_consume(struct parser *parser, struct token *token, enum token
     memcpy(token, &parser->peek, sizeof(struct token));
   }
 
+  enum token_id result = parser->peek.ident;
   parser->peek.ident = TOKEN_UNKNOWN;
-  return 0;
+  return result;
 }
 
 /**
@@ -180,7 +184,7 @@ static int parser_parse_toplevel(struct parser *parser) {
     return parser_parse_preproc(parser);
   }
 
-  int flags = 0;
+  uint64_t flags = 0;
 
   struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
   struct ast_fdecl *fdecl = &decl->fdecl;
@@ -350,7 +354,7 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
   parser_consume(parser, &token, TOKEN_LBRACE);
   int ended_semi = 0;
   while (1) {
-    int peek = parser_peek(parser);
+    enum token_id peek = parser_peek(parser);
     if (peek == TOKEN_RBRACE) {
       break;
     } else {
@@ -433,7 +437,7 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
   }
 
   // must end in either semicolon or rbrace
-  int peek = parser_peek(parser);
+  enum token_id peek = parser_peek(parser);
   if (peek != TOKEN_RBRACE) {
     parser_consume(parser, &token, TOKEN_SEMI);
     *ended_semi = 1;
@@ -516,7 +520,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
 
   struct token token;
 
-  int peek = parser_peek(parser);
+  enum token_id peek = parser_peek(parser);
   lexer_locate(parser->lexer, &result->loc);
   switch (peek) {
     // unary expression (higher precedence than binary operators)
@@ -599,7 +603,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         if (field < 0) {
           parser_diag(1, parser, &token, "unknown field %s in deref\n", token.value.identv.ident);
         }
-        result->deref.field = field;
+        result->deref.field = (size_t)field;
       } else if (parser_peek(parser) == TOKEN_LBRACKET) {
         parser_consume(parser, NULL, TOKEN_LBRACKET);
         result->type = AST_EXPR_TYPE_ARRAY_INDEX;
@@ -735,7 +739,7 @@ static struct ast_ty parse_type(struct parser *parser) {
   memset(&result, 0, sizeof(struct ast_ty));
   result.ty = AST_TYPE_ERROR;
 
-  int peek = parser_peek(parser);
+  enum token_id peek = parser_peek(parser);
   if (peek == TOKEN_TY_SIGNED || peek == TOKEN_TY_UNSIGNED) {
     parser_consume(parser, &token, peek);
 
@@ -788,7 +792,7 @@ static struct ast_ty parse_type(struct parser *parser) {
   return result;
 }
 
-static int binary_op(int token) {
+static int binary_op(enum token_id token) {
   switch (token) {
     case TOKEN_PLUS:
       return AST_BINARY_OP_ADD;
@@ -834,7 +838,8 @@ static int binary_op(int token) {
 static int deref_to_index(const char *deref) {
   if (isdigit(*deref)) {
     // numeric deref
-    return strtol(deref, NULL, 10);
+    // TODO: check that endptr is the end of deref; fully consume the string
+    return (int)strtol(deref, NULL, 10);
   }
 
   if (deref[1] == 0) {

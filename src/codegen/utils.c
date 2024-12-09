@@ -76,7 +76,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct ast_ty *ty) {
           inner = LLVMInt64Type();
           break;
         default:
-          inner = LLVMIntType(ty->integer.width);
+          inner = LLVMIntType((unsigned int)ty->integer.width);
       }
       break;
     case AST_TYPE_CHAR:
@@ -89,13 +89,13 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct ast_ty *ty) {
       inner = LLVMFloatType();
       break;
     case AST_TYPE_FVEC:
-      inner = LLVMVectorType(LLVMFloatType(), ty->fvec.width);
+      inner = LLVMVectorType(LLVMFloatType(), (unsigned int)ty->fvec.width);
       break;
     case AST_TYPE_VOID:
       inner = LLVMVoidType();
       break;
     case AST_TYPE_ARRAY:
-      inner = LLVMArrayType(ast_ty_to_llvm_ty(ty->array.element_ty), ty->array.width);
+      inner = LLVMArrayType(ast_ty_to_llvm_ty(ty->array.element_ty), (unsigned int)ty->array.width);
       break;
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);

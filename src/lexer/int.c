@@ -60,7 +60,7 @@ int lex_numeric(struct lex_state *state, struct token *token, char c) {
     // probably an integer
     uint64_t v = 0;
     while (isdigit_base(c, base)) {
-      v = (v * base) + (c - '0');
+      v = (v * base) + ((uint64_t)c - '0');
       *buf++ = c;
       c = lex_getc(state);
     }
@@ -79,8 +79,14 @@ int lex_numeric(struct lex_state *state, struct token *token, char c) {
   if (is_float) {
     token->ident = TOKEN_FLOAT;
     memset(token->value.floatv.buf, 0, 256);
-    token->value.floatv.length =
-        snprintf(token->value.floatv.buf, 256, "%s.%s", &fpbuf[0], &fpbuf[128]);
+    int len = snprintf(token->value.floatv.buf, 256, "%s.%s", &fpbuf[0], &fpbuf[128]);
+    ;
+    if (len < 0) {
+      lex_error(state, "failed to format float");
+      return -1;
+    }
+    token->value.floatv.length = (size_t)len;
+
   } else {
     token->ident = TOKEN_INTEGER;
     token->value.intv.val = vs[0];

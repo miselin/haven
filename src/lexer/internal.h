@@ -38,7 +38,7 @@ int lex_maybe_keyword(struct lex_state *state, struct token *token);
  */
 int lex_maybe_keyword_trie(struct lex_state *state, struct token *token);
 
-void lex_error(struct lex_state *state, const char *fmt, ...);
+void lex_error(struct lex_state *state, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // lex an integer or floating point literal
 int lex_numeric(struct lex_state *state, struct token *token, char c);

@@ -14,6 +14,6 @@ int lex_vector_type(struct lex_state *state, struct token *token) {
     return -1;
   }
   token->ident = TOKEN_TY_FVEC;
-  token->value.tyv.dimension = dim;
+  token->value.tyv.dimension = (size_t)dim;
   return 0;
 }

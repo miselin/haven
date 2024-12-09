@@ -13,8 +13,9 @@
 #define _MATTC_TYPES_H
 
 #include <stddef.h>
+#include <stdint.h>
 
-#define TYPE_FLAG_PTR (1 << 0)
+#define TYPE_FLAG_PTR (1U << 0)
 
 enum ast_ty_id {
   AST_TYPE_ERROR = 0,
@@ -32,20 +33,22 @@ enum ast_ty_id {
 
 struct ast_ty {
   enum ast_ty_id ty;
-  int flags;
+  uint64_t flags;
   union {
     struct {
       int is_signed;
-      int width;
+      size_t width;
     } integer;
     struct {
-      int width;
+      size_t width;
     } fvec;
     struct {
       // TBD - names of enum values
+      int tbd;
     } enumty;
     struct {
       // TBD - fields, types of fields
+      int tbd;
     } structty;
     struct {
       size_t width;

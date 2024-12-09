@@ -10,7 +10,7 @@
 #include "tokens.h"
 
 static int lex_check_either(struct lex_state *state, struct token *token, char expected,
-                            int ident_true, int ident_false) {
+                            enum token_id ident_true, enum token_id ident_false) {
   char next = lex_getc(state);
   if (next < 0) {
     // not technically an error if we hit EOF here, as we are choosing between

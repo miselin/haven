@@ -17,19 +17,22 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
         case AST_TYPE_INTEGER:
           return LLVMConstInt(const_ty, ast->constant.constant.value.intv.val, 0);
         case AST_TYPE_CHAR:
-          return LLVMConstInt(const_ty, ast->constant.constant.value.charv.c, 0);
+          return LLVMConstInt(const_ty, (unsigned)ast->constant.constant.value.charv.c, 0);
         case AST_TYPE_STRING: {
           LLVMValueRef str = LLVMAddGlobal(
               codegen->llvm_module,
-              LLVMArrayType(LLVMInt8Type(), ast->constant.constant.value.strv.length + 1), "str");
-          LLVMSetInitializer(str, LLVMConstString(ast->constant.constant.value.strv.s,
-                                                  ast->constant.constant.value.strv.length, 0));
+              LLVMArrayType(LLVMInt8Type(),
+                            (unsigned int)ast->constant.constant.value.strv.length + 1),
+              "str");
+          LLVMSetInitializer(
+              str, LLVMConstString(ast->constant.constant.value.strv.s,
+                                   (unsigned int)ast->constant.constant.value.strv.length, 0));
           return str;
         } break;
         case AST_TYPE_FVEC: {
           LLVMValueRef *fields = malloc(sizeof(LLVMValueRef) * ast->list->num_elements);
 
-          size_t i = 0;
+          unsigned int i = 0;
           int non_const_elements = 0;
           struct ast_expr_list *node = ast->list;
           while (node) {
@@ -62,9 +65,9 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
 
         } break;
         case AST_TYPE_FLOAT:
-          return LLVMConstRealOfStringAndSize(LLVMFloatType(),
-                                              ast->constant.constant.value.floatv.buf,
-                                              ast->constant.constant.value.floatv.length);
+          return LLVMConstRealOfStringAndSize(
+              LLVMFloatType(), ast->constant.constant.value.floatv.buf,
+              (unsigned int)ast->constant.constant.value.floatv.length);
 
         case AST_TYPE_ARRAY: {
           LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(ast->ty.array.element_ty);
@@ -131,7 +134,7 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
       size_t named_param_count = LLVMCountParams(entry->ref);
 
       LLVMValueRef *args = NULL;
-      size_t num_args = 0;
+      unsigned int num_args = 0;
       if (ast->call.args) {
         args = malloc(sizeof(LLVMValueRef) * ast->call.args->num_elements);
         struct ast_expr_list *node = ast->call.args;
@@ -167,7 +170,7 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
                              ast->call.ident.value.identv.ident);
       }
 
-      LLVMValueRef index = LLVMConstInt(LLVMInt64Type(), ast->deref.field, 0);
+      LLVMValueRef index = LLVMConstInt(LLVMInt64Type(), (unsigned int)ast->deref.field, 0);
       return LLVMBuildExtractElement(codegen->llvm_builder, ref, index, "deref");
     }; break;
 
@@ -229,8 +232,8 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
         case AST_UNARY_OP_NOT:
           return LLVMBuildNot(codegen->llvm_builder, expr, "not");
         case AST_UNARY_OP_COMP:
-          return LLVMBuildXor(codegen->llvm_builder, expr, LLVMConstInt(LLVMInt32Type(), -1, 0),
-                              "comp");
+          return LLVMBuildXor(codegen->llvm_builder, expr,
+                              LLVMConstInt(LLVMInt32Type(), (unsigned)-1, 0), "comp");
       }
     } break;
 

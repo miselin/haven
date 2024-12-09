@@ -78,6 +78,9 @@ void free_expr(struct ast_expr *ast) {
         case AST_TYPE_ARRAY:
           free_expr_list(ast->list);
           break;
+
+        default:
+          break;
       }
       break;
 

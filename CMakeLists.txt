@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.28)
 project(mattc C CXX ASM)
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include("CMakeDependentOption")
 
+include(build-etc/config.cmake)
 include(build-etc/macros.cmake)
 
 find_library(MALLOC NAMES jemalloc tcmalloc)
@@ -26,7 +27,7 @@ option(MSAN "memory sanitizer" OFF)
 # Enable debugging symbols.
 option(DEBUG_SYMBOLS "build with debug symbols" ON)
 option(PROFILING "build with profiling" OFF)
-option(DEBUG_BUILD "build a debug build (NOT relevant on iOS/Windows)" ON)
+option(DEBUG_BUILD "build with extra debug options such as logging, even in a Release configuration (NOT relevant on iOS/Windows)" ON)
 
 # Generic compilation options
 option(WARNINGS "allow warnings" OFF)

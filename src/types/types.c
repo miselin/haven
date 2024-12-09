@@ -1,19 +1,27 @@
 #include "types.h"
 
+#include <string.h>
+
 #include "typecheck.h"
 
 struct ast_ty type_tbd() {
-  struct ast_ty ty = {AST_TYPE_TBD, 0, {}};
+  struct ast_ty ty;
+  memset(&ty, 0, sizeof(ty));
+  ty.ty = AST_TYPE_TBD;
   return ty;
 }
 
 struct ast_ty type_void() {
-  struct ast_ty ty = {AST_TYPE_VOID, 0, {}};
+  struct ast_ty ty;
+  memset(&ty, 0, sizeof(ty));
+  ty.ty = AST_TYPE_VOID;
   return ty;
 }
 
 struct ast_ty type_error() {
-  struct ast_ty ty = {AST_TYPE_ERROR, 0, {}};
+  struct ast_ty ty;
+  memset(&ty, 0, sizeof(ty));
+  ty.ty = AST_TYPE_ERROR;
   return ty;
 }
 
@@ -93,7 +101,7 @@ const char *type_name(struct ast_ty *ty) {
 }
 
 void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
-  size_t offset = 0;
+  int offset = 0;
   switch (ty->ty) {
     case AST_TYPE_ERROR:
       offset += snprintf(buf, maxlen, "error");
@@ -103,11 +111,11 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       return;
     case AST_TYPE_INTEGER:
       if (ty->integer.is_signed) {
-        offset += snprintf(buf + offset, maxlen - offset, "i");
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "i");
       } else {
-        offset += snprintf(buf + offset, maxlen - offset, "u");
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "u");
       }
-      offset += snprintf(buf + offset, maxlen - offset, "%d", ty->integer.width);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%zd", ty->integer.width);
       break;
     case AST_TYPE_STRING:
       offset += snprintf(buf, maxlen, "str");
@@ -119,7 +127,7 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf, maxlen, "float");
       break;
     case AST_TYPE_FVEC:
-      offset += snprintf(buf + offset, maxlen - offset, "fvec%d", ty->fvec.width);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->fvec.width);
       break;
     case AST_TYPE_VOID:
       offset += snprintf(buf, maxlen, "void");
@@ -127,7 +135,8 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
     case AST_TYPE_ARRAY: {
       char element_ty[256];
       type_name_into(ty->array.element_ty, element_ty, 256);
-      offset += snprintf(buf + offset, maxlen - offset, "%s[%zu]", element_ty, ty->array.width);
+      offset +=
+          snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty, ty->array.width);
     } break;
     default:
       snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
@@ -135,7 +144,7 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
   }
 
   if (ty->flags & TYPE_FLAG_PTR) {
-    offset += snprintf(buf + offset, maxlen - offset, "*");
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
   }
 
   buf[offset] = '\0';

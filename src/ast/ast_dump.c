@@ -24,7 +24,7 @@ static void dump_match_arms(struct ast_expr_match_arm *arm, int indent);
 static void dump_match_arm(struct ast_expr_match_arm *arm, int indent);
 
 static void dump_ty(struct ast_ty *ty);
-static void dump_decl_flags(int flags);
+static void dump_decl_flags(uint64_t flags);
 
 void dump_ast(struct ast_program *ast) {
   struct ast_toplevel *decl = ast->decls;
@@ -160,7 +160,7 @@ static void dump_expr(struct ast_expr *ast, int indent) {
         case AST_TYPE_FVEC: {
           fprintf(stderr, "<");
           struct ast_expr_list *node = ast->list;
-          for (int i = 0; i < ast->ty.fvec.width; i++) {
+          for (size_t i = 0; i < ast->ty.fvec.width; i++) {
             if (i > 0) {
               fprintf(stderr, ", ");
             }
@@ -231,7 +231,7 @@ static void dump_expr(struct ast_expr *ast, int indent) {
     } break;
 
     case AST_EXPR_TYPE_DEREF:
-      fprintf(stderr, "Deref(%s, %d) -> ", ast->deref.ident.value.identv.ident, ast->deref.field);
+      fprintf(stderr, "Deref(%s, %zd) -> ", ast->deref.ident.value.identv.ident, ast->deref.field);
       dump_ty(&ast->ty);
       break;
 
@@ -374,7 +374,7 @@ static void dump_maybe_space(const char *s, int first) {
   fputs(s, stderr);
 }
 
-static void dump_decl_flags(int flags) {
+static void dump_decl_flags(uint64_t flags) {
   int first = 1;
   if (flags & DECL_FLAG_PUB) {
     dump_maybe_space("pub", first);

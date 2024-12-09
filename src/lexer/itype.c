@@ -16,7 +16,7 @@ int lex_integer_type(struct lex_state *state, struct token *token, char c) {
   }
 
   while (isdigit(c)) {
-    bits = bits * 10 + (c - '0');
+    bits = bits * 10 + ((size_t)c - '0');
     c = lex_getc(state);
   }
 
