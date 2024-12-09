@@ -109,8 +109,24 @@ int lexer_token(struct lex_state *state, struct token *token) {
     case '%':
       token->ident = TOKEN_PERCENT;
       break;
-    case '=':
-      return lex_check_either(state, token, '=', TOKEN_EQUALS, TOKEN_ASSIGN);
+    case '=': {
+      char next = lex_getc(state);
+      if (next < 0) {
+        token->ident = TOKEN_ASSIGN;
+        return 0;
+      }
+
+      if (next == '>') {
+        token->ident = TOKEN_INTO;
+      } else if (next == '=') {
+        token->ident = TOKEN_EQUALS;
+      } else {
+        token->ident = TOKEN_ASSIGN;
+        lex_unget(state, next);
+      }
+
+      return 0;
+    } break;
     case '(':
       token->ident = TOKEN_LPAREN;
       break;
@@ -198,6 +214,9 @@ int lexer_token(struct lex_state *state, struct token *token) {
       break;
     case '#':
       token->ident = TOKEN_POUND;
+      break;
+    case '_':
+      token->ident = TOKEN_UNDER;
       break;
     default: {
       if (!isalpha(c)) {

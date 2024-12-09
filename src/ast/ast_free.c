@@ -149,6 +149,23 @@ void free_expr(struct ast_expr *ast) {
       free_expr(ast->array_index.index);
       break;
 
+    case AST_EXPR_TYPE_MATCH: {
+      free_expr(ast->match.expr);
+      struct ast_expr_match_arm *arm = ast->match.arms;
+      while (arm) {
+        struct ast_expr_match_arm *next = arm->next;
+        free_expr(arm->pattern);
+        free_expr(arm->expr);
+        free(arm);
+        arm = next;
+      }
+
+      if (ast->match.otherwise) {
+        free_expr(ast->match.otherwise->expr);
+        free(ast->match.otherwise);
+      }
+    } break;
+
     default:
       fprintf(stderr, "unhandled free for expr type %d\n", ast->type);
   }

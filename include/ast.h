@@ -36,6 +36,7 @@
 #define AST_EXPR_TYPE_LOAD 15
 #define AST_EXPR_TYPE_BOOLEAN 16
 #define AST_EXPR_TYPE_ARRAY_INDEX 17
+#define AST_EXPR_TYPE_MATCH 18
 
 #define AST_BINARY_OP_ADD 1
 #define AST_BINARY_OP_SUB 2
@@ -179,6 +180,19 @@ struct ast_expr_array_index {
   struct ast_expr *index;
 };
 
+struct ast_expr_match {
+  struct ast_expr *expr;
+  struct ast_expr_match_arm *arms;
+  struct ast_expr_match_arm *otherwise;
+  size_t num_arms;
+};
+
+struct ast_expr_match_arm {
+  struct ast_expr *pattern;
+  struct ast_expr *expr;
+  struct ast_expr_match_arm *next;
+};
+
 struct ast_expr {
   int type;
   struct ast_ty ty;
@@ -200,6 +214,7 @@ struct ast_expr {
     struct ast_expr_load load;
     struct ast_expr_boolean boolean;
     struct ast_expr_array_index array_index;
+    struct ast_expr_match match;
   };
 };
 

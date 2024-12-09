@@ -288,6 +288,10 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
       return LLVMBuildLoad2(codegen->llvm_builder, target_ty, retrieve, "load");
     } break;
 
+    case AST_EXPR_TYPE_MATCH: {
+      return emit_match_expr(codegen, &ast->ty, &ast->match);
+    } break;
+
     default:
       fprintf(stderr, "unhandled expression type %d\n", ast->type);
   }

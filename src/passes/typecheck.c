@@ -702,6 +702,76 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
       return ast->ty;
     } break;
 
+    case AST_EXPR_TYPE_MATCH: {
+      struct ast_ty expr_ty = typecheck_expr(typecheck, ast->match.expr);
+      if (type_is_error(&expr_ty)) {
+        return type_error();
+      }
+
+      struct ast_expr_match_arm *arm = ast->match.arms;
+      while (arm) {
+        struct ast_ty pattern_ty = typecheck_expr(typecheck, arm->pattern);
+        if (type_is_error(&pattern_ty)) {
+          return type_error();
+        }
+
+        if (!same_type(&expr_ty, &pattern_ty)) {
+          char exprstr[256], patternstr[256];
+          type_name_into(&expr_ty, exprstr, 256);
+          type_name_into(&pattern_ty, patternstr, 256);
+
+          fprintf(stderr, "match expression has type %s, pattern has type %s\n", exprstr,
+                  patternstr);
+          ++typecheck->errors;
+          return type_error();
+        }
+
+        struct ast_ty arm_ty = typecheck_expr(typecheck, arm->expr);
+        if (type_is_error(&arm_ty)) {
+          return type_error();
+        }
+
+        if (arm->next) {
+          if (!same_type(&arm_ty, &arm->next->expr->ty)) {
+            char armstr[256], nextstr[256];
+            type_name_into(&arm_ty, armstr, 256);
+            type_name_into(&arm->next->expr->ty, nextstr, 256);
+
+            fprintf(stderr, "match arm has type %s, next arm has type %s\n", armstr, nextstr);
+            ++typecheck->errors;
+            return type_error();
+          }
+        }
+
+        arm = arm->next;
+      }
+
+      if (!ast->match.otherwise) {
+        fprintf(stderr, "match expression has no otherwise arm\n");
+        ++typecheck->errors;
+        return type_error();
+      }
+
+      struct ast_ty otherwise_ty = typecheck_expr(typecheck, ast->match.otherwise->expr);
+      if (type_is_error(&otherwise_ty)) {
+        return type_error();
+      }
+
+      if (!same_type(&expr_ty, &otherwise_ty)) {
+        char exprstr[256], otherwisestr[256];
+        type_name_into(&expr_ty, exprstr, 256);
+        type_name_into(&otherwise_ty, otherwisestr, 256);
+
+        fprintf(stderr, "match expression has type %s, otherwise has type %s\n", exprstr,
+                otherwisestr);
+        ++typecheck->errors;
+        return type_error();
+      }
+
+      ast->ty = expr_ty;
+      return ast->ty;
+    } break;
+
     default:
       fprintf(stderr, "unhandled expression type %d\n", ast->type);
   }

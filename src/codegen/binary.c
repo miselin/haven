@@ -18,13 +18,30 @@ LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *
   LLVMValueRef lcmp =
       LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, lhs, LLVMConstInt(lhs_type, 0, 0), "lhs");
 
+  // if AND: if lhs is false, return false, otherwise evaluate rhs
+  // if OR: if lhs is false, evaluate rhs, otherwise return true
+
   LLVMContextRef context = LLVMGetGlobalContext();
 
   LLVMBasicBlockRef start = LLVMGetInsertBlock(codegen->llvm_builder);
   LLVMBasicBlockRef rhs = LLVMCreateBasicBlockInContext(context, "logic.rhs");
   LLVMBasicBlockRef end = LLVMCreateBasicBlockInContext(context, "logic.end");
 
-  LLVMBuildCondBr(codegen->llvm_builder, lcmp, rhs, end);
+  LLVMAppendExistingBasicBlock(codegen->current_function, end);
+  LLVMPositionBuilderAtEnd(codegen->llvm_builder, end);
+  LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, LLVMInt1Type(), "phi");
+
+  LLVMPositionBuilderAtEnd(codegen->llvm_builder, start);
+
+  if (binary->op == AST_BINARY_OP_LOGICAL_AND) {
+    LLVMValueRef false = LLVMConstInt(LLVMInt1Type(), 0, 0);
+    LLVMAddIncoming(phi, &false, &start, 1);
+    LLVMBuildCondBr(codegen->llvm_builder, lcmp, rhs, end);
+  } else {
+    LLVMValueRef true = LLVMConstInt(LLVMInt1Type(), 1, 0);
+    LLVMAddIncoming(phi, &true, &start, 1);
+    LLVMBuildCondBr(codegen->llvm_builder, lcmp, end, rhs);
+  }
 
   LLVMAppendExistingBasicBlock(codegen->current_function, rhs);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, rhs);
@@ -32,14 +49,11 @@ LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *
   LLVMValueRef rcmp =
       LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, rhs_val, LLVMConstInt(rhs_type, 0, 0), "rhs");
   LLVMBasicBlockRef final_rhs = LLVMGetInsertBlock(codegen->llvm_builder);
+  LLVMAddIncoming(phi, &rcmp, &final_rhs, 1);
   LLVMBuildBr(codegen->llvm_builder, end);
 
-  LLVMAppendExistingBasicBlock(codegen->current_function, end);
+  LLVMMoveBasicBlockAfter(end, LLVMGetInsertBlock(codegen->llvm_builder));
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, end);
-  LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, LLVMInt1Type(), "phi");
-  LLVMValueRef values[] = {LLVMConstInt(LLVMInt1Type(), 0, 0), rcmp};
-  LLVMBasicBlockRef blocks[] = {start, final_rhs};
-  LLVMAddIncoming(phi, values, blocks, 2);
 
   return phi;
 }

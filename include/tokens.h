@@ -46,6 +46,7 @@ enum token_id {
   TOKEN_LSHIFT,      // <<
   TOKEN_RSHIFT,      // >>
   TOKEN_POUND,       // #
+  TOKEN_UNDER,       // _
 
   // keywords
   TOKEN_KW_PUB = 100,  // pub

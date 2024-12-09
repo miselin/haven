@@ -25,8 +25,8 @@ struct codegen *new_codegen(struct ast_program *ast) {
   result->llvm_module = LLVMModuleCreateWithName("<stdin>");
   result->llvm_builder = LLVMCreateBuilder();
 
-  // LLVMContextRef context = LLVMGetGlobalContext();
-  // LLVMContextSetDiscardValueNames(context, 1);
+  LLVMContextRef context = LLVMGetGlobalContext();
+  LLVMContextSetDiscardValueNames(context, 1);
 
   result->functions = new_kv();
 

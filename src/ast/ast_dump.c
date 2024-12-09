@@ -20,6 +20,8 @@ static void dump_stmt(struct ast_stmt *ast, int indent);
 static void dump_expr(struct ast_expr *ast, int indent);
 static void dump_fdecl(struct ast_fdecl *ast, int indent);
 static void dump_vdecl(struct ast_vdecl *ast, int indent);
+static void dump_match_arms(struct ast_expr_match_arm *arm, int indent);
+static void dump_match_arm(struct ast_expr_match_arm *arm, int indent);
 
 static void dump_ty(struct ast_ty *ty);
 static void dump_decl_flags(int flags);
@@ -315,9 +317,41 @@ static void dump_expr(struct ast_expr *ast, int indent) {
       dump_ty(&ast->ty);
       break;
 
+    case AST_EXPR_TYPE_MATCH:
+      fprintf(stderr, "Match(");
+      dump_expr(ast->match.expr, indent);
+      fprintf(stderr, ") {\n");
+      dump_match_arms(ast->match.arms, indent + 2);
+      if (ast->match.otherwise) {
+        INDENTED(indent + 2, "Otherwise => ");
+        dump_expr(ast->match.otherwise->expr, indent + 2);
+        fprintf(stderr, "\n");
+      }
+      INDENTED(indent, "}");
+      break;
+
     default:
       fprintf(stderr, "<unknown-expr %d>", ast->type);
   }
+}
+
+static void dump_match_arms(struct ast_expr_match_arm *arm, int indent) {
+  while (arm) {
+    dump_match_arm(arm, indent);
+    arm = arm->next;
+  }
+}
+
+static void dump_match_arm(struct ast_expr_match_arm *arm, int indent) {
+  INDENTED(indent, "MatchArm(");
+  if (arm->pattern) {
+    dump_expr(arm->pattern, indent);
+  } else {
+    fprintf(stderr, "_");
+  }
+  fprintf(stderr, " => ");
+  dump_expr(arm->expr, indent);
+  fprintf(stderr, ")\n");
 }
 
 static void dump_ty(struct ast_ty *ty) {

@@ -630,6 +630,12 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       parser_consume(parser, NULL, TOKEN_RPAREN);
       break;
 
+      // sub-blocks
+    case TOKEN_LBRACE:
+      result->type = AST_EXPR_TYPE_BLOCK;
+      parse_block(parser, &result->block);
+      break;
+
       // type casts
     case TOKEN_KW_AS:
       // as <ty> <expr>
@@ -670,9 +676,47 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       }
       break;
 
-    case TOKEN_LBRACE:
-      result->type = AST_EXPR_TYPE_BLOCK;
-      parse_block(parser, &result->block);
+    // match expressions
+    case TOKEN_KW_MATCH:
+      parser_consume(parser, NULL, TOKEN_KW_MATCH);
+      result->type = AST_EXPR_TYPE_MATCH;
+      result->match.expr = parse_expression(parser);
+      parser_consume(parser, NULL, TOKEN_LBRACE);
+      while (parser_peek(parser) != TOKEN_RBRACE) {
+        struct ast_expr_match_arm *arm = calloc(1, sizeof(struct ast_expr_match_arm));
+        int is_otherwise = 0;
+        if (parser_peek(parser) == TOKEN_UNDER) {
+          parser_consume(parser, NULL, TOKEN_UNDER);
+          arm->pattern = NULL;
+          is_otherwise = 1;
+        } else {
+          arm->pattern = parse_expression(parser);
+        }
+        parser_consume(parser, NULL, TOKEN_INTO);
+        arm->expr = parse_expression(parser);
+
+        if (is_otherwise) {
+          if (result->match.otherwise) {
+            parser_diag(1, parser, &parser->peek, "multiple otherwise arms in match expression\n");
+          }
+          result->match.otherwise = arm;
+        } else {
+          if (!result->match.arms) {
+            result->match.arms = arm;
+          } else {
+            struct ast_expr_match_arm *last = result->match.arms;
+            while (last->next) {
+              last = last->next;
+            }
+
+            last->next = arm;
+          }
+
+          // TODO: need a semantic analysis pass to yell if there's no arms!
+          result->match.num_arms++;
+        }
+      }
+      parser_consume(parser, NULL, TOKEN_RBRACE);
       break;
 
     default:

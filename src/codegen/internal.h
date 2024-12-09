@@ -3,6 +3,7 @@
 
 #include <llvm-c-18/llvm-c/Types.h>
 
+#include "ast.h"
 #include "codegen.h"
 
 struct scope_entry {
@@ -61,5 +62,8 @@ LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *
 LLVMValueRef emit_boolean_expr(struct codegen *codegen, struct ast_expr_binary *binary);
 LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *binary,
                               struct ast_ty *ty);
+
+LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
+                             struct ast_expr_match *match);
 
 #endif
