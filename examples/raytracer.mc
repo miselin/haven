@@ -87,17 +87,16 @@ pub fn i32 main() {
             // 64 rays per pixel
             iter 0:64 r {
                 let t = {
-                    let left = {
+                    {
                         let r = R() - 0.5;
                         let delta = a * r;
                         delta * 99.9
-                    };
-                    let right = {
+                    } +
+                    {
                         let r = R() - 0.5;
                         let delta = b * r;
                         delta * 99.9
-                    };
-                    left + right
+                    }
                 };
 
                 let contrib = {
@@ -181,10 +180,8 @@ pub fn fvec3 S(fvec3 o, fvec3 d) {
         } else {
             <3.0, 3.0, 3.0>
         };
-        ret floorsquare * mul;
-    };
-
-    {
+        floorsquare * mul
+    } else {
         let p = powf(LdR * mmm, 99.0);
         let base = <p, p, p>;
         let bounce = S(h, r) * 0.5;
