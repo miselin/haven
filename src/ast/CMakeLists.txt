@@ -1,1 +1,1 @@
-add_library(ast STATIC ast.c ast_free.c)
+add_library(ast STATIC ast.c ast_free.c ast_dump.c)
