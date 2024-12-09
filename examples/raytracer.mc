@@ -139,54 +139,60 @@ pub fn fvec3 S(fvec3 o, fvec3 d) {
 
     let m = T(o, d, ref t, ref n);
 
-    if m == as i8 0 {
-        let sky = <0.7, 0.6, 1.0>;
-        ret sky * powf(1.0 - d.z, 4.0);
-    };
+    match m {
+        (as i8 0) => {
+            let sky = <0.7, 0.6, 1.0>;
+            sky * powf(1.0 - d.z, 4.0)
+        }
+        _ => {
+            let h = {
+                let dirt = d * t;
+                o + dirt
+            };
+            let l = {
+                let v = <(R() + 9.0), (R() + 9.0), 16.0>;
+                vnorm(v - h)
+            };
+            let r = {
+                let inner = vdot(n, d) * -2.0;
+                let outer = n * inner;
+                d + outer
+            };
 
-    let h = {
-        let dirt = d * t;
-        o + dirt
-    };
-    let l = {
-        let v = <(R() + 9.0), (R() + 9.0), 16.0>;
-        vnorm(v - h)
-    };
-    let r = {
-        let inner = vdot(n, d) * -2.0;
-        let outer = n * inner;
-        d + outer
-    };
+            let shadow = T(h, l, ref t, ref n);
 
-    let shadow = T(h, l, ref t, ref n);
+            let LdN = vdot(l, n);
+            let b = if (LdN < 0.0) || (shadow != as i8 0) {
+                0.0
+            } else {
+                LdN
+            };
 
-    let LdN = vdot(l, n);
-    let b = if (LdN < 0.0) || (shadow != as i8 0) {
-        0.0
-    } else {
-        LdN
-    };
+            let LdR = vdot(l, r);
+            let mmm = if (b > 0.0) { 1.0 } else { 0.0 };
 
-    let LdR = vdot(l, r);
-    let mmm = if (b > 0.0) { 1.0 } else { 0.0 };
-
-    if m == as i8 1 {
-        let hfifth = h * 0.2;
-        let mul = b * 0.2 + 0.1;
-        let ceils = ceilf(hfifth.x) + ceilf(hfifth.y);
-        let iceils = as i32 ceils;
-        let floorsquare = if (iceils & as i32 1) == as i32 1 {
-            <3.0, 1.0, 1.0>
-        } else {
-            <3.0, 3.0, 3.0>
-        };
-        floorsquare * mul
-    } else {
-        let p = powf(LdR * mmm, 99.0);
-        let base = <p, p, p>;
-        let bounce = S(h, r) * 0.5;
-        let contrib = base + bounce;
-        contrib
+            match m {
+                (as i8 1) => {
+                    let hfifth = h * 0.2;
+                    let mul = b * 0.2 + 0.1;
+                    let ceils = ceilf(hfifth.x) + ceilf(hfifth.y);
+                    let iceils = as i32 ceils;
+                    let floorsquare = if (iceils & as i32 1) == as i32 1 {
+                        <3.0, 1.0, 1.0>
+                    } else {
+                        <3.0, 3.0, 3.0>
+                    };
+                    floorsquare * mul
+                }
+                _ => {
+                    let p = powf(LdR * mmm, 99.0);
+                    let base = <p, p, p>;
+                    let bounce = S(h, r) * 0.5;
+                    let contrib = base + bounce;
+                    contrib
+                }
+            }
+        }
     }
 }
 

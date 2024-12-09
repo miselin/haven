@@ -320,14 +320,19 @@ static void dump_expr(struct ast_expr *ast, int indent) {
     case AST_EXPR_TYPE_MATCH:
       fprintf(stderr, "Match(");
       dump_expr(ast->match.expr, indent);
+      fprintf(stderr, " -> ");
+      dump_ty(&ast->match.expr->ty);
       fprintf(stderr, ") {\n");
       dump_match_arms(ast->match.arms, indent + 2);
       if (ast->match.otherwise) {
         INDENTED(indent + 2, "Otherwise => ");
         dump_expr(ast->match.otherwise->expr, indent + 2);
+        fprintf(stderr, " -> ");
+        dump_ty(&ast->match.otherwise->expr->ty);
         fprintf(stderr, "\n");
       }
-      INDENTED(indent, "}");
+      INDENTED(indent, "} -> ");
+      dump_ty(&ast->ty);
       break;
 
     default:
@@ -351,7 +356,9 @@ static void dump_match_arm(struct ast_expr_match_arm *arm, int indent) {
   }
   fprintf(stderr, " => ");
   dump_expr(arm->expr, indent);
-  fprintf(stderr, ")\n");
+  fprintf(stderr, ") -> ");
+  dump_ty(&arm->expr->ty);
+  fprintf(stderr, "\n");
 }
 
 static void dump_ty(struct ast_ty *ty) {

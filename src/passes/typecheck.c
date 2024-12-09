@@ -411,7 +411,9 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      return typecheck_block(typecheck, &ast->block);
+      struct ast_ty ty = typecheck_block(typecheck, &ast->block);
+      ast->ty = ty;
+      return ast->ty;
     } break;
 
     case AST_EXPR_TYPE_CALL: {
@@ -705,42 +707,34 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
     case AST_EXPR_TYPE_MATCH: {
       struct ast_ty expr_ty = typecheck_expr(typecheck, ast->match.expr);
       if (type_is_error(&expr_ty)) {
+        fprintf(stderr, "match expression has type error\n");
         return type_error();
       }
 
+      // first pass: check that all arms have the same pattern type, and check their expressions
       struct ast_expr_match_arm *arm = ast->match.arms;
       while (arm) {
         struct ast_ty pattern_ty = typecheck_expr(typecheck, arm->pattern);
         if (type_is_error(&pattern_ty)) {
+          fprintf(stderr, "match arm pattern has type error\n");
           return type_error();
         }
 
-        if (!same_type(&expr_ty, &pattern_ty)) {
-          char exprstr[256], patternstr[256];
-          type_name_into(&expr_ty, exprstr, 256);
-          type_name_into(&pattern_ty, patternstr, 256);
+        if (!same_type(&pattern_ty, &expr_ty)) {
+          char wantstr[256], gotstr[256];
+          type_name_into(&pattern_ty, wantstr, 256);
+          type_name_into(&expr_ty, gotstr, 256);
 
-          fprintf(stderr, "match expression has type %s, pattern has type %s\n", exprstr,
-                  patternstr);
+          fprintf(stderr, "match patterns has incorrect type, wanted %s but got %s\n", wantstr,
+                  gotstr);
           ++typecheck->errors;
           return type_error();
         }
 
         struct ast_ty arm_ty = typecheck_expr(typecheck, arm->expr);
         if (type_is_error(&arm_ty)) {
+          fprintf(stderr, "match arm expression has type error\n");
           return type_error();
-        }
-
-        if (arm->next) {
-          if (!same_type(&arm_ty, &arm->next->expr->ty)) {
-            char armstr[256], nextstr[256];
-            type_name_into(&arm_ty, armstr, 256);
-            type_name_into(&arm->next->expr->ty, nextstr, 256);
-
-            fprintf(stderr, "match arm has type %s, next arm has type %s\n", armstr, nextstr);
-            ++typecheck->errors;
-            return type_error();
-          }
         }
 
         arm = arm->next;
@@ -754,26 +748,36 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
 
       struct ast_ty otherwise_ty = typecheck_expr(typecheck, ast->match.otherwise->expr);
       if (type_is_error(&otherwise_ty)) {
+        fprintf(stderr, "match otherwise arm has type error\n");
         return type_error();
       }
 
-      if (!same_type(&expr_ty, &otherwise_ty)) {
-        char exprstr[256], otherwisestr[256];
-        type_name_into(&expr_ty, exprstr, 256);
-        type_name_into(&otherwise_ty, otherwisestr, 256);
+      // second pass: check that all arms have the same type
+      arm = ast->match.arms;
+      while (arm) {
+        struct ast_expr_match_arm *next = arm->next ? arm->next : ast->match.otherwise;
+        if (next) {
+          if (!same_type(&arm->expr->ty, &next->expr->ty)) {
+            char armstr[256], nextstr[256];
+            type_name_into(&arm->expr->ty, armstr, 256);
+            type_name_into(&next->expr->ty, nextstr, 256);
 
-        fprintf(stderr, "match expression has type %s, otherwise has type %s\n", exprstr,
-                otherwisestr);
-        ++typecheck->errors;
-        return type_error();
+            fprintf(stderr, "match arm has type %s, next arm has mismatched type %s\n", armstr,
+                    nextstr);
+            ++typecheck->errors;
+            return type_error();
+          }
+        }
+
+        arm = arm->next;
       }
 
-      ast->ty = expr_ty;
+      ast->ty = ast->match.arms->expr->ty;
       return ast->ty;
     } break;
 
     default:
-      fprintf(stderr, "unhandled expression type %d\n", ast->type);
+      fprintf(stderr, "typecheck: unhandled expression type %d\n", ast->type);
   }
 
   // all expressions must resolve to a type
