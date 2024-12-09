@@ -252,4 +252,7 @@ const char *ast_binary_op_to_str(int op);
 const char *ast_unary_op_to_str(int op);
 const char *ast_logical_op_to_str(int op);
 
+int ast_binary_op_conditional(int op);
+int ast_binary_op_logical(int op);
+
 #endif

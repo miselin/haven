@@ -368,10 +368,18 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         type_name_into(&lhs, lhsstr, 256);
         type_name_into(&rhs, rhsstr, 256);
 
-        fprintf(stderr, "binary op %d has mismatching lhs type %s, rhs type %s\n", ast->binary.op,
-                lhsstr, rhsstr);
+        fprintf(stderr, "binary op %s has mismatching lhs type %s, rhs type %s\n",
+                ast_binary_op_to_str(ast->binary.op), lhsstr, rhsstr);
         ++typecheck->errors;
         return type_error();
+      }
+
+      if (ast_binary_op_conditional(ast->binary.op) || ast_binary_op_logical(ast->binary.op)) {
+        // conditionals & logicals both emit 1-bit booleans
+        ast->ty.ty = AST_TYPE_INTEGER;
+        ast->ty.integer.is_signed = 1;
+        ast->ty.integer.width = 1;
+        return ast->ty;
       }
 
       ast->ty = lhs;

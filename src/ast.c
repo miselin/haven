@@ -367,12 +367,32 @@ const char *ast_binary_op_to_str(int op) {
       return "/";
     case AST_BINARY_OP_MOD:
       return "%";
+    case AST_BINARY_OP_BITAND:
+      return "&";
+    case AST_BINARY_OP_BITOR:
+      return "|";
     case AST_BINARY_OP_BITXOR:
       return "^";
     case AST_BINARY_OP_LSHIFT:
       return "<<";
     case AST_BINARY_OP_RSHIFT:
       return ">>";
+    case AST_BINARY_OP_LOGICAL_OR:
+      return "||";
+    case AST_BINARY_OP_LOGICAL_AND:
+      return "&&";
+    case AST_BINARY_OP_EQUAL:
+      return "==";
+    case AST_BINARY_OP_NOT_EQUAL:
+      return "!=";
+    case AST_BINARY_OP_LT:
+      return "<";
+    case AST_BINARY_OP_LTE:
+      return "<=";
+    case AST_BINARY_OP_GT:
+      return ">";
+    case AST_BINARY_OP_GTE:
+      return ">=";
     default:
       return "<unknown-binary-op>";
   }
@@ -398,5 +418,29 @@ const char *ast_logical_op_to_str(int op) {
       return "&&";
     default:
       return "<unknown-logical-op>";
+  }
+}
+
+int ast_binary_op_conditional(int op) {
+  switch (op) {
+    case AST_BINARY_OP_EQUAL:
+    case AST_BINARY_OP_NOT_EQUAL:
+    case AST_BINARY_OP_LT:
+    case AST_BINARY_OP_LTE:
+    case AST_BINARY_OP_GT:
+    case AST_BINARY_OP_GTE:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+int ast_binary_op_logical(int op) {
+  switch (op) {
+    case AST_BINARY_OP_LOGICAL_OR:
+    case AST_BINARY_OP_LOGICAL_AND:
+      return 1;
+    default:
+      return 0;
   }
 }
