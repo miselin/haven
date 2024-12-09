@@ -14,6 +14,7 @@ struct lex_state *new_lexer(FILE *stream) {
   struct lex_state *result = calloc(1, sizeof(struct lex_state));
   result->stream = stream;
   strncpy(result->loc.file, "<stdin>", 256);
+  initialize_keyword_trie(result);
   return result;
 }
 
@@ -34,5 +35,6 @@ void lexer_update_loc(struct lex_state *state, struct lex_locator *loc) {
 }
 
 void destroy_lexer(struct lex_state *state) {
+  destroy_keyword_trie(state);
   free(state);
 }

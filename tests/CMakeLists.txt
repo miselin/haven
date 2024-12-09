@@ -1,11 +1,15 @@
 
+include(GoogleTest)
+
 add_subdirectory(inputs)
 
 add_executable(vec_test vec_test.cc)
 target_link_libraries(vec_test mattc_vec GTest::gtest_main)
-
-include(GoogleTest)
 gtest_discover_tests(vec_test)
+
+add_executable(trie_test trie_test.cc)
+target_link_libraries(trie_test utilities GTest::gtest_main)
+gtest_discover_tests(trie_test)
 
 macro(add_functional_test name expectedrc lib)
     add_executable(${name} rc_test.cc)

@@ -2,55 +2,85 @@
 
 #include "internal.h"
 #include "tokens.h"
+#include "trie.h"
 
-int lex_maybe_keyword(struct lex_state *state, struct token *token) {
-  if (!strcmp(token->value.identv.ident, "if")) {
-    token->ident = TOKEN_KW_IF;
-  } else if (!strcmp(token->value.identv.ident, "else")) {
-    token->ident = TOKEN_KW_ELSE;
-  } else if (!strcmp(token->value.identv.ident, "let")) {
-    token->ident = TOKEN_KW_LET;
-  } else if (!strcmp(token->value.identv.ident, "for")) {
-    token->ident = TOKEN_KW_FOR;
-  } else if (!strcmp(token->value.identv.ident, "while")) {
-    token->ident = TOKEN_KW_WHILE;
-  } else if (!strcmp(token->value.identv.ident, "break")) {
-    token->ident = TOKEN_KW_BREAK;
-  } else if (!strcmp(token->value.identv.ident, "continue")) {
-    token->ident = TOKEN_KW_CONTINUE;
-  } else if (!strcmp(token->value.identv.ident, "match")) {
-    token->ident = TOKEN_KW_MATCH;
-  } else if (!strcmp(token->value.identv.ident, "as")) {
-    token->ident = TOKEN_KW_AS;
-  } else if (!strcmp(token->value.identv.ident, "pub")) {
-    token->ident = TOKEN_KW_PUB;
-  } else if (!strcmp(token->value.identv.ident, "mut")) {
-    token->ident = TOKEN_KW_MUT;
-  } else if (!strcmp(token->value.identv.ident, "neg")) {
-    token->ident = TOKEN_KW_NEG;
-  } else if (!strcmp(token->value.identv.ident, "fn")) {
-    token->ident = TOKEN_KW_FN;
-  } else if (!strcmp(token->value.identv.ident, "iter")) {
-    token->ident = TOKEN_KW_ITER;
-  } else if (!strcmp(token->value.identv.ident, "ref")) {
-    token->ident = TOKEN_KW_REF;
-  } else if (!strcmp(token->value.identv.ident, "store")) {
-    token->ident = TOKEN_KW_STORE;
-  } else if (!strcmp(token->value.identv.ident, "load")) {
-    token->ident = TOKEN_KW_LOAD;
-  } else if (!strcmp(token->value.identv.ident, "ret")) {
-    token->ident = TOKEN_KW_RETURN;
-  } else if (!strcmp(token->value.identv.ident, "float")) {
-    token->ident = TOKEN_TY_FLOAT;
-  } else if (!strcmp(token->value.identv.ident, "str")) {
-    token->ident = TOKEN_TY_STR;
-  } else if (!strcmp(token->value.identv.ident, "char")) {
-    token->ident = TOKEN_TY_CHAR;
-  } else if (!strcmp(token->value.identv.ident, "void")) {
-    token->ident = TOKEN_TY_VOID;
-  } else if (!strncmp(token->value.identv.ident, "fvec", 4)) {
+struct lookup {
+  const char *name;
+  enum token_id ident;
+} keywords[] = {
+    {"if", TOKEN_KW_IF},
+    {"else", TOKEN_KW_ELSE},
+    {"let", TOKEN_KW_LET},
+    {"for", TOKEN_KW_FOR},
+    {"while", TOKEN_KW_WHILE},
+    {"break", TOKEN_KW_BREAK},
+    {"continue", TOKEN_KW_CONTINUE},
+    {"match", TOKEN_KW_MATCH},
+    {"as", TOKEN_KW_AS},
+    {"pub", TOKEN_KW_PUB},
+    {"mut", TOKEN_KW_MUT},
+    {"neg", TOKEN_KW_NEG},
+    {"fn", TOKEN_KW_FN},
+    {"iter", TOKEN_KW_ITER},
+    {"ref", TOKEN_KW_REF},
+    {"store", TOKEN_KW_STORE},
+    {"load", TOKEN_KW_LOAD},
+    {"ret", TOKEN_KW_RETURN},
+    {"float", TOKEN_TY_FLOAT},
+    {"str", TOKEN_TY_STR},
+    {"char", TOKEN_TY_CHAR},
+    {"void", TOKEN_TY_VOID},
+};
+
+int initialize_keyword_trie(struct lex_state *state) {
+  state->keywords = new_trie();
+  for (size_t i = 0; i < sizeof(keywords) / sizeof(struct lookup); i++) {
+    trie_insert(state->keywords, keywords[i].name, (void *)keywords[i].ident);
+  }
+
+  return 0;
+}
+
+int destroy_keyword_trie(struct lex_state *state) {
+  destroy_trie(state->keywords);
+  return 0;
+}
+
+// public for benchmark
+int lex_maybe_keyword_inner(struct lex_state *state, struct token *token, const char *ident) {
+  for (size_t i = 0; i < sizeof(keywords) / sizeof(struct lookup); i++) {
+    if (!strcmp(ident, keywords[i].name)) {
+      token->ident = keywords[i].ident;
+      return 0;
+    }
+  }
+
+  if (!strncmp(ident, "fvec", 4)) {
     return lex_vector_type(state, token);
   }
 
   return 0;
+}
+
+// public for benchmark
+int lex_maybe_keyword_trie_inner(struct lex_state *state, struct token *token, const char *ident) {
+  void *entry = trie_lookup(state->keywords, token->value.identv.ident);
+  if (entry) {
+    token->ident = (size_t)entry;
+    return 0;
+  }
+
+  if (!strncmp(ident, "fvec", 4)) {
+    return lex_vector_type(state, token);
+  }
+
+  return 0;
+}
+
+int lex_maybe_keyword_trie(struct lex_state *state, struct token *token) {
+  return lex_maybe_keyword_trie_inner(state, token, token->value.identv.ident);
+}
+
+int lex_maybe_keyword(struct lex_state *state, struct token *token) {
+  return lex_maybe_keyword_inner(state, token, token->value.identv.ident);
 }

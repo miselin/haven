@@ -44,6 +44,10 @@ struct token {
   struct lex_locator loc;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct lex_state *new_lexer(FILE *);
 int lexer_eof(struct lex_state *);
 int lexer_token(struct lex_state *, struct token *);
@@ -54,5 +58,9 @@ void destroy_lexer(struct lex_state *);
 void lexer_update_loc(struct lex_state *, struct lex_locator *);
 
 void print_token(struct token *);
+
+#ifdef __cplusplus
+};
+#endif
 
 #endif

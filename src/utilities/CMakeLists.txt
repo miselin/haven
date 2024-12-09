@@ -1,1 +1,1 @@
-add_library(utilities STATIC kv.c scope.c)
+add_library(utilities STATIC kv.c scope.c trie.c)
