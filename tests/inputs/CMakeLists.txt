@@ -1,3 +1,5 @@
 add_mattc_library(mattc_vec vec.mc)
 add_mattc_library(test_input_simplest simplest.mc)
 add_mattc_library(test_input_add add.mc)
+add_mattc_library(test_input_prec1 prec1.mc)
+add_mattc_library(test_input_prec2 prec2.mc)
