@@ -1,0 +1,1 @@
+add_library(lexer STATIC lex.c)

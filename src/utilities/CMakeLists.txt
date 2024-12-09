@@ -1,0 +1,1 @@
+add_library(utilities STATIC kv.c scope.c)

@@ -1,0 +1,1 @@
+add_library(ast STATIC ast.c ast_free.c)

@@ -1,24 +1,16 @@
-llvm_map_components_to_libnames(llvm_libs support core analysis)
-
-add_library(mattc_lib STATIC
-    lex.c
-    parse.c
-    codegen.c
-    typecheck.c
-    kv.c
-    scope.c
-    types.c
-    ast.c
-    cfold.c
-    tokens.c
-    ast_free.c
-)
-target_link_libraries(mattc_lib PUBLIC ${llvm_libs})
+add_subdirectory(lexer)
+add_subdirectory(parser)
+add_subdirectory(codegen)
+add_subdirectory(passes)
+add_subdirectory(tokens)
+add_subdirectory(ast)
+add_subdirectory(utilities)
+add_subdirectory(types)
 
 add_executable(mattc
     main.c
 )
-target_link_libraries(mattc mattc_lib)
+target_link_libraries(mattc lexer parser ir passes)
 
 # Use C compiler to build, but C++ compiler for linking due to LLVM
 set_target_properties(mattc PROPERTIES LINKER_LANGUAGE CXX)
