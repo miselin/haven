@@ -14,8 +14,9 @@
 struct lex_state {
   FILE *stream;
   char buf[LEXER_BUFFER_SIZE];
-  size_t buf_head;  // read from head
-  size_t buf_tail;  // write to tail
+  size_t buf_head;     // read from head
+  size_t buf_tail;     // write to tail
+  size_t prev_column;  // column before a newline (for unget)
 
   struct lex_locator loc;
 };
@@ -44,6 +45,7 @@ static void lex_error(struct lex_state *state, const char *fmt, ...) {
 struct lex_state *new_lexer(FILE *stream) {
   struct lex_state *result = calloc(1, sizeof(struct lex_state));
   result->stream = stream;
+  strncpy(result->loc.file, "<stdin>", 256);
   return result;
 }
 
@@ -305,6 +307,9 @@ int lexer_token(struct lex_state *state, struct token *token) {
     c = lex_getc(state);
   }
 
+  // skipped spaces, this is the more correct locator
+  lexer_locate(state, &token->loc);
+
   if (isdigit(c)) {
     return lex_integer(state, token, c);
   }
@@ -454,6 +459,9 @@ int lexer_token(struct lex_state *state, struct token *token) {
     case '~':
       token->ident = TOKEN_TILDE;
       break;
+    case '#':
+      token->ident = TOKEN_POUND;
+      break;
     default: {
       if (!isalpha(c)) {
         lex_error(state, "first character of identifier is not a letter");
@@ -507,6 +515,7 @@ static char lex_getc(struct lex_state *state) {
   }
 
   if (c == '\n') {
+    state->prev_column = state->loc.column;
     state->loc.line++;
     state->loc.column = 0;
   } else {
@@ -528,7 +537,7 @@ static void lex_unget(struct lex_state *state, char c) {
     state->loc.column--;
   } else {
     state->loc.line--;
-    state->loc.column = 0;
+    state->loc.column = state->prev_column;
   }
 }
 
@@ -569,6 +578,9 @@ void lexer_locate(struct lex_state *state, struct lex_locator *loc) {
 }
 
 void lexer_locate_str(struct lex_state *state, char *buf, size_t len) {
-  // TODO: pass file name to lexer state
-  snprintf(buf, len, "<stdin>:%zu:%zu", state->loc.line, state->loc.column);
+  snprintf(buf, len, "%s:%zu:%zu", state->loc.file, state->loc.line, state->loc.column);
+}
+
+void lexer_update_loc(struct lex_state *state, struct lex_locator *loc) {
+  memcpy(&state->loc, loc, sizeof(struct lex_locator));
 }

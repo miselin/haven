@@ -28,6 +28,18 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
 
 static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs);
 
+static void typecheck_diag_expr(struct typecheck *typecheck, struct ast_expr *expr, const char *msg,
+                                ...) {
+  fprintf(stderr, "%s:%zu:%zu: ", expr->loc.file, expr->loc.line, expr->loc.column);
+
+  va_list args;
+  va_start(args, msg);
+  vfprintf(stderr, msg, args);
+  va_end(args);
+
+  ++typecheck->errors;
+}
+
 struct typecheck *new_typecheck(struct ast_program *ast) {
   struct typecheck *result = calloc(1, sizeof(struct typecheck));
   result->ast = ast;
@@ -153,8 +165,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
         type_name_into(&result, resultstr, 256);
         type_name_into(&ast->vdecl.ty, tystr, 256);
 
-        fprintf(stderr, "variable %s initializer has type %s, expected %s\n",
-                ast->vdecl.ident.value.identv.ident, resultstr, tystr);
+        typecheck_diag_expr(typecheck, ast->vdecl.init_expr,
+                            "variable %s initializer has type %s, expected %s\n",
+                            ast->vdecl.ident.value.identv.ident, resultstr, tystr);
         ++typecheck->errors;
         return;
       }
@@ -204,8 +217,9 @@ static struct ast_ty typecheck_stmt(struct typecheck *typecheck, struct ast_stmt
         type_name_into(&ast->let.ty, tystr, 256);
         type_name_into(&init_ty, initstr, 256);
 
-        fprintf(stderr, "let %s initializer has type %s, expected %s\n",
-                ast->let.ident.value.identv.ident, initstr, tystr);
+        typecheck_diag_expr(typecheck, ast->let.init_expr,
+                            "let %s initializer has type %s, expected %s\n",
+                            ast->let.ident.value.identv.ident, initstr, tystr);
         ++typecheck->errors;
       }
     } break;

@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-gcc -E -P - <$1 >$1.preproc
+gcc -E - <$1 >$1.preproc
 ./build/src/mattc $1.preproc $1.ir 2>&1 | tee log.log
 
 opt-18 -S --O3 $1.ir >$1.ll

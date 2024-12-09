@@ -49,18 +49,12 @@ int main(int argc, char *argv[]) {
   }
 
   if (rc == 0) {
-    fprintf(stderr, "== Pre-typecheck AST ==\n");
-    dump_ast(parser_get_ast(parser));
-
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser));
     rc = typecheck_run(typecheck);
     destroy_typecheck(typecheck);
   }
 
   if (rc == 0) {
-    fprintf(stderr, "== Finalized AST ==\n");
-    dump_ast(parser_get_ast(parser));
-
     struct codegen *codegen = new_codegen(parser_get_ast(parser));
     rc = codegen_run(codegen);
     if (rc == 0) {
@@ -70,9 +64,6 @@ int main(int argc, char *argv[]) {
     }
     destroy_codegen(codegen);
   }
-
-  destroy_parser(parser);
-  return 0;
 
   if (rc) {
     fprintf(stderr, "== Partial AST after failure ==\n");

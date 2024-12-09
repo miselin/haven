@@ -12,6 +12,7 @@ struct lex_state;
 struct lex_locator {
   size_t line;
   size_t column;
+  char file[256];
 };
 
 struct token {
@@ -49,6 +50,8 @@ int lexer_token(struct lex_state *, struct token *);
 void lexer_locate(struct lex_state *, struct lex_locator *);
 void lexer_locate_str(struct lex_state *, char *buf, size_t len);
 void destroy_lexer(struct lex_state *);
+
+void lexer_update_loc(struct lex_state *, struct lex_locator *);
 
 void print_token(struct token *);
 

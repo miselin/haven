@@ -174,6 +174,7 @@ struct ast_expr_array_index {
 struct ast_expr {
   int type;
   struct ast_ty ty;
+  struct lex_locator loc;
   union {
     struct ast_expr_constant constant;
     struct ast_block block;

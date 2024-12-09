@@ -15,4 +15,5 @@ macro(add_functional_test name expectedrc lib)
 endmacro()
 
 add_functional_test(simplest_test 0 test_input_simplest)
+add_functional_test(add_test 6 test_input_add)
 

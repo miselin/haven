@@ -29,6 +29,7 @@ static enum token_id parser_peek(struct parser *parser);
 static int parser_consume(struct parser *parser, struct token *token, enum token_id expected);
 
 static int parser_parse_toplevel(struct parser *parser);
+static int parser_parse_preproc(struct parser *parser);
 
 static int parse_block(struct parser *parser, struct ast_block *into);
 static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi);
@@ -45,8 +46,8 @@ static int binary_op(int token);
 static void parser_diag(int fatal, struct parser *parser, struct token *token, const char *msg,
                         ...) {
   if (token) {
-    char locbuf[64] = {0};
-    lexer_locate_str(parser->lexer, locbuf, 64);
+    char locbuf[256] = {0};
+    lexer_locate_str(parser->lexer, locbuf, 256);
     fprintf(stderr, "%s: ", locbuf);
   } else {
     fprintf(stderr, "???: ");
@@ -170,6 +171,10 @@ static int parser_parse_toplevel(struct parser *parser) {
     return 1;
   }
 
+  if (peek == TOKEN_POUND) {
+    return parser_parse_preproc(parser);
+  }
+
   int flags = 0;
 
   struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
@@ -287,6 +292,43 @@ static int parser_parse_toplevel(struct parser *parser) {
     }
 
     last->next = decl;
+  }
+
+  return 0;
+}
+
+static int parser_parse_preproc(struct parser *parser) {
+  struct token token;
+
+  parser_consume(parser, NULL, TOKEN_POUND);
+
+  // what's next?
+  enum token_id peek = parser_peek(parser);
+  switch (peek) {
+    case TOKEN_INTEGER:
+      // line number update - <int> <filename>
+      parser_consume(parser, &token, TOKEN_INTEGER);
+      size_t new_line = token.value.intv.val;
+
+      parser_consume(parser, &token, TOKEN_STRING);
+      const char *new_file = token.value.strv.s;
+
+      struct lex_locator loc;
+      lexer_locate(parser->lexer, &loc);
+      loc.line = new_line - 1;  // references the next line
+      strncpy(loc.file, new_file, 256);
+      lexer_update_loc(parser->lexer, &loc);
+
+      // consume the flags (if any) -- TODO: use the flags
+      while (parser_peek(parser) == TOKEN_INTEGER) {
+        parser_consume(parser, NULL, TOKEN_INTEGER);
+      }
+
+      break;
+
+    default:
+      parser_diag(1, parser, NULL, "unexpected token %s in preprocessor line\n",
+                  token_id_to_string(peek));
   }
 
   return 0;
@@ -434,9 +476,11 @@ static struct ast_expr_list *parse_expression_list(struct parser *parser,
 static struct ast_expr *parse_expression(struct parser *parser) {
   struct ast_expr *result = calloc(1, sizeof(struct ast_expr));
   result->ty.ty = AST_TYPE_TBD;
+
   struct token token;
 
   int peek = parser_peek(parser);
+  lexer_locate(parser->lexer, &result->loc);
   switch (peek) {
     case TOKEN_INTEGER:
     case TOKEN_STRING:
