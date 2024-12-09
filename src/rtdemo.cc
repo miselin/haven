@@ -65,7 +65,7 @@ v S(v o, v d) {
     h = h * .2;
     return ((i)(ceil(h.x) + ceil(h.y)) & 1 ? v(3, 1, 1) : v(3, 3, 3)) * (b * .2 + .1);
   }
-  return v(p, p, p);  // + S(h, r) * .5;
+  return v(p, p, p) + S(h, r) * .5;
 }
 i main() {
   printf("P6 512 512 255 ");

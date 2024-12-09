@@ -84,6 +84,10 @@ static void cfold_stmt(struct ast_stmt *ast) {
       ast->store.rhs = cfold_expr(ast->store.rhs);
       break;
 
+    case AST_STMT_TYPE_RETURN:
+      ast->expr = cfold_expr(ast->expr);
+      break;
+
     default:
       fprintf(stderr, "cfold: unhandled statement type %d\n", ast->type);
   }
@@ -206,9 +210,10 @@ static struct ast_expr *cfold_unary(struct ast_expr *unary) {
   }
 
   if (folded) {
+    free_expr(unary);
     return new_expr;
   }
 
-  free(new_expr);
+  free_expr(new_expr);
   return unary;
 }

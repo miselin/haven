@@ -10,6 +10,8 @@ add_library(mattc_lib STATIC
     types.c
     ast.c
     cfold.c
+    tokens.c
+    ast_free.c
 )
 target_link_libraries(mattc_lib PUBLIC ${llvm_libs})
 

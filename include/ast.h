@@ -227,6 +227,20 @@ struct ast_stmt {
   struct ast_stmt *next;
 };
 
+void free_ast(struct ast_program *ast);
 void dump_ast(struct ast_program *ast);
+
+void free_toplevel(struct ast_toplevel *ast);
+void free_block(struct ast_block *ast, int heap);
+void free_stmt(struct ast_stmt *ast);
+void free_expr(struct ast_expr *ast);
+void free_fdecl(struct ast_fdecl *ast, int heap);
+void free_vdecl(struct ast_vdecl *ast, int heap);
+void free_ty(struct ast_ty *ty, int heap);
+void free_expr_list(struct ast_expr_list *list);
+
+const char *ast_binary_op_to_str(int op);
+const char *ast_unary_op_to_str(int op);
+const char *ast_logical_op_to_str(int op);
 
 #endif

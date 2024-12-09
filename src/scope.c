@@ -19,6 +19,13 @@ struct scope *enter_scope(struct scope *parent) {
 
 struct scope *exit_scope(struct scope *scope) {
   struct scope *parent = scope->parent;
+
+  void *iter = scope_iter(scope);
+  while (!scope_end(iter)) {
+    void *entry = scope_next(&iter);
+    free(entry);
+  }
+
   destroy_kv(scope->values);
   free(scope);
   return parent;
@@ -40,6 +47,18 @@ void *scope_lookup(struct scope *scope, const char *name, int recurse) {
   }
 
   return NULL;
+}
+
+void *scope_iter(struct scope *scope) {
+  return kv_iter(scope->values);
+}
+
+void *scope_next(void **iter) {
+  return kv_next(iter);
+}
+
+int scope_end(void *iter) {
+  return kv_end(iter);
 }
 
 struct scope *scope_parent(struct scope *scope) {

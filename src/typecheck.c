@@ -61,8 +61,6 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
     entry->fdecl = &ast->fdecl;
 
-    fprintf(stderr, "entry: %s %p %p\n", ast->fdecl.ident.value.identv.ident, entry, entry->fdecl);
-
     scope_insert(typecheck->scope, ast->fdecl.ident.value.identv.ident, entry);
 
     if (existing) {
@@ -242,8 +240,10 @@ static struct ast_ty typecheck_stmt(struct typecheck *typecheck, struct ast_stmt
         ++typecheck->errors;
       }
 
+      struct ast_vdecl *index = calloc(1, sizeof(struct ast_vdecl));
+
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->vdecl = calloc(1, sizeof(struct ast_vdecl));
+      entry->vdecl = index;
       entry->vdecl->ident = ast->iter.index.ident;
       entry->vdecl->ty = start;
       ast->iter.index_vdecl = entry->vdecl;

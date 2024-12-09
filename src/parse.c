@@ -19,6 +19,9 @@ struct parser {
   struct ast_program ast;
 
   jmp_buf errbuf;
+
+  int errors;
+  int warnings;
 };
 
 static enum token_id parser_peek(struct parser *parser);
@@ -38,6 +41,30 @@ static struct ast_range parse_range(struct parser *parser);
 static int deref_to_index(const char *deref);
 
 static int binary_op(int token);
+
+static void parser_diag(int fatal, struct parser *parser, struct token *token, const char *msg,
+                        ...) {
+  if (token) {
+    char locbuf[64] = {0};
+    lexer_locate_str(parser->lexer, locbuf, 64);
+    fprintf(stderr, "%s: ", locbuf);
+  } else {
+    fprintf(stderr, "???: ");
+  }
+
+  va_list args;
+  va_start(args, msg);
+  vfprintf(stderr, msg, args);
+  va_end(args);
+
+  if (fatal) {
+    ++parser->errors;
+
+    longjmp(parser->errbuf, -1);
+  } else {
+    ++parser->warnings;
+  }
+}
 
 struct parser *new_parser(struct lex_state *lexer) {
   struct parser *result = calloc(1, sizeof(struct parser));
@@ -74,6 +101,7 @@ struct ast_program *parser_get_ast(struct parser *parser) {
 }
 
 void destroy_parser(struct parser *parser) {
+  free_ast(&parser->ast);
   free(parser);
 }
 
@@ -95,16 +123,13 @@ static int parser_consume(struct parser *parser, struct token *token, enum token
   }
 
   if (parser->peek.ident <= 0) {
-    fprintf(stderr, "parse: error in token stream (EOF?)\n");
-    longjmp(parser->errbuf, -1);
+    parser_diag(1, parser, NULL, "unexpected EOF or other error in token stream\n");
+    return -1;
   } else if (parser->peek.ident != expected) {
-    fprintf(stderr, "parse: unexpected token %d, wanted %d\n", parser->peek.ident, expected);
-    longjmp(parser->errbuf, -2);
+    parser_diag(1, parser, &parser->peek, "unexpected token %s, wanted %s\n",
+                token_id_to_string(parser->peek.ident), token_id_to_string(expected));
+    return -1;
   }
-
-  fprintf(stderr, "consume: ");
-  print_token(&parser->peek);
-  fprintf(stderr, "\n");
 
   if (token) {
     memcpy(token, &parser->peek, sizeof(struct token));
@@ -127,7 +152,10 @@ static struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
   vdecl->ty = ty;
 
   struct token token;
-  parser_consume(parser, &token, TOKEN_IDENTIFIER);
+  if (parser_consume(parser, &token, TOKEN_IDENTIFIER) < 0) {
+    free(vdecl);
+    return NULL;
+  }
   vdecl->ident = token;
 
   return vdecl;
@@ -166,6 +194,7 @@ static int parser_parse_toplevel(struct parser *parser) {
 
   struct ast_ty ty = parse_type(parser);
   if (type_is_error(&ty)) {
+    free(decl);
     return -1;
   }
   if (decl->is_fn) {
@@ -200,10 +229,9 @@ static int parser_parse_toplevel(struct parser *parser) {
       // parse decls
       struct ast_vdecl *param = parse_parse_vdecl(parser);
       if (!param) {
-        fprintf(stderr, "parse: error parsing function parameter\n");
-        longjmp(parser->errbuf, -1);
+        free(decl);
+        return -1;
       }
-
       param->flags |= DECL_FLAG_TEMPORARY;
 
       if (!fdecl->params) {
@@ -473,8 +501,7 @@ static struct ast_expr *parse_expression(struct parser *parser) {
         parser_consume(parser, &token, TOKEN_IDENTIFIER);
         int field = deref_to_index(token.value.identv.ident);
         if (field < 0) {
-          fprintf(stderr, "unknown field %s in deref\n", token.value.identv.ident);
-          longjmp(parser->errbuf, -3);
+          parser_diag(1, parser, &token, "unknown field %s in deref\n", token.value.identv.ident);
         }
         result->deref.field = field;
       } else if (parser_peek(parser) == TOKEN_LBRACKET) {
@@ -503,9 +530,7 @@ static struct ast_expr *parse_expression(struct parser *parser) {
     case TOKEN_LPAREN:
       free(result);
       parser_consume(parser, NULL, TOKEN_LPAREN);
-      fprintf(stderr, "parsing parenthesized expression\n");
       result = parse_expression(parser);
-      fprintf(stderr, "done!\n");
       parser_consume(parser, NULL, TOKEN_RPAREN);
       break;
 
@@ -534,14 +559,10 @@ static struct ast_expr *parse_expression(struct parser *parser) {
     case TOKEN_AND:
     case TOKEN_OR:
       parser_consume(parser, &token, peek);
-      fprintf(stderr, "seems to be a logical\n");
       result->type = AST_EXPR_TYPE_LOGICAL;
       result->logical.op = peek == TOKEN_AND ? AST_LOGICAL_OP_AND : AST_LOGICAL_OP_OR;
-      fprintf(stderr, "lhs...\n");
       result->logical.lhs = parse_condition(parser);
-      fprintf(stderr, "rhs...\n");
       result->logical.rhs = parse_condition(parser);
-      fprintf(stderr, "done logical\n");
       break;
 
     case TOKEN_KW_AS:
@@ -602,8 +623,8 @@ static struct ast_expr *parse_expression(struct parser *parser) {
       break;
 
     default:
-      fprintf(stderr, "unknown token %d when parsing expression\n", peek);
-      longjmp(parser->errbuf, -3);
+      parser_diag(1, parser, NULL, "unknown token %s when parsing expression\n",
+                  token_id_to_string(peek));
   }
 
   return result;
@@ -645,8 +666,8 @@ static struct ast_ty parse_type(struct parser *parser) {
 
     result.ty = AST_TYPE_VOID;
   } else {
-    fprintf(stderr, "unknown type token %d\n", peek);
-    longjmp(parser->errbuf, -3);
+    parser_diag(1, parser, &parser->peek, "unexpected token of type %s when parsing type\n",
+                token_id_to_string(peek));
   }
 
   if (parser_peek(parser) == TOKEN_ASTERISK) {
@@ -654,9 +675,7 @@ static struct ast_ty parse_type(struct parser *parser) {
     result.flags |= TYPE_FLAG_PTR;
   }
 
-  fprintf(stderr, "peeked: %d\n", parser_peek(parser));
   if (parser_peek(parser) == TOKEN_LBRACKET) {
-    fprintf(stderr, "parsing array type\n");
     parser_consume(parser, NULL, TOKEN_LBRACKET);
     struct ast_ty *element_ty = calloc(1, sizeof(struct ast_ty));
     memcpy(element_ty, &result, sizeof(struct ast_ty));

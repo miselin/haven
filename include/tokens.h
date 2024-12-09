@@ -78,4 +78,6 @@ enum token_id {
   TOKEN_EOF,
 };
 
+const char *token_id_to_string(enum token_id);
+
 #endif

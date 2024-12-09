@@ -100,6 +100,14 @@ void codegen_dispose_ir(char *ir) {
 }
 
 void destroy_codegen(struct codegen *codegen) {
+  void *iter = scope_iter(codegen->scope);
+  while (!scope_end(iter)) {
+    struct scope_entry *entry = scope_next(&iter);
+    if (entry->fdecl) {
+      free(entry->param_types);
+    }
+  }
+
   destroy_kv(codegen->functions);
   exit_scope(codegen->scope);
   LLVMDisposeBuilder(codegen->llvm_builder);
@@ -409,10 +417,13 @@ static LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
               LLVMValueRef idx = LLVMConstInt(LLVMInt32Type(), j, 0);
               vec = LLVMBuildInsertElement(codegen->llvm_builder, vec, fields[j], idx, "element");
             }
+            free(fields);
             return vec;
           }
 
-          return LLVMConstVector(fields, i);
+          LLVMValueRef vec = LLVMConstVector(fields, i);
+          free(fields);
+          return vec;
 
         } break;
         case AST_TYPE_FLOAT:
@@ -430,7 +441,9 @@ static LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
 
             node = node->next;
           }
-          return LLVMConstArray2(inner_ty, values, ast->list->num_elements);
+          LLVMValueRef array = LLVMConstArray2(inner_ty, values, ast->list->num_elements);
+          free(values);
+          return array;
         } break;
 
         default: {
@@ -577,8 +590,12 @@ static LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
         }
       }
 
-      return LLVMBuildCall2(codegen->llvm_builder, entry->function_type, entry->ref, args, num_args,
-                            "");
+      LLVMValueRef call = LLVMBuildCall2(codegen->llvm_builder, entry->function_type, entry->ref,
+                                         args, num_args, "");
+      if (args) {
+        free(args);
+      }
+      return call;
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
@@ -769,7 +786,6 @@ static LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast
 }
 
 static LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
-  fprintf(stderr, "emit if_expr\n");
   LLVMValueRef cond_expr = emit_expr(codegen, ast->if_expr.cond);
   LLVMValueRef cond =
       LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond_expr,
@@ -786,20 +802,15 @@ static LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMAppendExistingBasicBlock(codegen->current_function, then_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, then_block);
-  fprintf(stderr, "emit then_block\n");
   LLVMValueRef then_val = emit_block(codegen, &ast->if_expr.then_block);
-  fprintf(stderr, "emit then_block complete\n");
   LLVMBasicBlockRef final_then_block = LLVMGetInsertBlock(codegen->llvm_builder);
   LLVMBuildBr(codegen->llvm_builder, end_block);
 
   LLVMAppendExistingBasicBlock(codegen->current_function, else_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, else_block);
-  fprintf(stderr, "emit else_block\n");
   LLVMValueRef else_val = emit_block(codegen, &ast->if_expr.else_block);
   LLVMBasicBlockRef final_else_block = LLVMGetInsertBlock(codegen->llvm_builder);
   LLVMBuildBr(codegen->llvm_builder, end_block);
-
-  fprintf(stderr, "preparing phi\n");
 
   LLVMAppendExistingBasicBlock(codegen->current_function, end_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
@@ -808,13 +819,10 @@ static LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
   LLVMBasicBlockRef blocks[] = {final_then_block, final_else_block};
   LLVMAddIncoming(phi, values, blocks, 2);
 
-  fprintf(stderr, "return if result\n");
   return phi;
 }
 
 static void emit_void_if(struct codegen *codegen, struct ast_expr *ast) {
-  fprintf(stderr, "emit if_expr\n");
-
   LLVMValueRef cond_expr = emit_expr(codegen, ast->if_expr.cond);
   LLVMValueRef cond =
       LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond_expr,
@@ -831,9 +839,7 @@ static void emit_void_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMAppendExistingBasicBlock(codegen->current_function, then_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, then_block);
-  fprintf(stderr, "emit then_block\n");
   emit_block(codegen, &ast->if_expr.then_block);
-  fprintf(stderr, "emit then_block complete\n");
 
   if (!LLVMGetBasicBlockTerminator(then_block)) {
     LLVMBuildBr(codegen->llvm_builder, end_block);
@@ -842,9 +848,7 @@ static void emit_void_if(struct codegen *codegen, struct ast_expr *ast) {
   if (ast->if_expr.has_else) {
     LLVMAppendExistingBasicBlock(codegen->current_function, else_block);
     LLVMPositionBuilderAtEnd(codegen->llvm_builder, else_block);
-    fprintf(stderr, "emit else_block\n");
     emit_block(codegen, &ast->if_expr.else_block);
-    fprintf(stderr, "emit else_block complete\n");
     if (!LLVMGetBasicBlockTerminator(else_block)) {
       LLVMBuildBr(codegen->llvm_builder, end_block);
     }

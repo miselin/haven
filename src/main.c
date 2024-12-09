@@ -34,7 +34,6 @@ int main(int argc, char *argv[]) {
   struct parser *parser = new_parser(lexer);
 
   if (parser_run(parser) < 0) {
-    fprintf(stderr, "failed!\n");
     rc = 1;
   }
 
@@ -71,6 +70,9 @@ int main(int argc, char *argv[]) {
     }
     destroy_codegen(codegen);
   }
+
+  destroy_parser(parser);
+  return 0;
 
   if (rc) {
     fprintf(stderr, "== Partial AST after failure ==\n");

@@ -9,6 +9,11 @@
 
 struct lex_state;
 
+struct lex_locator {
+  size_t line;
+  size_t column;
+};
+
 struct token {
   enum token_id ident;
   union {
@@ -34,11 +39,15 @@ struct token {
       size_t length;
     } floatv;
   } value;
+
+  struct lex_locator loc;
 };
 
 struct lex_state *new_lexer(FILE *);
 int lexer_eof(struct lex_state *);
 int lexer_token(struct lex_state *, struct token *);
+void lexer_locate(struct lex_state *, struct lex_locator *);
+void lexer_locate_str(struct lex_state *, char *buf, size_t len);
 void destroy_lexer(struct lex_state *);
 
 void print_token(struct token *);

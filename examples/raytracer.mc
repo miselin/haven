@@ -19,8 +19,9 @@ pub fn float sqrtf(float v);
 pub fn float ceilf(float v);
 pub fn float powf(float a, float b);
 pub fn i32 rand();
+pub fn i32 exit(i32 code);
 
-pub fn fvec3 S(fvec3 o, fvec3 d, i32 maxbounce);
+pub fn fvec3 S(fvec3 o, fvec3 d);
 pub fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n);
 
 pub fn float R() {
@@ -57,7 +58,7 @@ pub fn void printvec(fvec3 v) {
 }
 
 pub fn i32 main() {
-    let xdim = + 512 1;
+    let xdim = 512;
     let ydim = xdim;
 
     printf("P6 %d %d 255 ", xdim, ydim);
@@ -120,7 +121,7 @@ pub fn i32 main() {
 
                     // printf("o=%.2f %.2f %.2f d=%.2f %.2f %.2f\n", origin.x, origin.y, origin.z, dir.x, dir.y, dir.z);
 
-                    * S(origin, dir, as i32 8) 3.5
+                    * S(origin, dir) 3.5
                 };
 
                 p = + p contrib;
@@ -134,14 +135,11 @@ pub fn i32 main() {
     as i32 0
 }
 
-pub fn fvec3 S(fvec3 o, fvec3 d, i32 maxbounce) {
+pub fn fvec3 S(fvec3 o, fvec3 d) {
     let float t = 0.0;
     let fvec3 n = <0.0, 0.0, 0.0>;
-    let m = T(o, d, ref t, ref n);
 
-    if == maxbounce as i32 0 {
-        ret <0.0, 0.0, 0.0>;
-    };
+    let m = T(o, d, ref t, ref n);
 
     if == m as i8 0 {
         let sky = <0.7, 0.6, 1.0>;
@@ -163,8 +161,10 @@ pub fn fvec3 S(fvec3 o, fvec3 d, i32 maxbounce) {
         + d outer
     };
 
+    let shadow = T(h, l, ref t, ref n);
+
     let LdN = vdot(l, n);
-    let b = if || (< LdN 0.0) (!= T(h, l, ref t, ref n) as i8 0) {
+    let b = if || (< LdN 0.0) (!= shadow as i8 0) {
         0.0
     } else {
         LdN
@@ -189,10 +189,9 @@ pub fn fvec3 S(fvec3 o, fvec3 d, i32 maxbounce) {
     {
         let p = powf(* LdR mmm, 99.0);
         let base = <p, p, p>;
-        let bounce = * S(h, r, - maxbounce as i32 1) 0.5;
+        let bounce = * S(h, r) 0.5;
         let contrib = + base bounce;
-        // contrib
-        base
+        contrib
     }
 }
 
@@ -228,7 +227,7 @@ pub fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n) {
 
                     let t_ = load t;
                     if && (< s t_) (> s 0.01) {
-                        let dir_dist = * d t_;
+                        let dir_dist = * d s;
                         store t s;
                         store n vnorm(+ dir_dist p);
                         m = as i8 2;

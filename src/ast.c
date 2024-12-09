@@ -194,7 +194,7 @@ static void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_BINARY:
-      fprintf(stderr, "Binary(%d, ", ast->binary.op);
+      fprintf(stderr, "Binary(%s, ", ast_binary_op_to_str(ast->binary.op));
       dump_expr(ast->binary.lhs, indent);
       fprintf(stderr, ", ");
       dump_expr(ast->binary.rhs, indent);
@@ -207,7 +207,7 @@ static void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_LOGICAL:
-      fprintf(stderr, "Logical(%d, ", ast->logical.op);
+      fprintf(stderr, "Logical(%s, ", ast_logical_op_to_str(ast->logical.op));
       dump_expr(ast->logical.lhs, indent);
       fprintf(stderr, ", ");
       dump_expr(ast->logical.rhs, indent);
@@ -296,7 +296,7 @@ static void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_UNARY:
-      fprintf(stderr, "Unary(%d, ", ast->unary.op);
+      fprintf(stderr, "Unary(%s, ", ast_unary_op_to_str(ast->unary.op));
       dump_expr(ast->unary.expr, indent);
       fprintf(stderr, ") -> ");
       dump_ty(&ast->ty);
@@ -328,17 +328,75 @@ static void dump_ty(struct ast_ty *ty) {
   fprintf(stderr, "%s", buf);
 }
 
+static void dump_maybe_space(const char *s, int first) {
+  if (!first) {
+    fputc(' ', stderr);
+  }
+  fputs(s, stderr);
+}
+
 static void dump_decl_flags(int flags) {
+  int first = 1;
   if (flags & DECL_FLAG_PUB) {
-    fprintf(stderr, "pub ");
+    dump_maybe_space("pub", first);
+    first = 0;
   }
   if (flags & DECL_FLAG_MUT) {
-    fprintf(stderr, "mut ");
+    dump_maybe_space("mut", first);
+    first = 0;
   }
   if (flags & DECL_FLAG_VARARG) {
-    fprintf(stderr, "vararg ");
+    dump_maybe_space("vararg", first);
+    first = 0;
   }
   if (flags & DECL_FLAG_TEMPORARY) {
-    fprintf(stderr, "temporary ");
+    dump_maybe_space("temporary", first);
+    first = 0;
+  }
+}
+
+const char *ast_binary_op_to_str(int op) {
+  switch (op) {
+    case AST_BINARY_OP_ADD:
+      return "+";
+    case AST_BINARY_OP_SUB:
+      return "-";
+    case AST_BINARY_OP_MUL:
+      return "*";
+    case AST_BINARY_OP_DIV:
+      return "/";
+    case AST_BINARY_OP_MOD:
+      return "%";
+    case AST_BINARY_OP_BITXOR:
+      return "^";
+    case AST_BINARY_OP_LSHIFT:
+      return "<<";
+    case AST_BINARY_OP_RSHIFT:
+      return ">>";
+    default:
+      return "<unknown-binary-op>";
+  }
+}
+const char *ast_unary_op_to_str(int op) {
+  switch (op) {
+    case AST_UNARY_OP_NEG:
+      return "-";
+    case AST_UNARY_OP_NOT:
+      return "!";
+    case AST_UNARY_OP_COMP:
+      return "~";
+    default:
+      return "<unknown-unary-op>";
+  }
+}
+
+const char *ast_logical_op_to_str(int op) {
+  switch (op) {
+    case AST_LOGICAL_OP_OR:
+      return "||";
+    case AST_LOGICAL_OP_AND:
+      return "&&";
+    default:
+      return "<unknown-logical-op>";
   }
 }

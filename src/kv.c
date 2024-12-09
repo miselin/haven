@@ -82,3 +82,21 @@ void destroy_kv(struct kv *kv) {
 
   free(kv);
 }
+
+void *kv_iter(struct kv *kv) {
+  return kv->head;
+}
+
+void *kv_next(void **iter) {
+  struct kv_node *node = *iter;
+  if (!node) {
+    return NULL;
+  }
+
+  *iter = node->next;
+  return node->value;
+}
+
+int kv_end(void *iter) {
+  return iter == NULL;
+}
