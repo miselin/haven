@@ -39,11 +39,11 @@ void destroy_cfolder(struct cfolder *cfolder) {
 }
 
 static void cfold_toplevel(struct ast_toplevel *ast) {
-  if (ast->is_fn) {
+  if (ast->type == AST_DECL_TYPE_FDECL) {
     if (ast->fdecl.body) {
       cfold_block(ast->fdecl.body);
     }
-  } else {
+  } else if (ast->type == AST_DECL_TYPE_VDECL) {
     if (ast->vdecl.init_expr) {
       ast->vdecl.init_expr = cfold_expr(ast->vdecl.init_expr);
     }
@@ -105,6 +105,9 @@ static struct ast_expr *cfold_expr(struct ast_expr *ast) {
             node = node->next;
           }
         } break;
+
+        default:
+          break;
       }
       break;
 

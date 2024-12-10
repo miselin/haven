@@ -20,8 +20,10 @@ static void dump_stmt(struct ast_stmt *ast, int indent);
 static void dump_expr(struct ast_expr *ast, int indent);
 static void dump_fdecl(struct ast_fdecl *ast, int indent);
 static void dump_vdecl(struct ast_vdecl *ast, int indent);
+static void dump_tydecl(struct ast_tydecl *ast, int indent);
 static void dump_match_arms(struct ast_expr_match_arm *arm, int indent);
 static void dump_match_arm(struct ast_expr_match_arm *arm, int indent);
+static void dump_array(struct ast_expr *ast, int indent);
 
 static void dump_ty(struct ast_ty *ty);
 static void dump_decl_flags(uint64_t flags);
@@ -35,10 +37,16 @@ void dump_ast(struct ast_program *ast) {
 }
 
 static void dump_toplevel(struct ast_toplevel *ast) {
-  if (ast->is_fn) {
+  if (ast->type == AST_DECL_TYPE_FDECL) {
     dump_fdecl(&ast->fdecl, 0);
-  } else {
+  } else if (ast->type == AST_DECL_TYPE_VDECL) {
     dump_vdecl(&ast->vdecl, 0);
+  } else if (ast->type == AST_DECL_TYPE_TYDECL) {
+    dump_tydecl(&ast->tydecl, 0);
+  } else if (ast->type == AST_DECL_TYPE_PREPROC) {
+    fprintf(stderr, "<preprocessor-decl>");
+  } else {
+    fprintf(stderr, "<unknown-toplevel>");
   }
 
   fprintf(stderr, "\n");
@@ -75,6 +83,12 @@ static void dump_vdecl(struct ast_vdecl *ast, int indent) {
     fprintf(stderr, " = ");
     dump_expr(ast->init_expr, indent);
   }
+  fprintf(stderr, ";");
+}
+
+static void dump_tydecl(struct ast_tydecl *ast, int indent) {
+  INDENTED(indent, "Type %s = ", ast->ident.value.identv.ident);
+  dump_ty(&ast->ty);
   fprintf(stderr, ";");
 }
 
@@ -171,22 +185,16 @@ static void dump_expr(struct ast_expr *ast, int indent) {
         } break;
 
         case AST_TYPE_ARRAY: {
-          dump_ty(ast->ty.array.element_ty);
-          fprintf(stderr, " {");
-          struct ast_expr_list *node = ast->list;
-          while (node) {
-            dump_expr(node->expr, indent);
-            node = node->next;
-            if (node) {
-              fprintf(stderr, ", ");
-            }
-          }
-          fprintf(stderr, "}");
+          dump_array(ast, 0);
         } break;
 
         default:
           fprintf(stderr, "<unknown-constant>");
       }
+      break;
+
+    case AST_EXPR_TYPE_STRUCT_INIT:
+      dump_array(ast, indent);
       break;
 
     case AST_EXPR_TYPE_BLOCK:
@@ -231,7 +239,8 @@ static void dump_expr(struct ast_expr *ast, int indent) {
     } break;
 
     case AST_EXPR_TYPE_DEREF:
-      fprintf(stderr, "Deref(%s, %zd) -> ", ast->deref.ident.value.identv.ident, ast->deref.field);
+      fprintf(stderr, "Deref(%s, %s [#%zd]) -> ", ast->deref.ident.value.identv.ident,
+              ast->deref.field.value.identv.ident, ast->deref.field_idx);
       dump_ty(&ast->ty);
       break;
 
@@ -392,4 +401,18 @@ static void dump_decl_flags(uint64_t flags) {
     dump_maybe_space("temporary", first);
     first = 0;
   }
+}
+
+static void dump_array(struct ast_expr *ast, int indent) {
+  dump_ty(ast->ty.array.element_ty);
+  fprintf(stderr, " {");
+  struct ast_expr_list *node = ast->list;
+  while (node) {
+    dump_expr(node->expr, indent);
+    node = node->next;
+    if (node) {
+      fprintf(stderr, ", ");
+    }
+  }
+  fprintf(stderr, "}");
 }

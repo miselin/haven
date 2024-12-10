@@ -138,6 +138,20 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset +=
           snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty, ty->array.width);
     } break;
+    case AST_TYPE_CUSTOM:
+      offset += snprintf(buf, maxlen, "Ty(%s)", ty->name);
+      break;
+    case AST_TYPE_STRUCT: {
+      offset += snprintf(buf, maxlen, "struct %s { ", ty->name);
+      struct ast_struct_field *field = ty->structty.fields;
+      while (field) {
+        char field_ty[256];
+        type_name_into(field->ty, field_ty, 256);
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_ty, field->name);
+        field = field->next;
+      }
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+    } break;
     default:
       snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
       return;

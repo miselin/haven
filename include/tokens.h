@@ -67,6 +67,8 @@ enum token_id {
   TOKEN_KW_STORE,      // store
   TOKEN_KW_LOAD,       // load
   TOKEN_KW_RETURN,     // ret
+  TOKEN_KW_STRUCT,     // struct
+  TOKEN_KW_TYPE,       // type
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

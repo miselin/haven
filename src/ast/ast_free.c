@@ -1,6 +1,7 @@
 #include <malloc.h>
 
 #include "ast.h"
+#include "types.h"
 #include "utility.h"
 
 void free_ast(struct ast_program *ast) {
@@ -13,10 +14,14 @@ void free_ast(struct ast_program *ast) {
 }
 
 void free_toplevel(struct ast_toplevel *ast) {
-  if (ast->is_fn) {
+  if (ast->type == AST_DECL_TYPE_FDECL) {
     free_fdecl(&ast->fdecl, 0);
-  } else {
+  } else if (ast->type == AST_DECL_TYPE_VDECL) {
     free_vdecl(&ast->vdecl, 0);
+  } else if (ast->type == AST_DECL_TYPE_TYDECL) {
+    free_tydecl(&ast->tydecl, 0);
+  } else if (ast->type == AST_DECL_TYPE_PREPROC) {
+    // nothing to be done here
   }
 
   free(ast);
@@ -82,6 +87,10 @@ void free_expr(struct ast_expr *ast) {
         default:
           break;
       }
+      break;
+
+    case AST_EXPR_TYPE_STRUCT_INIT:
+      free_expr_list(ast->list);
       break;
 
     case AST_EXPR_TYPE_BLOCK:
@@ -207,9 +216,29 @@ void free_vdecl(struct ast_vdecl *ast, int heap) {
   }
 }
 
+void free_tydecl(struct ast_tydecl *ast, int heap) {
+  free_ty(&ast->ty, 0);
+  if (heap) {
+    free(ast);
+  }
+}
+
 void free_ty(struct ast_ty *ty, int heap) {
-  if (ty->ty == AST_TYPE_ARRAY) {
-    free_ty(ty->array.element_ty, 1);
+  // only free internals of a type if this ast_ty instance owns them
+  if ((ty->flags & TYPE_FLAG_INDIRECT) == 0) {
+    if (ty->ty == AST_TYPE_ARRAY) {
+      free_ty(ty->array.element_ty, 1);
+    }
+
+    if (ty->ty == AST_TYPE_STRUCT) {
+      struct ast_struct_field *field = ty->structty.fields;
+      while (field) {
+        struct ast_struct_field *next = field->next;
+        free_ty(field->ty, 1);
+        free(field);
+        field = next;
+      }
+    }
   }
 
   if (heap) {

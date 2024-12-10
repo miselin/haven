@@ -17,6 +17,9 @@
 
 #define TYPE_FLAG_PTR (1U << 0)
 
+// References another type. Used to avoid freeing struct field types in particular.
+#define TYPE_FLAG_INDIRECT (1U << 1)
+
 enum ast_ty_id {
   AST_TYPE_ERROR = 0,
   AST_TYPE_TBD,  // yet to be determined by type checking pass
@@ -29,11 +32,19 @@ enum ast_ty_id {
   AST_TYPE_ENUM,
   AST_TYPE_STRUCT,
   AST_TYPE_ARRAY,
+  AST_TYPE_CUSTOM,  // unresolved type name that might be a custom type
+};
+
+struct ast_struct_field {
+  char name[256];
+  struct ast_ty *ty;
+  struct ast_struct_field *next;
 };
 
 struct ast_ty {
   enum ast_ty_id ty;
   uint64_t flags;
+  char name[256];  // filled for custom, struct, and enum types
   union {
     struct {
       int is_signed;
@@ -47,13 +58,16 @@ struct ast_ty {
       int tbd;
     } enumty;
     struct {
-      // TBD - fields, types of fields
-      int tbd;
+      struct ast_struct_field *fields;
+      size_t num_fields;
     } structty;
     struct {
       size_t width;
       struct ast_ty *element_ty;
     } array;
+    struct {
+      int empty;
+    } custom;
   };
 };
 

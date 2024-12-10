@@ -5,6 +5,8 @@
 #include "ast.h"
 #include "codegen.h"
 #include "internal.h"
+#include "kv.h"
+#include "types.h"
 #include "utility.h"
 
 LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *name) {
@@ -36,7 +38,7 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
     return value;
   }
 
-  LLVMTypeRef dest_ty = ast_ty_to_llvm_ty(to);
+  LLVMTypeRef dest_ty = ast_ty_to_llvm_ty(codegen, to);
 
   if (!same_type_class(from, to)) {
     if (from->ty == AST_TYPE_INTEGER) {
@@ -54,7 +56,7 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
   }
 }
 
-LLVMTypeRef ast_ty_to_llvm_ty(struct ast_ty *ty) {
+LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
   LLVMTypeRef inner = NULL;
 
   switch (ty->ty) {
@@ -95,8 +97,17 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct ast_ty *ty) {
       inner = LLVMVoidType();
       break;
     case AST_TYPE_ARRAY:
-      inner = LLVMArrayType(ast_ty_to_llvm_ty(ty->array.element_ty), (unsigned int)ty->array.width);
+      inner = LLVMArrayType(ast_ty_to_llvm_ty(codegen, ty->array.element_ty),
+                            (unsigned int)ty->array.width);
       break;
+    case AST_TYPE_STRUCT: {
+      struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
+      if (!entry) {
+        fprintf(stderr, "struct %s not found in codegen\n", ty->name);
+        return NULL;
+      }
+      return entry->type;
+    } break;
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
       return NULL;

@@ -19,10 +19,10 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
     // emit declaration
     param_types = malloc(sizeof(LLVMTypeRef) * fdecl->num_params);
     for (size_t i = 0; i < fdecl->num_params; i++) {
-      param_types[i] = ast_ty_to_llvm_ty(&fdecl->params[i]->ty);
+      param_types[i] = ast_ty_to_llvm_ty(codegen, &fdecl->params[i]->ty);
     }
     LLVMTypeRef ret_type =
-        LLVMFunctionType(ast_ty_to_llvm_ty(&fdecl->retty), param_types,
+        LLVMFunctionType(ast_ty_to_llvm_ty(codegen, &fdecl->retty), param_types,
                          (unsigned int)fdecl->num_params, fdecl->flags & DECL_FLAG_VARARG);
     func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, ret_type);
     if (fdecl->flags & DECL_FLAG_PUB) {

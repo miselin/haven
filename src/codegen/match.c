@@ -22,7 +22,7 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
   // add the phi node early so we can start adding incoming values
   LLVMBasicBlockRef end_block = LLVMAppendBasicBlock(codegen->current_function, "match.post");
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
-  LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, ast_ty_to_llvm_ty(ty), "match");
+  LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, ty), "match");
 
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, start_block);
 

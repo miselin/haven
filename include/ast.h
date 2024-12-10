@@ -13,6 +13,11 @@
 #define DECL_FLAG_VARARG (1U << 2)
 #define DECL_FLAG_TEMPORARY (1U << 3)
 
+#define AST_DECL_TYPE_VDECL 1
+#define AST_DECL_TYPE_FDECL 2
+#define AST_DECL_TYPE_TYDECL 3
+#define AST_DECL_TYPE_PREPROC 4  // tracked in AST but not used after parse
+
 #define AST_STMT_TYPE_EXPR 1
 #define AST_STMT_TYPE_LET 2
 #define AST_STMT_TYPE_ITER 3
@@ -37,6 +42,7 @@
 #define AST_EXPR_TYPE_BOOLEAN 16
 #define AST_EXPR_TYPE_ARRAY_INDEX 17
 #define AST_EXPR_TYPE_MATCH 18
+#define AST_EXPR_TYPE_STRUCT_INIT 19
 
 #define AST_BINARY_OP_ADD 1
 #define AST_BINARY_OP_SUB 2
@@ -88,13 +94,19 @@ struct ast_fdecl {
   size_t num_params;
 };
 
+struct ast_tydecl {
+  struct token ident;
+  struct ast_ty ty;
+};
+
 struct ast_toplevel {
-  int is_fn;
+  int type;
 
   struct ast_toplevel *next;
   union {
     struct ast_vdecl vdecl;
     struct ast_fdecl fdecl;
+    struct ast_tydecl tydecl;
   };
 };
 
@@ -125,7 +137,8 @@ struct ast_expr_variable {
 
 struct ast_expr_deref {
   struct token ident;
-  size_t field;
+  struct token field;  // typecheck resolves this and fills field_idx
+  size_t field_idx;
 };
 
 struct ast_expr_list {
@@ -260,6 +273,7 @@ void free_stmt(struct ast_stmt *ast);
 void free_expr(struct ast_expr *ast);
 void free_fdecl(struct ast_fdecl *ast, int heap);
 void free_vdecl(struct ast_vdecl *ast, int heap);
+void free_tydecl(struct ast_tydecl *ast, int heap);
 void free_ty(struct ast_ty *ty, int heap);
 void free_expr_list(struct ast_expr_list *list);
 

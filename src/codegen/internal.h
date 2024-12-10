@@ -17,6 +17,10 @@ struct scope_entry {
   LLVMValueRef ref;
 };
 
+struct struct_entry {
+  LLVMTypeRef type;
+};
+
 struct codegen {
   struct ast_program *ast;
 
@@ -36,10 +40,14 @@ struct codegen {
 
   // we keep a scope to track LLVM refs for variables/functions
   struct scope *scope;
+
+  // struct type names -> their definition
+  struct kv *structs;
 };
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast);
+LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMValueRef into);
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl);
 void emit_vdecl(struct codegen *codegen, struct ast_vdecl *vdecl);
@@ -49,7 +57,7 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
 
 LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *name);
 
-LLVMTypeRef ast_ty_to_llvm_ty(struct ast_ty *ty);
+LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty);
 
 // emit the expression variant of if (i.e. returns a value) - requires else
 LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast);

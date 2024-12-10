@@ -30,6 +30,8 @@ struct codegen *new_codegen(struct ast_program *ast) {
 
   result->functions = new_kv();
 
+  result->structs = new_kv();
+
   result->scope = enter_scope(NULL);
   return result;
 }
@@ -56,7 +58,14 @@ void codegen_dispose_ir(char *ir) {
 }
 
 void destroy_codegen(struct codegen *codegen) {
-  void *iter = scope_iter(codegen->scope);
+  void *iter = kv_iter(codegen->structs);
+  while (!kv_end(iter)) {
+    struct struct_entry *entry = kv_next(&iter);
+    free(entry);
+  }
+  destroy_kv(codegen->structs);
+
+  iter = scope_iter(codegen->scope);
   while (!scope_end(iter)) {
     struct scope_entry *entry = scope_next(&iter);
     if (entry->fdecl) {
@@ -79,11 +88,43 @@ static void emit_ast(struct codegen *codegen, struct ast_program *ast) {
   }
 }
 
+static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) {
+  char buf[256];
+  snprintf(buf, 256, "struct.%s", ty->name);
+
+  struct struct_entry *entry = calloc(1, sizeof(struct struct_entry));
+  kv_insert(codegen->structs, ty->name, entry);
+  entry->type = LLVMStructCreateNamed(LLVMGetGlobalContext(), buf);
+
+  LLVMTypeRef *element_types = malloc(sizeof(LLVMTypeRef) * ty->structty.num_fields);
+  struct ast_struct_field *field = ty->structty.fields;
+  for (size_t i = 0; i < ty->structty.num_fields; i++) {
+    element_types[i] = ast_ty_to_llvm_ty(codegen, field->ty);
+    field = field->next;
+  }
+
+  LLVMStructSetBody(entry->type, element_types, (unsigned int)ty->structty.num_fields, 0);
+
+  // LLVMAddGlobal(codegen->llvm_module, entry->type, ty->name);
+
+  free(element_types);
+  return entry->type;
+}
+
 static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
-  if (ast->is_fn) {
+  if (ast->type == AST_DECL_TYPE_FDECL) {
     emit_fdecl(codegen, &ast->fdecl);
-  } else {
+  } else if (ast->type == AST_DECL_TYPE_VDECL) {
     emit_vdecl(codegen, &ast->vdecl);
+  } else if (ast->type == AST_DECL_TYPE_TYDECL) {
+    if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
+      // generate the struct type
+      emit_struct_type(codegen, &ast->tydecl.ty);
+    }
+  } else if (ast->type == AST_DECL_TYPE_PREPROC) {
+    // no-op in codegen
+  } else {
+    fprintf(stderr, "unhandled toplevel type %d\n", ast->type);
   }
 }
 
@@ -108,9 +149,9 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
     case AST_STMT_TYPE_LET: {
       const char *ident = ast->let.ident.value.identv.ident;
-      LLVMTypeRef var_type = ast_ty_to_llvm_ty(&ast->let.ty);
+      LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->let.ty);
       LLVMValueRef var = new_alloca(codegen, var_type, ident);
-      LLVMValueRef init = emit_expr(codegen, ast->let.init_expr);
+      LLVMValueRef init = emit_expr_into(codegen, ast->let.init_expr, var);
       LLVMBuildStore(codegen->llvm_builder, init, var);
 
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
@@ -128,7 +169,7 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       LLVMValueRef step = ast->iter.range.step ? emit_expr(codegen, ast->iter.range.step)
                                                : LLVMConstInt(LLVMInt64Type(), 1, 0);
 
-      LLVMTypeRef var_type = ast_ty_to_llvm_ty(&ast->iter.index_vdecl->ty);
+      LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->iter.index_vdecl->ty);
 
       codegen->scope = enter_scope(codegen->scope);
 

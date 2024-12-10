@@ -26,10 +26,12 @@ struct lookup {
     {"store", TOKEN_KW_STORE},
     {"load", TOKEN_KW_LOAD},
     {"ret", TOKEN_KW_RETURN},
+    {"struct", TOKEN_KW_STRUCT},
     {"float", TOKEN_TY_FLOAT},
     {"str", TOKEN_TY_STR},
     {"char", TOKEN_TY_CHAR},
     {"void", TOKEN_TY_VOID},
+    {"type", TOKEN_KW_TYPE},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {

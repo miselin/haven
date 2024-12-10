@@ -4,7 +4,7 @@ set -e
 set -o pipefail
 
 gcc -E - <$1 >$1.preproc
-./build/src/mattc $1.preproc $1.ir 2>&1 | tee log.log
+./build/bin/mattc $1.preproc $1.ir 2>&1 | tee log.log
 
 opt-18 -S --O3 $1.ir >$1.ll
 llc-18 -O2 -filetype=obj $1.ll -o $1.o

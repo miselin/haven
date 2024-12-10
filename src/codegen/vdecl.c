@@ -12,7 +12,7 @@
 
 void emit_vdecl(struct codegen *codegen, struct ast_vdecl *vdecl) {
   // emit global variable
-  LLVMTypeRef variable_type = ast_ty_to_llvm_ty(&vdecl->ty);
+  LLVMTypeRef variable_type = ast_ty_to_llvm_ty(codegen, &vdecl->ty);
   LLVMValueRef global =
       LLVMAddGlobal(codegen->llvm_module, variable_type, vdecl->ident.value.identv.ident);
   if (vdecl->flags & DECL_FLAG_PUB) {

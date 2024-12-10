@@ -30,8 +30,8 @@ static enum token_id parser_peek(struct parser *parser);
 static enum token_id parser_consume(struct parser *parser, struct token *token,
                                     enum token_id expected);
 
-static int parser_parse_toplevel(struct parser *parser);
-static int parser_parse_preproc(struct parser *parser);
+static struct ast_toplevel *parser_parse_toplevel(struct parser *parser);
+static struct ast_toplevel *parser_parse_preproc(struct parser *parser);
 
 static int parse_block(struct parser *parser, struct ast_block *into);
 static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi);
@@ -42,7 +42,9 @@ static struct ast_expr *parse_factor(struct parser *parser);
 static struct ast_ty parse_type(struct parser *parser);
 static struct ast_range parse_range(struct parser *parser);
 
-static int deref_to_index(const char *deref);
+static int parse_braced_initializer(struct parser *parser, struct ast_expr *into);
+
+static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into);
 
 static int binary_op(enum token_id token);
 static int binary_op_prec(int token);
@@ -86,16 +88,24 @@ int parser_run(struct parser *parser) {
   }
 
   while (!lexer_eof(parser->lexer)) {
-    int rc = parser_parse_toplevel(parser);
-    if (rc == 1) {
-      // EOF
-      break;
-    } else if (rc < 0) {
+    struct ast_toplevel *decl = parser_parse_toplevel(parser);
+    if (!decl) {
       // EOF is OK in this context (means peek hit EOF)
       if (lexer_eof(parser->lexer)) {
         break;
       }
       return -1;
+    }
+
+    if (!parser->ast.decls) {
+      parser->ast.decls = decl;
+    } else {
+      struct ast_toplevel *last = parser->ast.decls;
+      while (last->next) {
+        last = last->next;
+      }
+
+      last->next = decl;
     }
   }
 
@@ -171,17 +181,32 @@ static struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
   return vdecl;
 }
 
-static int parser_parse_toplevel(struct parser *parser) {
+static struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
+  struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
+  decl->type = AST_DECL_TYPE_TYDECL;
+
+  parser_consume(parser, &decl->tydecl.ident, TOKEN_IDENTIFIER);
+  parser_consume(parser, NULL, TOKEN_ASSIGN);
+
+  decl->tydecl.ty = parse_type(parser);
+  strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
+
+  parser_consume(parser, NULL, TOKEN_SEMI);
+  return decl;
+}
+
+static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
   struct token token;
   enum token_id peek = parser_peek(parser);
-  if (peek == TOKEN_UNKNOWN) {
-    return -1;
-  } else if (peek == TOKEN_EOF) {
-    return 1;
+  if (peek == TOKEN_UNKNOWN || peek == TOKEN_EOF) {
+    return NULL;
   }
 
   if (peek == TOKEN_POUND) {
     return parser_parse_preproc(parser);
+  } else if (peek == TOKEN_KW_TYPE) {
+    parser_consume(parser, NULL, TOKEN_KW_TYPE);
+    return parser_parse_tydecl(parser);
   }
 
   uint64_t flags = 0;
@@ -203,22 +228,20 @@ static int parser_parse_toplevel(struct parser *parser) {
   // fn or type
   if (parser_peek(parser) == TOKEN_KW_FN) {
     parser_consume(parser, NULL, TOKEN_KW_FN);
-    decl->is_fn = 1;
+    decl->type = AST_DECL_TYPE_FDECL;
+  } else {
+    decl->type = AST_DECL_TYPE_VDECL;
   }
 
   struct ast_ty ty = parse_type(parser);
-  if (type_is_error(&ty)) {
-    free(decl);
-    return -1;
-  }
-  if (decl->is_fn) {
+  if (decl->type == AST_DECL_TYPE_FDECL) {
     fdecl->retty = ty;
   } else {
     vdecl->ty = ty;
   }
 
   // mut or name
-  if (decl->is_fn) {
+  if (decl->type == AST_DECL_TYPE_FDECL) {
     parser_consume(parser, &token, TOKEN_IDENTIFIER);
     fdecl->ident = token;
   } else {
@@ -231,7 +254,7 @@ static int parser_parse_toplevel(struct parser *parser) {
     vdecl->ident = token;
   }
 
-  if (decl->is_fn) {
+  if (decl->type == AST_DECL_TYPE_FDECL) {
     parser_consume(parser, NULL, TOKEN_LPAREN);
     while (parser_peek(parser) != TOKEN_RPAREN) {
       if (parser_peek(parser) == TOKEN_ASTERISK) {
@@ -244,7 +267,7 @@ static int parser_parse_toplevel(struct parser *parser) {
       struct ast_vdecl *param = parse_parse_vdecl(parser);
       if (!param) {
         free(decl);
-        return -1;
+        return NULL;
       }
       param->flags |= DECL_FLAG_TEMPORARY;
 
@@ -269,7 +292,7 @@ static int parser_parse_toplevel(struct parser *parser) {
   }
 
   peek = parser_peek(parser);
-  if (decl->is_fn) {
+  if (decl->type == AST_DECL_TYPE_FDECL) {
     if (peek == TOKEN_LBRACE) {
       // full function definition
       fdecl->body = calloc(1, sizeof(struct ast_block));
@@ -286,27 +309,19 @@ static int parser_parse_toplevel(struct parser *parser) {
     parser_consume(parser, &token, TOKEN_SEMI);
   }
 
-  if (decl->is_fn) {
+  if (decl->type == AST_DECL_TYPE_FDECL) {
     fdecl->flags |= flags;
   } else {
     vdecl->flags |= flags;
   }
 
-  if (!parser->ast.decls) {
-    parser->ast.decls = decl;
-  } else {
-    struct ast_toplevel *last = parser->ast.decls;
-    while (last->next) {
-      last = last->next;
-    }
-
-    last->next = decl;
-  }
-
-  return 0;
+  return decl;
 }
 
-static int parser_parse_preproc(struct parser *parser) {
+static struct ast_toplevel *parser_parse_preproc(struct parser *parser) {
+  struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
+  decl->type = AST_DECL_TYPE_PREPROC;
+
   struct token token;
 
   parser_consume(parser, NULL, TOKEN_POUND);
@@ -336,11 +351,13 @@ static int parser_parse_preproc(struct parser *parser) {
       break;
 
     default:
+      free(decl);
       parser_diag(1, parser, NULL, "unexpected token %s in preprocessor line\n",
                   token_id_to_string(peek));
+      return NULL;
   }
 
-  return 0;
+  return decl;
 }
 
 static int parse_block(struct parser *parser, struct ast_block *into) {
@@ -568,15 +585,22 @@ static struct ast_expr *parse_factor(struct parser *parser) {
     case TOKEN_TY_UNSIGNED:
     case TOKEN_TY_STR:
     case TOKEN_TY_VOID: {
-      struct ast_ty element_ty = parse_type(parser);
-      parser_consume(parser, NULL, TOKEN_LBRACE);
-      result->type = AST_EXPR_TYPE_CONSTANT;
-      result->ty.ty = AST_TYPE_ARRAY;
-      result->ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
-      *result->ty.array.element_ty = element_ty;
-      result->list = parse_expression_list(parser, TOKEN_RBRACE, 0);
-      result->ty.array.width = result->list->num_elements;
-      parser_consume(parser, NULL, TOKEN_RBRACE);
+      if (parse_braced_initializer(parser, result) < 0) {
+        free(result);
+        return NULL;
+      }
+    } break;
+
+    // struct literals struct <ty> { <expr>, ... }
+    case TOKEN_KW_STRUCT: {
+      parser_consume(parser, NULL, TOKEN_KW_STRUCT);
+      if (parse_braced_initializer(parser, result) < 0) {
+        free(result);
+        return NULL;
+      }
+
+      // swap type for future passes (braced initializers are arrays by default)
+      result->type = AST_EXPR_TYPE_STRUCT_INIT;
     } break;
 
     // vec literals
@@ -598,12 +622,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
 
         result->type = AST_EXPR_TYPE_DEREF;
         result->deref.ident = token;
-        parser_consume(parser, &token, TOKEN_IDENTIFIER);
-        int field = deref_to_index(token.value.identv.ident);
-        if (field < 0) {
-          parser_diag(1, parser, &token, "unknown field %s in deref\n", token.value.identv.ident);
-        }
-        result->deref.field = (size_t)field;
+        parser_consume(parser, &result->deref.field, TOKEN_IDENTIFIER);
       } else if (parser_peek(parser) == TOKEN_LBRACKET) {
         parser_consume(parser, NULL, TOKEN_LBRACKET);
         result->type = AST_EXPR_TYPE_ARRAY_INDEX;
@@ -767,6 +786,17 @@ static struct ast_ty parse_type(struct parser *parser) {
     parser_consume(parser, &token, TOKEN_TY_VOID);
 
     result.ty = AST_TYPE_VOID;
+  } else if (peek == TOKEN_IDENTIFIER) {
+    parser_consume(parser, &token, TOKEN_IDENTIFIER);
+
+    result.ty = AST_TYPE_CUSTOM;
+    strncpy(result.name, token.value.identv.ident, 256);
+  } else if (peek == TOKEN_KW_STRUCT) {
+    parser_consume(parser, NULL, TOKEN_KW_STRUCT);
+
+    if (parser_parse_struct_decl(parser, &result) < 0) {
+      result.ty = AST_TYPE_ERROR;
+    }
   } else {
     parser_diag(1, parser, &parser->peek, "unexpected token of type %s when parsing type\n",
                 token_id_to_string(peek));
@@ -835,39 +865,6 @@ static int binary_op(enum token_id token) {
   }
 }
 
-static int deref_to_index(const char *deref) {
-  if (isdigit(*deref)) {
-    // numeric deref
-    // TODO: check that endptr is the end of deref; fully consume the string
-    return (int)strtol(deref, NULL, 10);
-  }
-
-  if (deref[1] == 0) {
-    // single character deref
-    switch (deref[0]) {
-      // XYZW
-      case 'x':
-      case 'y':
-      case 'z':
-        return deref[0] - 'x';
-      case 'w':
-        return 3;
-
-      // RGBA
-      case 'r':
-        return 0;
-      case 'g':
-        return 1;
-      case 'b':
-        return 2;
-      case 'a':
-        return 3;
-    }
-  }
-
-  return -1;
-}
-
 static struct ast_range parse_range(struct parser *parser) {
   struct ast_range result;
 
@@ -919,5 +916,57 @@ static int binary_op_prec(int op) {
       fprintf(stderr, "returning lowest possible precedence for unknown binary op %d \n", op);
   }
 
+  return 0;
+}
+
+static int parse_braced_initializer(struct parser *parser, struct ast_expr *into) {
+  struct ast_ty element_ty = parse_type(parser);
+  parser_consume(parser, NULL, TOKEN_LBRACE);
+  into->type = AST_EXPR_TYPE_CONSTANT;
+  into->ty.ty = AST_TYPE_ARRAY;
+  into->ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
+  *into->ty.array.element_ty = element_ty;
+  into->list = parse_expression_list(parser, TOKEN_RBRACE, 0);
+  into->ty.array.width = into->list->num_elements;
+  parser_consume(parser, NULL, TOKEN_RBRACE);
+  return 0;
+}
+
+static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into) {
+  parser_consume(parser, NULL, TOKEN_LBRACE);
+
+  into->ty = AST_TYPE_STRUCT;
+
+  struct ast_struct_field *last = into->structty.fields;
+
+  // parse fields
+  while (parser_peek(parser) != TOKEN_RBRACE) {
+    struct ast_ty field_ty = parse_type(parser);
+    if (type_is_error(&field_ty)) {
+      return -1;
+    }
+
+    struct token token;
+    parser_consume(parser, &token, TOKEN_IDENTIFIER);
+
+    struct ast_struct_field *field = calloc(1, sizeof(struct ast_struct_field));
+    field->ty = calloc(1, sizeof(struct ast_ty));
+    *field->ty = field_ty;
+    strncpy(field->name, token.value.identv.ident, 256);
+
+    if (!last) {
+      into->structty.fields = field;
+      last = field;
+    } else {
+      last->next = field;
+      last = field;
+    }
+
+    ++into->structty.num_fields;
+
+    parser_consume(parser, NULL, TOKEN_SEMI);
+  }
+
+  parser_consume(parser, NULL, TOKEN_RBRACE);
   return 0;
 }

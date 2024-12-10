@@ -10,9 +10,13 @@
 #include "utility.h"
 
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
+  return emit_expr_into(codegen, ast, NULL);
+}
+
+LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMValueRef into) {
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
-      LLVMTypeRef const_ty = ast_ty_to_llvm_ty(&ast->ty);
+      LLVMTypeRef const_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
       switch (ast->ty.ty) {
         case AST_TYPE_INTEGER:
           return LLVMConstInt(const_ty, ast->constant.constant.value.intv.val, 0);
@@ -47,10 +51,11 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
             LLVMValueRef zero = LLVMConstNull(LLVMVectorType(LLVMFloatType(), i));
 
             // add zero to the vector to get it into a temporary
-            LLVMValueRef vec_stack = new_alloca(codegen, ast_ty_to_llvm_ty(&ast->ty), "vec");
+            LLVMValueRef vec_stack =
+                new_alloca(codegen, ast_ty_to_llvm_ty(codegen, &ast->ty), "vec");
             LLVMBuildStore(codegen->llvm_builder, zero, vec_stack);
-            LLVMValueRef vec = LLVMBuildLoad2(codegen->llvm_builder, ast_ty_to_llvm_ty(&ast->ty),
-                                              vec_stack, "vec");
+            LLVMValueRef vec = LLVMBuildLoad2(
+                codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), vec_stack, "vec");
             for (size_t j = 0; j < i; j++) {
               LLVMValueRef idx = LLVMConstInt(LLVMInt32Type(), j, 0);
               vec = LLVMBuildInsertElement(codegen->llvm_builder, vec, fields[j], idx, "element");
@@ -70,7 +75,7 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
               (unsigned int)ast->constant.constant.value.floatv.length);
 
         case AST_TYPE_ARRAY: {
-          LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(ast->ty.array.element_ty);
+          LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(codegen, ast->ty.array.element_ty);
           LLVMValueRef *values = malloc(sizeof(LLVMValueRef) * ast->list->num_elements);
           struct ast_expr_list *node = ast->list;
           for (size_t i = 0; i < ast->list->num_elements; i++) {
@@ -159,19 +164,25 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
-      struct scope_entry *entry =
-          scope_lookup(codegen->scope, ast->call.ident.value.identv.ident, 1);
+      const char *ident = ast->deref.ident.value.identv.ident;
+      struct scope_entry *entry = scope_lookup(codegen->scope, ident, 1);
 
-      LLVMValueRef ref;
-      if (entry->vdecl->flags & DECL_FLAG_TEMPORARY) {
-        ref = entry->ref;
-      } else {
-        ref = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, entry->ref,
-                             ast->call.ident.value.identv.ident);
+      // vector -> extractelement
+      if (LLVMGetTypeKind(entry->variable_type) == LLVMVectorTypeKind) {
+        LLVMValueRef ref = entry->ref;
+
+        // rotate through any pointers until we get to the actual vector
+        while (LLVMGetTypeKind(LLVMTypeOf(ref)) == LLVMPointerTypeKind) {
+          ref = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, ref, ident);
+        }
+
+        LLVMValueRef index = LLVMConstInt(LLVMInt64Type(), (unsigned int)ast->deref.field_idx, 0);
+        return LLVMBuildExtractElement(codegen->llvm_builder, ref, index, "deref");
       }
 
-      LLVMValueRef index = LLVMConstInt(LLVMInt64Type(), (unsigned int)ast->deref.field, 0);
-      return LLVMBuildExtractElement(codegen->llvm_builder, ref, index, "deref");
+      // struct -> getelementptr
+      LLVMBuildStructGEP2(codegen->llvm_builder, entry->variable_type, entry->ref,
+                          (unsigned int)ast->deref.field_idx, "deref");
     }; break;
 
     case AST_EXPR_TYPE_VOID:
@@ -214,7 +225,7 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_LOAD: {
       LLVMValueRef expr = emit_expr(codegen, ast->load.expr);
-      LLVMTypeRef expr_type = ast_ty_to_llvm_ty(&ast->ty);
+      LLVMTypeRef expr_type = ast_ty_to_llvm_ty(codegen, &ast->ty);
 
       return LLVMBuildLoad2(codegen->llvm_builder, expr_type, expr,
                             ast->call.ident.value.identv.ident);
@@ -282,7 +293,7 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
       struct scope_entry *entry =
           scope_lookup(codegen->scope, ast->array_index.ident.value.identv.ident, 1);
 
-      LLVMTypeRef target_ty = ast_ty_to_llvm_ty(&ast->ty);
+      LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
 
       LLVMValueRef index = emit_expr(codegen, ast->array_index.index);
       LLVMValueRef gep[] = {LLVMConstInt(LLVMInt32Type(), 0, 0), index};
@@ -293,6 +304,25 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_MATCH: {
       return emit_match_expr(codegen, &ast->ty, &ast->match);
+    } break;
+
+    case AST_EXPR_TYPE_STRUCT_INIT: {
+      if (codegen->current_function) {
+        LLVMTypeRef struct_type = ast_ty_to_llvm_ty(codegen, ast->ty.array.element_ty);
+        LLVMValueRef dest = into ? into : new_alloca(codegen, struct_type, "struct");
+        struct ast_expr_list *node = ast->list;
+        for (size_t i = 0; i < ast->list->num_elements; i++) {
+          LLVMValueRef value = emit_expr(codegen, node->expr);
+          LLVMValueRef store =
+              LLVMBuildStructGEP2(codegen->llvm_builder, struct_type, dest, (unsigned int)i, "");
+          LLVMBuildStore(codegen->llvm_builder, value, store);
+          node = node->next;
+        }
+
+        return dest;
+      }
+
+      // TODO: const initializer
     } break;
 
     default:

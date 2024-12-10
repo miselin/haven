@@ -11,8 +11,8 @@ LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *
                                struct ast_ty *ty) {
   UNUSED(ty);
 
-  LLVMTypeRef lhs_type = ast_ty_to_llvm_ty(&binary->lhs->ty);
-  LLVMTypeRef rhs_type = ast_ty_to_llvm_ty(&binary->rhs->ty);
+  LLVMTypeRef lhs_type = ast_ty_to_llvm_ty(codegen, &binary->lhs->ty);
+  LLVMTypeRef rhs_type = ast_ty_to_llvm_ty(codegen, &binary->rhs->ty);
 
   LLVMValueRef lhs = emit_expr(codegen, binary->lhs);
   LLVMValueRef lcmp =

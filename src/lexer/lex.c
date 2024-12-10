@@ -27,7 +27,7 @@ void lexer_locate(struct lex_state *state, struct lex_locator *loc) {
 }
 
 void lexer_locate_str(struct lex_state *state, char *buf, size_t len) {
-  snprintf(buf, len, "%s:%zu:%zu", state->loc.file, state->loc.line, state->loc.column);
+  snprintf(buf, len, "%s:%zu:%zu", state->loc.file, state->loc.line, state->loc.column + 1);
 }
 
 void lexer_update_loc(struct lex_state *state, struct lex_locator *loc) {

@@ -1,9 +1,13 @@
 #include "typecheck.h"
 
+#include <ctype.h>
 #include <malloc.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "ast.h"
+#include "kv.h"
 #include "scope.h"
 #include "types.h"
 #include "utility.h"
@@ -13,12 +17,18 @@ struct scope_entry {
   struct ast_fdecl *fdecl;
 };
 
+struct alias_entry {
+  struct ast_ty ty;
+};
+
 struct typecheck {
   struct ast_program *ast;
 
   struct scope *scope;
 
   int errors;
+
+  struct kv *aliases;
 };
 
 static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast);
@@ -27,7 +37,13 @@ static struct ast_ty typecheck_block(struct typecheck *typecheck, struct ast_blo
 static struct ast_ty typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast);
 static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr *ast);
 
+static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty);
+
+static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl);
+
 static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs);
+
+static int deref_to_index(const char *deref);
 
 __attribute__((format(printf, 3, 4))) static void typecheck_diag_expr(struct typecheck *typecheck,
                                                                       struct ast_expr *expr,
@@ -46,6 +62,7 @@ struct typecheck *new_typecheck(struct ast_program *ast) {
   struct typecheck *result = calloc(1, sizeof(struct typecheck));
   result->ast = ast;
   result->scope = enter_scope(NULL);
+  result->aliases = new_kv();
   return result;
 }
 
@@ -56,6 +73,12 @@ int typecheck_run(struct typecheck *typecheck) {
 
 void destroy_typecheck(struct typecheck *typecheck) {
   exit_scope(typecheck->scope);
+  void *iter = kv_iter(typecheck->aliases);
+  while (!kv_end(iter)) {
+    struct alias_entry *entry = kv_next(&iter);
+    free(entry);
+  }
+  destroy_kv(typecheck->aliases);
   free(typecheck);
 }
 
@@ -68,7 +91,9 @@ static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast) 
 }
 
 static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast) {
-  if (ast->is_fn) {
+  if (ast->type == AST_DECL_TYPE_FDECL) {
+    ast->fdecl.retty = resolve_type(typecheck, &ast->fdecl.retty);
+
     struct scope_entry *existing =
         scope_lookup(typecheck->scope, ast->fdecl.ident.value.identv.ident, 1);
 
@@ -97,6 +122,8 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       }
 
       for (size_t i = 0; i < entry->fdecl->num_params; ++i) {
+        entry->fdecl->params[i]->ty = resolve_type(typecheck, &entry->fdecl->params[i]->ty);
+
         if (!same_type(&entry->fdecl->params[i]->ty, &existing->fdecl->params[i]->ty)) {
           char tystr[256], existingstr[256];
           type_name_into(&entry->fdecl->params[i]->ty, tystr, 256);
@@ -140,7 +167,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
         ++typecheck->errors;
       }
     }
-  } else {
+  } else if (ast->type == AST_DECL_TYPE_VDECL) {
+    ast->vdecl.ty = resolve_type(typecheck, &ast->vdecl.ty);
+
     if (ast->vdecl.init_expr) {
       struct scope_entry *existing =
           scope_lookup(typecheck->scope, ast->vdecl.ident.value.identv.ident, 0);
@@ -174,7 +203,30 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
         return;
       }
     }
+  } else if (ast->type == AST_DECL_TYPE_TYDECL) {
+    struct alias_entry *entry = calloc(1, sizeof(struct alias_entry));
+    entry->ty = ast->tydecl.ty;
+    kv_insert(typecheck->aliases, ast->tydecl.ident.value.identv.ident, entry);
+
+    if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
+      typecheck_struct_decl(typecheck, &ast->tydecl.ty);
+    }
   }
+}
+
+static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl) {
+  UNUSED(typecheck);
+  UNUSED(decl);
+
+  // TODO: causes infinite recursive loop on recursive struct definitions
+
+  /*
+  struct ast_struct_field *field = decl->structty.fields;
+  while (field) {
+    *field->ty = resolve_type(typecheck, field->ty);
+    field = field->next;
+  }
+  */
 }
 
 static struct ast_ty typecheck_block(struct typecheck *typecheck, struct ast_block *ast) {
@@ -322,11 +374,25 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
             typecheck_expr(typecheck, node->expr);
             node = node->next;
           }
+
         } break;
         default:
           break;
       }
-      return ast->ty;
+      return resolve_type(typecheck, &ast->ty);
+    } break;
+
+    case AST_EXPR_TYPE_STRUCT_INIT: {
+      // TODO: check each field initializer against the struct type
+      struct ast_expr_list *node = ast->list;
+      while (node) {
+        typecheck_expr(typecheck, node->expr);
+        node = node->next;
+      }
+
+      struct ast_ty resolved = resolve_type(typecheck, ast->ty.array.element_ty);
+      *ast->ty.array.element_ty = resolved;
+      return resolved;
     } break;
 
     case AST_EXPR_TYPE_VARIABLE: {
@@ -337,7 +403,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         ++typecheck->errors;
         return type_error();
       }
-      ast->ty = entry->vdecl->ty;
+      ast->ty = resolve_type(typecheck, &entry->vdecl->ty);
       return ast->ty;
     } break;
 
@@ -359,7 +425,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         return type_error();
       }
 
-      ast->ty = *entry->vdecl->ty.array.element_ty;
+      ast->ty = resolve_type(typecheck, entry->vdecl->ty.array.element_ty);
       return ast->ty;
     } break;
 
@@ -386,7 +452,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         return ast->ty;
       }
 
-      ast->ty = lhs;
+      ast->ty = resolve_type(typecheck, &lhs);
       return ast->ty;
     } break;
 
@@ -411,12 +477,13 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
       ast->ty.ty = AST_TYPE_INTEGER;
       ast->ty.integer.is_signed = 1;
       ast->ty.integer.width = 1;
+      ast->ty = resolve_type(typecheck, &ast->ty);
       return ast->ty;
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
       struct ast_ty ty = typecheck_block(typecheck, &ast->block);
-      ast->ty = ty;
+      ast->ty = resolve_type(typecheck, &ty);
       return ast->ty;
     } break;
 
@@ -470,7 +537,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         ++i;
       }
 
-      ast->ty = entry->fdecl->retty;
+      ast->ty = resolve_type(typecheck, &entry->fdecl->retty);
       return ast->ty;
     } break;
 
@@ -483,27 +550,60 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         return type_error();
       }
 
-      // TODO: other types of deref e.g. structs
-      if (entry->vdecl->ty.ty != AST_TYPE_FVEC) {
+      if (entry->vdecl->ty.ty != AST_TYPE_FVEC && entry->vdecl->ty.ty != AST_TYPE_STRUCT) {
         char tystr[256];
         type_name_into(&entry->vdecl->ty, tystr, 256);
 
-        fprintf(stderr, "deref %s has type %s, expected a vector type\n",
+        fprintf(stderr, "deref %s has type %s, expected a vector or struct type\n",
                 ast->variable.ident.value.identv.ident, tystr);
         ++typecheck->errors;
         return type_error();
       }
 
+      size_t max_field = 0;
+
+      if (entry->vdecl->ty.ty == AST_TYPE_FVEC) {
+        int deref = deref_to_index(ast->deref.field.value.identv.ident);
+        if (deref < 0) {
+          fprintf(stderr, "fvec deref %s has unknown field %s\n",
+                  ast->variable.ident.value.identv.ident, ast->deref.field.value.identv.ident);
+          ++typecheck->errors;
+          return type_error();
+        }
+        ast->deref.field_idx = (size_t)deref;
+        max_field = entry->vdecl->ty.fvec.width;
+
+        ast->ty.ty = AST_TYPE_FLOAT;
+      } else if (entry->vdecl->ty.ty == AST_TYPE_STRUCT) {
+        struct ast_struct_field *field = entry->vdecl->ty.structty.fields;
+        while (field) {
+          if (strcmp(field->name, ast->deref.field.value.identv.ident) == 0) {
+            ast->deref.field_idx = max_field;
+            break;
+          }
+          field = field->next;
+        }
+
+        if (!field) {
+          fprintf(stderr, "struct deref %s references unknown field %s\n",
+                  ast->variable.ident.value.identv.ident, ast->deref.field.value.identv.ident);
+          ++typecheck->errors;
+          return type_error();
+        }
+
+        ast->ty = *field->ty;
+        max_field = entry->vdecl->ty.structty.num_fields;
+      }
+
       // can't deref past the width of the vector
-      if (ast->deref.field >= entry->vdecl->ty.fvec.width) {
-        fprintf(stderr, "deref %s has field #%zd, exceeding vector width of %zd\n",
-                ast->variable.ident.value.identv.ident, ast->deref.field,
-                entry->vdecl->ty.fvec.width);
+      if (ast->deref.field_idx >= max_field) {
+        fprintf(stderr, "deref %s has field #%zd, exceeding field count of %zd\n",
+                ast->variable.ident.value.identv.ident, ast->deref.field_idx, max_field);
         ++typecheck->errors;
         return type_error();
       }
 
-      ast->ty.ty = AST_TYPE_FLOAT;
+      ast->ty = resolve_type(typecheck, &ast->ty);
       return ast->ty;
     }; break;
 
@@ -511,6 +611,8 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
       return type_void();
 
     case AST_EXPR_TYPE_CAST: {
+      ast->cast.ty = resolve_type(typecheck, &ast->cast.ty);
+
       struct ast_ty expr_ty = typecheck_expr(typecheck, ast->cast.expr);
       if (type_is_error(&expr_ty)) {
         return type_error();
@@ -526,7 +628,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         return type_error();
       }
 
-      ast->ty = ast->cast.ty;
+      ast->ty = resolve_type(typecheck, &ast->cast.ty);
       return ast->ty;
 
     } break;
@@ -568,7 +670,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         return type_error();
       }
 
-      ast->ty = then_ty;
+      ast->ty = resolve_type(typecheck, &then_ty);
       return ast->ty;
     } break;
 
@@ -607,7 +709,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         return type_error();
       }
 
-      ast->ty = expr_ty;
+      ast->ty = resolve_type(typecheck, &expr_ty);
       return ast->ty;
     } break;
 
@@ -632,6 +734,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
       ast->ty = entry->vdecl->ty;
       ast->ty.flags |= TYPE_FLAG_PTR;
       ast->ref.expr->ty.flags |= TYPE_FLAG_PTR;
+      ast->ty = resolve_type(typecheck, &ast->ty);
       return ast->ty;
     } break;
 
@@ -651,6 +754,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
 
       ast->ty = expr_ty;
       ast->ty.flags &= ~TYPE_FLAG_PTR;
+      ast->ty = resolve_type(typecheck, &ast->ty);
       return ast->ty;
     } break;
 
@@ -668,7 +772,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
             return type_error();
           }
 
-          ast->ty = expr_ty;
+          ast->ty = resolve_type(typecheck, &expr_ty);
           return ast->ty;
 
         case AST_UNARY_OP_NOT:
@@ -678,7 +782,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
             return type_error();
           }
 
-          ast->ty = expr_ty;
+          ast->ty = resolve_type(typecheck, &expr_ty);
           return ast->ty;
 
         case AST_UNARY_OP_COMP:
@@ -688,7 +792,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
             return type_error();
           }
 
-          ast->ty = expr_ty;
+          ast->ty = resolve_type(typecheck, &expr_ty);
           return ast->ty;
 
         default:
@@ -705,6 +809,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
       ast->ty.ty = AST_TYPE_INTEGER;
       ast->ty.integer.is_signed = 1;
       ast->ty.integer.width = 1;
+      ast->ty = resolve_type(typecheck, &ast->ty);
       return ast->ty;
     } break;
 
@@ -776,7 +881,7 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         arm = arm->next;
       }
 
-      ast->ty = ast->match.arms->expr->ty;
+      ast->ty = resolve_type(typecheck, &ast->match.arms->expr->ty);
       return ast->ty;
     } break;
 
@@ -797,4 +902,53 @@ static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
   }
 
   return 0;
+}
+
+static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
+  if (ty->ty != AST_TYPE_CUSTOM) {
+    return *ty;
+  }
+
+  struct alias_entry *entry = kv_lookup(typecheck->aliases, ty->name);
+  if (!entry) {
+    return type_error();
+  }
+
+  // copy flags from original type (e.g. ptr)
+  entry->ty.flags |= ty->flags;
+  entry->ty.flags |= TYPE_FLAG_INDIRECT;
+  return entry->ty;
+}
+
+static int deref_to_index(const char *deref) {
+  if (isdigit(*deref)) {
+    // numeric deref
+    // TODO: check that endptr is the end of deref; fully consume the string
+    return (int)strtol(deref, NULL, 10);
+  }
+
+  if (deref[1] == 0) {
+    // single character deref
+    switch (deref[0]) {
+      // XYZW
+      case 'x':
+      case 'y':
+      case 'z':
+        return deref[0] - 'x';
+      case 'w':
+        return 3;
+
+      // RGBA
+      case 'r':
+        return 0;
+      case 'g':
+        return 1;
+      case 'b':
+        return 2;
+      case 'a':
+        return 3;
+    }
+  }
+
+  return -1;
 }

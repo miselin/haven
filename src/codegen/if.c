@@ -9,9 +9,9 @@
 
 LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
   LLVMValueRef cond_expr = emit_expr(codegen, ast->if_expr.cond);
-  LLVMValueRef cond =
-      LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond_expr,
-                    LLVMConstInt(ast_ty_to_llvm_ty(&ast->if_expr.cond->ty), 0, 0), "tobool");
+  LLVMValueRef cond = LLVMBuildICmp(
+      codegen->llvm_builder, LLVMIntNE, cond_expr,
+      LLVMConstInt(ast_ty_to_llvm_ty(codegen, &ast->if_expr.cond->ty), 0, 0), "tobool");
 
   LLVMContextRef context = LLVMGetGlobalContext();
 
@@ -36,7 +36,8 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMAppendExistingBasicBlock(codegen->current_function, end_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
-  LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, ast_ty_to_llvm_ty(&ast->ty), "phi");
+  LLVMValueRef phi =
+      LLVMBuildPhi(codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), "phi");
   LLVMValueRef values[] = {then_val, else_val};
   LLVMBasicBlockRef blocks[] = {final_then_block, final_else_block};
   LLVMAddIncoming(phi, values, blocks, 2);
@@ -46,9 +47,9 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
 void emit_void_if(struct codegen *codegen, struct ast_expr *ast) {
   LLVMValueRef cond_expr = emit_expr(codegen, ast->if_expr.cond);
-  LLVMValueRef cond =
-      LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond_expr,
-                    LLVMConstInt(ast_ty_to_llvm_ty(&ast->if_expr.cond->ty), 0, 0), "tobool");
+  LLVMValueRef cond = LLVMBuildICmp(
+      codegen->llvm_builder, LLVMIntNE, cond_expr,
+      LLVMConstInt(ast_ty_to_llvm_ty(codegen, &ast->if_expr.cond->ty), 0, 0), "tobool");
 
   LLVMContextRef context = LLVMGetGlobalContext();
 
