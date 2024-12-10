@@ -93,6 +93,12 @@ static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast) 
 static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
     ast->fdecl.retty = resolve_type(typecheck, &ast->fdecl.retty);
+    if (type_is_error(&ast->fdecl.retty) || type_is_tbd(&ast->fdecl.retty)) {
+      fprintf(stderr, "function %s has unresolved return type\n",
+              ast->fdecl.ident.value.identv.ident);
+      ++typecheck->errors;
+      return;
+    }
 
     struct scope_entry *existing =
         scope_lookup(typecheck->scope, ast->fdecl.ident.value.identv.ident, 1);
@@ -169,6 +175,12 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
     ast->vdecl.ty = resolve_type(typecheck, &ast->vdecl.ty);
+    if (type_is_error(&ast->fdecl.retty) || type_is_tbd(&ast->fdecl.retty)) {
+      fprintf(stderr, "variable %s has unresolved return type\n",
+              ast->vdecl.ident.value.identv.ident);
+      ++typecheck->errors;
+      return;
+    }
 
     if (ast->vdecl.init_expr) {
       struct scope_entry *existing =

@@ -23,7 +23,7 @@ static char escaped(char c) {
 }
 
 int lex_string_literal(struct lex_state *state, struct token *token) {
-  token->ident = TOKEN_STRING;
+  token->ident = TOKEN_UNKNOWN;
 
   // string literal
   size_t i = 0;
@@ -36,6 +36,11 @@ int lex_string_literal(struct lex_state *state, struct token *token) {
     }
 
     token->value.strv.s[i++] = escape ? escaped(c) : c;
+    if (i >= 256) {
+      // string literal too long
+      lex_error(state, "string literal is too long\n");
+      return -1;
+    }
 
     if (c == '\\' && !escape) {
       escape = 1;
@@ -50,5 +55,6 @@ int lex_string_literal(struct lex_state *state, struct token *token) {
   token->value.strv.s[i] = 0;
   token->value.strv.length = i;
 
+  token->ident = TOKEN_STRING;
   return 0;
 }

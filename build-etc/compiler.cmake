@@ -5,21 +5,23 @@ endif()
 set(compiler_included true)
 
 add_library(cmake_base_compiler_options INTERFACE)
+add_library(with_asan INTERFACE)
+add_library(with_ubsan INTERFACE)
+add_library(with_tsan INTERFACE)
+add_library(with_msan INTERFACE)
 
 if (UNIX AND NOT IOS AND NOT ANDROID)
-    if (ASAN)
-        target_compile_options(cmake_base_compiler_options INTERFACE -fsanitize=address -fno-omit-frame-pointer)
-        target_link_libraries(cmake_base_compiler_options INTERFACE -fsanitize=address)
-    elseif (UBSAN)
-        target_compile_options(cmake_base_compiler_options INTERFACE -fsanitize=undefined -fno-omit-frame-pointer)
-        target_link_libraries(cmake_base_compiler_options INTERFACE -fsanitize=undefined)
-    elseif (TSAN)
-        target_compile_options(cmake_base_compiler_options INTERFACE -fsanitize=thread -fno-omit-frame-pointer)
-        target_link_libraries(cmake_base_compiler_options INTERFACE -fsanitize=thread)
-    elseif (MSAN)
-        target_compile_options(cmake_base_compiler_options INTERFACE -fsanitize=memory -fno-omit-frame-pointer)
-        target_link_libraries(cmake_base_compiler_options INTERFACE -fsanitize=memory)
-    endif ()
+    target_compile_options(with_asan INTERFACE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_libraries(with_asan INTERFACE -fsanitize=address)
+
+    target_compile_options(with_ubsan INTERFACE -fsanitize=undefined -fno-omit-frame-pointer)
+    target_link_libraries(with_ubsan INTERFACE -fsanitize=undefined)
+
+    target_compile_options(with_tsan INTERFACE -fsanitize=thread -fno-omit-frame-pointer)
+    target_link_libraries(with_tsan INTERFACE -fsanitize=thread)
+
+    target_compile_options(with_msan INTERFACE -fsanitize=memory -fno-omit-frame-pointer)
+    target_link_libraries(with_msan INTERFACE -fsanitize=memory)
 
     if (OPTIMIZE)
         if (OPTIMIZE_SIZE)
@@ -124,3 +126,19 @@ add_library(mattc_compiler_options_no_warnings INTERFACE)
 
 target_link_libraries(mattc_compiler_options INTERFACE mattc_compiler_options_no_warnings cmake_warning_options)
 target_link_libraries(mattc_compiler_options_no_warnings INTERFACE cmake_base_compiler_options)
+
+if (ASAN)
+    target_link_libraries(mattc_compiler_options INTERFACE with_asan)
+endif ()
+
+if (UBSAN)
+    target_link_libraries(mattc_compiler_options INTERFACE with_ubsan)
+endif ()
+
+if (TSAN)
+    target_link_libraries(mattc_compiler_options INTERFACE with_tsan)
+endif ()
+
+if (MSAN)
+    target_link_libraries(mattc_compiler_options INTERFACE with_msan)
+endif ()

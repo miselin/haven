@@ -67,6 +67,7 @@ CMakeUserPresets.json
 
 # Build directory
 build/
+build-afl/
 .cache/
 
 # misc test stuff
