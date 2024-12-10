@@ -33,6 +33,10 @@ int type_is_tbd(struct ast_ty *ty) {
   return ty->ty == AST_TYPE_TBD;
 }
 
+int type_is_nil(struct ast_ty *ty) {
+  return ty->ty == AST_TYPE_NIL;
+}
+
 int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2) {
   int same = (ty1->ty == ty2->ty) && (ty1->flags == ty2->flags);
   if (ty1->ty == AST_TYPE_ARRAY) {
@@ -159,6 +163,9 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       }
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
     } break;
+    case AST_TYPE_NIL:
+      offset += snprintf(buf, maxlen, "nil");
+      break;
     default:
       snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
       return;

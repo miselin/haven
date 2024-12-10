@@ -106,8 +106,11 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
         fprintf(stderr, "struct %s not found in codegen\n", ty->name);
         return NULL;
       }
-      return entry->type;
+      inner = entry->type;
     } break;
+    case AST_TYPE_NIL:
+      inner = LLVMVoidType();
+      break;
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
       return NULL;

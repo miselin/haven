@@ -33,6 +33,7 @@ enum ast_ty_id {
   AST_TYPE_STRUCT,
   AST_TYPE_ARRAY,
   AST_TYPE_CUSTOM,  // unresolved type name that might be a custom type
+  AST_TYPE_NIL,     // for integers/floats/chars, zero, for pointers, null
 };
 
 struct ast_struct_field {
@@ -84,6 +85,11 @@ int type_is_error(struct ast_ty *);
  * @brief Returns true if the given type is a TBD type.
  */
 int type_is_tbd(struct ast_ty *);
+
+/**
+ * @brief Returns true if the given type is a nil tpye.
+ */
+int type_is_nil(struct ast_ty *);
 
 /**
  * @brief Check if two types are the same type class (e.g. integer, float, etc).

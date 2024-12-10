@@ -89,8 +89,8 @@ static void emit_ast(struct codegen *codegen, struct ast_program *ast) {
 }
 
 static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) {
-  char buf[256];
-  snprintf(buf, 256, "struct.%s", ty->name);
+  char buf[256 + 8];
+  snprintf(buf, 256 + 8, "struct.%s", ty->name);
 
   struct struct_entry *entry = calloc(1, sizeof(struct struct_entry));
   kv_insert(codegen->structs, ty->name, entry);
@@ -152,7 +152,9 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->let.ty);
       LLVMValueRef var = new_alloca(codegen, var_type, ident);
       LLVMValueRef init = emit_expr_into(codegen, ast->let.init_expr, var);
-      LLVMBuildStore(codegen->llvm_builder, init, var);
+      if (init != var) {
+        LLVMBuildStore(codegen->llvm_builder, init, var);
+      }
 
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
       entry->vdecl = &ast->let;

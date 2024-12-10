@@ -69,6 +69,7 @@ enum token_id {
   TOKEN_KW_RETURN,     // ret
   TOKEN_KW_STRUCT,     // struct
   TOKEN_KW_TYPE,       // type
+  TOKEN_KW_NIL,        // nil
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

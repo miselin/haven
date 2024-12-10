@@ -6,5 +6,5 @@ type s = struct {
 
 pub fn i32 main() {
     let foo = struct s {as i32 1, as i32 2, as i32 3};
-    foo.x
+    foo.z
 }

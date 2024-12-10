@@ -344,6 +344,11 @@ static void dump_expr(struct ast_expr *ast, int indent) {
       dump_ty(&ast->ty);
       break;
 
+    case AST_EXPR_TYPE_NIL:
+      fprintf(stderr, "nil -> ");
+      dump_ty(&ast->ty);
+      break;
+
     default:
       fprintf(stderr, "<unknown-expr %d>", ast->type);
   }

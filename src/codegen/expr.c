@@ -21,7 +21,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         case AST_TYPE_INTEGER:
           return LLVMConstInt(const_ty, ast->constant.constant.value.intv.val, 0);
         case AST_TYPE_CHAR:
-          return LLVMConstInt(const_ty, (unsigned)ast->constant.constant.value.charv.c, 0);
+          return LLVMConstInt(const_ty, (unsigned long long)ast->constant.constant.value.charv.c,
+                              0);
         case AST_TYPE_STRING: {
           LLVMValueRef str = LLVMAddGlobal(
               codegen->llvm_module,
@@ -180,9 +181,13 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         return LLVMBuildExtractElement(codegen->llvm_builder, ref, index, "deref");
       }
 
+      LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+
       // struct -> getelementptr
-      LLVMBuildStructGEP2(codegen->llvm_builder, entry->variable_type, entry->ref,
-                          (unsigned int)ast->deref.field_idx, "deref");
+      LLVMValueRef gep =
+          LLVMBuildStructGEP2(codegen->llvm_builder, entry->variable_type, entry->ref,
+                              (unsigned int)ast->deref.field_idx, "deref.gep");
+      return LLVMBuildLoad2(codegen->llvm_builder, target_ty, gep, "deref.load");
     }; break;
 
     case AST_EXPR_TYPE_VOID:
@@ -323,6 +328,11 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       }
 
       // TODO: const initializer
+    } break;
+
+    case AST_EXPR_TYPE_NIL: {
+      LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+      return LLVMConstNull(target_ty);
     } break;
 
     default:

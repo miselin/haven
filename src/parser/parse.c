@@ -404,6 +404,7 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
 static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
   struct ast_stmt *result = calloc(1, sizeof(struct ast_stmt));
   struct token token;
+  memset(&token, 0, sizeof(struct token));
 
   switch (parser_peek(parser)) {
     case TOKEN_KW_LET:
@@ -741,6 +742,11 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         }
       }
       parser_consume(parser, NULL, TOKEN_RBRACE);
+      break;
+
+    case TOKEN_KW_NIL:
+      parser_consume(parser, NULL, TOKEN_KW_NIL);
+      result->type = AST_EXPR_TYPE_NIL;
       break;
 
     default:

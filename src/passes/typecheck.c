@@ -382,14 +382,35 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_STRUCT_INIT: {
+      struct ast_ty resolved = resolve_type(typecheck, ast->ty.array.element_ty);
+
       // TODO: check each field initializer against the struct type
+      struct ast_struct_field *field = resolved.structty.fields;
       struct ast_expr_list *node = ast->list;
       while (node) {
-        typecheck_expr(typecheck, node->expr);
+        struct ast_ty expr_ty = typecheck_expr(typecheck, node->expr);
+
+        if (type_is_nil(&expr_ty)) {
+          // swap expr type for the real underlying type for checking + codegen
+          // the expr is a nil expression, so this is safe to do.
+          node->expr->ty = expr_ty = *field->ty;
+        }
+
+        if (!same_type(&expr_ty, field->ty)) {
+          char exprty[256];
+          char fieldty[256];
+          type_name_into(&expr_ty, exprty, 256);
+          type_name_into(field->ty, fieldty, 256);
+
+          fprintf(stderr, "struct initializer field %s has type %s, expected %s\n", field->name,
+                  exprty, fieldty);
+          ++typecheck->errors;
+        }
+
         node = node->next;
+        field = field->next;
       }
 
-      struct ast_ty resolved = resolve_type(typecheck, ast->ty.array.element_ty);
       *ast->ty.array.element_ty = resolved;
       return resolved;
     } break;
@@ -575,12 +596,14 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         ast->ty.ty = AST_TYPE_FLOAT;
       } else if (entry->vdecl->ty.ty == AST_TYPE_STRUCT) {
         struct ast_struct_field *field = entry->vdecl->ty.structty.fields;
+        size_t i = 0;
         while (field) {
           if (strcmp(field->name, ast->deref.field.value.identv.ident) == 0) {
-            ast->deref.field_idx = max_field;
+            ast->deref.field_idx = i;
             break;
           }
           field = field->next;
+          ++i;
         }
 
         if (!field) {
@@ -884,6 +907,10 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
       return ast->ty;
     } break;
 
+    case AST_EXPR_TYPE_NIL:
+      ast->ty.ty = AST_TYPE_NIL;
+      return ast->ty;
+
     default:
       fprintf(stderr, "typecheck: unhandled expression type %d\n", ast->type);
   }
@@ -913,10 +940,11 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
     return type_error();
   }
 
-  // copy flags from original type (e.g. ptr)
-  entry->ty.flags |= ty->flags;
-  entry->ty.flags |= TYPE_FLAG_INDIRECT;
-  return entry->ty;
+  // copy flags from original type (e.g. ptr); don't mutate original type
+  struct ast_ty resolved_type = entry->ty;
+  resolved_type.flags |= ty->flags;
+  resolved_type.flags |= TYPE_FLAG_INDIRECT;
+  return resolved_type;
 }
 
 static int deref_to_index(const char *deref) {
