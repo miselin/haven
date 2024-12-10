@@ -216,13 +216,21 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
     case AST_STMT_TYPE_RETURN: {
       LLVMValueRef ret = emit_expr(codegen, ast->expr);
-      LLVMBuildRet(codegen->llvm_builder, ret);
+      LLVMBuildStore(codegen->llvm_builder, ret, codegen->retval);
+      LLVMBuildBr(codegen->llvm_builder, codegen->return_block);
     } break;
 
     case AST_STMT_TYPE_STORE: {
       LLVMValueRef lhs = emit_expr(codegen, ast->store.lhs);
       LLVMValueRef rhs = emit_expr(codegen, ast->store.rhs);
       LLVMBuildStore(codegen->llvm_builder, rhs, lhs);
+    } break;
+
+    case AST_STMT_TYPE_DEFER: {
+      struct defer_entry *entry = calloc(1, sizeof(struct defer_entry));
+      entry->expr = ast->expr;
+      entry->next = codegen->defer_head;
+      codegen->defer_head = entry;
     } break;
 
     default:

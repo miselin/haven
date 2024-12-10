@@ -88,6 +88,10 @@ static void cfold_stmt(struct ast_stmt *ast) {
       ast->expr = cfold_expr(ast->expr);
       break;
 
+    case AST_STMT_TYPE_DEFER:
+      ast->expr = cfold_expr(ast->expr);
+      break;
+
     default:
       fprintf(stderr, "cfold: unhandled statement type %d\n", ast->type);
   }

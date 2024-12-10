@@ -389,7 +389,7 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
   }
   parser_consume(parser, &token, TOKEN_RBRACE);
 
-  if (ended_semi) {
+  if (ended_semi || !last || last->type != AST_STMT_TYPE_EXPR) {
     // add a void yielding expression
     struct ast_stmt *stmt = calloc(1, sizeof(struct ast_stmt));
     stmt->type = AST_STMT_TYPE_EXPR;
@@ -445,6 +445,12 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
     case TOKEN_KW_RETURN:
       parser_consume(parser, NULL, TOKEN_KW_RETURN);
       result->type = AST_STMT_TYPE_RETURN;
+      result->expr = parse_expression(parser);
+      break;
+
+    case TOKEN_KW_DEFER:
+      parser_consume(parser, NULL, TOKEN_KW_DEFER);
+      result->type = AST_STMT_TYPE_DEFER;
       result->expr = parse_expression(parser);
       break;
 
@@ -802,6 +808,7 @@ static struct ast_ty parse_type(struct parser *parser) {
 
     if (parser_parse_struct_decl(parser, &result) < 0) {
       result.ty = AST_TYPE_ERROR;
+      return result;
     }
   } else {
     parser_diag(1, parser, &parser->peek, "unexpected token of type %s when parsing type\n",
@@ -971,6 +978,11 @@ static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into) 
     ++into->structty.num_fields;
 
     parser_consume(parser, NULL, TOKEN_SEMI);
+  }
+
+  if (!into->structty.fields) {
+    parser_diag(1, parser, &parser->peek, "structs must have at least one field\n");
+    return -1;
   }
 
   parser_consume(parser, NULL, TOKEN_RBRACE);

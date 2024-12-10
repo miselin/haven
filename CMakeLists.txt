@@ -48,7 +48,7 @@ if (OTHER_MALLOC AND MALLOC)
     set (CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${MALLOC}")
 endif ()
 
-include_directories(include)
+include_directories(include src)
 
 enable_testing()
 

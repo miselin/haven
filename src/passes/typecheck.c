@@ -366,6 +366,11 @@ static struct ast_ty typecheck_stmt(struct typecheck *typecheck, struct ast_stmt
       return typecheck_expr(typecheck, ast->expr);
     } break;
 
+    case AST_STMT_TYPE_DEFER: {
+      typecheck_expr(typecheck, ast->expr);
+      // expression type is irrelevant; defer is a void statement
+    } break;
+
     default:
       fprintf(stderr, "typecheck: unhandled statement type %d\n", ast->type);
   }
@@ -406,6 +411,19 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
           // swap expr type for the real underlying type for checking + codegen
           // the expr is a nil expression, so this is safe to do.
           node->expr->ty = expr_ty = *field->ty;
+        }
+
+        // TODO: fuzzer found field to be null here, the AST doesn't make sense to cause that
+        // either way though, we should check that both node & field are non-null
+        if (!field) {
+          fprintf(stderr, "struct initializer has more fields than the struct type\n");
+          ++typecheck->errors;
+          break;
+        }
+
+        if (!field->ty) {
+          fprintf(stderr, "struct initializer field %s inexplicably has no type\n", field->name);
+          ++typecheck->errors;
         }
 
         if (!same_type(&expr_ty, field->ty)) {

@@ -128,6 +128,8 @@ const char *token_id_to_string(enum token_id token) {
       return "ret";
     case TOKEN_KW_NIL:
       return "nil";
+    case TOKEN_KW_DEFER:
+      return "defer";
     case TOKEN_TY_SIGNED:
       return "i[0-9]+";
     case TOKEN_TY_UNSIGNED:

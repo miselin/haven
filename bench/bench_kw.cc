@@ -1,4 +1,5 @@
 #include <benchmark/benchmark.h>
+#include <stdio.h>
 
 #include "lex.h"
 
@@ -21,10 +22,12 @@ struct RAIILexer {
 };
 
 static void BM_KWNotFound_Trie(benchmark::State &state) {
-  RAIILexer lexer;
+  struct lex_state *lexer = new_lexer(stdin);
+  struct token token;
   for (auto _ : state) {
-    benchmark::DoNotOptimize(lex_maybe_keyword_trie_inner(lexer.state, &lexer.token, "foo"));
+    benchmark::DoNotOptimize(lex_maybe_keyword_trie_inner(lexer, &token, "foo"));
   }
+  destroy_lexer(lexer);
 }
 
 static void BM_KWFound_Trie(benchmark::State &state) {

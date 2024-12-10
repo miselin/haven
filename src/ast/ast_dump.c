@@ -144,6 +144,11 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
       dump_expr(ast->expr, indent);
       break;
 
+    case AST_STMT_TYPE_DEFER: {
+      INDENTED(indent, "Defer ");
+      dump_expr(ast->expr, indent);
+    } break;
+
     default:
       INDENTED(indent, "<unknown-stmt>\n");
   }

@@ -12,6 +12,7 @@
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
   LLVMValueRef func = NULL;
+  LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, &fdecl->retty);
   LLVMTypeRef *param_types = NULL;
 
   struct scope_entry *entry = scope_lookup(codegen->scope, fdecl->ident.value.identv.ident, 0);
@@ -21,10 +22,9 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
     for (size_t i = 0; i < fdecl->num_params; i++) {
       param_types[i] = ast_ty_to_llvm_ty(codegen, &fdecl->params[i]->ty);
     }
-    LLVMTypeRef ret_type =
-        LLVMFunctionType(ast_ty_to_llvm_ty(codegen, &fdecl->retty), param_types,
-                         (unsigned int)fdecl->num_params, fdecl->flags & DECL_FLAG_VARARG);
-    func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, ret_type);
+    LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)fdecl->num_params,
+                                             fdecl->flags & DECL_FLAG_VARARG);
+    func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, func_type);
     if (fdecl->flags & DECL_FLAG_PUB) {
       LLVMSetLinkage(func, LLVMExternalLinkage);
     } else {
@@ -33,7 +33,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
 
     entry = calloc(1, sizeof(struct scope_entry));
     entry->fdecl = fdecl;
-    entry->function_type = ret_type;
+    entry->function_type = func_type;
     entry->param_types = param_types;
     entry->ref = func;
     scope_insert(codegen->scope, fdecl->ident.value.identv.ident, entry);
@@ -44,12 +44,21 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
 
   // generate definition if we have one
   if (fdecl->body) {
+    LLVMContextRef context = LLVMGetGlobalContext();
+    codegen->return_block = LLVMCreateBasicBlockInContext(context, "return");
+
     codegen->entry_block = LLVMAppendBasicBlock(func, "entry");
     codegen->last_alloca = NULL;
     LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->entry_block);
 
+    if (fdecl->retty.ty != AST_TYPE_VOID) {
+      codegen->retval = new_alloca(codegen, ret_ty, "retval");
+    }
+
     codegen->current_function = func;
     codegen->locals = new_kv();
+
+    codegen->defer_head = NULL;
 
     codegen->scope = enter_scope(codegen->scope);
 
@@ -62,21 +71,43 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
     }
 
     LLVMValueRef block_result = emit_block(codegen, fdecl->body);
-    if (block_result) {
-      LLVMBuildRet(codegen->llvm_builder, block_result);
+    if (fdecl->retty.ty != AST_TYPE_VOID) {
+      LLVMBuildStore(codegen->llvm_builder, block_result, codegen->retval);
+    }
+
+    LLVMBasicBlockRef defers = LLVMCreateBasicBlockInContext(context, "defers");
+    LLVMBuildBr(codegen->llvm_builder, defers);
+
+    LLVMAppendExistingBasicBlock(codegen->current_function, defers);
+    LLVMPositionBuilderAtEnd(codegen->llvm_builder, defers);
+
+    // run defer expressions, if any
+    struct defer_entry *defer = codegen->defer_head;
+    while (defer) {
+      struct defer_entry *next = defer->next;
+      emit_expr(codegen, defer->expr);
+      free(defer);
+      defer = next;
+    }
+
+    LLVMBuildBr(codegen->llvm_builder, codegen->return_block);
+
+    // insert return block finally
+    LLVMAppendExistingBasicBlock(codegen->current_function, codegen->return_block);
+    LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->return_block);
+
+    if (fdecl->retty.ty == AST_TYPE_VOID) {
+      LLVMBuildRetVoid(codegen->llvm_builder);
     } else {
-      if (fdecl->retty.ty == AST_TYPE_VOID) {
-        LLVMBuildRetVoid(codegen->llvm_builder);
-      } else {
-        // semantic analysis should catch this case, but handle it just in case
-        // TODO: need to generate a return value based on the function's return type
-        LLVMBuildRet(codegen->llvm_builder, LLVMConstInt(LLVMInt32Type(), 0, 0));
-      }
+      LLVMValueRef retval = LLVMBuildLoad2(codegen->llvm_builder, ret_ty, codegen->retval, "");
+      LLVMBuildRet(codegen->llvm_builder, retval);
     }
 
     codegen->scope = exit_scope(codegen->scope);
 
     destroy_kv(codegen->locals);
     codegen->current_function = NULL;
+    codegen->retval = NULL;
+    codegen->return_block = NULL;
   }
 }

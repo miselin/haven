@@ -20,6 +20,10 @@ struct lex_state {
   struct trie *keywords;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 char lex_getc(struct lex_state *state);
 
 void lex_unget(struct lex_state *state, char c);
@@ -54,5 +58,9 @@ int lex_string_literal(struct lex_state *state, struct token *token);
 
 int initialize_keyword_trie(struct lex_state *state);
 int destroy_keyword_trie(struct lex_state *state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

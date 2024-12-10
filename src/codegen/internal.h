@@ -21,6 +21,11 @@ struct struct_entry {
   LLVMTypeRef type;
 };
 
+struct defer_entry {
+  struct ast_expr *expr;
+  struct defer_entry *next;
+};
+
 struct codegen {
   struct ast_program *ast;
 
@@ -43,6 +48,12 @@ struct codegen {
 
   // struct type names -> their definition
   struct kv *structs;
+
+  LLVMValueRef retval;
+  LLVMBasicBlockRef return_block;
+
+  // stack of defer expressions to run at the end of the current function
+  struct defer_entry *defer_head;
 };
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);

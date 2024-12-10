@@ -37,7 +37,7 @@ TEST(TrieTest, InsertEmpty) {
   struct trie *trie = new_trie();
   trie_insert(trie, "", (void *)1);
 
-  EXPECT_EQ(trie_lookup(trie, ""), (void *)1);
+  EXPECT_EQ(trie_lookup(trie, ""), (void *)0);
 
   destroy_trie(trie);
 }
@@ -55,6 +55,66 @@ TEST(TrieTest, InsertLookupMany) {
   EXPECT_EQ(trie_lookup(trie, "foo"), (void *)3);
   EXPECT_EQ(trie_lookup(trie, "bar"), (void *)4);
   EXPECT_EQ(trie_lookup(trie, "baz"), (void *)5);
+
+  destroy_trie(trie);
+}
+
+TEST(TrieTest, InsertLookupSharedSuffix) {
+  struct trie *trie = new_trie();
+  trie_insert(trie, "hat", (void *)1);
+  trie_insert(trie, "mat", (void *)2);
+  trie_insert(trie, "rat", (void *)3);
+  trie_insert(trie, "cat", (void *)4);
+
+  EXPECT_EQ(trie_lookup(trie, "hat"), (void *)1);
+  EXPECT_EQ(trie_lookup(trie, "mat"), (void *)2);
+  EXPECT_EQ(trie_lookup(trie, "rat"), (void *)3);
+  EXPECT_EQ(trie_lookup(trie, "cat"), (void *)4);
+
+  destroy_trie(trie);
+}
+
+TEST(TrieTest, InsertLookupSharedPrefix) {
+  struct trie *trie = new_trie();
+  trie_insert(trie, "tap", (void *)1);
+  trie_insert(trie, "tar", (void *)2);
+  trie_insert(trie, "tan", (void *)3);
+
+  EXPECT_EQ(trie_lookup(trie, "tap"), (void *)1);
+  EXPECT_EQ(trie_lookup(trie, "tar"), (void *)2);
+  EXPECT_EQ(trie_lookup(trie, "tan"), (void *)3);
+
+  EXPECT_EQ(trie_lookup(trie, "t"), (void *)0);
+
+  destroy_trie(trie);
+}
+
+TEST(TrieTest, InsertLookupSharedInnerLetters) {
+  struct trie *trie = new_trie();
+  trie_insert(trie, "ata", (void *)1);
+  trie_insert(trie, "bta", (void *)2);
+  trie_insert(trie, "cta", (void *)3);
+
+  EXPECT_EQ(trie_lookup(trie, "ata"), (void *)1);
+  EXPECT_EQ(trie_lookup(trie, "bta"), (void *)2);
+  EXPECT_EQ(trie_lookup(trie, "cta"), (void *)3);
+
+  EXPECT_EQ(trie_lookup(trie, "t"), (void *)0);
+
+  destroy_trie(trie);
+}
+
+TEST(TrieTest, InsertLookupSharedPrefixDifferentLengths) {
+  struct trie *trie = new_trie();
+  trie_insert(trie, "struct", (void *)1);
+  trie_insert(trie, "store", (void *)2);
+  trie_insert(trie, "str", (void *)3);
+
+  dump_trie(trie);
+
+  EXPECT_EQ(trie_lookup(trie, "struct"), (void *)1);
+  EXPECT_EQ(trie_lookup(trie, "store"), (void *)2);
+  EXPECT_EQ(trie_lookup(trie, "str"), (void *)3);
 
   destroy_trie(trie);
 }

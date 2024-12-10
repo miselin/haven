@@ -33,6 +33,7 @@ struct lookup {
     {"void", TOKEN_TY_VOID},
     {"type", TOKEN_KW_TYPE},
     {"nil", TOKEN_KW_NIL},
+    {"defer", TOKEN_KW_DEFER},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {

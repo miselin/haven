@@ -249,7 +249,7 @@ int lexer_token(struct lex_state *state, struct token *token) {
       token->value.identv.ident[i] = 0;
 
       // turn identifiers that are keywords into tokens now that we parsed the whole identifier
-      return lex_maybe_keyword(state, token);
+      return lex_maybe_keyword_trie(state, token);
     }
   }
 
