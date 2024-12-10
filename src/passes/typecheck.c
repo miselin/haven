@@ -220,13 +220,12 @@ static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *de
 
   // TODO: causes infinite recursive loop on recursive struct definitions
 
-  /*
   struct ast_struct_field *field = decl->structty.fields;
   while (field) {
+    // TODO: check for recursive definition, ensure it's a pointer if so, or it's not representable
     *field->ty = resolve_type(typecheck, field->ty);
     field = field->next;
   }
-  */
 }
 
 static struct ast_ty typecheck_block(struct typecheck *typecheck, struct ast_block *ast) {
