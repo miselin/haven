@@ -7,7 +7,7 @@ const char *token_id_to_string(enum token_id token) {
     case TOKEN_IDENTIFIER:
       return "<identifier>";
     case TOKEN_INTEGER:
-      return "<integer>>";
+      return "<integer>";
     case TOKEN_FLOAT:
       return "<float>";
     case TOKEN_STRING:

@@ -220,6 +220,7 @@ int lexer_token(struct lex_state *state, struct token *token) {
       break;
     default: {
       if (!isalpha(c)) {
+        token->ident = TOKEN_UNKNOWN;
         lex_error(state, "first character of identifier is not a letter");
         return -1;
       }

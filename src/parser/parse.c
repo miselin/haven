@@ -25,7 +25,7 @@ struct parser {
   int warnings;
 };
 
-static enum token_id parser_peek(struct parser *parser);
+static enum token_id parser_peek(struct parser *parser) __attribute__((warn_unused_result));
 
 static enum token_id parser_consume(struct parser *parser, struct token *token,
                                     enum token_id expected);
@@ -135,11 +135,7 @@ static enum token_id parser_peek(struct parser *parser) {
 static enum token_id parser_consume(struct parser *parser, struct token *token,
                                     enum token_id expected) {
   enum token_id rc = parser_peek(parser);
-  if (rc == TOKEN_UNKNOWN) {
-    return rc;
-  }
-
-  if (parser->peek.ident <= 0) {
+  if (rc == TOKEN_UNKNOWN || parser->peek.ident <= 0) {
     parser_diag(1, parser, NULL, "unexpected EOF or other error in token stream\n");
     return TOKEN_UNKNOWN;
   } else if (parser->peek.ident != expected) {
@@ -198,7 +194,9 @@ static struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
 static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
   struct token token;
   enum token_id peek = parser_peek(parser);
-  if (peek == TOKEN_UNKNOWN || peek == TOKEN_EOF) {
+  if (peek == TOKEN_UNKNOWN) {
+    parser_diag(1, parser, NULL, "unexpected EOF or other error in token stream\n");
+  } else if (peek == TOKEN_EOF) {
     return NULL;
   }
 
@@ -374,6 +372,8 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
     enum token_id peek = parser_peek(parser);
     if (peek == TOKEN_RBRACE) {
       break;
+    } else if (peek == TOKEN_UNKNOWN) {
+      parser_diag(1, parser, NULL, "unexpected lexer token in block\n");
     } else {
       ended_semi = 0;
     }
@@ -395,7 +395,11 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
     stmt->type = AST_STMT_TYPE_EXPR;
     stmt->expr = calloc(1, sizeof(struct ast_expr));
     stmt->expr->type = AST_EXPR_TYPE_VOID;
-    last->next = stmt;
+    if (last) {
+      last->next = stmt;
+    } else {
+      into->stmt = stmt;
+    }
   }
 
   return 0;
@@ -407,6 +411,10 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
   memset(&token, 0, sizeof(struct token));
 
   switch (parser_peek(parser)) {
+    case TOKEN_UNKNOWN:
+      parser_diag(1, parser, NULL, "unexpected lexer token in statement\n");
+      break;
+
     case TOKEN_KW_LET:
       // let [mut] <type>? <name> = <expr>;
       parser_consume(parser, NULL, TOKEN_KW_LET);
@@ -515,6 +523,10 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
 
   while (1) {
     enum token_id peek = parser_peek(parser);
+    if (peek == TOKEN_UNKNOWN) {
+      parser_diag(1, parser, NULL, "unexpected lexer token in expression\n");
+    }
+
     int binop = binary_op(peek);
     if (binop < 0) {
       break;
@@ -616,33 +628,41 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       result->type = AST_EXPR_TYPE_CONSTANT;
       result->ty.ty = AST_TYPE_FVEC;
       result->list = parse_expression_list(parser, TOKEN_GT, 1);
+      if (!result->list) {
+        free(result);
+        parser_diag(1, parser, NULL, "failed to parse expression list for vector initializer\n");
+        return NULL;
+      }
       result->ty.fvec.width = result->list->num_elements;
       parser_consume(parser, NULL, TOKEN_GT);
     } break;
 
       // identifiers (deref, function call, index)
-    case TOKEN_IDENTIFIER:
+    case TOKEN_IDENTIFIER: {
       parser_consume(parser, &token, TOKEN_IDENTIFIER);
 
-      if (parser_peek(parser) == TOKEN_PERIOD) {
+      enum token_id next = parser_peek(parser);
+      if (next == TOKEN_UNKNOWN) {
+        parser_diag(1, parser, NULL, "unexpected lexer token in factor\n");
+      } else if (next == TOKEN_PERIOD) {
         parser_consume(parser, NULL, TOKEN_PERIOD);
 
         result->type = AST_EXPR_TYPE_DEREF;
         result->deref.ident = token;
         parser_consume(parser, &result->deref.field, TOKEN_IDENTIFIER);
-      } else if (parser_peek(parser) == TOKEN_LBRACKET) {
+      } else if (next == TOKEN_LBRACKET) {
         parser_consume(parser, NULL, TOKEN_LBRACKET);
         result->type = AST_EXPR_TYPE_ARRAY_INDEX;
         result->array_index.ident = token;
         result->array_index.index = parse_expression(parser);
         parser_consume(parser, NULL, TOKEN_RBRACKET);
-      } else if (parser_peek(parser) == TOKEN_LPAREN) {
+      } else if (next == TOKEN_LPAREN) {
         parser_consume(parser, NULL, TOKEN_LPAREN);
         result->type = AST_EXPR_TYPE_CALL;
         result->call.ident = token;
         result->call.args = parse_expression_list(parser, TOKEN_RPAREN, 0);
         parser_consume(parser, NULL, TOKEN_RPAREN);
-      } else if (parser_peek(parser) == TOKEN_ASSIGN) {
+      } else if (next == TOKEN_ASSIGN) {
         parser_consume(parser, NULL, TOKEN_ASSIGN);
         result->type = AST_EXPR_TYPE_ASSIGN;
         result->assign.ident = token;
@@ -651,7 +671,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         result->type = AST_EXPR_TYPE_VARIABLE;
         result->variable.ident = token;
       }
-      break;
+    } break;
 
     // sub-expressions
     case TOKEN_LPAREN:
@@ -940,6 +960,11 @@ static int parse_braced_initializer(struct parser *parser, struct ast_expr *into
   into->ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
   *into->ty.array.element_ty = element_ty;
   into->list = parse_expression_list(parser, TOKEN_RBRACE, 0);
+  if (!into->list) {
+    parser_diag(1, parser, &parser->peek, "braced initializer must have at least one element\n");
+    free(into->ty.array.element_ty);
+    return -1;
+  }
   into->ty.array.width = into->list->num_elements;
   parser_consume(parser, NULL, TOKEN_RBRACE);
   return 0;

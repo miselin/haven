@@ -31,6 +31,8 @@ struct typecheck {
   struct kv *aliases;
 };
 
+int typecheck_verify_ast(struct ast_program *ast);
+
 static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast);
 static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast);
 static struct ast_ty typecheck_block(struct typecheck *typecheck, struct ast_block *ast);
@@ -68,7 +70,13 @@ struct typecheck *new_typecheck(struct ast_program *ast) {
 
 int typecheck_run(struct typecheck *typecheck) {
   typecheck_ast(typecheck, typecheck->ast);
-  return typecheck->errors;
+  if (typecheck->errors) {
+    return typecheck->errors;
+  }
+  if (typecheck_verify_ast(typecheck->ast) < 0) {
+    return 1;
+  }
+  return 0;
 }
 
 void destroy_typecheck(struct typecheck *typecheck) {
@@ -660,7 +668,8 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
     }; break;
 
     case AST_EXPR_TYPE_VOID:
-      return type_void();
+      ast->ty = type_void();
+      return ast->ty;
 
     case AST_EXPR_TYPE_CAST: {
       ast->cast.ty = resolve_type(typecheck, &ast->cast.ty);
@@ -933,7 +942,11 @@ static struct ast_ty typecheck_expr(struct typecheck *typecheck, struct ast_expr
         arm = arm->next;
       }
 
-      ast->ty = resolve_type(typecheck, &ast->match.arms->expr->ty);
+      if (ast->match.arms) {
+        ast->ty = resolve_type(typecheck, &ast->match.arms->expr->ty);
+      } else {
+        ast->ty = resolve_type(typecheck, &ast->match.otherwise->expr->ty);
+      }
       return ast->ty;
     } break;
 
