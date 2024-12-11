@@ -20,6 +20,12 @@
 // References another type. Used to avoid freeing struct field types in particular.
 #define TYPE_FLAG_INDIRECT (1U << 1)
 
+// This type is associated with a constant value. Used for literals to enable implicit
+// type conversion for constants.
+#define TYPE_FLAG_CONSTANT (1U << 2)
+
+#define TYPE_FLAG_MASK_ALL (~0U)
+
 enum ast_ty_id {
   AST_TYPE_ERROR = 0,
   AST_TYPE_TBD,  // yet to be determined by type checking pass
@@ -96,7 +102,22 @@ int type_is_nil(struct ast_ty *);
  *
  * Disregards specific type data such as width or element count.
  */
-int same_type_class(struct ast_ty *, struct ast_ty *);
+int same_type_class(struct ast_ty *, struct ast_ty *, uint64_t flagmask);
+
+/**
+ * @brief Check if the types are compatible (e.g. one is a constant smaller than the other's size).
+ */
+int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2);
+
+/**
+ * @brief Check if two types are the same type, including element count and width.
+ *
+ * This is extremely specific; in many cases it's better to use same_type_class and
+ * a widening/narrowing check instead.
+ *
+ * @param flagmask A mask to apply to flags during comparison.
+ */
+int same_type_masked(struct ast_ty *, struct ast_ty *, uint64_t flagmask);
 
 /**
  * @brief Check if two types are the same type, including element count and width.

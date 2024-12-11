@@ -203,16 +203,16 @@ pub fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n) {
     if 0.01 < p {
         store t p;
         store n <0.0, 0.0, 1.0>;
-        m = as i8 1;
+        m = 1;
     };
 
     iter 20:0:-1 k_ {
         let k = k_ - 1; // make it really 19..0
         iter 10:0:-1 j_ {
             let j = j_ - 1; // make it really 9..0 // TODO: there's a bug here - 9:0:-1 will skip zero!
-            let bit = as i32 (1 << k);
-            let lookup = G[j];
-            if (lookup & bit) != as i32 0 {
+            let bit = 1 << k;
+            let lookup = as i64 G[j];
+            if (lookup & bit) != 0 {
                 let p = o + <(as float -k), 0.0, (as float -j - 4.0)>;
                 let b = vdot(p, d);
                 let c = vdot(p, p) - 1.0;

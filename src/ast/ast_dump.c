@@ -122,7 +122,9 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
         fprintf(stderr, " by ");
         dump_expr(ast->iter.range.step, indent);
       }
-      fprintf(stderr, " for %s in ", ast->iter.index.ident.value.identv.ident);
+      fprintf(stderr, " for %s -> ", ast->iter.index.ident.value.identv.ident);
+      dump_ty(&ast->iter.index_vdecl->ty);
+      fprintf(stderr, " io ");
       dump_block(&ast->iter.block, indent);
       break;
 
@@ -196,6 +198,9 @@ static void dump_expr(struct ast_expr *ast, int indent) {
         default:
           fprintf(stderr, "<unknown-constant>");
       }
+
+      fprintf(stderr, " -> ");
+      dump_ty(&ast->ty);
       break;
 
     case AST_EXPR_TYPE_STRUCT_INIT:
@@ -209,8 +214,12 @@ static void dump_expr(struct ast_expr *ast, int indent) {
     case AST_EXPR_TYPE_BINARY:
       fprintf(stderr, "Binary(%s, ", ast_binary_op_to_str(ast->binary.op));
       dump_expr(ast->binary.lhs, indent);
+      fprintf(stderr, " -> ");
+      dump_ty(&ast->binary.lhs->ty);
       fprintf(stderr, ", ");
       dump_expr(ast->binary.rhs, indent);
+      fprintf(stderr, " -> ");
+      dump_ty(&ast->binary.rhs->ty);
       fprintf(stderr, ") -> ");
       dump_ty(&ast->ty);
       break;

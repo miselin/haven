@@ -71,6 +71,7 @@ enum token_id {
   TOKEN_KW_TYPE,       // type
   TOKEN_KW_NIL,        // nil
   TOKEN_KW_DEFER,      // defer
+  TOKEN_KW_IMPURE,     // impure
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

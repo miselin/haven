@@ -40,7 +40,7 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
 
   LLVMTypeRef dest_ty = ast_ty_to_llvm_ty(codegen, to);
 
-  if (!same_type_class(from, to)) {
+  if (!same_type_class(from, to, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT)) {
     if (from->ty == AST_TYPE_INTEGER) {
       return LLVMBuildSIToFP(codegen->llvm_builder, value, dest_ty, "fpconv");
     } else {

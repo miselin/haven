@@ -77,6 +77,8 @@ __attribute__((format(printf, 4, 5))) static void parser_diag(int fatal, struct 
 struct parser *new_parser(struct lex_state *lexer) {
   struct parser *result = calloc(1, sizeof(struct parser));
   result->lexer = lexer;
+  result->ast.filename = (const char *)malloc(256);
+  strcpy((char *)result->ast.filename, "raytracer.mc");
   return result;
 }
 
@@ -117,6 +119,7 @@ struct ast_program *parser_get_ast(struct parser *parser) {
 }
 
 void destroy_parser(struct parser *parser) {
+  free((char *)parser->ast.filename);
   free_ast(&parser->ast);
   free(parser);
 }
@@ -582,10 +585,18 @@ static struct ast_expr *parse_factor(struct parser *parser) {
 
       // constants have a fully resolved type immediately
       if (peek == TOKEN_INTEGER) {
-        // constants are default i64
         result->ty.ty = AST_TYPE_INTEGER;
+        result->ty.flags |= TYPE_FLAG_CONSTANT;
         result->ty.integer.is_signed = 1;
-        result->ty.integer.width = 64;
+        if (token.value.intv.val == 0) {
+          result->ty.integer.width = 1;
+        } else {
+          // width is the number of bits required to represent the value
+          // also, constants are all positive, so add one bit for sign
+          result->ty.integer.width =
+              (8 * sizeof(token.value.intv.val) - (uint64_t)__builtin_clzll(token.value.intv.val)) +
+              1;
+        }
       } else if (peek == TOKEN_STRING) {
         result->ty.ty = AST_TYPE_STRING;
       } else if (peek == TOKEN_CHAR) {
@@ -898,16 +909,35 @@ static int binary_op(enum token_id token) {
   }
 }
 
+static struct ast_expr *wrap_cast(struct ast_expr *expr, struct ast_ty *ty) {
+  if (!expr) {
+    return NULL;
+  }
+
+  struct ast_expr *result = calloc(1, sizeof(struct ast_expr));
+  result->type = AST_EXPR_TYPE_CAST;
+  result->cast.expr = expr;
+  result->cast.ty = *ty;
+  return result;
+}
+
 static struct ast_range parse_range(struct parser *parser) {
   struct ast_range result;
 
-  result.start = parse_expression(parser);
+  // ranges are all i64s (for now...)
+  struct ast_ty ty;
+  memset(&ty, 0, sizeof(struct ast_ty));
+  ty.ty = AST_TYPE_INTEGER;
+  ty.integer.is_signed = 1;
+  ty.integer.width = 64;
+
+  result.start = wrap_cast(parse_expression(parser), &ty);
   parser_consume(parser, NULL, TOKEN_COLON);
-  result.end = parse_expression(parser);
+  result.end = wrap_cast(parse_expression(parser), &ty);
 
   if (parser_peek(parser) == TOKEN_COLON) {
     parser_consume(parser, NULL, TOKEN_COLON);
-    result.step = parse_expression(parser);
+    result.step = wrap_cast(parse_expression(parser), &ty);
   } else {
     result.step = NULL;
   }

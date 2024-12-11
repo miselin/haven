@@ -37,35 +37,85 @@ int type_is_nil(struct ast_ty *ty) {
   return ty->ty == AST_TYPE_NIL;
 }
 
-int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2) {
-  int same = (ty1->ty == ty2->ty) && (ty1->flags == ty2->flags);
+int type_is_constant(struct ast_ty *ty) {
+  return ty->flags & TYPE_FLAG_CONSTANT;
+}
+
+int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
+  uint64_t flags1 = ty1->flags & flagmask;
+  uint64_t flags2 = ty2->flags & flagmask;
+
+  int same = (ty1->ty == ty2->ty) && (flags1 == flags2);
   if (ty1->ty == AST_TYPE_ARRAY) {
-    same = same && same_type_class(ty1->array.element_ty, ty2->array.element_ty);
+    same = same && same_type_class(ty1->array.element_ty, ty2->array.element_ty, flagmask);
   }
   return same;
 }
 
-int same_type(struct ast_ty *ty1, struct ast_ty *ty2) {
-  if (!same_type_class(ty1, ty2)) {
+int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
+  if (same_type(ty1, ty2)) {
+    return 1;
+  }
+
+  if (type_is_constant(ty1) != type_is_constant(ty2)) {
+    // make sure ty1 is the non-constant type
+    if (type_is_constant(ty1)) {
+      struct ast_ty *tmp = ty1;
+      ty1 = ty2;
+      ty2 = tmp;
+    }
+  }
+
+  switch (ty1->ty) {
+    case AST_TYPE_INTEGER:
+      if (ty1->integer.is_signed != ty2->integer.is_signed) {
+        return 0;
+      }
+
+      // constants are always compatible with each other, they can always be cast
+      if (type_is_constant(ty1) && type_is_constant(ty2)) {
+        return 1;
+      }
+
+      // destination type must be at least large enough for the constant
+      if (type_is_constant(ty2)) {
+        return ty1->integer.width >= ty2->integer.width;
+      }
+
+      return ty1->integer.width == ty2->integer.width;
+    default:
+      return 0;
+  }
+}
+
+int same_type_masked(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
+  if (!same_type_class(ty1, ty2, flagmask)) {
     return 0;
   }
 
   switch (ty1->ty) {
     case AST_TYPE_INTEGER:
-      return ty1->integer.is_signed == ty2->integer.is_signed &&
-             ty1->integer.width == ty2->integer.width;
+      if (ty1->integer.is_signed != ty2->integer.is_signed) {
+        return 0;
+      }
+
+      return ty1->integer.width == ty2->integer.width;
     case AST_TYPE_FVEC:
       return ty1->fvec.width == ty2->fvec.width;
     case AST_TYPE_ARRAY:
       return ty1->array.width == ty2->array.width &&
-             same_type(ty1->array.element_ty, ty2->array.element_ty);
+             same_type_masked(ty1->array.element_ty, ty2->array.element_ty, flagmask);
     default:
       return 1;
   }
 }
 
+int same_type(struct ast_ty *ty1, struct ast_ty *ty2) {
+  return same_type_masked(ty1, ty2, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT);
+}
+
 int narrower_type(struct ast_ty *ty1, struct ast_ty *ty2) {
-  if (!same_type_class(ty1, ty2)) {
+  if (!same_type_class(ty1, ty2, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT)) {
     return 0;
   }
 
@@ -82,7 +132,7 @@ int narrower_type(struct ast_ty *ty1, struct ast_ty *ty2) {
 }
 
 int wider_type(struct ast_ty *ty1, struct ast_ty *ty2) {
-  if (!same_type_class(ty1, ty2)) {
+  if (!same_type_class(ty1, ty2, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT)) {
     return 0;
   }
 
@@ -174,6 +224,12 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
   if (ty->flags & TYPE_FLAG_PTR) {
     offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
   }
+  if (ty->flags & TYPE_FLAG_CONSTANT) {
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
+  }
+  if (ty->flags & ~(TYPE_FLAG_PTR | TYPE_FLAG_CONSTANT)) {
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %lx)", ty->flags);
+  }
 
   buf[offset] = '\0';
 }
@@ -182,7 +238,9 @@ int can_cast(struct ast_ty *ty1, struct ast_ty *ty2) {
   // identical types?
   if (same_type(ty1, ty2)) {
     return 1;
-  } else if (same_type_class(ty1, ty2)) {
+  } else if (same_type_class(ty1, ty2, TYPE_FLAG_MASK_ALL)) {
+    return 1;
+  } else if (compatible_types(ty1, ty2)) {
     return 1;
   }
 

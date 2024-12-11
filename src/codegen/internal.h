@@ -26,12 +26,18 @@ struct defer_entry {
   struct defer_entry *next;
 };
 
+struct codegen_block {
+  LLVMMetadataRef scope_metadata;
+  struct codegen_block *parent;
+};
+
 struct codegen {
   struct ast_program *ast;
 
   LLVMContextRef llvm_context;
   LLVMModuleRef llvm_module;
   LLVMBuilderRef llvm_builder;
+  LLVMDIBuilderRef llvm_dibuilder;
 
   LLVMValueRef current_function;
   LLVMBasicBlockRef entry_block;
@@ -54,6 +60,10 @@ struct codegen {
 
   // stack of defer expressions to run at the end of the current function
   struct defer_entry *defer_head;
+
+  struct codegen_block *current_block;
+  LLVMMetadataRef file_metadata;
+  LLVMMetadataRef compile_unit;
 };
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
@@ -84,5 +94,8 @@ LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *b
 
 LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
                              struct ast_expr_match *match);
+
+void codegen_internal_enter_scope(struct codegen *codegen);
+void codegen_internal_leave_scope(struct codegen *codegen);
 
 #endif

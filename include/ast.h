@@ -73,6 +73,7 @@
 #define AST_LOGICAL_OP_AND 2
 
 struct ast_program {
+  const char *filename;
   struct ast_toplevel *decls;
 };
 
