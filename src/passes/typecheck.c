@@ -674,6 +674,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         }
       }
 
+      ast->call.fdecl = entry->fdecl;
+
       struct ast_expr_list *args = ast->call.args;
       size_t i = 0;
       while (args) {

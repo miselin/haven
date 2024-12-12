@@ -155,6 +155,7 @@ struct ast_expr_list {
 
 struct ast_expr_call {
   struct token ident;
+  struct ast_fdecl *fdecl;
   struct ast_expr_list *args;
 };
 

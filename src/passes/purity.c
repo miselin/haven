@@ -61,7 +61,8 @@ static int check_purity_toplevel(struct ast_toplevel *ast) {
 
     if (ast->fdecl.body) {
       if (check_purity_block(ast->fdecl.body) < 0) {
-        fprintf(stderr, "function %s is impure - it reads or writes memory\n",
+        fprintf(stderr,
+                "function %s is impure - it reads or writes memory, or calls an impure function\n",
                 ast->fdecl.ident.value.identv.ident);
         return -1;
       }
@@ -206,18 +207,19 @@ static int check_purity_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_CALL: {
+      if (ast->call.fdecl->flags & DECL_FLAG_IMPURE) {
+        // cannot call impure functions from pure functions
+        return -1;
+      }
+
       struct ast_expr_list *args = ast->call.args;
-      int total = 0;
       while (args) {
-        int rc = check_purity_expr(args->expr);
-        if (rc < 0) {
+        if (check_purity_expr(args->expr) < 0) {
           return -1;
         }
-        total += rc;
 
         args = args->next;
       }
-      return total;
     } break;
 
     case AST_EXPR_TYPE_DEREF:
