@@ -6,7 +6,7 @@ extern "C" int sut();
 #define EXPECTED_RC 0
 #endif
 
-TEST(CompiledFunctionRCTest, Run) {
+TEST(CompiledFunctionRCTest, TESTNAME) {
   int rc = sut();
   EXPECT_EQ(rc, EXPECTED_RC);
 }

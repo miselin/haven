@@ -18,7 +18,7 @@ gtest_discover_tests(kw_test)
 macro(add_functional_test name expectedrc lib)
     add_executable(${name} rc_test.cc)
     target_link_libraries(${name} mattc_compiler_options_no_warnings ${lib} GTest::gtest_main)
-    target_compile_definitions(${name} PRIVATE EXPECTED_RC=${expectedrc})
+    target_compile_definitions(${name} PRIVATE EXPECTED_RC=${expectedrc} TESTNAME=${name})
     gtest_discover_tests(${name})
 endmacro()
 

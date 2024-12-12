@@ -13,7 +13,7 @@ struct RAIILexer {
   struct token token;
 
   RAIILexer() {
-    state = new_lexer(stdin);
+    state = new_lexer(stdin, "<stdin>");
   }
 
   ~RAIILexer() {
@@ -22,7 +22,7 @@ struct RAIILexer {
 };
 
 static void BM_KWNotFound_Trie(benchmark::State &state) {
-  struct lex_state *lexer = new_lexer(stdin);
+  struct lex_state *lexer = new_lexer(stdin, "<stdin>");
   struct token token;
   for (auto _ : state) {
     benchmark::DoNotOptimize(lex_maybe_keyword_trie_inner(lexer, &token, "foo"));

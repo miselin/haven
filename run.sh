@@ -3,10 +3,13 @@
 set -e
 set -o pipefail
 
-gcc -E - <$1 >$1.preproc
-./build/bin/mattc $1.preproc $1.ir 2>&1 | tee log.log
+CFLAGS="-O2 -g -gdwarf-2 -fstandalone-debug -fno-eliminate-unused-debug-types -gline-tables-only"
 
-opt-18 -S --O3 $1.ir >$1.ll
-llc-18 -O2 -filetype=obj $1.ll -o $1.o
-llc-18 -O2 -filetype=asm $1.ll -o $1.s
-clang-18 -o $1.bin $1.o -lm
+gcc -E - <$1 >$1.preproc
+./build/bin/mattc $1.preproc $1.ll 2>&1 | tee log.log
+
+clang-18 -c ${CFLAGS} -o $1.o -x ir $1.ll
+clang-18 -S ${CFLAGS} -emit-llvm -o $1.opt.ll $1.ll
+objdump -S $1.o >$1.s
+
+clang-18 ${CFLAGS} -o $1.bin $1.o -lm

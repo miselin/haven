@@ -31,7 +31,7 @@ option(DEBUG_BUILD "build with extra debug options such as logging, even in a Re
 
 # Generic compilation options
 option(WARNINGS "allow warnings" OFF)
-option(OPTIMIZE "optimize all code" ON)
+option(OPTIMIZE "optimize all code" OFF)
 option(OPTIMIZE_SIZE "optimize all code for smallest size" OFF)
 
 # Enable jemalloc/tcmalloc if available?

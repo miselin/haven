@@ -6,7 +6,7 @@
 #include "trie.h"
 
 TEST(LexerKeywords, LookupLetterInKeyword) {
-  struct lex_state *state = new_lexer(stdin);
+  struct lex_state *state = new_lexer(stdin, "<stdin>");
 
   struct token token;
   token.ident = TOKEN_IDENTIFIER;
@@ -20,7 +20,7 @@ TEST(LexerKeywords, LookupLetterInKeyword) {
 }
 
 TEST(LexerKeywords, LookupEarlyTerminal) {
-  struct lex_state *state = new_lexer(stdin);
+  struct lex_state *state = new_lexer(stdin, "<stdin>");
 
   struct token token;
   token.ident = TOKEN_IDENTIFIER;
