@@ -233,6 +233,12 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     flags |= DECL_FLAG_PUB;
   }
 
+  // impure
+  if (parser_peek(parser) == TOKEN_KW_IMPURE) {
+    parser_consume(parser, NULL, TOKEN_KW_IMPURE);
+    flags |= DECL_FLAG_IMPURE;
+  }
+
   // fn or type
   if (parser_peek(parser) == TOKEN_KW_FN) {
     parser_consume(parser, NULL, TOKEN_KW_FN);

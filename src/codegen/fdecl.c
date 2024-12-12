@@ -34,12 +34,20 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       LLVMSetLinkage(func, LLVMInternalLinkage);
     }
 
-    unsigned int sanitize = LLVMGetEnumAttributeKindForName("sanitize_address", 16);
+    {
+      unsigned int sanitize = LLVMGetEnumAttributeKindForName("sanitize_address", 16);
+      unsigned int memory = LLVMGetEnumAttributeKindForName("memory", 6);
 
-    // sanitize_address
-    LLVMContextRef context = LLVMGetGlobalContext();
-    LLVMAttributeRef ref = LLVMCreateEnumAttribute(context, sanitize, 0);
-    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
+      // sanitize_address for ASAN - need cli flags for this
+      LLVMContextRef context = LLVMGetGlobalContext();
+      LLVMAttributeRef ref = LLVMCreateEnumAttribute(context, sanitize, 0);
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
+
+      if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {
+        ref = LLVMCreateEnumAttribute(context, memory, 0);
+        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
+      }
+    }
 
     entry = calloc(1, sizeof(struct scope_entry));
     entry->fdecl = fdecl;

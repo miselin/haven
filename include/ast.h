@@ -12,6 +12,7 @@
 #define DECL_FLAG_MUT (1U << 1)
 #define DECL_FLAG_VARARG (1U << 2)
 #define DECL_FLAG_TEMPORARY (1U << 3)
+#define DECL_FLAG_IMPURE (1U << 4)
 
 #define AST_DECL_TYPE_VDECL 1
 #define AST_DECL_TYPE_FDECL 2
@@ -73,7 +74,7 @@
 #define AST_LOGICAL_OP_AND 2
 
 struct ast_program {
-  const char *filename;
+  struct lex_locator loc;
   struct ast_toplevel *decls;
 };
 
@@ -104,6 +105,7 @@ struct ast_tydecl {
 
 struct ast_toplevel {
   int type;
+  struct lex_locator loc;
 
   struct ast_toplevel *next;
   union {
@@ -119,6 +121,7 @@ struct ast_expr_constant {
 
 struct ast_block {
   struct ast_stmt *stmt;
+  struct lex_locator loc;
 };
 
 struct ast_expr_binary {
@@ -256,6 +259,7 @@ struct ast_stmt_store {
 
 struct ast_stmt {
   int type;
+  struct lex_locator loc;
 
   union {
     struct ast_expr *expr;
@@ -269,6 +273,7 @@ struct ast_stmt {
 
 void free_ast(struct ast_program *ast);
 void dump_ast(struct ast_program *ast);
+void dump_expr(struct ast_expr *ast, int indent);
 
 void free_toplevel(struct ast_toplevel *ast);
 void free_block(struct ast_block *ast, int heap);

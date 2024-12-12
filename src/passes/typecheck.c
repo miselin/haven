@@ -324,6 +324,8 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
         ast->let.ty = *init_ty;
       }
 
+      maybe_implicitly_convert(init_ty, &ast->let.ty);
+
       if (!same_type(&ast->let.ty, init_ty)) {
         char tystr[256], initstr[256];
         type_name_into(&ast->let.ty, tystr, 256);
@@ -682,6 +684,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
         // check named parameters, don't check varargs (no types to check)
         if (i < entry->fdecl->num_params) {
+          maybe_implicitly_convert(arg_ty, &entry->fdecl->params[i]->ty);
           if (!same_type(arg_ty, &entry->fdecl->params[i]->ty)) {
             char tystr[256], expectedstr[256];
             type_name_into(arg_ty, tystr, 256);

@@ -6,6 +6,7 @@
 #include "codegen.h"
 #include "lex.h"
 #include "parse.h"
+#include "purity.h"
 #include "typecheck.h"
 #include "utility.h"
 
@@ -51,6 +52,12 @@ int main(int argc, char *argv[]) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser));
     rc = typecheck_run(typecheck);
     destroy_typecheck(typecheck);
+  }
+
+  if (rc == 0) {
+    struct purity *purity = purity_new(parser_get_ast(parser));
+    rc = purity_run(purity);
+    purity_destroy(purity);
   }
 
   if (rc == 0) {

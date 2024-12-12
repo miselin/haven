@@ -12,7 +12,8 @@ struct lex_state;
 struct lex_locator {
   size_t line;
   size_t column;
-  char file[256];
+  // shared - part of lex_state, don't modify
+  const char *file;
 };
 
 struct token {
@@ -48,7 +49,7 @@ struct token {
 extern "C" {
 #endif
 
-struct lex_state *new_lexer(FILE *);
+struct lex_state *new_lexer(FILE *, const char *filename);
 int lexer_eof(struct lex_state *);
 int lexer_token(struct lex_state *, struct token *);
 void lexer_locate(struct lex_state *, struct lex_locator *);
