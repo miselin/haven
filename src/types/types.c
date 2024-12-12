@@ -66,15 +66,15 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
     }
   }
 
+  if (type_is_constant(ty1) && type_is_constant(ty2)) {
+    // final constant type is the largest size of the two
+    return 1;
+  }
+
   switch (ty1->ty) {
     case AST_TYPE_INTEGER:
       if (ty1->integer.is_signed != ty2->integer.is_signed) {
         return 0;
-      }
-
-      // constants are always compatible with each other, they can always be cast
-      if (type_is_constant(ty1) && type_is_constant(ty2)) {
-        return 1;
       }
 
       // destination type must be at least large enough for the constant

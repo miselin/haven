@@ -23,7 +23,7 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast);
 struct codegen *new_codegen(struct ast_program *ast) {
   struct codegen *result = calloc(1, sizeof(struct codegen));
   result->ast = ast;
-  result->llvm_module = LLVMModuleCreateWithName(ast->filename);
+  result->llvm_module = LLVMModuleCreateWithName(ast->loc.file);
   result->llvm_builder = LLVMCreateBuilder();
   result->llvm_dibuilder = LLVMCreateDIBuilder(result->llvm_module);
 
@@ -34,13 +34,14 @@ struct codegen *new_codegen(struct ast_program *ast) {
 
   result->structs = new_kv();
 
-  result->file_metadata =
-      LLVMDIBuilderCreateFile(result->llvm_dibuilder, ast->filename, 12, "examples", 8);
+  // TODO: split file into dir + file
+  result->file_metadata = LLVMDIBuilderCreateFile(result->llvm_dibuilder, ast->loc.file,
+                                                  strlen(ast->loc.file), "examples", 8);
   result->compile_unit = LLVMDIBuilderCreateCompileUnit(
       result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, "mattc", 5, 0, "", 0,
-      0, "", 0, LLVMDWARFEmissionLineTablesOnly, 0, 0, 0, "", 0, "", 0);
+      0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
 
-  codegen_internal_enter_scope(result);
+  codegen_internal_enter_scope(result, &ast->loc, 0);
 
   return result;
 }
@@ -83,7 +84,7 @@ void destroy_codegen(struct codegen *codegen) {
   }
 
   destroy_kv(codegen->functions);
-  codegen_internal_leave_scope(codegen);
+  codegen_internal_leave_scope(codegen, 0);
   LLVMDisposeDIBuilder(codegen->llvm_dibuilder);
   LLVMDisposeBuilder(codegen->llvm_builder);
   LLVMDisposeModule(codegen->llvm_module);
@@ -91,6 +92,7 @@ void destroy_codegen(struct codegen *codegen) {
 }
 
 static void emit_ast(struct codegen *codegen, struct ast_program *ast) {
+  update_debug_loc(codegen, &ast->loc);
   struct ast_toplevel *decl = ast->decls;
   while (decl) {
     emit_toplevel(codegen, decl);
@@ -122,8 +124,9 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
 }
 
 static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
+  update_debug_loc(codegen, &ast->loc);
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    emit_fdecl(codegen, &ast->fdecl);
+    emit_fdecl(codegen, &ast->fdecl, &ast->loc);
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
     emit_vdecl(codegen, &ast->vdecl);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
@@ -139,18 +142,20 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
 }
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast) {
-  codegen_internal_enter_scope(codegen);
+  codegen_internal_enter_scope(codegen, &ast->loc, 1);
+  update_debug_loc(codegen, &ast->loc);
   struct ast_stmt *stmt = ast->stmt;
   LLVMValueRef last = NULL;
   while (stmt) {
     last = emit_stmt(codegen, stmt);
     stmt = stmt->next;
   }
-  codegen_internal_leave_scope(codegen);
+  codegen_internal_leave_scope(codegen, 1);
   return last;
 }
 
 static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
+  update_debug_loc(codegen, &ast->loc);
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR: {
       LLVMValueRef expr = emit_expr(codegen, ast->expr);
@@ -183,7 +188,7 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
       LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->iter.index_vdecl->ty);
 
-      codegen_internal_enter_scope(codegen);
+      codegen_internal_enter_scope(codegen, &ast->loc, 1);
 
       LLVMValueRef index = new_alloca(codegen, var_type, ident);
       LLVMBuildStore(codegen->llvm_builder, start, index);
@@ -197,10 +202,10 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
       // now build the actual loop
 
-      LLVMBasicBlockRef cond_block = LLVMAppendBasicBlock(codegen->current_function, "loop.cond");
-      LLVMBasicBlockRef body_block = LLVMAppendBasicBlock(codegen->current_function, "loop.body");
-      LLVMBasicBlockRef step_block = LLVMAppendBasicBlock(codegen->current_function, "loop.step");
-      LLVMBasicBlockRef end_block = LLVMAppendBasicBlock(codegen->current_function, "loop.end");
+      LLVMBasicBlockRef cond_block = LLVMAppendBasicBlock(codegen->current_function, "iter.cond");
+      LLVMBasicBlockRef body_block = LLVMAppendBasicBlock(codegen->current_function, "iter.body");
+      LLVMBasicBlockRef step_block = LLVMAppendBasicBlock(codegen->current_function, "iter.step");
+      LLVMBasicBlockRef end_block = LLVMAppendBasicBlock(codegen->current_function, "iter.end");
 
       LLVMBuildBr(codegen->llvm_builder, cond_block);
 
@@ -215,13 +220,13 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       LLVMBuildBr(codegen->llvm_builder, step_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, step_block);
-      LLVMValueRef next = LLVMBuildAdd(codegen->llvm_builder, index_val, step, "next");
+      LLVMValueRef next = LLVMBuildAdd(codegen->llvm_builder, index_val, step, "iter.next");
       LLVMBuildStore(codegen->llvm_builder, next, index);
       LLVMBuildBr(codegen->llvm_builder, cond_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
 
-      codegen_internal_leave_scope(codegen);
+      codegen_internal_leave_scope(codegen, 1);
     } break;
 
     case AST_STMT_TYPE_RETURN: {
@@ -250,21 +255,28 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
   return NULL;
 }
 
-void codegen_internal_enter_scope(struct codegen *codegen) {
+void codegen_internal_enter_scope(struct codegen *codegen, struct lex_locator *at,
+                                  int lexical_block) {
   codegen->scope = enter_scope(codegen->scope);
+
+  if (!lexical_block) {
+    return;
+  }
 
   struct codegen_block *parent = codegen->current_block;
   codegen->current_block = calloc(1, sizeof(struct codegen_block));
   codegen->current_block->parent = parent;
-  codegen->current_block->scope_metadata =
-      parent ? codegen->compile_unit
-             : LLVMDIBuilderCreateLexicalBlock(codegen->llvm_dibuilder,
-                                               codegen->current_block->scope_metadata,
-                                               codegen->file_metadata, 1, 1);
+  codegen->current_block->scope_metadata = LLVMDIBuilderCreateLexicalBlock(
+      codegen->llvm_dibuilder, parent ? parent->scope_metadata : codegen->current_function_metadata,
+      codegen->file_metadata, (unsigned)at->line + 1, (unsigned)at->column + 1);
 }
 
-void codegen_internal_leave_scope(struct codegen *codegen) {
+void codegen_internal_leave_scope(struct codegen *codegen, int lexical_block) {
   codegen->scope = exit_scope(codegen->scope);
+
+  if (!lexical_block) {
+    return;
+  }
 
   struct codegen_block *block = codegen->current_block;
   codegen->current_block = codegen->current_block->parent;

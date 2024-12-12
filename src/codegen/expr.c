@@ -11,17 +11,7 @@
 #include "utility.h"
 
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
-  if (ast) {
-    LLVMContextRef context = LLVMGetGlobalContext();
-    LLVMMetadataRef loc = LLVMDIBuilderCreateDebugLocation(
-        context, (unsigned)ast->loc.line, (unsigned)ast->loc.column,
-        codegen->current_block->scope_metadata, NULL);
-
-    LLVMSetCurrentDebugLocation2(codegen->llvm_builder, loc);
-  } else {
-    LLVMSetCurrentDebugLocation2(codegen->llvm_builder, NULL);
-  }
-
+  update_debug_loc(codegen, &ast->loc);
   return emit_expr_into(codegen, ast, NULL);
 }
 

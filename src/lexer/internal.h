@@ -18,6 +18,7 @@ struct lex_state {
   struct lex_locator loc;
 
   struct trie *keywords;
+  char *filename;
 };
 
 #ifdef __cplusplus

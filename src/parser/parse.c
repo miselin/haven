@@ -77,8 +77,6 @@ __attribute__((format(printf, 4, 5))) static void parser_diag(int fatal, struct 
 struct parser *new_parser(struct lex_state *lexer) {
   struct parser *result = calloc(1, sizeof(struct parser));
   result->lexer = lexer;
-  result->ast.filename = (const char *)malloc(256);
-  strcpy((char *)result->ast.filename, "raytracer.mc");
   return result;
 }
 
@@ -88,6 +86,8 @@ int parser_run(struct parser *parser) {
     // -2 = unexpected token
     return -1;
   }
+
+  lexer_locate(parser->lexer, &parser->ast.loc);
 
   while (!lexer_eof(parser->lexer)) {
     struct ast_toplevel *decl = parser_parse_toplevel(parser);
@@ -119,7 +119,6 @@ struct ast_program *parser_get_ast(struct parser *parser) {
 }
 
 void destroy_parser(struct parser *parser) {
-  free((char *)parser->ast.filename);
   free_ast(&parser->ast);
   free(parser);
 }
@@ -203,16 +202,24 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     return NULL;
   }
 
+  struct lex_locator loc;
+  lexer_locate(parser->lexer, &loc);
+
   if (peek == TOKEN_POUND) {
-    return parser_parse_preproc(parser);
+    struct ast_toplevel *result = parser_parse_preproc(parser);
+    result->loc = loc;
+    return result;
   } else if (peek == TOKEN_KW_TYPE) {
     parser_consume(parser, NULL, TOKEN_KW_TYPE);
-    return parser_parse_tydecl(parser);
+    struct ast_toplevel *result = parser_parse_tydecl(parser);
+    result->loc = loc;
+    return result;
   }
 
   uint64_t flags = 0;
 
   struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
+  decl->loc = loc;
   struct ast_fdecl *fdecl = &decl->fdecl;
   struct ast_vdecl *vdecl = &decl->vdecl;
 
@@ -336,12 +343,13 @@ static struct ast_toplevel *parser_parse_preproc(struct parser *parser) {
       size_t new_line = token.value.intv.val;
 
       parser_consume(parser, &token, TOKEN_STRING);
-      const char *new_file = token.value.strv.s;
+      // const char *new_file = token.value.strv.s;
 
       struct lex_locator loc;
       lexer_locate(parser->lexer, &loc);
       loc.line = new_line - 1;  // references the next line
-      strncpy(loc.file, new_file, 256);
+      // TODO: sort this business out
+      // strncpy(loc.file, new_file, 256);
       lexer_update_loc(parser->lexer, &loc);
 
       // consume the flags (if any) -- TODO: use the flags
@@ -363,6 +371,7 @@ static struct ast_toplevel *parser_parse_preproc(struct parser *parser) {
 
 static int parse_block(struct parser *parser, struct ast_block *into) {
   struct ast_stmt *last = NULL;
+  lexer_locate(parser->lexer, &into->loc);
 
   /**
    * { <stmt>* }
@@ -410,6 +419,8 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
 
 static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
   struct ast_stmt *result = calloc(1, sizeof(struct ast_stmt));
+  lexer_locate(parser->lexer, &result->loc);
+
   struct token token;
   memset(&token, 0, sizeof(struct token));
 
@@ -559,8 +570,8 @@ static struct ast_expr *parse_factor(struct parser *parser) {
 
   struct token token;
 
-  enum token_id peek = parser_peek(parser);
   lexer_locate(parser->lexer, &result->loc);
+  enum token_id peek = parser_peek(parser);
   switch (peek) {
     // unary expression (higher precedence than binary operators)
     case TOKEN_MINUS:

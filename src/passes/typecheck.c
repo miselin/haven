@@ -36,6 +36,7 @@ struct typecheck {
 };
 
 int typecheck_verify_ast(struct ast_program *ast);
+int typecheck_implicit_ast(struct ast_program *ast);
 
 static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast);
 static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast);
@@ -57,7 +58,7 @@ static int deref_to_index(const char *deref);
 
 // If allowed, makes from and to the same type using implicit conversion rules
 // Does nothing if implicit conversion is disallowed or irrelevant.
-static int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to);
+int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to);
 
 __attribute__((format(printf, 3, 4))) static void typecheck_diag_expr(struct typecheck *typecheck,
                                                                       struct ast_expr *expr,
@@ -90,6 +91,17 @@ int typecheck_run(struct typecheck *typecheck) {
   }
   if (typecheck_verify_ast(typecheck->ast) < 0) {
     return 1;
+  }
+  int rc = 0;
+  while (1) {
+    rc = typecheck_implicit_ast(typecheck->ast);
+    if (rc < 0) {
+      return 1;
+    }
+
+    if (rc == 0) {
+      break;
+    }
   }
   return 0;
 }
@@ -584,8 +596,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       if (ast_binary_op_conditional(ast->binary.op) || ast_binary_op_logical(ast->binary.op)) {
         // conditionals & logicals both emit 1-bit booleans
+        // don't set signed flag - booleans need to zero-extend in conversions, not sign-extend
         ast->ty.ty = AST_TYPE_INTEGER;
-        ast->ty.integer.is_signed = 1;
+        ast->ty.integer.is_signed = 0;
         ast->ty.integer.width = 1;
         return &ast->ty;
       }
@@ -617,7 +630,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       // return type of this operation is actually a 1-bit boolean
       ast->ty.ty = AST_TYPE_INTEGER;
-      ast->ty.integer.is_signed = 1;
+      ast->ty.integer.is_signed = 0;
       ast->ty.integer.width = 1;
       ast->ty = resolve_type(typecheck, &ast->ty);
       return &ast->ty;
@@ -782,7 +795,6 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       ast->ty = resolve_type(typecheck, &ast->cast.ty);
       return &ast->ty;
-
     } break;
 
     case AST_EXPR_TYPE_IF: {
@@ -969,7 +981,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       }
 
       ast->ty.ty = AST_TYPE_INTEGER;
-      ast->ty.integer.is_signed = 1;
+      ast->ty.integer.is_signed = 0;
       ast->ty.integer.width = 1;
       ast->ty = resolve_type(typecheck, &ast->ty);
       return &ast->ty;
@@ -1122,13 +1134,28 @@ static int deref_to_index(const char *deref) {
   return -1;
 }
 
-static int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
+int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
   if (!compatible_types(from, to)) {
     // no-op
     return 0;
   }
 
   if (from->ty == AST_TYPE_INTEGER && to->ty == AST_TYPE_INTEGER) {
+    if (from->integer.width == to->integer.width) {
+      return 0;
+    }
+
+    if (from->flags & TYPE_FLAG_CONSTANT && to->flags & TYPE_FLAG_CONSTANT) {
+      // swap from/to so the result is the highest width
+      if (from->integer.width > to->integer.width) {
+        to->integer.width = from->integer.width;
+      } else {
+        from->integer.width = to->integer.width;
+      }
+
+      return from->integer.width != to->integer.width;
+    }
+
     // don't propagate constant type in the wrong direction
     if (to->flags & TYPE_FLAG_CONSTANT) {
       return 0;

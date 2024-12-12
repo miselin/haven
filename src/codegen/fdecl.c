@@ -1,3 +1,4 @@
+#include <llvm-c-18/llvm-c/DebugInfo.h>
 #include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
@@ -8,10 +9,11 @@
 #include "codegen.h"
 #include "internal.h"
 #include "kv.h"
+#include "lex.h"
 #include "scope.h"
 #include "utility.h"
 
-void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
+void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at) {
   LLVMValueRef func = NULL;
   LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, &fdecl->retty);
   LLVMTypeRef *param_types = NULL;
@@ -55,6 +57,15 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
     return;
   }
 
+  LLVMMetadataRef function_metadata = LLVMDIBuilderCreateFunction(
+      codegen->llvm_dibuilder, codegen->compile_unit, fdecl->ident.value.identv.ident,
+      strlen(fdecl->ident.value.identv.ident), "", 0, codegen->file_metadata,
+      (unsigned)at->line + 1, NULL, (fdecl->flags & DECL_FLAG_PUB) == 0, fdecl->body != NULL, 1, 0,
+      0);
+
+  codegen->current_function_metadata = function_metadata;
+  update_debug_loc(codegen, at);
+
   LLVMContextRef context = LLVMGetGlobalContext();
   codegen->return_block = LLVMCreateBasicBlockInContext(context, "return");
 
@@ -71,7 +82,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
 
   codegen->defer_head = NULL;
 
-  codegen_internal_enter_scope(codegen);
+  codegen_internal_enter_scope(codegen, at, 0);
 
   for (size_t i = 0; i < fdecl->num_params; i++) {
     struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
@@ -114,10 +125,11 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl) {
     LLVMBuildRet(codegen->llvm_builder, retval);
   }
 
-  codegen_internal_leave_scope(codegen);
+  codegen_internal_leave_scope(codegen, 0);
 
   destroy_kv(codegen->locals);
   codegen->current_function = NULL;
   codegen->retval = NULL;
   codegen->return_block = NULL;
+  codegen->current_function_metadata = NULL;
 }

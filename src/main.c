@@ -10,6 +10,8 @@
 #include "utility.h"
 
 int main(int argc, char *argv[]) {
+  const char *filename = "<stdin>";
+
   FILE *in = stdin;
   if (argc > 1) {
     in = fopen(argv[1], "r");
@@ -17,6 +19,8 @@ int main(int argc, char *argv[]) {
       perror("fopen");
       return 1;
     }
+
+    filename = argv[1];
   }
 
   FILE *out = stdout;
@@ -30,14 +34,12 @@ int main(int argc, char *argv[]) {
 
   int rc = 0;
 
-  struct lex_state *lexer = new_lexer(in);
+  struct lex_state *lexer = new_lexer(in, filename);
   struct parser *parser = new_parser(lexer);
 
   if (parser_run(parser) < 0) {
     rc = 1;
   }
-
-  destroy_lexer(lexer);
 
   if (rc == 0) {
     struct cfolder *cfolder = new_cfolder(parser_get_ast(parser));
@@ -76,5 +78,6 @@ int main(int argc, char *argv[]) {
   }
 
   destroy_parser(parser);
+  destroy_lexer(lexer);
   return rc;
 }

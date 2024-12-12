@@ -10,10 +10,12 @@
 #include "internal.h"
 #include "tokens.h"
 
-struct lex_state *new_lexer(FILE *stream) {
+struct lex_state *new_lexer(FILE *stream, const char *filename) {
   struct lex_state *result = calloc(1, sizeof(struct lex_state));
   result->stream = stream;
-  strncpy(result->loc.file, "<stdin>", 256);
+  result->filename = malloc(strlen(filename) + 1);
+  strcpy(result->filename, filename);
+  result->loc.file = result->filename;
   initialize_keyword_trie(result);
   return result;
 }
@@ -36,5 +38,6 @@ void lexer_update_loc(struct lex_state *state, struct lex_locator *loc) {
 
 void destroy_lexer(struct lex_state *state) {
   destroy_keyword_trie(state);
+  free(state->filename);
   free(state);
 }

@@ -208,8 +208,13 @@ pub fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n) {
 
     iter 20:0:-1 k_ {
         let k = k_ - 1; // make it really 19..0
-        iter 10:0:-1 j_ {
-            let j = j_ - 1; // make it really 9..0 // TODO: there's a bug here - 9:0:-1 will skip zero!
+
+        // I think there's an actual bug in the business card raytracer
+        // It iterates j from 9 downwards but the G array has 9 elements (i.e. 8 is the highest index)
+        // Fixing it here...
+        iter 9:0:-1 j_ {
+            let j = j_ - 1; // make it really 8..0 // TODO: there's a bug here - 9:0:-1 will skip zero!
+
             let bit = 1 << k;
             let lookup = as i64 G[j];
             if (lookup & bit) != 0 {

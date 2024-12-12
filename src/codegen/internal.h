@@ -40,6 +40,7 @@ struct codegen {
   LLVMDIBuilderRef llvm_dibuilder;
 
   LLVMValueRef current_function;
+  LLVMMetadataRef current_function_metadata;
   LLVMBasicBlockRef entry_block;
   LLVMValueRef last_alloca;
 
@@ -70,7 +71,7 @@ LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast);
 LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMValueRef into);
 
-void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl);
+void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at);
 void emit_vdecl(struct codegen *codegen, struct ast_vdecl *vdecl);
 
 LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *from,
@@ -95,7 +96,10 @@ LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *b
 LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
                              struct ast_expr_match *match);
 
-void codegen_internal_enter_scope(struct codegen *codegen);
-void codegen_internal_leave_scope(struct codegen *codegen);
+void codegen_internal_enter_scope(struct codegen *codegen, struct lex_locator *at,
+                                  int lexical_block);
+void codegen_internal_leave_scope(struct codegen *codegen, int lexical_block);
+
+void update_debug_loc(struct codegen *codegen, struct lex_locator *loc);
 
 #endif

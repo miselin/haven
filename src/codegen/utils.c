@@ -1,6 +1,7 @@
-#include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
+#include <llvm-c/DebugInfo.h>
+#include <llvm-c/Types.h>
 
 #include "ast.h"
 #include "codegen.h"
@@ -50,6 +51,9 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
 
   if (narrower_type(from, to)) {
     // TODO: sext if signed integer
+    if (from->ty == AST_TYPE_INTEGER && from->integer.is_signed) {
+      return LLVMBuildSExtOrBitCast(codegen->llvm_builder, value, dest_ty, "widening");
+    }
     return LLVMBuildZExtOrBitCast(codegen->llvm_builder, value, dest_ty, "widening");
   } else {
     return LLVMBuildTruncOrBitCast(codegen->llvm_builder, value, dest_ty, "narrowing");
@@ -121,4 +125,24 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
   }
 
   return inner;
+}
+
+void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {
+  if (loc) {
+    LLVMContextRef context = LLVMGetGlobalContext();
+    LLVMMetadataRef scope = codegen->compile_unit;
+    if (codegen->current_function_metadata) {
+      if (codegen->current_block) {
+        scope = codegen->current_block->scope_metadata;
+      } else {
+        scope = codegen->current_function_metadata;
+      }
+    }
+    LLVMMetadataRef metadata = LLVMDIBuilderCreateDebugLocation(
+        context, (unsigned)loc->line + 1, (unsigned)loc->column + 1, scope, NULL);
+
+    LLVMSetCurrentDebugLocation2(codegen->llvm_builder, metadata);
+  } else {
+    LLVMSetCurrentDebugLocation2(codegen->llvm_builder, NULL);
+  }
 }

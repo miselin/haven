@@ -17,7 +17,6 @@ static void print_indent(int level) {
 static void dump_toplevel(struct ast_toplevel *ast);
 static void dump_block(struct ast_block *ast, int indent);
 static void dump_stmt(struct ast_stmt *ast, int indent);
-static void dump_expr(struct ast_expr *ast, int indent);
 static void dump_fdecl(struct ast_fdecl *ast, int indent);
 static void dump_vdecl(struct ast_vdecl *ast, int indent);
 static void dump_tydecl(struct ast_tydecl *ast, int indent);
@@ -158,7 +157,7 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
   fprintf(stderr, "\n");
 }
 
-static void dump_expr(struct ast_expr *ast, int indent) {
+void dump_expr(struct ast_expr *ast, int indent) {
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT:
       switch (ast->ty.ty) {
