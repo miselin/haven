@@ -11,20 +11,20 @@ pub i32[9] G = i32 {
     16
 };
 
-pub fn i32 printf(str fmt, *);
+pub impure fn i32 printf(str fmt, *);
 
 pub float RAND_MAX = 2147483647.0;
 
 pub fn float sqrtf(float v);
 pub fn float ceilf(float v);
 pub fn float powf(float a, float b);
-pub fn i32 rand();
+pub impure fn i32 rand();
 pub fn i32 exit(i32 code);
 
 pub fn fvec3 S(fvec3 o, fvec3 d);
 pub fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n);
 
-pub fn float R() {
+pub impure fn float R() {
     (as float rand()) / RAND_MAX
 }
 
@@ -53,11 +53,11 @@ pub fn fvec3 vnorm(fvec3 v) {
     v * denom
 }
 
-pub fn void printvec(fvec3 v) {
+pub impure fn void printvec(fvec3 v) {
     printf("(%f, %f, %f)\n", v.x, v.y, v.z);
 }
 
-pub fn i32 main() {
+pub impure fn i32 main() {
     let xdim = 512;
     let ydim = xdim;
 
@@ -133,7 +133,7 @@ pub fn i32 main() {
     as i32 0
 }
 
-pub fn fvec3 S(fvec3 o, fvec3 d) {
+pub impure fn fvec3 S(fvec3 o, fvec3 d) {
     let float t = 0.0;
     let fvec3 n = <0.0, 0.0, 0.0>;
 
@@ -196,7 +196,7 @@ pub fn fvec3 S(fvec3 o, fvec3 d) {
     }
 }
 
-pub fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n) {
+pub impure fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n) {
     store t 100000000.0;
     let mut m = as i8 0;
     let p = -o.z / d.z;
