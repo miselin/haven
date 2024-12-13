@@ -190,6 +190,9 @@ void free_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH:
+      if (ast->pattern_match.inner_vdecl) {
+        free_vdecl(ast->pattern_match.inner_vdecl, 1);
+      }
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
@@ -242,33 +245,35 @@ void free_tydecl(struct ast_tydecl *ast, int heap) {
 }
 
 void free_ty(struct ast_ty *ty, int heap) {
-  // only free internals of a type if this ast_ty instance owns them
-  if ((ty->flags & TYPE_FLAG_INDIRECT) == 0) {
-    if (ty->ty == AST_TYPE_ARRAY) {
-      free_ty(ty->array.element_ty, 1);
+  if (ty->ty == AST_TYPE_ARRAY) {
+    free_ty(ty->array.element_ty, 1);
+    ty->array.element_ty = NULL;
+  }
+
+  if (ty->ty == AST_TYPE_STRUCT) {
+    struct ast_struct_field *field = ty->structty.fields;
+    while (field) {
+      struct ast_struct_field *next = field->next;
+      free_ty(field->ty, 1);
+      free(field);
+      field = next;
     }
 
-    if (ty->ty == AST_TYPE_STRUCT) {
-      struct ast_struct_field *field = ty->structty.fields;
-      while (field) {
-        struct ast_struct_field *next = field->next;
-        free_ty(field->ty, 1);
-        free(field);
-        field = next;
+    ty->structty.fields = NULL;
+  }
+
+  if (ty->ty == AST_TYPE_ENUM) {
+    struct ast_enum_field *field = ty->enumty.fields;
+    while (field) {
+      struct ast_enum_field *next = field->next;
+      if (field->has_inner) {
+        free_ty(&field->inner, 0);
       }
+      free(field);
+      field = next;
     }
 
-    if (ty->ty == AST_TYPE_ENUM) {
-      struct ast_enum_field *field = ty->enumty.fields;
-      while (field) {
-        struct ast_enum_field *next = field->next;
-        if (field->has_inner) {
-          free_ty(&field->inner, 0);
-        }
-        free(field);
-        field = next;
-      }
-    }
+    ty->enumty.fields = NULL;
   }
 
   if (heap) {

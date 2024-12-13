@@ -193,4 +193,17 @@ int can_cast(struct ast_ty *, struct ast_ty *);
  */
 size_t type_size(struct ast_ty *);
 
+/**
+ * @brief Correctly copy a type, including any dynamic memory allocations.
+ */
+struct ast_ty copy_type(struct ast_ty *);
+
+/**
+ * @brief Deeply compare two type objects, including all sub-objects.
+ *
+ * This matches heap-allocated pointers deep in the type definition, making it useful for deciding
+ * whether to clean up a type or not.
+ */
+int same_type(struct ast_ty *, struct ast_ty *);
+
 #endif

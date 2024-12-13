@@ -212,13 +212,16 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       }
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    ast->vdecl.ty = resolve_type(typecheck, &ast->vdecl.ty);
-    if (type_is_error(&ast->fdecl.retty) || type_is_tbd(&ast->fdecl.retty)) {
-      fprintf(stderr, "variable %s has unresolved return type\n",
-              ast->vdecl.ident.value.identv.ident);
+    struct ast_ty new_type = resolve_type(typecheck, &ast->vdecl.ty);
+    if (type_is_error(&new_type) || type_is_tbd(&new_type)) {
+      fprintf(stderr, "variable %s has unresolved type\n", ast->vdecl.ident.value.identv.ident);
       ++typecheck->errors;
       return;
     }
+
+    // resolve creates a copy, clean up old type
+    free_ty(&ast->vdecl.ty, 0);
+    ast->vdecl.ty = new_type;
 
     if (ast->vdecl.init_expr) {
       struct scope_entry *existing =
@@ -466,7 +469,10 @@ static struct ast_ty *typecheck_expr_with_tbds(struct typecheck *typecheck, stru
 static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr *ast) {
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
-      ast->ty = resolve_type(typecheck, &ast->ty);
+      struct ast_ty new_ty = resolve_type(typecheck, &ast->ty);
+      free_ty(&ast->ty, 0);
+      ast->ty = new_ty;
+
       switch (ast->ty.ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY: {
@@ -1024,28 +1030,21 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
         struct scope_entry *inner_var = NULL;
 
-        if (arm->pattern->type == AST_EXPR_TYPE_PATTERN_MATCH) {
-          if (!arm->pattern->pattern_match.is_wildcard) {
-            typecheck->scope = enter_scope(typecheck->scope);
+        if (arm->pattern->type == AST_EXPR_TYPE_PATTERN_MATCH &&
+            arm->pattern->pattern_match.inner_vdecl) {
+          typecheck->scope = enter_scope(typecheck->scope);
 
-            struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-            entry->vdecl = calloc(1, sizeof(struct ast_vdecl));
-            entry->vdecl->ident = arm->pattern->pattern_match.inner;
-            entry->vdecl->ty = arm->pattern->pattern_match.inner_ty;
-            scope_insert(typecheck->scope, arm->pattern->pattern_match.inner.value.identv.ident,
-                         entry);
+          struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
+          entry->vdecl = arm->pattern->pattern_match.inner_vdecl;
+          scope_insert(typecheck->scope,
+                       arm->pattern->pattern_match.inner_vdecl->ident.value.identv.ident, entry);
 
-            inner_var = entry;
-          }
+          inner_var = entry;
         }
-
-        // TODO: if the inner on the pattern exists, we need to define a new scope + define the
-        // inner in it
 
         struct ast_ty *arm_ty = typecheck_expr(typecheck, arm->expr);
 
         if (inner_var) {
-          free(inner_var->vdecl);
           typecheck->scope = exit_scope(typecheck->scope);
         }
 
@@ -1205,7 +1204,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      ast->pattern_match.inner_ty = resolve_type(typecheck, &field->inner);
+      if (ast->pattern_match.inner_vdecl) {
+        ast->pattern_match.inner_vdecl->ty = resolve_type(typecheck, &field->inner);
+      }
 
       // no need to check inner, it'll become the type of the pattern match in the handler for the
       // match expression
@@ -1234,7 +1235,7 @@ static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
 
 static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
   if (ty->ty != AST_TYPE_CUSTOM) {
-    return *ty;
+    return copy_type(ty);
   }
 
   struct alias_entry *entry = kv_lookup(typecheck->aliases, ty->name);
@@ -1243,7 +1244,7 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
   }
 
   // copy flags from original type (e.g. ptr); don't mutate original type
-  struct ast_ty resolved_type = entry->ty;
+  struct ast_ty resolved_type = copy_type(&entry->ty);
   resolved_type.flags |= ty->flags;
   resolved_type.flags |= TYPE_FLAG_INDIRECT;
   return resolved_type;

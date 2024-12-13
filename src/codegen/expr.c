@@ -14,6 +14,12 @@
 #include "utility.h"
 
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
+  if (0) {
+    fprintf(stderr, "emit expr: ");
+    dump_expr(ast, 0);
+    fprintf(stderr, "\n");
+  }
+
   update_debug_loc(codegen, &ast->loc);
   return emit_expr_into(codegen, ast, NULL);
 }
@@ -109,8 +115,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       struct scope_entry *lookup =
           scope_lookup(codegen->scope, ast->variable.ident.value.identv.ident, 1);
 
-      fprintf(stderr, "failed to look up %s\n", ast->variable.ident.value.identv.ident);
-
       // temporaries are things like function parameters, and do not require loads
       if (lookup->vdecl->flags & DECL_FLAG_TEMPORARY) {
         return lookup->ref;
@@ -151,30 +155,49 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           scope_lookup(codegen->scope, ast->call.ident.value.identv.ident, 1);
 
       size_t named_param_count = LLVMCountParams(entry->ref);
+      size_t is_complex = (size_t)type_is_complex(&entry->fdecl->retty);
+
+      LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, &entry->fdecl->retty);
 
       LLVMValueRef *args = NULL;
       unsigned int num_args = 0;
       if (ast->call.args) {
-        args = malloc(sizeof(LLVMValueRef) * ast->call.args->num_elements);
+        args = malloc(sizeof(LLVMValueRef) * (ast->call.args->num_elements + is_complex));
         struct ast_expr_list *node = ast->call.args;
         while (node) {
-          args[num_args] = emit_expr(codegen, node->expr);
+          args[num_args + is_complex] = emit_expr(codegen, node->expr);
           if (node->expr->ty.ty == AST_TYPE_FLOAT && num_args >= named_param_count) {
             // vararg floats need to be promoted to doubles for C compatibility
-            args[num_args] =
-                LLVMBuildFPExt(codegen->llvm_builder, args[num_args], LLVMDoubleType(), "fpext");
+            args[num_args + is_complex] = LLVMBuildFPExt(
+                codegen->llvm_builder, args[num_args + is_complex], LLVMDoubleType(), "fpext");
           }
           ++num_args;
           node = node->next;
         }
       }
 
+      LLVMValueRef complex = NULL;
+      if (is_complex) {
+        // build retval
+        args[0] = into ? into : new_alloca(codegen, ret_ty, "sret");
+        complex = args[0];
+
+        ++num_args;
+      }
+
       LLVMValueRef call = LLVMBuildCall2(codegen->llvm_builder, entry->function_type, entry->ref,
                                          args, num_args, "");
+
+      if (is_complex) {
+        unsigned int kind = LLVMGetEnumAttributeKindForName("sret", 4);
+        LLVMAttributeRef attr = LLVMCreateTypeAttribute(codegen->llvm_context, kind, ret_ty);
+        LLVMAddCallSiteAttribute(call, 1, attr);
+      }
+
       if (args) {
         free(args);
       }
-      return call;
+      return is_complex ? complex : call;
     } break;
 
     case AST_EXPR_TYPE_DEREF: {

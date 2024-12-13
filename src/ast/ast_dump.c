@@ -364,10 +364,11 @@ void dump_expr(struct ast_expr *ast, int indent) {
 
     case AST_EXPR_TYPE_PATTERN_MATCH:
       fprintf(stderr, "PatternMatch(%s, ", ast->pattern_match.name.value.identv.ident);
-      if (ast->pattern_match.is_wildcard) {
-        fprintf(stderr, "_");
+      if (ast->pattern_match.inner_vdecl) {
+        // fprintf(stderr, "%s", ast->pattern_match.inner.value.identv.ident);
+        dump_vdecl(ast->pattern_match.inner_vdecl, 0);
       } else {
-        fprintf(stderr, "%s", ast->pattern_match.inner.value.identv.ident);
+        fprintf(stderr, "_");
       }
       fprintf(stderr, ") -> ");
       dump_ty(&ast->ty);

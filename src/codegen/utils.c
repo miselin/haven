@@ -11,6 +11,7 @@
 #include "utility.h"
 
 LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *name) {
+#if 0
   LLVMBasicBlockRef current_block = LLVMGetInsertBlock(codegen->llvm_builder);
 
   // insert allocas at the start of the entry block
@@ -24,11 +25,14 @@ LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *n
   } else {
     LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->entry_block);
   }
+#endif
 
   LLVMValueRef var = LLVMBuildAlloca(codegen->llvm_builder, type, name);
   codegen->last_alloca = var;
 
+#if 0
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, current_block);
+#endif
 
   return var;
 }

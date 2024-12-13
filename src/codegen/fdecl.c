@@ -16,16 +16,33 @@
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at) {
   LLVMValueRef func = NULL;
   LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, &fdecl->retty);
+  LLVMTypeRef orig_ret_ty = ret_ty;
   LLVMTypeRef *param_types = NULL;
+
+  int rc = type_is_complex(&fdecl->retty);
+  if (rc < 0) {
+    fprintf(stderr, "type_is_complex returned a completely unexpected value %d\n", rc);
+    return;
+  }
+
+  size_t complex_return = (size_t)rc;
+  size_t num_params = fdecl->num_params + complex_return;
+
+  if (complex_return) {
+    ret_ty = LLVMVoidTypeInContext(codegen->llvm_context);
+  }
 
   struct scope_entry *entry = scope_lookup(codegen->scope, fdecl->ident.value.identv.ident, 0);
   if (!entry) {
     // emit declaration
-    param_types = malloc(sizeof(LLVMTypeRef) * fdecl->num_params);
-    for (size_t i = 0; i < fdecl->num_params; i++) {
-      param_types[i] = ast_ty_to_llvm_ty(codegen, &fdecl->params[i]->ty);
+    param_types = malloc(sizeof(LLVMTypeRef) * num_params);
+    if (complex_return) {
+      param_types[0] = LLVMPointerTypeInContext(codegen->llvm_context, 0);
     }
-    LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)fdecl->num_params,
+    for (size_t i = 0; i < fdecl->num_params; i++) {
+      param_types[i + complex_return] = ast_ty_to_llvm_ty(codegen, &fdecl->params[i]->ty);
+    }
+    LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params,
                                              fdecl->flags & DECL_FLAG_VARARG);
     func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, func_type);
     if (fdecl->flags & DECL_FLAG_PUB) {
@@ -34,17 +51,27 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       LLVMSetLinkage(func, LLVMInternalLinkage);
     }
 
+    if (complex_return) {
+      unsigned int kind = LLVMGetEnumAttributeKindForName("sret", 4);
+      LLVMAttributeRef attr = LLVMCreateTypeAttribute(codegen->llvm_context, kind, orig_ret_ty);
+      LLVMAddAttributeAtIndex(func, 1, attr);
+    }
+
     {
       unsigned int sanitize = LLVMGetEnumAttributeKindForName("sanitize_address", 16);
       unsigned int memory = LLVMGetEnumAttributeKindForName("memory", 6);
+      unsigned int nounwind = LLVMGetEnumAttributeKindForName("nounwind", 8);
 
       // sanitize_address for ASAN - need cli flags for this
       LLVMContextRef context = codegen->llvm_context;
       LLVMAttributeRef ref = LLVMCreateEnumAttribute(context, sanitize, 0);
       LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
+      LLVMAttributeRef nounwind_ref = LLVMCreateEnumAttribute(context, nounwind, 0);
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, nounwind_ref);
 
       if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {
-        ref = LLVMCreateEnumAttribute(context, memory, 0);
+        // argmem: readwrite (allow struct returns to be pure)
+        ref = LLVMCreateEnumAttribute(context, memory, 3);
         LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
       }
     }
@@ -75,13 +102,17 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   update_debug_loc(codegen, at);
 
   LLVMContextRef context = codegen->llvm_context;
-  codegen->return_block = LLVMCreateBasicBlockInContext(context, "return");
+  LLVMBasicBlockRef defers = LLVMCreateBasicBlockInContext(context, "defers");
+  LLVMBasicBlockRef return_block = LLVMCreateBasicBlockInContext(context, "return");
+  codegen->return_block = defers;
 
   codegen->entry_block = LLVMAppendBasicBlockInContext(context, func, "entry");
   codegen->last_alloca = NULL;
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->entry_block);
 
-  if (fdecl->retty.ty != AST_TYPE_VOID) {
+  if (complex_return) {
+    codegen->retval = LLVMGetParam(func, 0);
+  } else if (fdecl->retty.ty != AST_TYPE_VOID) {
     codegen->retval = new_alloca(codegen, ret_ty, "retval");
   }
 
@@ -95,17 +126,17 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   for (size_t i = 0; i < fdecl->num_params; i++) {
     struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
     param_entry->vdecl = fdecl->params[i];
-    param_entry->variable_type = param_types[i];
-    param_entry->ref = LLVMGetParam(func, (unsigned int)i);
+    param_entry->variable_type = param_types[i + complex_return];
+    param_entry->ref = LLVMGetParam(func, (unsigned int)(i + complex_return));
     scope_insert(codegen->scope, fdecl->params[i]->ident.value.identv.ident, param_entry);
   }
 
   LLVMValueRef block_result = emit_block(codegen, fdecl->body);
   if (fdecl->retty.ty != AST_TYPE_VOID) {
+    // complex_return path sets retval to the return parameter
     emit_store(codegen, &fdecl->retty, block_result, codegen->retval);
   }
 
-  LLVMBasicBlockRef defers = LLVMCreateBasicBlockInContext(context, "defers");
   LLVMBuildBr(codegen->llvm_builder, defers);
 
   LLVMAppendExistingBasicBlock(codegen->current_function, defers);
@@ -120,13 +151,13 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     defer = next;
   }
 
-  LLVMBuildBr(codegen->llvm_builder, codegen->return_block);
+  LLVMBuildBr(codegen->llvm_builder, return_block);
 
   // insert return block finally
-  LLVMAppendExistingBasicBlock(codegen->current_function, codegen->return_block);
-  LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->return_block);
+  LLVMAppendExistingBasicBlock(codegen->current_function, return_block);
+  LLVMPositionBuilderAtEnd(codegen->llvm_builder, return_block);
 
-  if (fdecl->retty.ty == AST_TYPE_VOID) {
+  if (fdecl->retty.ty == AST_TYPE_VOID || complex_return) {
     LLVMBuildRetVoid(codegen->llvm_builder);
   } else {
     LLVMValueRef retval = LLVMBuildLoad2(codegen->llvm_builder, ret_ty, codegen->retval, "");

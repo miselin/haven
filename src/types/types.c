@@ -1,5 +1,6 @@
 #include "types.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "typecheck.h"
@@ -346,4 +347,53 @@ size_t type_size(struct ast_ty *ty) {
       fprintf(stderr, "type_size unhandled %d\n", ty->ty);
       return 0;
   }
+}
+
+struct ast_ty copy_type(struct ast_ty *ty) {
+  struct ast_ty new_type = *ty;
+
+  if (ty->ty == AST_TYPE_ARRAY) {
+    new_type.array.element_ty = calloc(1, sizeof(struct ast_ty));
+    *new_type.array.element_ty = copy_type(ty->array.element_ty);
+  } else if (ty->ty == AST_TYPE_STRUCT) {
+    new_type.structty.fields = NULL;
+    struct ast_struct_field *field = ty->structty.fields;
+    struct ast_struct_field *last = NULL;
+    while (field) {
+      struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
+      *new_field = *field;
+      new_field->ty = calloc(1, sizeof(struct ast_ty));
+      *new_field->ty = copy_type(field->ty);
+      field = field->next;
+
+      if (last == NULL) {
+        new_type.structty.fields = new_field;
+      } else {
+        last->next = new_field;
+      }
+
+      last = new_field;
+    }
+  } else if (ty->ty == AST_TYPE_ENUM) {
+    struct ast_enum_field *field = ty->enumty.fields;
+    struct ast_enum_field *last = NULL;
+    while (field) {
+      struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
+      *new_field = *field;
+      if (field->has_inner) {
+        new_field->inner = copy_type(&field->inner);
+      }
+      field = field->next;
+
+      if (last == NULL) {
+        new_type.enumty.fields = new_field;
+      } else {
+        last->next = new_field;
+      }
+
+      last = new_field;
+    }
+  }
+
+  return new_type;
 }

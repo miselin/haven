@@ -220,12 +220,8 @@ struct ast_expr_pattern_match {
   struct token enum_name;
   // name of enum field to match
   struct token name;
-  // 1 if the match is a wildcard / has no inner variable
-  int is_wildcard;
-  // identifier for the inner variable, if any
-  struct token inner;
-  // inner type, resolved during typecheck
-  struct ast_ty inner_ty;
+  // inner variable to bind, if any
+  struct ast_vdecl *inner_vdecl;
 };
 
 struct ast_expr_enum_init {

@@ -781,16 +781,13 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         int is_otherwise = 0;
         if (parser_peek(parser) == TOKEN_KW_ENUM) {
           // enum pattern match
-          fprintf(stderr, "match case -> enum\n");
           parser_consume(parser, NULL, TOKEN_KW_ENUM);
           arm->pattern = parser_parse_pattern_match(parser);
         } else if (parser_peek(parser) == TOKEN_UNDER) {
-          fprintf(stderr, "match case -> default\n");
           parser_consume(parser, NULL, TOKEN_UNDER);
           arm->pattern = NULL;
           is_otherwise = 1;
         } else {
-          fprintf(stderr, "match case -> expr\n");
           arm->pattern = parse_expression(parser);
         }
         parser_consume(parser, NULL, TOKEN_INTO);
@@ -1198,7 +1195,6 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
   parser_consume(parser, NULL, TOKEN_COLONCOLON);
   parser_consume(parser, &result->pattern_match.name, TOKEN_IDENTIFIER);
 
-  result->pattern_match.is_wildcard = 1;
   if (parser_peek(parser) == TOKEN_LPAREN) {
     // enum pattern match
     parser_consume(parser, NULL, TOKEN_LPAREN);
@@ -1206,18 +1202,14 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
     if (parser_peek(parser) == TOKEN_UNDER) {
       parser_consume(parser, NULL, TOKEN_UNDER);
     } else {
-      parser_consume(parser, &result->pattern_match.inner, TOKEN_IDENTIFIER);
-      result->pattern_match.is_wildcard = 0;
+      result->pattern_match.inner_vdecl = calloc(1, sizeof(struct ast_vdecl));
+      result->pattern_match.inner_vdecl->ty = type_tbd();  // filled in by typecheck
+      result->pattern_match.inner_vdecl->flags = DECL_FLAG_TEMPORARY;
+      parser_consume(parser, &result->pattern_match.inner_vdecl->ident, TOKEN_IDENTIFIER);
     }
 
     parser_consume(parser, NULL, TOKEN_RPAREN);
   }
-
-  fprintf(stderr, "built pattern match %p %s %s %s\n", (void *)result,
-          result->pattern_match.enum_name.value.identv.ident,
-          result->pattern_match.name.value.identv.ident,
-          result->pattern_match.is_wildcard ? "wildcard"
-                                            : result->pattern_match.inner.value.identv.ident);
 
   return result;
 }
