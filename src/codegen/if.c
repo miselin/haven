@@ -13,7 +13,7 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
       codegen->llvm_builder, LLVMIntNE, cond_expr,
       LLVMConstInt(ast_ty_to_llvm_ty(codegen, &ast->if_expr.cond->ty), 0, 0), "tobool");
 
-  LLVMContextRef context = LLVMGetGlobalContext();
+  LLVMContextRef context = codegen->llvm_context;
 
   LLVMBasicBlockRef then_block = LLVMCreateBasicBlockInContext(context, "if.expr.then");
   LLVMBasicBlockRef end_block = LLVMCreateBasicBlockInContext(context, "if.expr.end");
@@ -51,7 +51,7 @@ void emit_void_if(struct codegen *codegen, struct ast_expr *ast) {
       codegen->llvm_builder, LLVMIntNE, cond_expr,
       LLVMConstInt(ast_ty_to_llvm_ty(codegen, &ast->if_expr.cond->ty), 0, 0), "tobool");
 
-  LLVMContextRef context = LLVMGetGlobalContext();
+  LLVMContextRef context = codegen->llvm_context;
 
   LLVMBasicBlockRef then_block = LLVMCreateBasicBlockInContext(context, "if.stmt.then");
   LLVMBasicBlockRef end_block = LLVMCreateBasicBlockInContext(context, "if.stmt.end");

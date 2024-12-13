@@ -21,7 +21,7 @@ LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *
   // if AND: if lhs is false, return false, otherwise evaluate rhs
   // if OR: if lhs is false, evaluate rhs, otherwise return true
 
-  LLVMContextRef context = LLVMGetGlobalContext();
+  LLVMContextRef context = codegen->llvm_context;
 
   LLVMBasicBlockRef start = LLVMGetInsertBlock(codegen->llvm_builder);
   LLVMBasicBlockRef rhs = LLVMCreateBasicBlockInContext(context, "logic.rhs");
@@ -29,16 +29,17 @@ LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *
 
   LLVMAppendExistingBasicBlock(codegen->current_function, end);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, end);
-  LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, LLVMInt1Type(), "phi");
+  LLVMValueRef phi =
+      LLVMBuildPhi(codegen->llvm_builder, LLVMInt1TypeInContext(codegen->llvm_context), "phi");
 
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, start);
 
   if (binary->op == AST_BINARY_OP_LOGICAL_AND) {
-    LLVMValueRef false = LLVMConstInt(LLVMInt1Type(), 0, 0);
+    LLVMValueRef false = LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0);
     LLVMAddIncoming(phi, &false, &start, 1);
     LLVMBuildCondBr(codegen->llvm_builder, lcmp, rhs, end);
   } else {
-    LLVMValueRef true = LLVMConstInt(LLVMInt1Type(), 1, 0);
+    LLVMValueRef true = LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 1, 0);
     LLVMAddIncoming(phi, &true, &start, 1);
     LLVMBuildCondBr(codegen->llvm_builder, lcmp, end, rhs);
   }
@@ -108,11 +109,13 @@ LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *b
     unsigned int element_count = (unsigned int)ty->fvec.width;
     if (binary->lhs->ty.ty != binary->rhs->ty.ty) {
       // TODO: order of ops, find which one is the scalar broadcast vector
-      LLVMTypeRef vecty = LLVMVectorType(LLVMFloatType(), element_count);
+      LLVMTypeRef vecty =
+          LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context), element_count);
       LLVMValueRef zero = LLVMConstNull(vecty);
       LLVMValueRef undef = LLVMGetUndef(vecty);
-      LLVMValueRef bvec = LLVMBuildInsertElement(codegen->llvm_builder, undef, rhs,
-                                                 LLVMConstInt(LLVMInt32Type(), 0, 0), "broadcast");
+      LLVMValueRef bvec = LLVMBuildInsertElement(
+          codegen->llvm_builder, undef, rhs,
+          LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0), "broadcast");
       rhs = LLVMBuildShuffleVector(codegen->llvm_builder, bvec, undef, zero, "shuffle");
     }
   }

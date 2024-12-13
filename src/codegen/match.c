@@ -11,7 +11,7 @@
 
 LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
                              struct ast_expr_match *match) {
-  LLVMContextRef context = LLVMGetGlobalContext();
+  LLVMContextRef context = codegen->llvm_context;
   LLVMBasicBlockRef *arm_blocks = calloc(match->num_arms, sizeof(LLVMBasicBlockRef));
   LLVMValueRef otherwise_value = NULL;
 
@@ -23,9 +23,6 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
   LLVMValueRef main_expr_buf = NULL;
 
   if (match->expr->ty.ty == AST_TYPE_ENUM && !match->expr->ty.enumty.no_wrapped_fields) {
-    // LLVMValueRef local_storage = new_alloca(codegen, main_expr_ty, "enum_expr");
-    // LLVMBuildStore(codegen->llvm_builder, main_expr, local_storage);
-
     LLVMValueRef tag_ptr =
         LLVMBuildStructGEP2(codegen->llvm_builder, main_expr_ty, main_expr, 0, "tagptr");
     main_expr_buf =
@@ -43,7 +40,8 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
   }
 
   // add the phi node early so we can start adding incoming values
-  LLVMBasicBlockRef end_block = LLVMAppendBasicBlock(codegen->current_function, "match.post");
+  LLVMBasicBlockRef end_block =
+      LLVMAppendBasicBlockInContext(codegen->llvm_context, codegen->current_function, "match.post");
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
   LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, phi_ty, "match.result");
 
@@ -64,8 +62,8 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
     LLVMPositionBuilderAtEnd(codegen->llvm_builder, after_cond);
   }
 
-  LLVMBasicBlockRef otherwise_block =
-      LLVMAppendBasicBlock(codegen->current_function, "match.otherwise");
+  LLVMBasicBlockRef otherwise_block = LLVMAppendBasicBlockInContext(
+      codegen->llvm_context, codegen->current_function, "match.otherwise");
   LLVMBuildBr(codegen->llvm_builder, otherwise_block);
 
   // emit the otherwise to run if all the conditions fail to match

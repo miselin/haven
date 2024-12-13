@@ -39,7 +39,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       unsigned int memory = LLVMGetEnumAttributeKindForName("memory", 6);
 
       // sanitize_address for ASAN - need cli flags for this
-      LLVMContextRef context = LLVMGetGlobalContext();
+      LLVMContextRef context = codegen->llvm_context;
       LLVMAttributeRef ref = LLVMCreateEnumAttribute(context, sanitize, 0);
       LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
 
@@ -74,10 +74,10 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   codegen->current_function_metadata = function_metadata;
   update_debug_loc(codegen, at);
 
-  LLVMContextRef context = LLVMGetGlobalContext();
+  LLVMContextRef context = codegen->llvm_context;
   codegen->return_block = LLVMCreateBasicBlockInContext(context, "return");
 
-  codegen->entry_block = LLVMAppendBasicBlock(func, "entry");
+  codegen->entry_block = LLVMAppendBasicBlockInContext(context, func, "entry");
   codegen->last_alloca = NULL;
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->entry_block);
 
@@ -102,7 +102,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
 
   LLVMValueRef block_result = emit_block(codegen, fdecl->body);
   if (fdecl->retty.ty != AST_TYPE_VOID) {
-    LLVMBuildStore(codegen->llvm_builder, block_result, codegen->retval);
+    emit_store(codegen, &fdecl->retty, block_result, codegen->retval);
   }
 
   LLVMBasicBlockRef defers = LLVMCreateBasicBlockInContext(context, "defers");

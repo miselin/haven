@@ -31,12 +31,12 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         case AST_TYPE_STRING: {
           LLVMValueRef str = LLVMAddGlobal(
               codegen->llvm_module,
-              LLVMArrayType(LLVMInt8Type(),
+              LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context),
                             (unsigned int)ast->constant.constant.value.strv.length + 1),
               "str");
-          LLVMSetInitializer(
-              str, LLVMConstString(ast->constant.constant.value.strv.s,
-                                   (unsigned int)ast->constant.constant.value.strv.length, 0));
+          LLVMSetInitializer(str, LLVMConstStringInContext(
+                                      codegen->llvm_context, ast->constant.constant.value.strv.s,
+                                      (unsigned int)ast->constant.constant.value.strv.length, 0));
           return str;
         } break;
         case AST_TYPE_FVEC: {
@@ -54,7 +54,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           }
 
           if (non_const_elements) {
-            LLVMValueRef zero = LLVMConstNull(LLVMVectorType(LLVMFloatType(), i));
+            LLVMValueRef zero =
+                LLVMConstNull(LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context), i));
 
             // add zero to the vector to get it into a temporary
             LLVMValueRef vec_stack =
@@ -63,7 +64,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
             LLVMValueRef vec = LLVMBuildLoad2(
                 codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), vec_stack, "vec");
             for (size_t j = 0; j < i; j++) {
-              LLVMValueRef idx = LLVMConstInt(LLVMInt32Type(), j, 0);
+              LLVMValueRef idx = LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), j, 0);
               vec = LLVMBuildInsertElement(codegen->llvm_builder, vec, fields[j], idx, "element");
             }
             free(fields);
@@ -77,7 +78,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         } break;
         case AST_TYPE_FLOAT:
           return LLVMConstRealOfStringAndSize(
-              LLVMFloatType(), ast->constant.constant.value.floatv.buf,
+              LLVMFloatTypeInContext(codegen->llvm_context),
+              ast->constant.constant.value.floatv.buf,
               (unsigned int)ast->constant.constant.value.floatv.length);
 
         case AST_TYPE_ARRAY: {
@@ -188,7 +190,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           ref = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, ref, ident);
         }
 
-        LLVMValueRef index = LLVMConstInt(LLVMInt64Type(), (unsigned int)ast->deref.field_idx, 0);
+        LLVMValueRef index = LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context),
+                                          (unsigned int)ast->deref.field_idx, 0);
         return LLVMBuildExtractElement(codegen->llvm_builder, ref, index, "deref");
       }
 
@@ -229,7 +232,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         entry->ref = expr;
         return expr;
       } else {
-        LLVMBuildStore(codegen->llvm_builder, expr, entry->ref);
+        emit_store(codegen, &ast->assign.expr->ty, expr, entry->ref);
       }
 
       return expr;
@@ -259,8 +262,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         case AST_UNARY_OP_NOT:
           return LLVMBuildNot(codegen->llvm_builder, expr, "not");
         case AST_UNARY_OP_COMP:
-          return LLVMBuildXor(codegen->llvm_builder, expr,
-                              LLVMConstInt(LLVMInt32Type(), (unsigned)-1, 0), "comp");
+          return LLVMBuildXor(
+              codegen->llvm_builder, expr,
+              LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), (unsigned)-1, 0), "comp");
       }
     } break;
 
@@ -312,7 +316,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
 
       LLVMValueRef index = emit_expr(codegen, ast->array_index.index);
-      LLVMValueRef gep[] = {LLVMConstInt(LLVMInt32Type(), 0, 0), index};
+      LLVMValueRef gep[] = {LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
+                            index};
       LLVMValueRef retrieve =
           LLVMBuildGEP2(codegen->llvm_builder, entry->variable_type, entry->ref, gep, 2, "");
       return LLVMBuildLoad2(codegen->llvm_builder, target_ty, retrieve, "load");
@@ -331,7 +336,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           LLVMValueRef value = emit_expr(codegen, node->expr);
           LLVMValueRef store =
               LLVMBuildStructGEP2(codegen->llvm_builder, struct_type, dest, (unsigned int)i, "");
-          LLVMBuildStore(codegen->llvm_builder, value, store);
+          emit_store(codegen, &node->expr->ty, value, store);
           node = node->next;
         }
 
@@ -359,7 +364,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         field = field->next;
       }
 
-      LLVMValueRef tag_value = LLVMConstInt(LLVMInt32Type(), field->value, 0);
+      LLVMValueRef tag_value =
+          LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), field->value, 0);
 
       return tag_value;
     } break;
@@ -376,7 +382,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         field = field->next;
       }
 
-      LLVMValueRef tag_value = LLVMConstInt(LLVMInt32Type(), field->value, 0);
+      LLVMValueRef tag_value =
+          LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), field->value, 0);
 
       if (ast->ty.enumty.no_wrapped_fields) {
         return tag_value;

@@ -67,38 +67,39 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
     case AST_TYPE_INTEGER:
       switch (ty->integer.width) {
         case 1:
-          inner = LLVMInt1Type();
+          inner = LLVMInt1TypeInContext(codegen->llvm_context);
           break;
         case 8:
-          inner = LLVMInt8Type();
+          inner = LLVMInt8TypeInContext(codegen->llvm_context);
           break;
         case 16:
-          inner = LLVMInt16Type();
+          inner = LLVMInt16TypeInContext(codegen->llvm_context);
           break;
         case 32:
-          inner = LLVMInt32Type();
+          inner = LLVMInt32TypeInContext(codegen->llvm_context);
           break;
         case 64:
-          inner = LLVMInt64Type();
+          inner = LLVMInt64TypeInContext(codegen->llvm_context);
           break;
         default:
-          inner = LLVMIntType((unsigned int)ty->integer.width);
+          inner = LLVMIntTypeInContext(codegen->llvm_context, (unsigned int)ty->integer.width);
       }
       break;
     case AST_TYPE_CHAR:
-      inner = LLVMInt8Type();
+      inner = LLVMInt8TypeInContext(codegen->llvm_context);
       break;
     case AST_TYPE_STRING:
-      inner = LLVMPointerType(LLVMInt8Type(), 0);
+      inner = LLVMPointerTypeInContext(codegen->llvm_context, 0);
       break;
     case AST_TYPE_FLOAT:
-      inner = LLVMFloatType();
+      inner = LLVMFloatTypeInContext(codegen->llvm_context);
       break;
     case AST_TYPE_FVEC:
-      inner = LLVMVectorType(LLVMFloatType(), (unsigned int)ty->fvec.width);
+      inner = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
+                             (unsigned int)ty->fvec.width);
       break;
     case AST_TYPE_VOID:
-      inner = LLVMVoidType();
+      inner = LLVMVoidTypeInContext(codegen->llvm_context);
       break;
     case AST_TYPE_ARRAY:
       inner = LLVMArrayType(ast_ty_to_llvm_ty(codegen, ty->array.element_ty),
@@ -113,7 +114,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       inner = entry->type;
     } break;
     case AST_TYPE_NIL:
-      inner = LLVMVoidType();
+      inner = LLVMVoidTypeInContext(codegen->llvm_context);
       break;
     case AST_TYPE_ENUM: {
       struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
@@ -129,7 +130,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
   }
 
   if (ty->flags & TYPE_FLAG_PTR) {
-    return LLVMPointerType(inner, 0);
+    return LLVMPointerTypeInContext(codegen->llvm_context, 0);
   }
 
   return inner;
@@ -137,7 +138,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
 
 void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {
   if (loc) {
-    LLVMContextRef context = LLVMGetGlobalContext();
+    LLVMContextRef context = codegen->llvm_context;
     LLVMMetadataRef scope = codegen->compile_unit;
     if (codegen->current_function_metadata) {
       if (codegen->current_block) {
@@ -162,9 +163,9 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
   }
 
   LLVMTypeRef memcpy_types[3] = {
-      LLVMPointerType(LLVMInt8Type(), 0),
-      LLVMPointerType(LLVMInt8Type(), 0),
-      LLVMInt32Type(),
+      LLVMPointerTypeInContext(codegen->llvm_context, 0),
+      LLVMPointerTypeInContext(codegen->llvm_context, 0),
+      LLVMInt32TypeInContext(codegen->llvm_context),
   };
 
   // need to use the intrinsic instead
@@ -175,10 +176,10 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
   LLVMTypeRef func_type = LLVMGlobalGetValueType(memcpy_func);
   fprintf(stderr, "memcpy_func: %p\n", (void *)memcpy_func);
   LLVMValueRef args[4] = {
-      ptr,                                              // dest
-      value,                                            // src
-      LLVMConstInt(LLVMInt32Type(), type_size(ty), 0),  // len
-      LLVMConstInt(LLVMInt1Type(), 0, 0),               // isvolatile
+      ptr,                                                                            // dest
+      value,                                                                          // src
+      LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), type_size(ty), 0),  // len
+      LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0),               // isvolatile
   };
   LLVMBuildCall2(codegen->llvm_builder, func_type, memcpy_func, args, 4, "");
 }

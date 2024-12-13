@@ -23,12 +23,12 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast);
 struct codegen *new_codegen(struct ast_program *ast) {
   struct codegen *result = calloc(1, sizeof(struct codegen));
   result->ast = ast;
-  result->llvm_module = LLVMModuleCreateWithName(ast->loc.file);
-  result->llvm_builder = LLVMCreateBuilder();
+  result->llvm_context = LLVMContextCreate();
+  result->llvm_module = LLVMModuleCreateWithNameInContext(ast->loc.file, result->llvm_context);
+  result->llvm_builder = LLVMCreateBuilderInContext(result->llvm_context);
   result->llvm_dibuilder = LLVMCreateDIBuilder(result->llvm_module);
 
-  LLVMContextRef context = LLVMGetGlobalContext();
-  LLVMContextSetDiscardValueNames(context, 0);
+  LLVMContextSetDiscardValueNames(result->llvm_context, 0);
 
   result->functions = new_kv();
 
@@ -88,6 +88,7 @@ void destroy_codegen(struct codegen *codegen) {
   LLVMDisposeDIBuilder(codegen->llvm_dibuilder);
   LLVMDisposeBuilder(codegen->llvm_builder);
   LLVMDisposeModule(codegen->llvm_module);
+  LLVMContextDispose(codegen->llvm_context);
   free(codegen);
 }
 
@@ -106,7 +107,7 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
 
   struct struct_entry *entry = calloc(1, sizeof(struct struct_entry));
   kv_insert(codegen->structs, ty->name, entry);
-  entry->type = LLVMStructCreateNamed(LLVMGetGlobalContext(), buf);
+  entry->type = LLVMStructCreateNamed(codegen->llvm_context, buf);
 
   LLVMTypeRef *element_types = malloc(sizeof(LLVMTypeRef) * ty->structty.num_fields);
   struct ast_struct_field *field = ty->structty.fields;
@@ -116,8 +117,6 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
   }
 
   LLVMStructSetBody(entry->type, element_types, (unsigned int)ty->structty.num_fields, 0);
-
-  // LLVMAddGlobal(codegen->llvm_module, entry->type, ty->name);
 
   free(element_types);
   return entry->type;
@@ -132,11 +131,11 @@ static LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
 
   if (ty->enumty.no_wrapped_fields) {
     // simple integer enum
-    entry->type = LLVMInt32Type();
+    entry->type = LLVMInt32TypeInContext(codegen->llvm_context);
     return entry->type;
   }
 
-  entry->type = LLVMStructCreateNamed(LLVMGetGlobalContext(), buf);
+  entry->type = LLVMStructCreateNamed(codegen->llvm_context, buf);
 
   size_t total_size = 0;
   struct ast_enum_field *field = ty->enumty.fields;
@@ -153,7 +152,7 @@ static LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
 
   LLVMTypeRef fields[2] = {
       LLVMInt32Type(),  // identifying tag
-      LLVMArrayType(LLVMInt8Type(),
+      LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context),
                     (unsigned int)total_size),  // data storage for largest possible field
   };
 
@@ -226,15 +225,16 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       const char *ident = ast->iter.index_vdecl->ident.value.identv.ident;
       LLVMValueRef start = emit_expr(codegen, ast->iter.range.start);
       LLVMValueRef end = emit_expr(codegen, ast->iter.range.end);
-      LLVMValueRef step = ast->iter.range.step ? emit_expr(codegen, ast->iter.range.step)
-                                               : LLVMConstInt(LLVMInt64Type(), 1, 0);
+      LLVMValueRef step = ast->iter.range.step
+                              ? emit_expr(codegen, ast->iter.range.step)
+                              : LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context), 1, 0);
 
       LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->iter.index_vdecl->ty);
 
       codegen_internal_enter_scope(codegen, &ast->loc, 1);
 
       LLVMValueRef index = new_alloca(codegen, var_type, ident);
-      LLVMBuildStore(codegen->llvm_builder, start, index);
+      emit_store(codegen, &ast->iter.range.start->ty, start, index);
 
       // insert the index variable to scope
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
@@ -245,10 +245,14 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
       // now build the actual loop
 
-      LLVMBasicBlockRef cond_block = LLVMAppendBasicBlock(codegen->current_function, "iter.cond");
-      LLVMBasicBlockRef body_block = LLVMAppendBasicBlock(codegen->current_function, "iter.body");
-      LLVMBasicBlockRef step_block = LLVMAppendBasicBlock(codegen->current_function, "iter.step");
-      LLVMBasicBlockRef end_block = LLVMAppendBasicBlock(codegen->current_function, "iter.end");
+      LLVMBasicBlockRef cond_block = LLVMAppendBasicBlockInContext(
+          codegen->llvm_context, codegen->current_function, "iter.cond");
+      LLVMBasicBlockRef body_block = LLVMAppendBasicBlockInContext(
+          codegen->llvm_context, codegen->current_function, "iter.body");
+      LLVMBasicBlockRef step_block = LLVMAppendBasicBlockInContext(
+          codegen->llvm_context, codegen->current_function, "iter.step");
+      LLVMBasicBlockRef end_block = LLVMAppendBasicBlockInContext(
+          codegen->llvm_context, codegen->current_function, "iter.end");
 
       LLVMBuildBr(codegen->llvm_builder, cond_block);
 
@@ -264,7 +268,7 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, step_block);
       LLVMValueRef next = LLVMBuildAdd(codegen->llvm_builder, index_val, step, "iter.next");
-      LLVMBuildStore(codegen->llvm_builder, next, index);
+      emit_store(codegen, &ast->iter.index_vdecl->ty, next, index);
       LLVMBuildBr(codegen->llvm_builder, cond_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
@@ -274,14 +278,14 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
     case AST_STMT_TYPE_RETURN: {
       LLVMValueRef ret = emit_expr(codegen, ast->expr);
-      LLVMBuildStore(codegen->llvm_builder, ret, codegen->retval);
+      emit_store(codegen, &ast->expr->ty, ret, codegen->retval);
       LLVMBuildBr(codegen->llvm_builder, codegen->return_block);
     } break;
 
     case AST_STMT_TYPE_STORE: {
       LLVMValueRef lhs = emit_expr(codegen, ast->store.lhs);
       LLVMValueRef rhs = emit_expr(codegen, ast->store.rhs);
-      LLVMBuildStore(codegen->llvm_builder, rhs, lhs);
+      emit_store(codegen, &ast->store.rhs->ty, rhs, lhs);
     } break;
 
     case AST_STMT_TYPE_DEFER: {
