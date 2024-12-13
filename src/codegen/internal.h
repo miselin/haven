@@ -102,4 +102,7 @@ void codegen_internal_leave_scope(struct codegen *codegen, int lexical_block);
 
 void update_debug_loc(struct codegen *codegen, struct lex_locator *loc);
 
+// Emits a store, whether through a store instruction or a memcpy intrinsic, based on the type
+void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr);
+
 #endif

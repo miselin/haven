@@ -28,7 +28,7 @@ struct codegen *new_codegen(struct ast_program *ast) {
   result->llvm_dibuilder = LLVMCreateDIBuilder(result->llvm_module);
 
   LLVMContextRef context = LLVMGetGlobalContext();
-  LLVMContextSetDiscardValueNames(context, 1);
+  LLVMContextSetDiscardValueNames(context, 0);
 
   result->functions = new_kv();
 
@@ -123,6 +123,45 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
   return entry->type;
 }
 
+static LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
+  char buf[256 + 8];
+  snprintf(buf, 256 + 8, "enum.%s", ty->name);
+
+  struct struct_entry *entry = calloc(1, sizeof(struct struct_entry));
+  kv_insert(codegen->structs, ty->name, entry);
+
+  if (ty->enumty.no_wrapped_fields) {
+    // simple integer enum
+    entry->type = LLVMInt32Type();
+    return entry->type;
+  }
+
+  entry->type = LLVMStructCreateNamed(LLVMGetGlobalContext(), buf);
+
+  size_t total_size = 0;
+  struct ast_enum_field *field = ty->enumty.fields;
+  while (field) {
+    if (field->has_inner) {
+      size_t sz = type_size(&field->inner);
+      if (sz > total_size) {
+        total_size = sz;
+      }
+    }
+    total_size += field->has_inner ? 2 : 1;
+    field = field->next;
+  }
+
+  LLVMTypeRef fields[2] = {
+      LLVMInt32Type(),  // identifying tag
+      LLVMArrayType(LLVMInt8Type(),
+                    (unsigned int)total_size),  // data storage for largest possible field
+  };
+
+  LLVMStructSetBody(entry->type, fields, 2, 0);
+
+  return entry->type;
+}
+
 static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
   update_debug_loc(codegen, &ast->loc);
   if (ast->type == AST_DECL_TYPE_FDECL) {
@@ -133,6 +172,10 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
     if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
       // generate the struct type
       emit_struct_type(codegen, &ast->tydecl.ty);
+    } else if (ast->tydecl.ty.ty == AST_TYPE_ENUM) {
+      emit_enum_type(codegen, &ast->tydecl.ty);
+    } else {
+      fprintf(stderr, "unhandled top level type declaration type %d\n", ast->tydecl.ty.ty);
     }
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // no-op in codegen
@@ -168,7 +211,7 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       LLVMValueRef var = new_alloca(codegen, var_type, ident);
       LLVMValueRef init = emit_expr_into(codegen, ast->let.init_expr, var);
       if (init != var) {
-        LLVMBuildStore(codegen->llvm_builder, init, var);
+        emit_store(codegen, &ast->let.init_expr->ty, init, var);
       }
 
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));

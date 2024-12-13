@@ -362,6 +362,27 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_ty(&ast->ty);
       break;
 
+    case AST_EXPR_TYPE_PATTERN_MATCH:
+      fprintf(stderr, "PatternMatch(%s, ", ast->pattern_match.name.value.identv.ident);
+      if (ast->pattern_match.is_wildcard) {
+        fprintf(stderr, "_");
+      } else {
+        fprintf(stderr, "%s", ast->pattern_match.inner.value.identv.ident);
+      }
+      fprintf(stderr, ") -> ");
+      dump_ty(&ast->ty);
+      break;
+
+    case AST_EXPR_TYPE_ENUM_INIT:
+      fprintf(stderr, "EnumInit(%s, %s, ", ast->enum_init.enum_ty_name.value.identv.ident,
+              ast->enum_init.enum_val_name.value.identv.ident);
+      if (ast->enum_init.inner) {
+        dump_expr(ast->enum_init.inner, indent);
+      }
+      fprintf(stderr, ") -> ");
+      dump_ty(&ast->ty);
+      break;
+
     default:
       fprintf(stderr, "<unknown-expr %d>", ast->type);
   }

@@ -297,8 +297,15 @@ static int check_purity_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_NIL:
       break;
 
+    case AST_EXPR_TYPE_ENUM_INIT:
+      return ast->enum_init.inner ? check_purity_expr(ast->enum_init.inner) : 0;
+      break;
+
+    case AST_EXPR_TYPE_PATTERN_MATCH:
+      break;
+
     default:
-      fprintf(stderr, "tyverify: unhandled expression type %d\n", ast->type);
+      fprintf(stderr, "purity: unhandled expression type %d\n", ast->type);
   }
 
   return 0;

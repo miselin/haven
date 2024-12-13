@@ -3,11 +3,14 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
 #include <malloc.h>
+#include <string.h>
 
 #include "ast.h"
 #include "codegen.h"
 #include "internal.h"
+#include "kv.h"
 #include "scope.h"
+#include "types.h"
 #include "utility.h"
 
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
@@ -104,11 +107,17 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       struct scope_entry *lookup =
           scope_lookup(codegen->scope, ast->variable.ident.value.identv.ident, 1);
 
+      fprintf(stderr, "failed to look up %s\n", ast->variable.ident.value.identv.ident);
+
       // temporaries are things like function parameters, and do not require loads
       if (lookup->vdecl->flags & DECL_FLAG_TEMPORARY) {
         return lookup->ref;
       } else if (ast->ty.flags & TYPE_FLAG_PTR) {
         // if we WANT a pointer, don't load it
+        return lookup->ref;
+      } else if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
+        // enum is actually a struct -- don't load
+        // with no wrapped fields, it's an integer
         return lookup->ref;
       }
 
@@ -335,6 +344,58 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     case AST_EXPR_TYPE_NIL: {
       LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
       return LLVMConstNull(target_ty);
+    } break;
+
+    case AST_EXPR_TYPE_PATTERN_MATCH: {
+      // here, we just emit the tag value as the match
+      // the match expression handler handles unwrapping an inner value, if any, and storing it
+
+      // find the field
+      struct ast_enum_field *field = ast->ty.enumty.fields;
+      while (field) {
+        if (!strcmp(field->name, ast->enum_init.enum_val_name.value.identv.ident)) {
+          break;
+        }
+        field = field->next;
+      }
+
+      LLVMValueRef tag_value = LLVMConstInt(LLVMInt32Type(), field->value, 0);
+
+      return tag_value;
+    } break;
+
+    case AST_EXPR_TYPE_ENUM_INIT: {
+      // LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, &ast->enum_init.field_ty);
+
+      // find the field
+      struct ast_enum_field *field = ast->ty.enumty.fields;
+      while (field) {
+        if (!strcmp(field->name, ast->enum_init.enum_val_name.value.identv.ident)) {
+          break;
+        }
+        field = field->next;
+      }
+
+      LLVMValueRef tag_value = LLVMConstInt(LLVMInt32Type(), field->value, 0);
+
+      if (ast->ty.enumty.no_wrapped_fields) {
+        return tag_value;
+      }
+
+      LLVMValueRef inner = emit_expr(codegen, ast->enum_init.inner);
+
+      struct struct_entry *entry =
+          kv_lookup(codegen->structs, ast->enum_init.enum_ty_name.value.identv.ident);
+      LLVMTypeRef enum_type = entry->type;
+
+      LLVMValueRef storage = into ? into : new_alloca(codegen, enum_type, "enum");
+      LLVMValueRef tag = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 0, "tag");
+      LLVMValueRef buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 1, "buf");
+
+      LLVMBuildStore(codegen->llvm_builder, tag_value, tag);
+      LLVMBuildStore(codegen->llvm_builder, inner, buf);
+
+      return storage;
     } break;
 
     default:

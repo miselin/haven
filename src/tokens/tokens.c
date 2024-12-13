@@ -144,9 +144,19 @@ const char *token_id_to_string(enum token_id token) {
       return "char";
     case TOKEN_TY_VOID:
       return "void";
+    case TOKEN_KW_ENUM:
+      return "enum";
+    case TOKEN_UNDER:
+      return "_";
+    case TOKEN_KW_STRUCT:
+      return "struct";
+    case TOKEN_KW_TYPE:
+      return "type";
+    case TOKEN_KW_IMPURE:
+      return "impure";
+    case TOKEN_COLONCOLON:
+      return "::";
     case TOKEN_EOF:
       return "<EOF>";
-    default:
-      return "<str-not-implemented>";
   }
 }

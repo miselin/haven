@@ -47,6 +47,7 @@ enum token_id {
   TOKEN_RSHIFT,      // >>
   TOKEN_POUND,       // #
   TOKEN_UNDER,       // _
+  TOKEN_COLONCOLON,  // ::
 
   // keywords
   TOKEN_KW_PUB = 100,  // pub
@@ -72,6 +73,7 @@ enum token_id {
   TOKEN_KW_NIL,        // nil
   TOKEN_KW_DEFER,      // defer
   TOKEN_KW_IMPURE,     // impure
+  TOKEN_KW_ENUM,       // enum
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

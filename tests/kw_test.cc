@@ -13,6 +13,8 @@ TEST(LexerKeywords, LookupLetterInKeyword) {
   strcpy(token.value.identv.ident, "t");
   int rc = lex_maybe_keyword_trie(state, &token);
 
+  dump_trie(state->keywords);
+
   EXPECT_EQ(rc, 0);
   EXPECT_EQ(token.ident, TOKEN_IDENTIFIER);
 

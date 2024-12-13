@@ -111,11 +111,11 @@ int same_type_masked(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) 
 }
 
 int same_type(struct ast_ty *ty1, struct ast_ty *ty2) {
-  return same_type_masked(ty1, ty2, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT);
+  return same_type_masked(ty1, ty2, TYPE_FLAG_MASK_ALL);
 }
 
 int narrower_type(struct ast_ty *ty1, struct ast_ty *ty2) {
-  if (!same_type_class(ty1, ty2, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT)) {
+  if (!same_type_class(ty1, ty2, TYPE_FLAG_MASK_ALL)) {
     return 0;
   }
 
@@ -132,7 +132,7 @@ int narrower_type(struct ast_ty *ty1, struct ast_ty *ty2) {
 }
 
 int wider_type(struct ast_ty *ty1, struct ast_ty *ty2) {
-  if (!same_type_class(ty1, ty2, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT)) {
+  if (!same_type_class(ty1, ty2, TYPE_FLAG_MASK_ALL)) {
     return 0;
   }
 
@@ -154,15 +154,15 @@ const char *type_name(struct ast_ty *ty) {
   return buf;
 }
 
-void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
+int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
   int offset = 0;
   switch (ty->ty) {
     case AST_TYPE_ERROR:
       offset += snprintf(buf, maxlen, "error");
-      return;
+      return offset;
     case AST_TYPE_TBD:
       offset += snprintf(buf, maxlen, "tbd");
-      return;
+      return offset;
     case AST_TYPE_INTEGER:
       if (ty->integer.is_signed) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "i");
@@ -216,9 +216,42 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
     case AST_TYPE_NIL:
       offset += snprintf(buf, maxlen, "nil");
       break;
+    case AST_TYPE_TEMPLATE:
+      offset += snprintf(buf, maxlen, "template %s", ty->name);
+      break;
+    case AST_TYPE_ENUM:
+      offset += snprintf(buf, maxlen, "enum %s <", ty->name);
+      struct ast_template_ty *template = ty->enumty.templates;
+      while (template) {
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s", template->name);
+        if (template->next) {
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+        }
+        template = template->next;
+      }
+
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "> { ");
+      struct ast_enum_field *field = ty->enumty.fields;
+      while (field) {
+        offset +=
+            snprintf(buf + offset, maxlen - (size_t)offset, "%s = %ld", field->name, field->value);
+        if (field->has_inner) {
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, " (");
+          offset += type_name_into(&field->inner, buf + offset, maxlen - (size_t)offset);
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
+        }
+        if (field->next) {
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+        }
+        field = field->next;
+      }
+
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+
+      break;
     default:
-      snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
-      return;
+      offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
+      return offset;
   }
 
   if (ty->flags & TYPE_FLAG_PTR) {
@@ -232,6 +265,7 @@ void type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
   }
 
   buf[offset] = '\0';
+  return offset;
 }
 
 int can_cast(struct ast_ty *ty1, struct ast_ty *ty2) {
@@ -251,4 +285,53 @@ int can_cast(struct ast_ty *ty1, struct ast_ty *ty2) {
   }
 
   return 0;
+}
+
+size_t type_size(struct ast_ty *ty) {
+  if (ty->flags & TYPE_FLAG_PTR) {
+    // TODO: 64-bit assumption
+    return 8;
+  }
+
+  switch (ty->ty) {
+    case AST_TYPE_INTEGER:
+      return ty->integer.width / 8;
+    case AST_TYPE_CHAR:
+      return 1;
+    case AST_TYPE_FLOAT:
+      return 4;
+    case AST_TYPE_FVEC:
+      return ty->fvec.width * 4;
+    case AST_TYPE_ARRAY:
+      return ty->array.width * type_size(ty->array.element_ty);
+    case AST_TYPE_STRUCT: {
+      size_t size = 0;
+      struct ast_struct_field *field = ty->structty.fields;
+      while (field) {
+        size += type_size(field->ty);
+        field = field->next;
+      }
+      return size;
+    }
+    case AST_TYPE_ENUM: {
+      if (ty->enumty.no_wrapped_fields) {
+        return 4;  // tag
+      }
+
+      size_t size = 4;  // tag
+      struct ast_enum_field *field = ty->enumty.fields;
+      while (field) {
+        if (field->has_inner) {
+          size += type_size(&field->inner);
+        }
+        field = field->next;
+      }
+
+      return size;
+    } break;
+
+    default:
+      fprintf(stderr, "type_size unhandled %d\n", ty->ty);
+      return 0;
+  }
 }

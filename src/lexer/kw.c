@@ -35,6 +35,7 @@ struct lookup {
     {"nil", TOKEN_KW_NIL},
     {"defer", TOKEN_KW_DEFER},
     {"impure", TOKEN_KW_IMPURE},
+    {"enum", TOKEN_KW_ENUM},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {

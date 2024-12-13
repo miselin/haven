@@ -316,34 +316,59 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_MATCH: {
-      if (typecheck_implicit_expr(ast->match.expr) < 0) {
+      int rc = typecheck_implicit_expr(ast->match.expr);
+      if (rc < 0) {
         return -1;
       }
 
-      // first pass: check that all arms have the same pattern type, and check their expressions
+      int total = rc;
+
       struct ast_expr_match_arm *arm = ast->match.arms;
       while (arm) {
-        if (typecheck_implicit_expr(arm->pattern) < 0) {
+        // implicit conversion for pattern
+        total += maybe_implicitly_convert(&arm->pattern->ty, &ast->match.expr->ty);
+        rc = typecheck_implicit_expr(arm->pattern);
+        if (rc < 0) {
           return -1;
         }
 
-        if (typecheck_implicit_expr(arm->expr) < 0) {
+        total += rc;
+
+        // implicit conversion for expression - try both directions to see if we can widen the type
+        total += maybe_implicitly_convert(&arm->expr->ty, &ast->ty);
+        // total += maybe_implicitly_convert(&ast->ty, &arm->expr->ty);
+        rc = typecheck_implicit_expr(arm->expr);
+        if (rc < 0) {
           return -1;
         }
+
+        total += rc;
 
         arm = arm->next;
       }
 
-      if (typecheck_implicit_expr(ast->match.otherwise->expr) < 0) {
+      total += maybe_implicitly_convert(&ast->match.otherwise->expr->ty, &ast->ty);
+      // total += maybe_implicitly_convert(&ast->ty, &ast->match.otherwise->expr->ty);
+      rc = typecheck_implicit_expr(ast->match.otherwise->expr);
+      if (rc < 0) {
         return -1;
       }
+
+      return total + rc;
     } break;
 
     case AST_EXPR_TYPE_NIL:
       break;
 
+    case AST_EXPR_TYPE_PATTERN_MATCH:
+      break;
+
+    case AST_EXPR_TYPE_ENUM_INIT:
+      // TODO: implicit conversion to the enum's field type
+      break;
+
     default:
-      fprintf(stderr, "tyverify: unhandled expression type %d\n", ast->type);
+      fprintf(stderr, "tyimplicit: unhandled expression type %d\n", ast->type);
   }
 
   return 0;

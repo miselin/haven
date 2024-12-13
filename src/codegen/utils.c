@@ -115,6 +115,14 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
     case AST_TYPE_NIL:
       inner = LLVMVoidType();
       break;
+    case AST_TYPE_ENUM: {
+      struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
+      if (!entry) {
+        fprintf(stderr, "enum %s not found in codegen\n", ty->name);
+        return NULL;
+      }
+      inner = entry->type;
+    } break;
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
       return NULL;
@@ -145,4 +153,47 @@ void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {
   } else {
     LLVMSetCurrentDebugLocation2(codegen->llvm_builder, NULL);
   }
+}
+
+void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr) {
+  int is_complex = 0;
+  switch (ty->ty) {
+    case AST_TYPE_ENUM:
+      if (ty->enumty.no_wrapped_fields) {
+        break;
+      }
+
+    case AST_TYPE_STRUCT:
+      is_complex = 1;
+      break;
+
+    default:
+      break;
+  }
+
+  if (!is_complex) {
+    LLVMBuildStore(codegen->llvm_builder, value, ptr);
+    return;
+  }
+
+  LLVMTypeRef memcpy_types[3] = {
+      LLVMPointerType(LLVMInt8Type(), 0),
+      LLVMPointerType(LLVMInt8Type(), 0),
+      LLVMInt32Type(),
+  };
+
+  // need to use the intrinsic instead
+  unsigned int memcpy_id = LLVMLookupIntrinsicID("llvm.memcpy", 11);
+  fprintf(stderr, "intrinsic id: %d\n", memcpy_id);
+  LLVMValueRef memcpy_func =
+      LLVMGetIntrinsicDeclaration(codegen->llvm_module, memcpy_id, memcpy_types, 3);
+  LLVMTypeRef func_type = LLVMGlobalGetValueType(memcpy_func);
+  fprintf(stderr, "memcpy_func: %p\n", (void *)memcpy_func);
+  LLVMValueRef args[4] = {
+      ptr,                                              // dest
+      value,                                            // src
+      LLVMConstInt(LLVMInt32Type(), type_size(ty), 0),  // len
+      LLVMConstInt(LLVMInt1Type(), 0, 0),               // isvolatile
+  };
+  LLVMBuildCall2(codegen->llvm_builder, func_type, memcpy_func, args, 4, "");
 }

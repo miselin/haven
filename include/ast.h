@@ -46,6 +46,8 @@
 #define AST_EXPR_TYPE_MATCH 18
 #define AST_EXPR_TYPE_STRUCT_INIT 19
 #define AST_EXPR_TYPE_NIL 20
+#define AST_EXPR_TYPE_PATTERN_MATCH 21
+#define AST_EXPR_TYPE_ENUM_INIT 22
 
 #define AST_BINARY_OP_ADD 1
 #define AST_BINARY_OP_SUB 2
@@ -213,6 +215,27 @@ struct ast_expr_match_arm {
   struct ast_expr_match_arm *next;
 };
 
+struct ast_expr_pattern_match {
+  // name of enum type
+  struct token enum_name;
+  // name of enum field to match
+  struct token name;
+  // 1 if the match is a wildcard / has no inner variable
+  int is_wildcard;
+  // identifier for the inner variable, if any
+  struct token inner;
+  // inner type, resolved during typecheck
+  struct ast_ty inner_ty;
+};
+
+struct ast_expr_enum_init {
+  struct token enum_ty_name;
+  struct token enum_val_name;
+  struct ast_expr *inner;
+  // field type, resolved during typecheck
+  struct ast_ty field_ty;
+};
+
 struct ast_expr {
   int type;
   struct ast_ty ty;
@@ -235,6 +258,8 @@ struct ast_expr {
     struct ast_expr_boolean boolean;
     struct ast_expr_array_index array_index;
     struct ast_expr_match match;
+    struct ast_expr_pattern_match pattern_match;
+    struct ast_expr_enum_init enum_init;
   };
 };
 

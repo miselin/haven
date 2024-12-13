@@ -322,6 +322,7 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
       if (type_is_tbd(&ast->let.ty)) {
         // inferred type
         ast->let.ty = *init_ty;
+        ast->let.ty.flags &= ~TYPE_FLAG_CONSTANT;  // no longer a constant
       }
 
       maybe_implicitly_convert(init_ty, &ast->let.ty);
@@ -426,7 +427,7 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
     } break;
 
     default:
-      fprintf(stderr, "typecheck: unhandled statement type %d\n", ast->type);
+      typecheck_diag_expr(typecheck, NULL, "typecheck: unhandled statement type %d\n", ast->type);
   }
 
   // statements that aren't expressions do not have types (their expressions do)
@@ -1006,19 +1007,48 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
           return NULL;
         }
 
+        maybe_implicitly_convert(pattern_ty, expr_ty);
+
         if (!same_type(pattern_ty, expr_ty)) {
           char wantstr[256], gotstr[256];
           type_name_into(pattern_ty, wantstr, 256);
           type_name_into(expr_ty, gotstr, 256);
 
-          fprintf(stderr, "match patterns has incorrect type, wanted %s but got %s\n", wantstr,
-                  gotstr);
+          typecheck_diag_expr(typecheck, ast,
+                              "match pattern has incorrect type, wanted %s but got %s\n", wantstr,
+                              gotstr);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
         }
 
+        struct scope_entry *inner_var = NULL;
+
+        if (arm->pattern->type == AST_EXPR_TYPE_PATTERN_MATCH) {
+          if (!arm->pattern->pattern_match.is_wildcard) {
+            typecheck->scope = enter_scope(typecheck->scope);
+
+            struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
+            entry->vdecl = calloc(1, sizeof(struct ast_vdecl));
+            entry->vdecl->ident = arm->pattern->pattern_match.inner;
+            entry->vdecl->ty = arm->pattern->pattern_match.inner_ty;
+            scope_insert(typecheck->scope, arm->pattern->pattern_match.inner.value.identv.ident,
+                         entry);
+
+            inner_var = entry;
+          }
+        }
+
+        // TODO: if the inner on the pattern exists, we need to define a new scope + define the
+        // inner in it
+
         struct ast_ty *arm_ty = typecheck_expr(typecheck, arm->expr);
+
+        if (inner_var) {
+          free(inner_var->vdecl);
+          typecheck->scope = exit_scope(typecheck->scope);
+        }
+
         if (!arm_ty) {
           return NULL;
         }
@@ -1027,7 +1057,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       }
 
       if (!ast->match.otherwise) {
-        fprintf(stderr, "match expression has no otherwise arm\n");
+        typecheck_diag_expr(typecheck, ast, "match expression has no otherwise arm\n");
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -1037,32 +1067,39 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return NULL;
       }
 
+      struct ast_ty *largest_ty = otherwise_ty;
+
       // second pass: check that all arms have the same type
       arm = ast->match.arms;
       while (arm) {
         struct ast_expr_match_arm *next = arm->next ? arm->next : ast->match.otherwise;
         if (next) {
+          if (!maybe_implicitly_convert(&arm->expr->ty, &next->expr->ty)) {
+            maybe_implicitly_convert(&next->expr->ty, &arm->expr->ty);
+          }
+
           if (!same_type(&arm->expr->ty, &next->expr->ty)) {
             char armstr[256], nextstr[256];
             type_name_into(&arm->expr->ty, armstr, 256);
             type_name_into(&next->expr->ty, nextstr, 256);
 
-            fprintf(stderr, "match arm has type %s, next arm has mismatched type %s\n", armstr,
-                    nextstr);
+            typecheck_diag_expr(typecheck, ast,
+                                "match arm has type %s, next arm has mismatched type %s\n", armstr,
+                                nextstr);
             ++typecheck->errors;
             return &typecheck->error_type;
             ;
+          }
+
+          if (wider_type(&arm->expr->ty, largest_ty)) {
+            largest_ty = &arm->expr->ty;
           }
         }
 
         arm = arm->next;
       }
 
-      if (ast->match.arms) {
-        ast->ty = resolve_type(typecheck, &ast->match.arms->expr->ty);
-      } else {
-        ast->ty = resolve_type(typecheck, &ast->match.otherwise->expr->ty);
-      }
+      ast->ty = resolve_type(typecheck, largest_ty);
       return &ast->ty;
     } break;
 
@@ -1070,8 +1107,114 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       ast->ty.ty = AST_TYPE_NIL;
       return &ast->ty;
 
+    case AST_EXPR_TYPE_ENUM_INIT: {
+      struct alias_entry *entry =
+          kv_lookup(typecheck->aliases, ast->enum_init.enum_ty_name.value.identv.ident);
+      if (!entry) {
+        typecheck_diag_expr(typecheck, ast, "enum type %s not found\n",
+                            ast->enum_init.enum_ty_name.value.identv.ident);
+        return &typecheck->error_type;
+      }
+
+      if (entry->ty.ty != AST_TYPE_ENUM) {
+        typecheck_diag_expr(typecheck, ast, "type %s is not an enum\n",
+                            ast->enum_init.enum_ty_name.value.identv.ident);
+        return &typecheck->error_type;
+      }
+
+      struct ast_enum_field *field = entry->ty.enumty.fields;
+      while (field) {
+        if (!strcmp(field->name, ast->enum_init.enum_val_name.value.identv.ident)) {
+          break;
+        }
+        field = field->next;
+      }
+
+      if (!field) {
+        typecheck_diag_expr(typecheck, ast, "enum field %s not found in enum %s\n",
+                            ast->enum_init.enum_val_name.value.identv.ident,
+                            ast->enum_init.enum_ty_name.value.identv.ident);
+        return &typecheck->error_type;
+      }
+
+      if (ast->enum_init.inner) {
+        if (!field->has_inner) {
+          typecheck_diag_expr(typecheck, ast, "enum field %s does not have an inner\n",
+                              field->name);
+          return &typecheck->error_type;
+        }
+
+        // includes an inner, ensure it matches the enum field's type
+        struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->enum_init.inner);
+        if (!inner_ty) {
+          return NULL;
+        }
+
+        maybe_implicitly_convert(inner_ty, &field->inner);
+
+        if (!same_type(inner_ty, &field->inner)) {
+          char innerstr[256], fieldstr[256];
+          type_name_into(inner_ty, innerstr, 256);
+          type_name_into(&field->inner, fieldstr, 256);
+
+          typecheck_diag_expr(typecheck, ast,
+                              "enum field %s wraps type %s, but was given type %s instead\n",
+                              field->name, fieldstr, innerstr);
+          return &typecheck->error_type;
+        }
+
+        ast->enum_init.field_ty = resolve_type(typecheck, &field->inner);
+      } else {
+        // default to integer if no inner is provided
+        ast->enum_init.field_ty.ty = AST_TYPE_INTEGER;
+        ast->enum_init.field_ty.integer.is_signed = 1;
+        ast->enum_init.field_ty.integer.width = 32;
+      }
+
+      ast->ty = resolve_type(typecheck, &entry->ty);
+      return &ast->ty;
+    } break;
+
+    case AST_EXPR_TYPE_PATTERN_MATCH: {
+      struct alias_entry *entry =
+          kv_lookup(typecheck->aliases, ast->enum_init.enum_ty_name.value.identv.ident);
+      if (!entry) {
+        typecheck_diag_expr(typecheck, ast, "enum type %s not found\n",
+                            ast->enum_init.enum_ty_name.value.identv.ident);
+        return &typecheck->error_type;
+      }
+
+      if (entry->ty.ty != AST_TYPE_ENUM) {
+        typecheck_diag_expr(typecheck, ast, "type %s is not an enum\n",
+                            ast->enum_init.enum_ty_name.value.identv.ident);
+        return &typecheck->error_type;
+      }
+
+      struct ast_enum_field *field = entry->ty.enumty.fields;
+      while (field) {
+        if (!strcmp(field->name, ast->enum_init.enum_val_name.value.identv.ident)) {
+          break;
+        }
+        field = field->next;
+      }
+
+      if (!field) {
+        typecheck_diag_expr(typecheck, ast, "enum field %s not found in enum %s\n",
+                            ast->enum_init.enum_val_name.value.identv.ident,
+                            ast->enum_init.enum_ty_name.value.identv.ident);
+        return &typecheck->error_type;
+      }
+
+      ast->pattern_match.inner_ty = resolve_type(typecheck, &field->inner);
+
+      // no need to check inner, it'll become the type of the pattern match in the handler for the
+      // match expression
+      ast->ty = resolve_type(typecheck, &entry->ty);
+      return &ast->ty;
+    } break;
+
     default:
-      fprintf(stderr, "typecheck: unhandled expression type %d\n", ast->type);
+      typecheck_diag_expr(typecheck, ast, "typecheck: unhandled expression type %d\n", ast->type);
   }
 
   // all expressions must resolve to a type
@@ -1140,6 +1283,11 @@ static int deref_to_index(const char *deref) {
 }
 
 int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
+  if (type_is_tbd(to)) {
+    *to = *from;
+    return 1;
+  }
+
   if (!compatible_types(from, to)) {
     // no-op
     return 0;

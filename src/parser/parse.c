@@ -45,6 +45,9 @@ static struct ast_range parse_range(struct parser *parser);
 static int parse_braced_initializer(struct parser *parser, struct ast_expr *into);
 
 static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into);
+static int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into);
+
+static struct ast_expr *parser_parse_pattern_match(struct parser *parser);
 
 static int binary_op(enum token_id token);
 static int binary_op_prec(int token);
@@ -695,6 +698,18 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         result->type = AST_EXPR_TYPE_ASSIGN;
         result->assign.ident = token;
         result->assign.expr = parse_expression(parser);
+      } else if (next == TOKEN_COLONCOLON) {
+        parser_consume(parser, NULL, TOKEN_COLONCOLON);
+        result->type = AST_EXPR_TYPE_ENUM_INIT;
+        result->enum_init.enum_ty_name = token;
+
+        parser_consume(parser, &result->enum_init.enum_val_name, TOKEN_IDENTIFIER);
+
+        if (parser_peek(parser) == TOKEN_LPAREN) {
+          result->enum_init.inner = parse_factor(parser);
+        } else {
+          result->enum_init.inner = NULL;
+        }
       } else {
         result->type = AST_EXPR_TYPE_VARIABLE;
         result->variable.ident = token;
@@ -764,11 +779,18 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       while (parser_peek(parser) != TOKEN_RBRACE) {
         struct ast_expr_match_arm *arm = calloc(1, sizeof(struct ast_expr_match_arm));
         int is_otherwise = 0;
-        if (parser_peek(parser) == TOKEN_UNDER) {
+        if (parser_peek(parser) == TOKEN_KW_ENUM) {
+          // enum pattern match
+          fprintf(stderr, "match case -> enum\n");
+          parser_consume(parser, NULL, TOKEN_KW_ENUM);
+          arm->pattern = parser_parse_pattern_match(parser);
+        } else if (parser_peek(parser) == TOKEN_UNDER) {
+          fprintf(stderr, "match case -> default\n");
           parser_consume(parser, NULL, TOKEN_UNDER);
           arm->pattern = NULL;
           is_otherwise = 1;
         } else {
+          fprintf(stderr, "match case -> expr\n");
           arm->pattern = parse_expression(parser);
         }
         parser_consume(parser, NULL, TOKEN_INTO);
@@ -851,10 +873,33 @@ static struct ast_ty parse_type(struct parser *parser) {
 
     result.ty = AST_TYPE_CUSTOM;
     strncpy(result.name, token.value.identv.ident, 256);
+
+    peek = parser_peek(parser);
+    if (peek == TOKEN_LT) {
+      struct ast_ty *tmplty = calloc(1, sizeof(struct ast_ty));
+      tmplty->ty = AST_TYPE_TEMPLATE;
+      memcpy(tmplty->template.outer, &result, sizeof(struct ast_ty));
+
+      // TODO: multiple inner types
+      parser_consume(parser, NULL, TOKEN_LT);
+      // struct ast_ty inner = parse_type(parser);
+      // memcpy(tmplty->template.inner, &inner, sizeof(struct ast_ty));
+      parser_consume(parser, NULL, TOKEN_GT);
+
+      memcpy(&result, tmplty, sizeof(struct ast_ty));
+      free(tmplty);
+    }
   } else if (peek == TOKEN_KW_STRUCT) {
     parser_consume(parser, NULL, TOKEN_KW_STRUCT);
 
     if (parser_parse_struct_decl(parser, &result) < 0) {
+      result.ty = AST_TYPE_ERROR;
+      return result;
+    }
+  } else if (peek == TOKEN_KW_ENUM) {
+    parser_consume(parser, NULL, TOKEN_KW_ENUM);
+
+    if (parser_parse_enum_decl(parser, &result) < 0) {
       result.ty = AST_TYPE_ERROR;
       return result;
     }
@@ -1059,4 +1104,120 @@ static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into) 
 
   parser_consume(parser, NULL, TOKEN_RBRACE);
   return 0;
+}
+
+int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into) {
+  struct token token;
+
+  into->ty = AST_TYPE_ENUM;
+  into->enumty.no_wrapped_fields = 1;
+
+  enum token_id peek = parser_peek(parser);
+  if (peek == TOKEN_LT) {
+    parser_consume(parser, NULL, TOKEN_LT);
+
+    struct ast_template_ty *last = into->enumty.templates;
+
+    // parse templates
+    peek = parser_peek(parser);
+    while (peek != TOKEN_GT) {
+      parser_consume(parser, &token, TOKEN_IDENTIFIER);
+
+      struct ast_template_ty *template = calloc(1, sizeof(struct ast_template_ty));
+      strncpy(template->name, token.value.identv.ident, 256);
+
+      if (last) {
+        last->next = template;
+        last = template;
+      } else {
+        into->enumty.templates = template;
+        last = template;
+      }
+
+      peek = parser_peek(parser);
+      if (peek == TOKEN_COMMA) {
+        parser_consume(parser, NULL, TOKEN_COMMA);
+        peek = parser_peek(parser);
+      }
+    }
+
+    parser_consume(parser, NULL, TOKEN_GT);
+  }
+
+  parser_consume(parser, NULL, TOKEN_LBRACE);
+
+  struct ast_enum_field *last = into->enumty.fields;
+  peek = parser_peek(parser);
+  uint64_t value = 0;
+  while (peek != TOKEN_RBRACE) {
+    parser_consume(parser, &token, TOKEN_IDENTIFIER);
+
+    struct ast_enum_field *field = calloc(1, sizeof(struct ast_enum_field));
+    strncpy(field->name, token.value.identv.ident, 256);
+    field->value = value++;
+
+    peek = parser_peek(parser);
+    if (peek == TOKEN_LPAREN) {
+      parser_consume(parser, NULL, TOKEN_LPAREN);
+
+      // enum field with inner type
+      field->has_inner = 1;
+      field->inner = parse_type(parser);
+
+      parser_consume(parser, NULL, TOKEN_RPAREN);
+
+      into->enumty.no_wrapped_fields = 0;
+    }
+
+    if (last) {
+      last->next = field;
+      last = field;
+    } else {
+      into->enumty.fields = field;
+      last = field;
+    }
+
+    peek = parser_peek(parser);
+    if (peek == TOKEN_COMMA) {
+      parser_consume(parser, NULL, TOKEN_COMMA);
+      peek = parser_peek(parser);
+    }
+  }
+
+  parser_consume(parser, NULL, TOKEN_RBRACE);
+
+  return 0;
+}
+
+static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
+  struct ast_expr *result = calloc(1, sizeof(struct ast_expr));
+  result->type = AST_EXPR_TYPE_PATTERN_MATCH;
+  lexer_locate(parser->lexer, &result->loc);
+
+  parser_consume(parser, &result->pattern_match.enum_name, TOKEN_IDENTIFIER);
+  parser_consume(parser, NULL, TOKEN_COLONCOLON);
+  parser_consume(parser, &result->pattern_match.name, TOKEN_IDENTIFIER);
+
+  result->pattern_match.is_wildcard = 1;
+  if (parser_peek(parser) == TOKEN_LPAREN) {
+    // enum pattern match
+    parser_consume(parser, NULL, TOKEN_LPAREN);
+
+    if (parser_peek(parser) == TOKEN_UNDER) {
+      parser_consume(parser, NULL, TOKEN_UNDER);
+    } else {
+      parser_consume(parser, &result->pattern_match.inner, TOKEN_IDENTIFIER);
+      result->pattern_match.is_wildcard = 0;
+    }
+
+    parser_consume(parser, NULL, TOKEN_RPAREN);
+  }
+
+  fprintf(stderr, "built pattern match %p %s %s %s\n", (void *)result,
+          result->pattern_match.enum_name.value.identv.ident,
+          result->pattern_match.name.value.identv.ident,
+          result->pattern_match.is_wildcard ? "wildcard"
+                                            : result->pattern_match.inner.value.identv.ident);
+
+  return result;
 }

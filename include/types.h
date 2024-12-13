@@ -24,7 +24,9 @@
 // type conversion for constants.
 #define TYPE_FLAG_CONSTANT (1U << 2)
 
-#define TYPE_FLAG_MASK_ALL (~0U)
+// All flags that typically matter for type comparison.
+// indireect/constant are excluded as they are typically specific to an expression, not a type.
+#define TYPE_FLAG_MASK_ALL ((~0U) ^ (TYPE_FLAG_INDIRECT | TYPE_FLAG_CONSTANT))
 
 enum ast_ty_id {
   AST_TYPE_ERROR = 0,
@@ -38,8 +40,9 @@ enum ast_ty_id {
   AST_TYPE_ENUM,
   AST_TYPE_STRUCT,
   AST_TYPE_ARRAY,
-  AST_TYPE_CUSTOM,  // unresolved type name that might be a custom type
-  AST_TYPE_NIL,     // for integers/floats/chars, zero, for pointers, null
+  AST_TYPE_CUSTOM,    // unresolved type name that might be a custom type
+  AST_TYPE_NIL,       // for integers/floats/chars, zero, for pointers, null
+  AST_TYPE_TEMPLATE,  // present in type definitions, replaced in concrete types
 };
 
 struct ast_struct_field {
@@ -51,7 +54,7 @@ struct ast_struct_field {
 struct ast_ty {
   enum ast_ty_id ty;
   uint64_t flags;
-  char name[256];  // filled for custom, struct, and enum types
+  char name[256];  // filled for custom, struct, templat, and enum types
   union {
     struct {
       int is_signed;
@@ -61,8 +64,11 @@ struct ast_ty {
       size_t width;
     } fvec;
     struct {
-      // TBD - names of enum values
-      int tbd;
+      struct ast_template_ty *templates;
+      struct ast_enum_field *fields;
+      size_t num_fields;
+      // if 1, no fields have an inner type and the enum is a simple integer enum
+      int no_wrapped_fields;
     } enumty;
     struct {
       struct ast_struct_field *fields;
@@ -75,7 +81,27 @@ struct ast_ty {
     struct {
       int empty;
     } custom;
+    struct {
+      // both of these are CUSTOM after parsing and real types after type checking
+      struct ast_ty *outer;
+      struct ast_template_ty *inners;
+    } template;
   };
+};
+
+struct ast_enum_field {
+  char name[256];
+  uint64_t value;
+  int has_inner;
+  struct ast_ty inner;  // optional
+  struct ast_enum_field *next;
+};
+
+struct ast_template_ty {
+  char name[256];
+  int is_resolved;
+  struct ast_ty resolved;  // only set if is_resolved == 1, when a type is actually specified
+  struct ast_template_ty *next;
 };
 
 struct ast_ty type_tbd(void);
@@ -147,11 +173,16 @@ const char *type_name(struct ast_ty *);
 /**
  * @brief Retrieves a user-friendly name for the type.
  */
-void type_name_into(struct ast_ty *, char *, size_t);
+int type_name_into(struct ast_ty *, char *, size_t);
 
 /**
  * @brief Can ty1 be casted into ty2?
  */
 int can_cast(struct ast_ty *, struct ast_ty *);
+
+/**
+ * @brief Return the size required to store the type in bytes.
+ */
+size_t type_size(struct ast_ty *);
 
 #endif

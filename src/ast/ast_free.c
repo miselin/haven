@@ -80,6 +80,10 @@ void free_stmt(struct ast_stmt *ast) {
 }
 
 void free_expr(struct ast_expr *ast) {
+  if (!ast) {
+    return;
+  }
+
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT:
       switch (ast->ty.ty) {
@@ -185,6 +189,13 @@ void free_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_NIL:
       break;
 
+    case AST_EXPR_TYPE_PATTERN_MATCH:
+      break;
+
+    case AST_EXPR_TYPE_ENUM_INIT:
+      free_expr(ast->enum_init.inner);
+      break;
+
     default:
       fprintf(stderr, "unhandled free for expr type %d\n", ast->type);
   }
@@ -242,6 +253,18 @@ void free_ty(struct ast_ty *ty, int heap) {
       while (field) {
         struct ast_struct_field *next = field->next;
         free_ty(field->ty, 1);
+        free(field);
+        field = next;
+      }
+    }
+
+    if (ty->ty == AST_TYPE_ENUM) {
+      struct ast_enum_field *field = ty->enumty.fields;
+      while (field) {
+        struct ast_enum_field *next = field->next;
+        if (field->has_inner) {
+          free_ty(&field->inner, 0);
+        }
         free(field);
         field = next;
       }

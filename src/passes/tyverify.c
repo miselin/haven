@@ -319,6 +319,15 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_NIL:
       break;
 
+    case AST_EXPR_TYPE_PATTERN_MATCH:
+      break;
+
+    case AST_EXPR_TYPE_ENUM_INIT: {
+      if (ast->enum_init.inner && typecheck_verify_expr(ast->enum_init.inner) < 0) {
+        return -1;
+      }
+    } break;
+
     default:
       fprintf(stderr, "tyverify: unhandled expression type %d\n", ast->type);
   }
