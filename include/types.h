@@ -124,6 +124,14 @@ int type_is_tbd(struct ast_ty *);
 int type_is_nil(struct ast_ty *);
 
 /**
+ * @brief Returns true if the given type is complex, i.e. not plain old data.
+ *
+ * Complex types require special handling in code generation as they typically have an underlying
+ * block of memory.
+ */
+int type_is_complex(struct ast_ty *);
+
+/**
  * @brief Check if two types are the same type class (e.g. integer, float, etc).
  *
  * Disregards specific type data such as width or element count.

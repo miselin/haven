@@ -156,22 +156,7 @@ void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {
 }
 
 void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr) {
-  int is_complex = 0;
-  switch (ty->ty) {
-    case AST_TYPE_ENUM:
-      if (ty->enumty.no_wrapped_fields) {
-        break;
-      }
-
-    case AST_TYPE_STRUCT:
-      is_complex = 1;
-      break;
-
-    default:
-      break;
-  }
-
-  if (!is_complex) {
+  if (!type_is_complex(ty)) {
     LLVMBuildStore(codegen->llvm_builder, value, ptr);
     return;
   }

@@ -41,6 +41,18 @@ int type_is_constant(struct ast_ty *ty) {
   return ty->flags & TYPE_FLAG_CONSTANT;
 }
 
+int type_is_complex(struct ast_ty *ty) {
+  if (ty->ty == AST_TYPE_STRUCT || ty->ty == AST_TYPE_ARRAY) {
+    return 1;
+  }
+
+  if (ty->ty == AST_TYPE_ENUM && !ty->enumty.no_wrapped_fields) {
+    return 1;
+  }
+
+  return 0;
+}
+
 int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
   uint64_t flags1 = ty1->flags & flagmask;
   uint64_t flags2 = ty2->flags & flagmask;
