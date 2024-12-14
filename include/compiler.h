@@ -20,6 +20,10 @@ enum DiagLevel { DiagError, DiagWarning, DiagNote, DiagDebug };
 
 struct compiler;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct compiler *new_compiler(int argc, const char *argv[]);
 
 enum OptLevel compiler_get_opt_level(struct compiler *compiler);
@@ -41,5 +45,9 @@ __attribute__((__format__(__printf__, 3, 0))) int compiler_vdiag(struct compiler
                                                                  const char *fmt, va_list args);
 __attribute__((format(printf, 3, 4))) int compiler_diag(struct compiler *compiler,
                                                         enum DiagLevel level, const char *fmt, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

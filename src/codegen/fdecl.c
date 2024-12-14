@@ -64,16 +64,20 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
 
       // sanitize_address for ASAN - need cli flags for this
       LLVMContextRef context = codegen->llvm_context;
-      LLVMAttributeRef ref = LLVMCreateEnumAttribute(context, sanitize, 0);
-      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
-      LLVMAttributeRef nounwind_ref = LLVMCreateEnumAttribute(context, nounwind, 0);
-      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, nounwind_ref);
+      LLVMAttributeRef sanitize_attr = LLVMCreateEnumAttribute(context, sanitize, 0);
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, sanitize_attr);
+      LLVMAttributeRef nounwind_attr = LLVMCreateEnumAttribute(context, nounwind, 0);
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, nounwind_attr);
 
+      LLVMAttributeRef mem_attr = NULL;
       if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {
         // argmem: readwrite (allow struct returns to be pure)
-        ref = LLVMCreateEnumAttribute(context, memory, 3);
-        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, ref);
+        mem_attr = LLVMCreateEnumAttribute(context, memory, 3);
+      } else {
+        // allow all types of access
+        mem_attr = LLVMCreateEnumAttribute(context, memory, ~0U);
       }
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, mem_attr);
     }
 
     entry = calloc(1, sizeof(struct scope_entry));

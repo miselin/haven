@@ -103,6 +103,13 @@ void destroy_compiler(struct compiler *compiler) {
   free(compiler);
 }
 
+static const char *copy_to_heap(const char *str) {
+  size_t len = strlen(str);
+  char *result = (char *)malloc(len + 1);
+  strcpy(result, str);
+  return result;
+}
+
 static void usage() {
   fprintf(stderr, "usage: %s [options] [file]\n", COMPILER_IDENT);
   fprintf(stderr, "  -o <file>  output file\n");
@@ -118,7 +125,10 @@ static void usage() {
 }
 
 static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
-  UNUSED(into);
+  if (!argc && !argv) {
+    // used for testing - retain default values
+    return 0;
+  }
 
   if (!isatty(2)) {
     into->flags[0] |= FLAG_NO_COLOR;
@@ -142,9 +152,9 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       case 'S':
         into->output_format = OutputASM;
         break;
-      case 'o':
-        into->output_file = optarg;
-        break;
+      case 'o': {
+        into->output_file = copy_to_heap(optarg);
+      } break;
       case O0:
         into->opt_level = OptNone;
         break;
@@ -184,9 +194,7 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       return -1;
     }
 
-    size_t len = strlen(argv[i]);
-    into->input_file = (const char *)malloc(len + 1);
-    strcpy((char *)into->input_file, argv[i]);
+    into->input_file = copy_to_heap(argv[i]);
   }
 
   if (!into->output_file) {
@@ -266,8 +274,10 @@ int compiler_run(struct compiler *compiler) {
   }
 
   if (rc == 0) {
-    fprintf(stderr, "== Pre-codegen AST ==\n");
-    dump_ast(parser_get_ast(parser));
+    if (compiler->flags[0] & FLAG_DISPLAY_AST) {
+      fprintf(stderr, "== Pre-codegen AST ==\n");
+      dump_ast(parser_get_ast(parser));
+    }
 
     struct codegen *codegen = new_codegen(parser_get_ast(parser), compiler);
     rc = codegen_run(codegen);

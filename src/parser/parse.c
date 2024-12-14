@@ -266,6 +266,11 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     parser_consume(parser, NULL, TOKEN_KW_FN);
     decl->type = AST_DECL_TYPE_FDECL;
   } else {
+    if (flags & DECL_FLAG_IMPURE) {
+      parser_diag(1, parser, NULL, "only functions can be impure\n");
+      free(decl);
+      return NULL;
+    }
     decl->type = AST_DECL_TYPE_VDECL;
   }
 

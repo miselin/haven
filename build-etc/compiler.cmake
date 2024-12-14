@@ -87,7 +87,7 @@ if (UNIX AND NOT IOS AND NOT ANDROID)
                                    -Wextra
                                    -Wshadow
                                    $<$<COMPILE_LANGUAGE:CXX>:-Wnon-virtual-dtor>
-                                   $<$<COMPILE_LANGUAGE:CXX>:-Wold-style-cast>
+                                   $<$<COMPILE_LANGUAGE:CXX>:-Wno-old-style-cast>
                                    -Wcast-align
                                    -Wunused
                                    $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>

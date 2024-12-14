@@ -151,6 +151,12 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     scope_insert(typecheck->scope, ast->fdecl.ident.value.identv.ident, entry);
 
     if (existing) {
+      if (entry->fdecl->flags != existing->fdecl->flags) {
+        fprintf(stderr, "function %s redeclared with different flags\n",
+                ast->fdecl.ident.value.identv.ident);
+        ++typecheck->errors;
+      }
+
       if (!same_type(&entry->fdecl->retty, &existing->fdecl->retty)) {
         char tystr[256], existingstr[256];
         type_name_into(&entry->fdecl->retty, tystr, 256);

@@ -8,11 +8,11 @@ target_link_libraries(vec_test mattc_compiler_options_no_warnings mattc_vec GTes
 gtest_discover_tests(vec_test)
 
 add_executable(trie_test trie_test.cc)
-target_link_libraries(trie_test mattc_compiler_options_no_warnings utilities GTest::gtest_main)
+target_link_libraries(trie_test mattc_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(trie_test)
 
 add_executable(kw_test kw_test.cc)
-target_link_libraries(kw_test mattc_compiler_options_no_warnings lexer utilities GTest::gtest_main)
+target_link_libraries(kw_test mattc_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(kw_test)
 
 macro(add_functional_test name expectedrc lib)

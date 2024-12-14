@@ -1,12 +1,14 @@
 #include <gtest/gtest.h>
 
+#include "compiler.h"
 #include "lex.h"
 #include "lexer/internal.h"
 #include "tokens.h"
 #include "trie.h"
 
 TEST(LexerKeywords, LookupLetterInKeyword) {
-  struct lex_state *state = new_lexer(stdin, "<stdin>");
+  struct compiler *compiler = new_compiler(0, NULL);
+  struct lex_state *state = new_lexer(stdin, "<stdin>", compiler);
 
   struct token token;
   token.ident = TOKEN_IDENTIFIER;
@@ -19,10 +21,12 @@ TEST(LexerKeywords, LookupLetterInKeyword) {
   EXPECT_EQ(token.ident, TOKEN_IDENTIFIER);
 
   destroy_lexer(state);
+  destroy_compiler(compiler);
 }
 
 TEST(LexerKeywords, LookupEarlyTerminal) {
-  struct lex_state *state = new_lexer(stdin, "<stdin>");
+  struct compiler *compiler = new_compiler(0, NULL);
+  struct lex_state *state = new_lexer(stdin, "<stdin>", compiler);
 
   struct token token;
   token.ident = TOKEN_IDENTIFIER;
@@ -40,4 +44,5 @@ TEST(LexerKeywords, LookupEarlyTerminal) {
   EXPECT_EQ(token.ident, TOKEN_KW_STRUCT);
 
   destroy_lexer(state);
+  destroy_compiler(compiler);
 }

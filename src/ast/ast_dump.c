@@ -441,6 +441,10 @@ static void dump_decl_flags(uint64_t flags) {
     dump_maybe_space("temporary", first);
     first = 0;
   }
+  if (flags & DECL_FLAG_IMPURE) {
+    dump_maybe_space("impure", first);
+    first = 0;
+  }
 }
 
 static void dump_array(struct ast_expr *ast, int indent) {

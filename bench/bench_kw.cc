@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h>
 #include <stdio.h>
 
+#include "compiler.h"
 #include "lex.h"
 
 extern "C" int lex_maybe_keyword_inner(struct lex_state *state, struct token *token,
@@ -9,25 +10,26 @@ extern "C" int lex_maybe_keyword_trie_inner(struct lex_state *state, struct toke
                                             const char *ident);
 
 struct RAIILexer {
+  struct compiler *compiler;
   struct lex_state *state;
   struct token token;
 
   RAIILexer() {
-    state = new_lexer(stdin, "<stdin>");
+    compiler = new_compiler(0, NULL);
+    state = new_lexer(stdin, "<stdin>", compiler);
   }
 
   ~RAIILexer() {
     destroy_lexer(state);
+    destroy_compiler(compiler);
   }
 };
 
 static void BM_KWNotFound_Trie(benchmark::State &state) {
-  struct lex_state *lexer = new_lexer(stdin, "<stdin>");
-  struct token token;
+  RAIILexer lexer;
   for (auto _ : state) {
-    benchmark::DoNotOptimize(lex_maybe_keyword_trie_inner(lexer, &token, "foo"));
+    benchmark::DoNotOptimize(lex_maybe_keyword_trie_inner(lexer.state, &lexer.token, "foo"));
   }
-  destroy_lexer(lexer);
 }
 
 static void BM_KWFound_Trie(benchmark::State &state) {
