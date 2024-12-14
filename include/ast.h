@@ -222,6 +222,8 @@ struct ast_expr_pattern_match {
   struct token name;
   // inner variable to bind, if any
   struct ast_vdecl *inner_vdecl;
+  // bindings are to be ignored
+  int bindings_ignored;
 };
 
 struct ast_expr_enum_init {

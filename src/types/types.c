@@ -168,6 +168,10 @@ const char *type_name(struct ast_ty *ty) {
 }
 
 int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
+  if (!ty) {
+    return snprintf(buf, maxlen, "<null-type-ptr>");
+  }
+
   int offset = 0;
   switch (ty->ty) {
     case AST_TYPE_ERROR:

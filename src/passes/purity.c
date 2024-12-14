@@ -21,7 +21,6 @@ static int check_purity_toplevel(struct ast_toplevel *ast);
 static int check_purity_block(struct ast_block *ast);
 static int check_purity_stmt(struct ast_stmt *ast);
 static int check_purity_expr(struct ast_expr *ast);
-static int check_purity_struct_decl(struct ast_ty *decl);
 
 struct purity *purity_new(struct ast_program *ast, struct compiler *compiler) {
   struct purity *purity = calloc(1, sizeof(struct purity));
@@ -54,8 +53,6 @@ int check_purity_ast(struct ast_program *ast) {
 }
 
 static int check_purity_toplevel(struct ast_toplevel *ast) {
-  int total = 0;
-
   if (ast->type == AST_DECL_TYPE_FDECL) {
     if (ast->fdecl.flags & DECL_FLAG_IMPURE) {
       return 0;
@@ -96,25 +93,18 @@ static int check_purity_stmt(struct ast_stmt *ast) {
     } break;
 
     case AST_STMT_TYPE_ITER: {
-      int total = 0;
-      int rc = check_purity_expr(ast->iter.range.start);
-      if (rc < 0) {
+      if (check_purity_expr(ast->iter.range.start) < 0) {
         return -1;
       }
-      total += rc;
 
-      rc = check_purity_expr(ast->iter.range.end);
-      if (rc < 0) {
+      if (check_purity_expr(ast->iter.range.end) < 0) {
         return -1;
       }
 
       if (ast->iter.range.step) {
-        rc = check_purity_expr(ast->iter.range.step);
-        if (rc < 0) {
+        if (check_purity_expr(ast->iter.range.step) < 0) {
           return -1;
         }
-
-        total += rc;
       }
 
       return check_purity_block(&ast->iter.block);

@@ -4,5 +4,8 @@ pub fn i32 main() {
     iter 0:4 i {
         printf("%d\n", i);
     };
-    as i32 0
+    iter 4:0:-1 i {
+        printf("%d\n", i);
+    };
+    0
 }

@@ -295,6 +295,20 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
                               ? emit_expr(codegen, ast->iter.range.step)
                               : LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context), 1, 0);
 
+      int direction = 1;
+      if (ast->iter.range.step) {
+        struct ast_expr *step_expr = ast->iter.range.step;
+        if (step_expr->type == AST_EXPR_TYPE_CAST) {
+          step_expr = step_expr->cast.expr;
+        }
+
+        if ((int64_t)step_expr->constant.constant.value.intv.val < 0) {
+          direction = -1;
+        }
+      }
+
+      fprintf(stderr, "iter direction %d\n", direction);
+
       LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->iter.index_vdecl->ty);
 
       codegen_internal_enter_scope(codegen, &ast->loc, 1);
@@ -324,7 +338,8 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, cond_block);
       LLVMValueRef index_val = LLVMBuildLoad2(codegen->llvm_builder, var_type, index, "index");
-      LLVMValueRef cmp = LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, index_val, end, "cmp");
+      LLVMValueRef cmp = LLVMBuildICmp(
+          codegen->llvm_builder, direction > 0 ? LLVMIntSLE : LLVMIntSGE, index_val, end, "cmp");
       LLVMBuildCondBr(codegen->llvm_builder, cmp, body_block, end_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, body_block);

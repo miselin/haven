@@ -1225,6 +1225,7 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
 
     if (parser_peek(parser) == TOKEN_UNDER) {
       parser_consume(parser, NULL, TOKEN_UNDER);
+      result->pattern_match.bindings_ignored = 1;
     } else {
       result->pattern_match.inner_vdecl = calloc(1, sizeof(struct ast_vdecl));
       result->pattern_match.inner_vdecl->ty = type_tbd();  // filled in by typecheck

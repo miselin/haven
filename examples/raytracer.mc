@@ -58,10 +58,10 @@ pub impure fn void printvec(fvec3 v) {
 }
 
 pub impure fn i32 main() {
-    let xdim = 512;
+    let xdim = 511;
     let ydim = xdim;
 
-    printf("P6 %d %d 255 ", xdim, ydim);
+    printf("P6 %d %d 255 ", xdim + 1, ydim + 1);
     let g = {
         let vec = <-6.0, -16.0, 0.0>;
         vnorm(vec)
@@ -84,7 +84,7 @@ pub impure fn i32 main() {
         iter xdim:0:-1 x {
             let mut p = <13.0, 13.0, 13.0>;
 
-            iter 0:64 r {
+            iter 0:63 r {
                 let t = {
                     {
                         let r = R() - 0.5;
@@ -202,12 +202,8 @@ pub impure fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n) {
         m = 1;
     };
 
-    iter 20:0:-1 k_ {
-        let k = k_ - 1;
-
-        iter 9:0:-1 j_ {
-            let j = j_ - 1;
-
+    iter 0:18 k {
+        iter 0:8 j {
             let bit = 1 << k;
             let lookup = as i64 G[j];
             if (lookup & bit) != 0 {

@@ -12,6 +12,7 @@
 #include "lex.h"
 #include "parse.h"
 #include "purity.h"
+#include "semantic.h"
 #include "typecheck.h"
 #include "utility.h"
 
@@ -250,11 +251,24 @@ int compiler_run(struct compiler *compiler) {
     rc = 1;
   }
 
+  fprintf(stderr, "result from parse: %d\n", rc);
+
   if (rc == 0) {
     struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);
     rc = cfolder_run(cfolder);
     destroy_cfolder(cfolder);
   }
+
+  fprintf(stderr, "result from cfold: %d\n", rc);
+
+  if (rc == 0) {
+    // pre-typecheck semantic pass
+    struct semantic *semantic = semantic_new(parser_get_ast(parser), compiler, 0);
+    rc = semantic_run(semantic);
+    semantic_destroy(semantic);
+  }
+
+  fprintf(stderr, "result from first semantic pass: %d\n", rc);
 
   if (rc == 0) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser), compiler);
@@ -262,11 +276,24 @@ int compiler_run(struct compiler *compiler) {
     destroy_typecheck(typecheck);
   }
 
+  fprintf(stderr, "result from typecheck pass: %d\n", rc);
+
   if (rc == 0) {
     struct purity *purity = purity_new(parser_get_ast(parser), compiler);
     rc = purity_run(purity);
     purity_destroy(purity);
   }
+
+  fprintf(stderr, "result from purity pass: %d\n", rc);
+
+  if (rc == 0) {
+    // post-typecheck semantic pass
+    struct semantic *semantic = semantic_new(parser_get_ast(parser), compiler, 1);
+    rc = semantic_run(semantic);
+    semantic_destroy(semantic);
+  }
+
+  fprintf(stderr, "result from second semantic pass: %d\n", rc);
 
   if (rc && (compiler->flags[0] & FLAG_DISPLAY_AST)) {
     fprintf(stderr, "== Partial AST after failure ==\n");
