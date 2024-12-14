@@ -30,8 +30,8 @@
 #define AST_EXPR_TYPE_BLOCK 2
 #define AST_EXPR_TYPE_BINARY 3
 #define AST_EXPR_TYPE_VARIABLE 4
-#define AST_EXPR_TYPE_LOGICAL 5
-#define AST_EXPR_TYPE_LIST 6
+#define AST_EXPR_TYPE_LOGICAL 5  // should be removed
+#define AST_EXPR_TYPE_LIST 6     // should be removed
 #define AST_EXPR_TYPE_DEREF 7
 #define AST_EXPR_TYPE_CALL 8
 #define AST_EXPR_TYPE_VOID 9
@@ -41,7 +41,7 @@
 #define AST_EXPR_TYPE_ASSIGN 13
 #define AST_EXPR_TYPE_REF 14
 #define AST_EXPR_TYPE_LOAD 15
-#define AST_EXPR_TYPE_BOOLEAN 16
+#define AST_EXPR_TYPE_BOOLEAN 16  // should be removed
 #define AST_EXPR_TYPE_ARRAY_INDEX 17
 #define AST_EXPR_TYPE_MATCH 18
 #define AST_EXPR_TYPE_STRUCT_INIT 19
