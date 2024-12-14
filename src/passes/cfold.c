@@ -9,6 +9,7 @@
 
 struct cfolder {
   struct ast_program *ast;
+  struct compiler *compiler;
 };
 
 static void cfold_toplevel(struct ast_toplevel *ast);
@@ -18,9 +19,10 @@ static struct ast_expr *cfold_expr(struct ast_expr *ast);
 
 static struct ast_expr *cfold_unary(struct ast_expr *unary);
 
-struct cfolder *new_cfolder(struct ast_program *ast) {
+struct cfolder *new_cfolder(struct ast_program *ast, struct compiler *compiler) {
   struct cfolder *result = calloc(1, sizeof(struct cfolder));
   result->ast = ast;
+  result->compiler = compiler;
   return result;
 }
 

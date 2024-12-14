@@ -13,6 +13,7 @@
 
 struct purity {
   struct ast_program *ast;
+  struct compiler *compiler;
 };
 
 int check_purity_ast(struct ast_program *ast);
@@ -22,9 +23,10 @@ static int check_purity_stmt(struct ast_stmt *ast);
 static int check_purity_expr(struct ast_expr *ast);
 static int check_purity_struct_decl(struct ast_ty *decl);
 
-struct purity *purity_new(struct ast_program *ast) {
+struct purity *purity_new(struct ast_program *ast, struct compiler *compiler) {
   struct purity *purity = calloc(1, sizeof(struct purity));
   purity->ast = ast;
+  purity->compiler = compiler;
   return purity;
 }
 

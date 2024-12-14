@@ -16,7 +16,7 @@
 
 struct cfolder;
 
-struct cfolder *new_cfolder(struct ast_program *);
+struct cfolder *new_cfolder(struct ast_program *, struct compiler *);
 int cfolder_run(struct cfolder *);
 void destroy_cfolder(struct cfolder *);
 

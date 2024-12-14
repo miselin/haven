@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "compiler.h"
 #include "lex.h"
 
 #define LEXER_BUFFER_SIZE 256
@@ -19,6 +20,8 @@ struct lex_state {
 
   struct trie *keywords;
   char *filename;
+
+  struct compiler *compiler;
 };
 
 #ifdef __cplusplus

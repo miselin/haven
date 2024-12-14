@@ -10,13 +10,14 @@
 #include "internal.h"
 #include "tokens.h"
 
-struct lex_state *new_lexer(FILE *stream, const char *filename) {
+struct lex_state *new_lexer(FILE *stream, const char *filename, struct compiler *compiler) {
   struct lex_state *result = calloc(1, sizeof(struct lex_state));
   result->stream = stream;
   result->filename = malloc(strlen(filename) + 1);
   strcpy(result->filename, filename);
   result->loc.file = result->filename;
   initialize_keyword_trie(result);
+  result->compiler = compiler;
   return result;
 }
 

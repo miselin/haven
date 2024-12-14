@@ -5,7 +5,7 @@
 
 struct codegen;
 
-struct codegen *new_codegen(struct ast_program *);
+struct codegen *new_codegen(struct ast_program *, struct compiler *compiler);
 int codegen_run(struct codegen *);
 int codegen_emit_ir(struct codegen *, FILE *);
 int codegen_emit_bitcode(struct codegen *, FILE *);

@@ -5,7 +5,7 @@
 
 struct purity;
 
-struct purity *purity_new(struct ast_program *ast);
+struct purity *purity_new(struct ast_program *ast, struct compiler *compiler);
 int purity_run(struct purity *purity);
 void purity_destroy(struct purity *purity);
 

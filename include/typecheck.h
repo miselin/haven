@@ -20,7 +20,7 @@
 
 struct typecheck;
 
-struct typecheck *new_typecheck(struct ast_program *);
+struct typecheck *new_typecheck(struct ast_program *, struct compiler *);
 
 /**
  * @brief Run the type checking pass on the AST associated with the type

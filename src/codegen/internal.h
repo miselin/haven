@@ -6,6 +6,7 @@
 
 #include "ast.h"
 #include "codegen.h"
+#include "compiler.h"
 
 struct scope_entry {
   struct ast_vdecl *vdecl;
@@ -70,6 +71,8 @@ struct codegen {
   LLVMTargetRef llvm_target;
   LLVMTargetMachineRef llvm_target_machine;
   LLVMTargetDataRef llvm_data_layout;
+
+  struct compiler *compiler;
 };
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
@@ -111,5 +114,6 @@ void update_debug_loc(struct codegen *codegen, struct lex_locator *loc);
 void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr);
 
 int initialize_llvm();
+void shutdown_llvm();
 
 #endif

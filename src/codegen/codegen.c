@@ -1,6 +1,7 @@
 
 #include "codegen.h"
 
+#include <llvm-c-18/llvm-c/Target.h>
 #include <llvm-c-18/llvm-c/TargetMachine.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
@@ -10,6 +11,7 @@
 #include <string.h>
 
 #include "ast.h"
+#include "compiler.h"
 #include "internal.h"
 #include "kv.h"
 #include "scope.h"
@@ -21,7 +23,7 @@ static void emit_ast(struct codegen *codegen, struct ast_program *ast);
 static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast);
 static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast);
 
-struct codegen *new_codegen(struct ast_program *ast) {
+struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) {
   if (initialize_llvm() != 0) {
     return NULL;
   }
@@ -32,6 +34,7 @@ struct codegen *new_codegen(struct ast_program *ast) {
   result->llvm_module = LLVMModuleCreateWithNameInContext(ast->loc.file, result->llvm_context);
   result->llvm_builder = LLVMCreateBuilderInContext(result->llvm_context);
   result->llvm_dibuilder = LLVMCreateDIBuilder(result->llvm_module);
+  result->compiler = compiler;
 
   LLVMContextSetDiscardValueNames(result->llvm_context, 0);
 
@@ -46,23 +49,59 @@ struct codegen *new_codegen(struct ast_program *ast) {
       result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, "mattc", 5, 0, "", 0,
       0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
 
+  char *triple = LLVMGetDefaultTargetTriple();
+
   char *error = NULL;
-  LLVMGetTargetFromTriple(LLVMGetDefaultTargetTriple(), &result->llvm_target, &error);
+  LLVMGetTargetFromTriple(triple, &result->llvm_target, &error);
   if (error) {
     fprintf(stderr, "error getting target: %s\n", error);
   }
   LLVMDisposeMessage(error);
 
+  LLVMCodeGenOptLevel opt_level = LLVMCodeGenLevelDefault;
+  LLVMRelocMode reloc = LLVMRelocPIC;
+
+  switch (compiler_get_opt_level(compiler)) {
+    case OptNone:
+      opt_level = LLVMCodeGenLevelNone;
+      break;
+    case OptLight:
+      opt_level = LLVMCodeGenLevelLess;
+      break;
+    case OptNormal:
+      opt_level = LLVMCodeGenLevelDefault;
+      break;
+    case OptAggressive:
+      opt_level = LLVMCodeGenLevelAggressive;
+      break;
+    default:
+      break;
+  }
+
+  switch (compiler_get_relocations_type(compiler)) {
+    case RelocsStatic:
+      reloc = LLVMRelocStatic;
+      break;
+    case RelocsPIC:
+      reloc = LLVMRelocPIC;
+      break;
+    default:
+      break;
+  }
+
+  char *host_features = LLVMGetHostCPUFeatures();
   result->llvm_target_machine =
-      LLVMCreateTargetMachine(result->llvm_target, LLVMGetDefaultTargetTriple(), "generic",
-                              LLVMGetHostCPUFeatures(), LLVMCodeGenLevelDefault /* opt */,
-                              LLVMRelocPIC /* reloc */, LLVMCodeModelDefault /* code model */);
-  LLVMSetTarget(result->llvm_module, LLVMGetDefaultTargetTriple());
+      LLVMCreateTargetMachine(result->llvm_target, triple, "generic", host_features, opt_level,
+                              reloc, LLVMCodeModelDefault /* code model */);
+  LLVMSetTarget(result->llvm_module, triple);
 
   result->llvm_data_layout = LLVMCreateTargetDataLayout(result->llvm_target_machine);
   char *layout = LLVMCopyStringRepOfTargetData(result->llvm_data_layout);
   LLVMSetDataLayout(result->llvm_module, layout);
   LLVMDisposeMessage(layout);
+
+  LLVMDisposeMessage(host_features);
+  LLVMDisposeMessage(triple);
 
   codegen_internal_enter_scope(result, &ast->loc, 0);
 
@@ -108,11 +147,15 @@ void destroy_codegen(struct codegen *codegen) {
 
   destroy_kv(codegen->functions);
   codegen_internal_leave_scope(codegen, 0);
+  LLVMDisposeTargetData(codegen->llvm_data_layout);
+  LLVMDisposeTargetMachine(codegen->llvm_target_machine);
   LLVMDisposeDIBuilder(codegen->llvm_dibuilder);
   LLVMDisposeBuilder(codegen->llvm_builder);
   LLVMDisposeModule(codegen->llvm_module);
   LLVMContextDispose(codegen->llvm_context);
   free(codegen);
+
+  shutdown_llvm();
 }
 
 static void emit_ast(struct codegen *codegen, struct ast_program *ast) {

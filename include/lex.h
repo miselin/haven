@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "compiler.h"
 #include "tokens.h"
 
 struct lex_state;
@@ -49,7 +50,7 @@ struct token {
 extern "C" {
 #endif
 
-struct lex_state *new_lexer(FILE *, const char *filename);
+struct lex_state *new_lexer(FILE *, const char *filename, struct compiler *compiler);
 int lexer_eof(struct lex_state *);
 int lexer_token(struct lex_state *, struct token *);
 void lexer_locate(struct lex_state *, struct lex_locator *);

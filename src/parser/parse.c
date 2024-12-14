@@ -4,10 +4,12 @@
 #include <malloc.h>
 #include <setjmp.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "ast.h"
+#include "compiler.h"
 #include "lex.h"
 #include "tokens.h"
 #include "types.h"
@@ -23,6 +25,8 @@ struct parser {
 
   int errors;
   int warnings;
+
+  struct compiler *compiler;
 };
 
 static enum token_id parser_peek(struct parser *parser) __attribute__((warn_unused_result));
@@ -55,18 +59,32 @@ static int binary_op_prec(int token);
 __attribute__((format(printf, 4, 5))) static void parser_diag(int fatal, struct parser *parser,
                                                               struct token *token, const char *msg,
                                                               ...) {
+  char msgbuf[1024];
+  size_t offset = 0;
+  int rc = 0;
+
   if (token) {
     char locbuf[256] = {0};
     lexer_locate_str(parser->lexer, locbuf, 256);
-    fprintf(stderr, "%s: ", locbuf);
+    rc = snprintf(msgbuf, 1024, "%s: ", locbuf);
   } else {
-    fprintf(stderr, "???: ");
+    rc = snprintf(msgbuf, 1024, "???: ");
   }
+
+  if (rc < 0) {
+    fprintf(stderr, "failed to format diagnostic message\n");
+    longjmp(parser->errbuf, -1);
+    return;
+  }
+
+  offset = (size_t)rc;
 
   va_list args;
   va_start(args, msg);
-  vfprintf(stderr, msg, args);
+  vsnprintf(msgbuf + offset, 1024 - offset, msg, args);
   va_end(args);
+
+  compiler_diag(parser->compiler, DiagError, "%s", msgbuf);
 
   if (fatal) {
     ++parser->errors;
@@ -77,9 +95,10 @@ __attribute__((format(printf, 4, 5))) static void parser_diag(int fatal, struct 
   }
 }
 
-struct parser *new_parser(struct lex_state *lexer) {
+struct parser *new_parser(struct lex_state *lexer, struct compiler *compiler) {
   struct parser *result = calloc(1, sizeof(struct parser));
   result->lexer = lexer;
+  result->compiler = compiler;
   return result;
 }
 

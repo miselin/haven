@@ -33,6 +33,8 @@ struct typecheck {
   struct ast_ty void_type;
   struct ast_ty error_type;
   struct ast_ty tbd_type;
+
+  struct compiler *compiler;
 };
 
 int typecheck_verify_ast(struct ast_program *ast);
@@ -73,7 +75,7 @@ __attribute__((format(printf, 3, 4))) static void typecheck_diag_expr(struct typ
   ++typecheck->errors;
 }
 
-struct typecheck *new_typecheck(struct ast_program *ast) {
+struct typecheck *new_typecheck(struct ast_program *ast, struct compiler *compiler) {
   struct typecheck *result = calloc(1, sizeof(struct typecheck));
   result->ast = ast;
   result->scope = enter_scope(NULL);
@@ -81,6 +83,7 @@ struct typecheck *new_typecheck(struct ast_program *ast) {
   result->error_type = type_error();
   result->void_type = type_void();
   result->tbd_type = type_tbd();
+  result->compiler = compiler;
   return result;
 }
 

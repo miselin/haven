@@ -9,6 +9,7 @@ add_subdirectory(types)
 
 add_executable(mattc
     main.c
+    compiler.c
 )
 target_link_libraries(mattc mattc_compiler_options lexer parser ir passes)
 

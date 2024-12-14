@@ -17,6 +17,7 @@ static int emit_membuf(LLVMMemoryBufferRef membuf, FILE *stream) {
     return 1;
   }
   fflush(stream);
+  LLVMDisposeMemoryBuffer(membuf);
   return 0;
 }
 
@@ -27,6 +28,7 @@ int codegen_emit_ir(struct codegen *codegen, FILE *stream) {
   }
 
   fputs(ir, stream);
+  LLVMDisposeMessage(ir);
   return 0;
 }
 
