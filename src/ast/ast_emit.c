@@ -76,7 +76,7 @@ static int code_emit_block(FILE *stream, struct ast_block *ast, int indent) {
 static int code_emit_stmt(FILE *stream, struct ast_stmt *ast, int indent) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      INDENTED(stream, indent, "");
+      print_indent(stream, indent);
       code_emit_expr(stream, ast->expr, indent);
       break;
 
@@ -148,7 +148,7 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
 }
 
 static int code_emit_vdecl(FILE *stream, struct ast_vdecl *ast, int indent) {
-  INDENTED(stream, indent, "");
+  print_indent(stream, indent);
   if (!type_is_tbd(&ast->ty)) {
     code_emit_ty(stream, &ast->ty);
     fprintf(stream, " ");
@@ -247,7 +247,7 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
       fprintf(stream, " {\n");
       struct ast_expr_match_arm *arm = ast->match.arms;
       while (arm) {
-        INDENTED(stream, indent + 1, "");
+        print_indent(stream, indent + 1);
         code_emit_expr(stream, arm->pattern, indent);
         fprintf(stream, " => ");
         code_emit_expr(stream, arm->expr, indent);
