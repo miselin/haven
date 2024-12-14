@@ -26,6 +26,7 @@ enum Options {
   EmitBitcode,
   Verbose,
   NoColor,
+  OnlyParse,
 };
 
 enum Color {
@@ -59,6 +60,8 @@ struct compiler {
   struct lex_state *lexer;
 
   uint64_t flags[1];
+
+  enum Pass default_until;
 };
 
 static int parse_flags(struct compiler *into, int argc, char *const argv[]);
@@ -154,6 +157,7 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"emit-bitcode", no_argument, 0, EmitBitcode},
                                   {"verbose", no_argument, 0, Verbose},
                                   {"no-color", no_argument, 0, NoColor},
+                                  {"only-parse", no_argument, 0, OnlyParse},
                                   {0, 0, 0, 0}};
 
   int opt;
@@ -192,6 +196,9 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       case NoColor:
         into->flags[0] |= FLAG_NO_COLOR;
         break;
+      case OnlyParse:
+        into->default_until = PassParse;
+        break;
       default:
         usage();
         return -1;
@@ -207,16 +214,24 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
     into->input_file = copy_to_heap(argv[i]);
   }
 
+  if (!into->input_file) {
+    usage();
+    return -1;
+  }
+
+  const char *ext = outext(into);
+
   if (!into->output_file) {
     // build the output filename from the input file
-    into->output_file = (const char *)malloc(strlen(into->input_file) + 1);
+    // one extra byte for a potential dot, and one for the null terminator
+    into->output_file = (const char *)malloc(strlen(into->input_file) + 1 + strlen(ext) + 1);
     strcpy((char *)into->output_file, into->input_file);
     char *dot = strrchr((char *)into->output_file, '.');
     if (!dot) {
-      dot = (char *)into->output_file + strlen(into->output_file);
+      strcat((char *)into->output_file, ".");
+      dot = (char *)into->output_file;
     }
-    *dot++ = '.';
-    strcpy(dot, outext(into));
+    strcat(dot, outext(into));
   }
 
   if (into->flags[0] & FLAG_VERBOSE) {
@@ -231,6 +246,10 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
 }
 
 int compiler_run(struct compiler *compiler, enum Pass until) {
+  if (until == AllPasses) {
+    until = compiler->default_until;
+  }
+
   const char *filename = compiler->input_file ? compiler->input_file : "<stdin>";
 
   FILE *in = stdin;
