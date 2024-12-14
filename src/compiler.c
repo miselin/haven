@@ -55,6 +55,9 @@ struct compiler {
   enum OutputFormat output_format;
   enum RelocationsType relocations_type;
 
+  struct parser *parser;
+  struct lex_state *lexer;
+
   uint64_t flags[1];
 };
 
@@ -101,6 +104,12 @@ const char *compiler_get_output_file(struct compiler *compiler) {
 void destroy_compiler(struct compiler *compiler) {
   free((void *)compiler->input_file);
   free((void *)compiler->output_file);
+  if (compiler->parser) {
+    destroy_parser(compiler->parser);
+  }
+  if (compiler->lexer) {
+    destroy_lexer(compiler->lexer);
+  }
   free(compiler);
 }
 
@@ -221,7 +230,7 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
   return 0;
 }
 
-int compiler_run(struct compiler *compiler) {
+int compiler_run(struct compiler *compiler, enum Pass until) {
   const char *filename = compiler->input_file ? compiler->input_file : "<stdin>";
 
   FILE *in = stdin;
@@ -247,8 +256,15 @@ int compiler_run(struct compiler *compiler) {
   struct lex_state *lexer = new_lexer(in, filename, compiler);
   struct parser *parser = new_parser(lexer, compiler);
 
+  compiler->parser = parser;
+  compiler->lexer = lexer;
+
   if (parser_run(parser) < 0) {
     rc = 1;
+  }
+
+  if (until == PassParse) {
+    goto out;
   }
 
   fprintf(stderr, "result from parse: %d\n", rc);
@@ -257,6 +273,10 @@ int compiler_run(struct compiler *compiler) {
     struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);
     rc = cfolder_run(cfolder);
     destroy_cfolder(cfolder);
+  }
+
+  if (until == PassCFold) {
+    goto out;
   }
 
   fprintf(stderr, "result from cfold: %d\n", rc);
@@ -268,12 +288,20 @@ int compiler_run(struct compiler *compiler) {
     semantic_destroy(semantic);
   }
 
+  if (until == PassSemantic1) {
+    goto out;
+  }
+
   fprintf(stderr, "result from first semantic pass: %d\n", rc);
 
   if (rc == 0) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser), compiler);
     rc = typecheck_run(typecheck);
     destroy_typecheck(typecheck);
+  }
+
+  if (until == PassTypecheck) {
+    goto out;
   }
 
   fprintf(stderr, "result from typecheck pass: %d\n", rc);
@@ -284,6 +312,10 @@ int compiler_run(struct compiler *compiler) {
     purity_destroy(purity);
   }
 
+  if (until == PassPurity) {
+    goto out;
+  }
+
   fprintf(stderr, "result from purity pass: %d\n", rc);
 
   if (rc == 0) {
@@ -291,6 +323,10 @@ int compiler_run(struct compiler *compiler) {
     struct semantic *semantic = semantic_new(parser_get_ast(parser), compiler, 1);
     rc = semantic_run(semantic);
     semantic_destroy(semantic);
+  }
+
+  if (until == PassSemantic2) {
+    goto out;
   }
 
   fprintf(stderr, "result from second semantic pass: %d\n", rc);
@@ -332,8 +368,7 @@ int compiler_run(struct compiler *compiler) {
     destroy_codegen(codegen);
   }
 
-  destroy_parser(parser);
-  destroy_lexer(lexer);
+out:
   return rc;
 }
 
@@ -407,4 +442,8 @@ int compiler_diag(struct compiler *compiler, enum DiagLevel level, const char *f
   int rc = compiler_vdiag(compiler, level, fmt, args);
   va_end(args);
   return rc;
+}
+
+struct ast_program *compiler_get_ast(struct compiler *compiler) {
+  return parser_get_ast(compiler->parser);
 }

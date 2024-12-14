@@ -33,7 +33,7 @@ option(DEBUG_BUILD "build with extra debug options such as logging, even in a Re
 option(WARNINGS "allow warnings" OFF)
 option(OPTIMIZE "optimize all code" OFF)
 option(OPTIMIZE_SIZE "optimize all code for smallest size" OFF)
-option(COVERAGE "enable code coverage" ON)
+option(COVERAGE "enable code coverage" OFF)
 
 # Enable jemalloc/tcmalloc if available?
 option(OTHER_MALLOC "use jemalloc or tcmalloc if present" ON)

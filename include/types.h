@@ -184,6 +184,11 @@ const char *type_name(struct ast_ty *);
 int type_name_into(struct ast_ty *, char *, size_t);
 
 /**
+ * @brief Retrieves a parseable version of the type.
+ */
+int type_name_into_as_code(struct ast_ty *, char *, size_t);
+
+/**
  * @brief Can ty1 be casted into ty2?
  */
 int can_cast(struct ast_ty *, struct ast_ty *);

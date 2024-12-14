@@ -14,6 +14,16 @@ enum RelocationsType { RelocsPIC, RelocsStatic };
 
 enum DiagLevel { DiagError, DiagWarning, DiagNote, DiagDebug };
 
+enum Pass {
+  AllPasses,
+  PassParse,
+  PassTypecheck,
+  PassPurity,
+  PassCFold,
+  PassSemantic1,
+  PassSemantic2,
+};
+
 #define FLAG_VERBOSE (1U << 0)
 #define FLAG_DISPLAY_AST (1U << 1)
 #define FLAG_NO_COLOR (1U << 2)
@@ -36,7 +46,9 @@ uint64_t compiler_get_flags(struct compiler *compiler);
 const char *compiler_get_input_file(struct compiler *compiler);
 const char *compiler_get_output_file(struct compiler *compiler);
 
-int compiler_run(struct compiler *compiler);
+int compiler_run(struct compiler *compiler, enum Pass until);
+
+struct ast_program *compiler_get_ast(struct compiler *compiler);
 
 void destroy_compiler(struct compiler *compiler);
 

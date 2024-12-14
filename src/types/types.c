@@ -401,3 +401,111 @@ struct ast_ty copy_type(struct ast_ty *ty) {
 
   return new_type;
 }
+
+int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
+  if (!ty) {
+    return snprintf(buf, maxlen, "<null-type-ptr>");
+  }
+
+  int offset = 0;
+  switch (ty->ty) {
+    case AST_TYPE_ERROR:
+      offset += snprintf(buf, maxlen, "error");
+      return offset;
+    case AST_TYPE_TBD:
+      offset += snprintf(buf, maxlen, "tbd");
+      return offset;
+    case AST_TYPE_INTEGER:
+      if (ty->integer.is_signed) {
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "i");
+      } else {
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "u");
+      }
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%zd", ty->integer.width);
+      break;
+    case AST_TYPE_STRING:
+      offset += snprintf(buf, maxlen, "str");
+      break;
+    case AST_TYPE_CHAR:
+      offset += snprintf(buf, maxlen, "char");
+      break;
+    case AST_TYPE_FLOAT:
+      offset += snprintf(buf, maxlen, "float");
+      break;
+    case AST_TYPE_FVEC:
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->fvec.width);
+      break;
+    case AST_TYPE_VOID:
+      offset += snprintf(buf, maxlen, "void");
+      break;
+    case AST_TYPE_ARRAY: {
+      char element_ty[256];
+      type_name_into(ty->array.element_ty, element_ty, 256);
+      offset +=
+          snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty, ty->array.width);
+    } break;
+    case AST_TYPE_CUSTOM:
+      offset += snprintf(buf, maxlen, "%s", ty->name);
+      break;
+    case AST_TYPE_STRUCT: {
+      offset += snprintf(buf, maxlen, "struct %s { ", ty->name);
+      struct ast_struct_field *field = ty->structty.fields;
+      while (field) {
+        if (!strcmp(field->ty->name, ty->name)) {
+          // recursive def
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s%s; ",
+                             field->ty->flags & TYPE_FLAG_PTR ? "*" : "", ty->name);
+        } else {
+          char field_ty[256];
+          type_name_into(field->ty, field_ty, 256);
+          offset +=
+              snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_ty, field->name);
+        }
+        field = field->next;
+      }
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+    } break;
+    case AST_TYPE_NIL:
+      offset += snprintf(buf, maxlen, "nil");
+      break;
+    case AST_TYPE_TEMPLATE:
+      offset += snprintf(buf, maxlen, "template %s", ty->name);
+      break;
+    case AST_TYPE_ENUM:
+      offset += snprintf(buf, maxlen, "enum {\n");
+      struct ast_enum_field *field = ty->enumty.fields;
+      while (field) {
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "  %s", field->name);
+        if (field->has_inner) {
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, "(");
+          offset += type_name_into(&field->inner, buf + offset, maxlen - (size_t)offset);
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
+        }
+        if (field->next) {
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, ",");
+        }
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "\n");
+        field = field->next;
+      }
+
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+
+      break;
+    default:
+      offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
+      return offset;
+  }
+
+  if (ty->flags & TYPE_FLAG_PTR) {
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
+  }
+  if (ty->flags & TYPE_FLAG_CONSTANT) {
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
+  }
+  if (ty->flags & ~(TYPE_FLAG_PTR | TYPE_FLAG_CONSTANT)) {
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %lx)", ty->flags);
+  }
+
+  buf[offset] = '\0';
+  return offset;
+}

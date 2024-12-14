@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  int rc = compiler_run(compiler);
+  int rc = compiler_run(compiler, AllPasses);
   destroy_compiler(compiler);
   return rc;
 }
