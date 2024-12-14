@@ -1,6 +1,8 @@
 
 include(GoogleTest)
 
+add_mattc_library(mattc_vec inputs/vec.mc)
+
 add_executable(vec_test vec_test.cc)
 target_link_libraries(vec_test mattc_compiler_options_no_warnings mattc_vec GTest::gtest_main)
 gtest_discover_tests(vec_test)
