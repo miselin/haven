@@ -1,6 +1,7 @@
 
 #include "codegen.h"
 
+#include <llvm-c-18/llvm-c/TargetMachine.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
@@ -21,6 +22,10 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast);
 static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast);
 
 struct codegen *new_codegen(struct ast_program *ast) {
+  if (initialize_llvm() != 0) {
+    return NULL;
+  }
+
   struct codegen *result = calloc(1, sizeof(struct codegen));
   result->ast = ast;
   result->llvm_context = LLVMContextCreate();
@@ -41,6 +46,24 @@ struct codegen *new_codegen(struct ast_program *ast) {
       result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, "mattc", 5, 0, "", 0,
       0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
 
+  char *error = NULL;
+  LLVMGetTargetFromTriple(LLVMGetDefaultTargetTriple(), &result->llvm_target, &error);
+  if (error) {
+    fprintf(stderr, "error getting target: %s\n", error);
+  }
+  LLVMDisposeMessage(error);
+
+  result->llvm_target_machine =
+      LLVMCreateTargetMachine(result->llvm_target, LLVMGetDefaultTargetTriple(), "generic",
+                              LLVMGetHostCPUFeatures(), LLVMCodeGenLevelDefault /* opt */,
+                              LLVMRelocPIC /* reloc */, LLVMCodeModelDefault /* code model */);
+  LLVMSetTarget(result->llvm_module, LLVMGetDefaultTargetTriple());
+
+  result->llvm_data_layout = LLVMCreateTargetDataLayout(result->llvm_target_machine);
+  char *layout = LLVMCopyStringRepOfTargetData(result->llvm_data_layout);
+  LLVMSetDataLayout(result->llvm_module, layout);
+  LLVMDisposeMessage(layout);
+
   codegen_internal_enter_scope(result, &ast->loc, 0);
 
   return result;
@@ -52,11 +75,11 @@ int codegen_run(struct codegen *codegen) {
   char *error = NULL;
   int rc = LLVMVerifyModule(codegen->llvm_module, LLVMReturnStatusAction, &error);
   if (rc) {
-    fprintf(stderr, "verification failed: %s\n", error);
+    fprintf(stderr, "Internal module verification failed:\n%s\n", error);
   }
   LLVMDisposeMessage(error);
 
-  return 0;
+  return rc;
 }
 
 char *codegen_ir(struct codegen *codegen) {

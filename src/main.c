@@ -60,6 +60,11 @@ int main(int argc, char *argv[]) {
     purity_destroy(purity);
   }
 
+  if (rc) {
+    fprintf(stderr, "== Partial AST after failure ==\n");
+    dump_ast(parser_get_ast(parser));
+  }
+
   if (rc == 0) {
     fprintf(stderr, "== Pre-codegen AST ==\n");
     dump_ast(parser_get_ast(parser));
@@ -67,21 +72,14 @@ int main(int argc, char *argv[]) {
     struct codegen *codegen = new_codegen(parser_get_ast(parser));
     rc = codegen_run(codegen);
     if (rc == 0) {
-      char *ir = codegen_ir(codegen);
-      fprintf(out, "%s\n", ir);
-      codegen_dispose_ir(ir);
-
-      fflush(out);
-      if (out != stdout) {
-        fclose(out);
-      }
+      rc = codegen_emit_ir(codegen, out);
     }
-    destroy_codegen(codegen);
-  }
 
-  if (rc) {
-    fprintf(stderr, "== Partial AST after failure ==\n");
-    dump_ast(parser_get_ast(parser));
+    if (out != stdout) {
+      fclose(out);
+    }
+
+    destroy_codegen(codegen);
   }
 
   destroy_parser(parser);

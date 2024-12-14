@@ -1,5 +1,5 @@
-llvm_map_components_to_libnames(llvm_libs support core analysis)
+llvm_map_components_to_libnames(llvm_libs -18)
 
-add_library(ir STATIC codegen.c binary.c expr.c if.c utils.c fdecl.c vdecl.c match.c)
+add_library(ir STATIC codegen.c binary.c expr.c if.c utils.c fdecl.c vdecl.c match.c emit.c llvm.c)
 target_link_libraries(ir PUBLIC ${llvm_libs})
 target_link_libraries(ir PRIVATE mattc_compiler_options)

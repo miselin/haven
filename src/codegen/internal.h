@@ -1,7 +1,8 @@
 #ifndef _MATTC_CODEGEN_INTERNAL_H
 #define _MATTC_CODEGEN_INTERNAL_H
 
-#include <llvm-c-18/llvm-c/Types.h>
+#include <llvm-c/TargetMachine.h>
+#include <llvm-c/Types.h>
 
 #include "ast.h"
 #include "codegen.h"
@@ -65,6 +66,10 @@ struct codegen {
   struct codegen_block *current_block;
   LLVMMetadataRef file_metadata;
   LLVMMetadataRef compile_unit;
+
+  LLVMTargetRef llvm_target;
+  LLVMTargetMachineRef llvm_target_machine;
+  LLVMTargetDataRef llvm_data_layout;
 };
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
@@ -104,5 +109,7 @@ void update_debug_loc(struct codegen *codegen, struct lex_locator *loc);
 
 // Emits a store, whether through a store instruction or a memcpy intrinsic, based on the type
 void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr);
+
+int initialize_llvm();
 
 #endif
