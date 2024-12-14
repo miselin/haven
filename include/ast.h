@@ -299,6 +299,8 @@ void free_ast(struct ast_program *ast);
 void dump_ast(struct ast_program *ast);
 void dump_expr(struct ast_expr *ast, int indent);
 
+int emit_ast_as_code(struct ast_program *ast, FILE *stream);
+
 void free_toplevel(struct ast_toplevel *ast);
 void free_block(struct ast_block *ast, int heap);
 void free_stmt(struct ast_stmt *ast);
