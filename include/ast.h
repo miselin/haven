@@ -1,5 +1,5 @@
-#ifndef _MATTC_AST_H
-#define _MATTC_AST_H
+#ifndef _HAVEN_AST_H
+#define _HAVEN_AST_H
 
 #include <stddef.h>
 #include <stdint.h>

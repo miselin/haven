@@ -1,7 +1,7 @@
 /**
  * @file typecheck.h
  * @author Matt Iselin (matthew@theiselins.net)
- * @brief MattC type checking pass
+ * @brief Haven type checking pass
  * @version 0.1
  * @date 2024-12-06
  *
@@ -13,8 +13,8 @@
  * is fully annotated and ready for code generation.
  */
 
-#ifndef _MATTC_TYPECHECK_H
-#define _MATTC_TYPECHECK_H
+#ifndef _HAVEN_TYPECHECK_H
+#define _HAVEN_TYPECHECK_H
 
 #include "ast.h"
 

@@ -1,5 +1,5 @@
-#ifndef _MATTC_UTILITY_H
-#define _MATTC_UTILITY_H
+#ifndef _HAVEN_UTILITY_H
+#define _HAVEN_UTILITY_H
 
 // ensures alignment to the given number of bytes
 #define ALIGNED(x) alignas((x))

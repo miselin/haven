@@ -1,3 +1,3 @@
 
-add_subdirectory(mattc)
-add_subdirectory(mattfmt)
+add_subdirectory(haven)
+add_subdirectory(havenfmt)

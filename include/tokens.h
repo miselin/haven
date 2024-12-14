@@ -1,5 +1,5 @@
-#ifndef _MATTC_TOKENS_H
-#define _MATTC_TOKENS_H
+#ifndef _HAVEN_TOKENS_H
+#define _HAVEN_TOKENS_H
 
 enum token_id {
   TOKEN_UNKNOWN = 0,

@@ -46,8 +46,8 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
   result->file_metadata = LLVMDIBuilderCreateFile(result->llvm_dibuilder, ast->loc.file,
                                                   strlen(ast->loc.file), "examples", 8);
   result->compile_unit = LLVMDIBuilderCreateCompileUnit(
-      result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, "mattc", 5, 0, "", 0,
-      0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
+      result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, COMPILER_IDENT, 5, 0,
+      "", 0, 0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
 
   char *triple = LLVMGetDefaultTargetTriple();
 

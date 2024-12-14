@@ -1,5 +1,5 @@
-#ifndef _MATTC_SEMANTIC_H
-#define _MATTC_SEMANTIC_H
+#ifndef _HAVEN_SEMANTIC_H
+#define _HAVEN_SEMANTIC_H
 
 #include "ast.h"
 

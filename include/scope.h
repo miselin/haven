@@ -1,5 +1,5 @@
-#ifndef _MATTC_SCOPE_H
-#define _MATTC_SCOPE_H
+#ifndef _HAVEN_SCOPE_H
+#define _HAVEN_SCOPE_H
 
 struct scope;
 

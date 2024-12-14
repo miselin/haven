@@ -1,5 +1,5 @@
-#ifndef _MATTC_CODEGEN_H
-#define _MATTC_CODEGEN_H
+#ifndef _HAVEN_CODEGEN_H
+#define _HAVEN_CODEGEN_H
 
 #include "ast.h"
 

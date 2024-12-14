@@ -9,8 +9,8 @@
  *
  */
 
-#ifndef _MATTC_CFOLD_H
-#define _MATTC_CFOLD_H
+#ifndef _HAVEN_CFOLD_H
+#define _HAVEN_CFOLD_H
 
 #include "ast.h"
 

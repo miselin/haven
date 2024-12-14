@@ -1,5 +1,5 @@
-#ifndef _MATTC_PURITY_H
-#define _MATTC_PURITY_H
+#ifndef _HAVEN_PURITY_H
+#define _HAVEN_PURITY_H
 
 #include "ast.h"
 

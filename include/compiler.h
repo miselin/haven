@@ -1,10 +1,10 @@
-#ifndef _MATTC_COMPILER_H
-#define _MATTC_COMPILER_H
+#ifndef _HAVEN_COMPILER_H
+#define _HAVEN_COMPILER_H
 
 #include <stdarg.h>
 #include <stdint.h>
 
-#define COMPILER_IDENT "mattc"
+#define COMPILER_IDENT "haven"
 
 enum OptLevel { OptNone, OptLight, OptNormal, OptAggressive };
 

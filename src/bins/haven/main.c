@@ -1,8 +1,7 @@
-/* mattc entry point: compiles MattC code into LLVM IR. */
+/* haven entry point: frontend driver for Haven. */
 
 #include <stdio.h>
 
-#include "ast.h"
 #include "cfold.h"
 #include "codegen.h"
 #include "compiler.h"
@@ -18,12 +17,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  int rc = compiler_run(compiler, PassParse);
-  if (rc == 0) {
-    struct ast_program *ast = compiler_get_ast(compiler);
-    emit_ast_as_code(ast, stdout);
-  }
-
+  int rc = compiler_run(compiler, AllPasses);
   destroy_compiler(compiler);
   return rc;
 }

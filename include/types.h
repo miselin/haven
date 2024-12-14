@@ -9,8 +9,8 @@
  *
  */
 
-#ifndef _MATTC_TYPES_H
-#define _MATTC_TYPES_H
+#ifndef _HAVEN_TYPES_H
+#define _HAVEN_TYPES_H
 
 #include <stddef.h>
 #include <stdint.h>

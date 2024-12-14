@@ -49,31 +49,31 @@ static void BM_GLMScale(benchmark::State& state) {
   }
 }
 
-static void BM_MattCAdd(benchmark::State& state) {
+static void BM_HavenAdd(benchmark::State& state) {
   for (auto _ : state) {
     benchmark::DoNotOptimize(vadd(av, bv));
   }
 }
 
-static void BM_MattCCrossProduct(benchmark::State& state) {
+static void BM_HavenCrossProduct(benchmark::State& state) {
   for (auto _ : state) {
     benchmark::DoNotOptimize(vcross(av, bv));
   }
 }
 
-static void BM_MattCDotProduct(benchmark::State& state) {
+static void BM_HavenDotProduct(benchmark::State& state) {
   for (auto _ : state) {
     benchmark::DoNotOptimize(vdot(av, bv));
   }
 }
 
-static void BM_MattCNormalize(benchmark::State& state) {
+static void BM_HavenNormalize(benchmark::State& state) {
   for (auto _ : state) {
     benchmark::DoNotOptimize(vnorm(av));
   }
 }
 
-static void BM_MattCScale(benchmark::State& state) {
+static void BM_HavenScale(benchmark::State& state) {
   for (auto _ : state) {
     benchmark::DoNotOptimize(vscale(av, 5.0f));
   }
@@ -84,10 +84,10 @@ BENCHMARK(BM_GLMCrossProduct);
 BENCHMARK(BM_GLMDotProduct);
 BENCHMARK(BM_GLMNormalize);
 BENCHMARK(BM_GLMScale);
-BENCHMARK(BM_MattCAdd);
-BENCHMARK(BM_MattCCrossProduct);
-BENCHMARK(BM_MattCDotProduct);
-BENCHMARK(BM_MattCNormalize);
-BENCHMARK(BM_MattCScale);
+BENCHMARK(BM_HavenAdd);
+BENCHMARK(BM_HavenCrossProduct);
+BENCHMARK(BM_HavenDotProduct);
+BENCHMARK(BM_HavenNormalize);
+BENCHMARK(BM_HavenScale);
 
 BENCHMARK_MAIN();

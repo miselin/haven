@@ -1,3 +1,5 @@
-# MattC Language
+# The Haven Programming Language
 
-A programming language just for me.
+Designed for systems programming and other low-level environments.
+
+[Language Overview](language.md)

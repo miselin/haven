@@ -1,5 +1,5 @@
-#ifndef _MATTC_LEXER_INTERNAL_H
-#define _MATTC_LEXER_INTERNAL_H
+#ifndef _HAVEN_LEXER_INTERNAL_H
+#define _HAVEN_LEXER_INTERNAL_H
 
 #include <stddef.h>
 #include <stdio.h>

@@ -1,5 +1,5 @@
-#ifndef _MATTC_PARSE_H
-#define _MATTC_PARSE_H
+#ifndef _HAVEN_PARSE_H
+#define _HAVEN_PARSE_H
 
 #include "ast.h"
 #include "compiler.h"

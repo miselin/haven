@@ -9,6 +9,6 @@ add_subdirectory(types)
 
 add_library(compiler STATIC compiler.c)
 target_link_libraries(compiler PUBLIC lexer parser ir passes)
-target_link_libraries(compiler PRIVATE mattc_compiler_options)
+target_link_libraries(compiler PRIVATE haven_compiler_options)
 
 add_subdirectory(bins)

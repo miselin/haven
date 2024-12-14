@@ -1,5 +1,5 @@
-#ifndef _MATTC_KV_H
-#define _MATTC_KV_H
+#ifndef _HAVEN_KV_H
+#define _HAVEN_KV_H
 
 struct kv;
 

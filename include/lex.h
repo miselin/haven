@@ -1,5 +1,5 @@
-#ifndef _MATTC_LEX_H
-#define _MATTC_LEX_H
+#ifndef _HAVEN_LEX_H
+#define _HAVEN_LEX_H
 
 #include <stddef.h>
 #include <stdint.h>

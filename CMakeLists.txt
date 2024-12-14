@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(mattc C CXX ASM)
+project(haven C CXX ASM)
 
 include("CMakeDependentOption")
 

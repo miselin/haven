@@ -1,5 +1,5 @@
-#ifndef _MATTC_TRIE_H
-#define _MATTC_TRIE_H
+#ifndef _HAVEN_TRIE_H
+#define _HAVEN_TRIE_H
 
 struct trie;
 

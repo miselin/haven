@@ -1,5 +1,5 @@
-#ifndef _MATTC_CODEGEN_INTERNAL_H
-#define _MATTC_CODEGEN_INTERNAL_H
+#ifndef _HAVEN_CODEGEN_INTERNAL_H
+#define _HAVEN_CODEGEN_INTERNAL_H
 
 #include <llvm-c/TargetMachine.h>
 #include <llvm-c/Types.h>
