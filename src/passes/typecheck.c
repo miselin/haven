@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "ast.h"
+#include "compiler.h"
 #include "kv.h"
 #include "scope.h"
 #include "types.h"
@@ -65,12 +66,15 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to);
 __attribute__((format(printf, 3, 4))) static void typecheck_diag_expr(struct typecheck *typecheck,
                                                                       struct ast_expr *expr,
                                                                       const char *msg, ...) {
-  fprintf(stderr, "%s:%zu:%zu: ", expr->loc.file, expr->loc.line, expr->loc.column);
+  char msgbuf[1024];
 
   va_list args;
   va_start(args, msg);
-  vfprintf(stderr, msg, args);
+  vsprintf(msgbuf, msg, args);
   va_end(args);
+
+  compiler_diag(typecheck->compiler, DiagError, "%s:%zu:%zu: %s", expr->loc.file, expr->loc.line,
+                expr->loc.column, msgbuf);
 
   ++typecheck->errors;
 }
