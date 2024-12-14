@@ -348,6 +348,8 @@ static const char *outext(struct compiler *compiler) {
     case OutputObject:
       return "o";
   }
+
+  return "o";
 }
 
 static void color(struct compiler *compiler, enum Color color, enum Attribute attr) {
