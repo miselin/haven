@@ -206,9 +206,20 @@ static struct ast_expr *cfold_unary(struct ast_expr *unary) {
           folded = 1;
         } break;
         case AST_TYPE_FLOAT: {
-          char buf[256] = {0};
-          strcpy(buf, inner->constant.constant.value.floatv.buf);
-          snprintf(new_expr->constant.constant.value.floatv.buf, 256, "-%s", buf);
+          char *old_buf = inner->constant.constant.value.floatv.buf;
+          char *new_buf = new_expr->constant.constant.value.floatv.buf;
+
+          if (strlen(old_buf) >= 255) {
+            // constant is too long, don't bother
+            break;
+          }
+
+          if (old_buf[0] == '-') {
+            strcpy(new_buf, old_buf + 1);
+          } else {
+            new_buf[0] = '-';
+            strncpy(new_buf + 1, old_buf, 255);
+          }
           folded = 1;
         } break;
 
