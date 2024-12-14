@@ -1,6 +1,2 @@
-*.bin
-*.ll
-*.ir
-*.o
-*.preproc
-*.s
+*
+!*.mc

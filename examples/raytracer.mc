@@ -21,8 +21,8 @@ pub fn float powf(float a, float b);
 pub impure fn i32 rand();
 pub fn i32 exit(i32 code);
 
-pub fn fvec3 S(fvec3 o, fvec3 d);
-pub fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n);
+pub impure fn fvec3 S(fvec3 o, fvec3 d);
+pub impure fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n);
 
 pub impure fn float R() {
     (as float rand()) / RAND_MAX
@@ -84,7 +84,6 @@ pub impure fn i32 main() {
         iter xdim:0:-1 x {
             let mut p = <13.0, 13.0, 13.0>;
 
-            // 64 rays per pixel
             iter 0:64 r {
                 let t = {
                     {
@@ -117,15 +116,12 @@ pub impure fn i32 main() {
                         vnorm(outer)
                     };
 
-                    // printf("o=%.2f %.2f %.2f d=%.2f %.2f %.2f\n", origin.x, origin.y, origin.z, dir.x, dir.y, dir.z);
-
                     S(origin, dir) * 3.5
                 };
 
                 p = p + contrib;
             };
 
-            // printf("%f %f %f\n", p.x, p.y, p.z);
             printf("%c%c%c", as i32 p.x, as i32 p.y, as i32 p.z);
         };
     };
@@ -207,13 +203,10 @@ pub impure fn i8 T(fvec3 o, fvec3 d, float *t, fvec3 *n) {
     };
 
     iter 20:0:-1 k_ {
-        let k = k_ - 1; // make it really 19..0
+        let k = k_ - 1;
 
-        // I think there's an actual bug in the business card raytracer
-        // It iterates j from 9 downwards but the G array has 9 elements (i.e. 8 is the highest index)
-        // Fixing it here...
         iter 9:0:-1 j_ {
-            let j = j_ - 1; // make it really 8..0 // TODO: there's a bug here - 9:0:-1 will skip zero!
+            let j = j_ - 1;
 
             let bit = 1 << k;
             let lookup = as i64 G[j];
