@@ -159,4 +159,6 @@ const char *token_id_to_string(enum token_id token) {
     case TOKEN_EOF:
       return "<EOF>";
   }
+
+  return "<unknown>";
 }

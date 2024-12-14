@@ -66,6 +66,11 @@ if (UNIX AND NOT IOS AND NOT ANDROID)
     if (NOT APPLE)
         target_link_libraries(cmake_base_compiler_options INTERFACE -Wl,-z,defs -Wl,-z,now -Wl,-z,relro)
     endif ()
+
+    if (COVERAGE)
+        target_compile_options(cmake_base_compiler_options INTERFACE -coverage)
+        target_link_libraries(cmake_base_compiler_options INTERFACE -coverage)
+    endif ()
 elseif (MSVC)
     # Add some common definitions - e.g. don't put min() and max() in the
     # global namespace.
