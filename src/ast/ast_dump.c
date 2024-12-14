@@ -98,7 +98,8 @@ static void dump_block(struct ast_block *ast, int indent) {
     dump_stmt(stmt, indent + 2);
     stmt = stmt->next;
   }
-  INDENTED(indent, "}");
+  INDENTED(indent, "} -> ");
+  dump_ty(&ast->ty);
 }
 
 static void dump_stmt(struct ast_stmt *ast, int indent) {

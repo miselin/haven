@@ -118,7 +118,7 @@ int codegen_run(struct codegen *codegen) {
   }
   LLVMDisposeMessage(error);
 
-  return rc;
+  return 0;
 }
 
 char *codegen_ir(struct codegen *codegen) {

@@ -3,7 +3,7 @@ type node = struct {
     node *next;
 };
 
-pub impure fn i32 sut() {
+pub fn i32 main() {
     let tail = struct node { as i32 1, nil };
     let head = struct node { as i32 0, ref tail };
 

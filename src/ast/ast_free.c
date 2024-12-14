@@ -35,12 +35,14 @@ void free_block(struct ast_block *ast, int heap) {
     stmt = next;
   }
 
+  free_ty(&ast->ty, 0);
   if (heap) {
     free(ast);
   }
 }
 
 void free_stmt(struct ast_stmt *ast) {
+  fprintf(stderr, "free stmt %d\n", ast->type);
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
       free_expr(ast->expr);
@@ -187,6 +189,9 @@ void free_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_NIL:
+      // always references an existing type that will be freed elsewhere
+      free(ast);
+      return;
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH:
@@ -203,7 +208,9 @@ void free_expr(struct ast_expr *ast) {
       fprintf(stderr, "unhandled free for expr type %d\n", ast->type);
   }
 
+  fprintf(stderr, "free expr %d\n", ast->type);
   free_ty(&ast->ty, 0);
+  fprintf(stderr, "done!\n");
   free(ast);
 }
 
@@ -227,9 +234,12 @@ void free_fdecl(struct ast_fdecl *ast, int heap) {
 }
 
 void free_vdecl(struct ast_vdecl *ast, int heap) {
+  fprintf(stderr, "hallo\n");
   if (ast->init_expr) {
     free_expr(ast->init_expr);
   }
+
+  fprintf(stderr, "free ty\n");
 
   free_ty(&ast->ty, 0);
   if (heap) {
@@ -238,6 +248,7 @@ void free_vdecl(struct ast_vdecl *ast, int heap) {
 }
 
 void free_tydecl(struct ast_tydecl *ast, int heap) {
+  fprintf(stderr, "free_tydecl\n");
   free_ty(&ast->ty, 0);
   if (heap) {
     free(ast);
@@ -251,8 +262,10 @@ void free_ty(struct ast_ty *ty, int heap) {
   }
 
   if (ty->ty == AST_TYPE_STRUCT) {
+    fprintf(stderr, "free struct ty %p\n", (void *)ty);
     struct ast_struct_field *field = ty->structty.fields;
     while (field) {
+      fprintf(stderr, " -> %p\n", (void *)field);
       struct ast_struct_field *next = field->next;
       free_ty(field->ty, 1);
       free(field);
@@ -282,6 +295,7 @@ void free_ty(struct ast_ty *ty, int heap) {
 }
 
 void free_expr_list(struct ast_expr_list *list) {
+  fprintf(stderr, "free expr list %p\n", (void *)list);
   struct ast_expr_list *node = list;
   while (node) {
     struct ast_expr_list *next = node->next;

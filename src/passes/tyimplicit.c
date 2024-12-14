@@ -55,6 +55,7 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
       if (rc < 0) {
         return -1;
       }
+
       total += rc;
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
@@ -90,6 +91,7 @@ static int typecheck_implicit_struct_decl(struct ast_ty *decl) {
 
 static int typecheck_implicit_block(struct ast_block *ast) {
   struct ast_stmt *stmt = ast->stmt;
+  struct ast_stmt *last_stmt = NULL;
   int total = 0;
   while (stmt) {
     int rc = typecheck_implicit_stmt(stmt);
@@ -97,7 +99,12 @@ static int typecheck_implicit_block(struct ast_block *ast) {
       return -1;
     }
     total += rc;
+    last_stmt = stmt;
     stmt = stmt->next;
+  }
+
+  if (last_stmt && last_stmt->type == AST_STMT_TYPE_EXPR) {
+    total += maybe_implicitly_convert(&last_stmt->expr->ty, &ast->ty);
   }
 
   return total;
@@ -236,7 +243,12 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      return typecheck_implicit_block(&ast->block);
+      int rc = typecheck_implicit_block(&ast->block);
+      if (rc < 0) {
+        return -1;
+      }
+
+      return rc + maybe_implicitly_convert(&ast->block.ty, &ast->ty);
     } break;
 
     case AST_EXPR_TYPE_CALL: {

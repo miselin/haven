@@ -9,3 +9,4 @@
 - [ ] figure out a better way to handle attribute valeus like "argmem: readwrite" which are now just a hardcoded constant
 - [x] ranges stop before the terminal value (e.g. 10..0..-1's last iteration is 1)
 - [ ] finish on generic enums (for option types and such), some initial code is in there
+- [ ] `let node *p = ...` fails to parse (unexpected token \*)

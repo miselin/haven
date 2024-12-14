@@ -101,12 +101,14 @@ int typecheck_run(struct typecheck *typecheck) {
   }
   int rc = 0;
   while (1) {
+    fprintf(stderr, "implicit pass...\n");
     rc = typecheck_implicit_ast(typecheck->ast);
     if (rc < 0) {
       return 1;
     }
 
     if (rc == 0) {
+      fprintf(stderr, "no implicit conversions, ending implicit conversion pass\n");
       break;
     }
   }
@@ -300,7 +302,7 @@ static struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_bl
   typecheck->scope = enter_scope(typecheck->scope);
 
   struct ast_stmt *stmt = ast->stmt;
-  struct ast_ty *last_ty = &typecheck->void_type;
+  struct ast_ty *last_ty = NULL;
 
   while (stmt) {
     struct ast_ty *ty = typecheck_stmt(typecheck, stmt);
@@ -308,14 +310,18 @@ static struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_bl
       return NULL;
     }
 
-    if (!stmt->next) {
-      last_ty = ty;
-    }
+    last_ty = ty;
     stmt = stmt->next;
   }
 
+  if (!last_ty) {
+    last_ty = &typecheck->void_type;
+  }
+
   typecheck->scope = exit_scope(typecheck->scope);
-  return last_ty;
+
+  ast->ty = resolve_type(typecheck, last_ty);
+  return &ast->ty;
 }
 
 static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast) {
@@ -353,6 +359,10 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
                             ast->let.ident.value.identv.ident, initstr, tystr);
         ++typecheck->errors;
       }
+
+      // fully resolve the let type now that the initializer is known
+      struct ast_ty resolved = resolve_type(typecheck, &ast->let.ty);
+      ast->let.ty = resolved;
     } break;
 
     case AST_STMT_TYPE_ITER: {
@@ -556,6 +566,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         field = field->next;
       }
 
+      // original got copied when we resolved
       *ast->ty.array.element_ty = resolved;
       return ast->ty.array.element_ty;
     } break;
@@ -1247,6 +1258,10 @@ static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
 }
 
 static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
+  if (ty == &typecheck->void_type) {
+    return *ty;
+  }
+
   if (ty->ty != AST_TYPE_CUSTOM) {
     return copy_type(ty);
   }
@@ -1313,6 +1328,8 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
     }
 
     if (from->flags & TYPE_FLAG_CONSTANT && to->flags & TYPE_FLAG_CONSTANT) {
+      int conversion = from->integer.width != to->integer.width;
+
       // swap from/to so the result is the highest width
       if (from->integer.width > to->integer.width) {
         to->integer.width = from->integer.width;
@@ -1320,7 +1337,7 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
         from->integer.width = to->integer.width;
       }
 
-      return from->integer.width != to->integer.width;
+      return conversion;
     }
 
     // don't propagate constant type in the wrong direction

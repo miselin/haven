@@ -229,9 +229,10 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
     char *dot = strrchr((char *)into->output_file, '.');
     if (!dot) {
       strcat((char *)into->output_file, ".");
-      dot = (char *)into->output_file;
+    } else {
+      *(dot + 1) = '\0';
     }
-    strcat(dot, outext(into));
+    strcat((char *)into->output_file, outext(into));
   }
 
   if (into->flags[0] & FLAG_VERBOSE) {
@@ -364,6 +365,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     struct codegen *codegen = new_codegen(parser_get_ast(parser), compiler);
     rc = codegen_run(codegen);
     if (rc == 0) {
+      codegen_emit_ir(codegen, stderr);
       switch (compiler->output_format) {
         case OutputIR:
           rc = codegen_emit_ir(codegen, out);

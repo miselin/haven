@@ -124,6 +124,7 @@ struct ast_expr_constant {
 struct ast_block {
   struct ast_stmt *stmt;
   struct lex_locator loc;
+  struct ast_ty ty;
 };
 
 struct ast_expr_binary {
