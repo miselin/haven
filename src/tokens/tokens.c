@@ -156,6 +156,9 @@ const char *token_id_to_string(enum token_id token) {
       return "impure";
     case TOKEN_COLONCOLON:
       return "::";
+    case TOKEN_COMMENTLINE:
+    case TOKEN_COMMENTLONG:
+      return "comment";
     case TOKEN_EOF:
       return "<EOF>";
   }

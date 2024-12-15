@@ -103,9 +103,18 @@ int lexer_token(struct lex_state *state, struct token *token) {
     case '*':
       token->ident = TOKEN_ASTERISK;
       break;
-    case '/':
+    case '/': {
+      char next = lex_getc(state);
+      if (next == '*') {
+        // block comment
+        return lex_block_comment(state, token);
+      } else if (next == '/') {
+        // line comment
+        return lex_line_comment(state, token);
+      }
+
       token->ident = TOKEN_FSLASH;
-      break;
+    } break;
     case '%':
       token->ident = TOKEN_PERCENT;
       break;

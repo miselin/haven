@@ -146,9 +146,13 @@ void destroy_parser(struct parser *parser) {
 }
 
 static enum token_id parser_peek(struct parser *parser) {
-  if (parser->peek.ident == 0) {
+  // Eat comments - but in the future we will want to carry them with the AST
+  while (parser->peek.ident == 0 || parser->peek.ident == TOKEN_COMMENTLINE ||
+         parser->peek.ident == TOKEN_COMMENTLONG) {
     int rc = lexer_token(parser->lexer, &parser->peek);
     if (rc < 0) {
+      return TOKEN_UNKNOWN;
+    } else if (parser->peek.ident == TOKEN_UNKNOWN) {
       return TOKEN_UNKNOWN;
     }
   }

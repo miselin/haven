@@ -60,6 +60,12 @@ int lex_vector_type(struct lex_state *state, struct token *token);
 // lex a string literal
 int lex_string_literal(struct lex_state *state, struct token *token);
 
+// lex a block comment (/* ... */)
+int lex_block_comment(struct lex_state *state, struct token *token);
+
+// lex a line comment (// ...)
+int lex_line_comment(struct lex_state *state, struct token *token);
+
 int initialize_keyword_trie(struct lex_state *state);
 int destroy_keyword_trie(struct lex_state *state);
 
