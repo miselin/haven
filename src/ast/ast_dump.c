@@ -170,10 +170,6 @@ void dump_expr(struct ast_expr *ast, int indent) {
           fprintf(stderr, "%s", ast->constant.constant.value.floatv.buf);
           break;
 
-        case AST_TYPE_CHAR:
-          fprintf(stderr, "'%c'", ast->constant.constant.value.charv.c);
-          break;
-
         case AST_TYPE_STRING:
           fprintf(stderr, "\"%s\"", ast->constant.constant.value.strv.s);
           break;

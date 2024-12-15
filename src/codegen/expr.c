@@ -31,9 +31,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       switch (ast->ty.ty) {
         case AST_TYPE_INTEGER:
           return LLVMConstInt(const_ty, ast->constant.constant.value.intv.val, 0);
-        case AST_TYPE_CHAR:
-          return LLVMConstInt(const_ty, (unsigned long long)ast->constant.constant.value.charv.c,
-                              0);
         case AST_TYPE_STRING: {
           LLVMValueRef str = LLVMAddGlobal(
               codegen->llvm_module,

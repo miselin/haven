@@ -196,9 +196,6 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
     case AST_TYPE_STRING:
       offset += snprintf(buf, maxlen, "str");
       break;
-    case AST_TYPE_CHAR:
-      offset += snprintf(buf, maxlen, "char");
-      break;
     case AST_TYPE_FLOAT:
       offset += snprintf(buf, maxlen, "float");
       break;
@@ -318,8 +315,6 @@ size_t type_size(struct ast_ty *ty) {
   switch (ty->ty) {
     case AST_TYPE_INTEGER:
       return ty->integer.width / 8;
-    case AST_TYPE_CHAR:
-      return 1;
     case AST_TYPE_FLOAT:
       return 4;
     case AST_TYPE_FVEC:
@@ -430,9 +425,6 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       break;
     case AST_TYPE_STRING:
       offset += snprintf(buf, maxlen, "str");
-      break;
-    case AST_TYPE_CHAR:
-      offset += snprintf(buf, maxlen, "char");
       break;
     case AST_TYPE_FLOAT:
       offset += snprintf(buf, maxlen, "float");

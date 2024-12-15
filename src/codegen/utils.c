@@ -89,9 +89,6 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
           inner = LLVMIntTypeInContext(codegen->llvm_context, (unsigned int)ty->integer.width);
       }
       break;
-    case AST_TYPE_CHAR:
-      inner = LLVMInt8TypeInContext(codegen->llvm_context);
-      break;
     case AST_TYPE_STRING:
       inner = LLVMPointerTypeInContext(codegen->llvm_context, 0);
       break;

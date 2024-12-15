@@ -6,30 +6,30 @@
 - [x] let
 - [x] iter
 - [x] store
-- [ ] ret
+- [x] ret
 - [x] defer
 
 ## Expressions
 
-- [ ] constant
+- [x] constant
   - [x] int
-  - [ ] string
+  - [x] string
   - [x] float
-  - [ ] char
-- [ ] block
+  - [x] char
+- [x] block
 - [x] binary expr
   - [x] precedence
   - [x] short circuiting
 - [x] variable
-- [ ] deref
+- [x] deref
   - [x] vec deref
-  - [ ] struct deref
+  - [x] struct deref
 - [x] call
-- [ ] void
+- [x] void
 - [x] cast
-- [ ] unary
+- [x] unary
 - [x] if
-- [ ] assign
+- [x] assign
 - [x] ref
 - [x] load
 - [x] array index

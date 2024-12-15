@@ -33,7 +33,6 @@ enum ast_ty_id {
   AST_TYPE_TBD,  // yet to be determined by type checking pass
   AST_TYPE_INTEGER,
   AST_TYPE_STRING,
-  AST_TYPE_CHAR,
   AST_TYPE_FLOAT,
   AST_TYPE_FVEC,
   AST_TYPE_VOID,

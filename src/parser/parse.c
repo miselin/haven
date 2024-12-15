@@ -675,7 +675,9 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       } else if (peek == TOKEN_STRING) {
         result->ty.ty = AST_TYPE_STRING;
       } else if (peek == TOKEN_CHAR) {
-        result->ty.ty = AST_TYPE_CHAR;
+        result->ty.ty = AST_TYPE_INTEGER;
+        result->ty.integer.is_signed = 1;
+        result->ty.integer.width = 8;
       } else if (peek == TOKEN_FLOAT) {
         result->ty.ty = AST_TYPE_FLOAT;
       }
@@ -906,7 +908,9 @@ static struct ast_ty parse_type(struct parser *parser) {
   } else if (peek == TOKEN_TY_CHAR) {
     parser_consume(parser, &token, TOKEN_TY_CHAR);
 
-    result.ty = AST_TYPE_CHAR;
+    result.ty = AST_TYPE_INTEGER;
+    result.integer.is_signed = 1;
+    result.integer.width = 8;
   } else if (peek == TOKEN_TY_FLOAT) {
     parser_consume(parser, &token, TOKEN_TY_FLOAT);
 
