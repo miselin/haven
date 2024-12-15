@@ -159,6 +159,8 @@ const char *token_id_to_string(enum token_id token) {
     case TOKEN_COMMENTLINE:
     case TOKEN_COMMENTLONG:
       return "comment";
+    case TOKEN_NEWLINE:
+      return "<NL>";
     case TOKEN_EOF:
       return "<EOF>";
   }

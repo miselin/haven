@@ -50,6 +50,7 @@ enum token_id {
   TOKEN_COLONCOLON,   // ::
   TOKEN_COMMENTLONG,  // /* ... */
   TOKEN_COMMENTLINE,  // //
+  TOKEN_NEWLINE,      // \n
 
   // keywords
   TOKEN_KW_PUB = 100,  // pub

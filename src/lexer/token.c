@@ -41,6 +41,12 @@ int lexer_token(struct lex_state *state, struct token *token) {
   }
 
   while (isspace(c)) {
+    if (c == '\n') {
+      lexer_locate(state, &token->loc);
+      token->ident = TOKEN_NEWLINE;
+      return 0;
+    }
+
     c = lex_getc(state);
   }
 

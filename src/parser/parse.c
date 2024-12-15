@@ -145,7 +145,8 @@ void destroy_parser(struct parser *parser) {
   free(parser);
 }
 
-static enum token_id parser_peek(struct parser *parser) {
+// peeks the next token in the stream, without skipping over newlines
+static enum token_id parser_peek_with_nl(struct parser *parser) {
   // Eat comments - but in the future we will want to carry them with the AST
   while (parser->peek.ident == 0 || parser->peek.ident == TOKEN_COMMENTLINE ||
          parser->peek.ident == TOKEN_COMMENTLONG) {
@@ -160,9 +161,23 @@ static enum token_id parser_peek(struct parser *parser) {
   return parser->peek.ident;
 }
 
+// peeks the next token in the stream, skipping over newlines
+static enum token_id parser_peek(struct parser *parser) {
+  enum token_id peeked = TOKEN_UNKNOWN;
+  do {
+    peeked = parser_peek_with_nl(parser);
+    if (peeked == TOKEN_NEWLINE) {
+      // eat it.
+      parser->peek.ident = TOKEN_UNKNOWN;
+    }
+  } while (peeked == TOKEN_NEWLINE);
+
+  return peeked;
+}
+
 static enum token_id parser_consume(struct parser *parser, struct token *token,
                                     enum token_id expected) {
-  enum token_id rc = parser_peek(parser);
+  enum token_id rc = expected == TOKEN_NEWLINE ? parser_peek_with_nl(parser) : parser_peek(parser);
   if (rc == TOKEN_UNKNOWN || parser->peek.ident <= 0) {
     parser_diag(1, parser, NULL, "unexpected EOF or other error in token stream\n");
     return TOKEN_UNKNOWN;
@@ -372,7 +387,7 @@ static struct ast_toplevel *parser_parse_preproc(struct parser *parser) {
   parser_consume(parser, NULL, TOKEN_POUND);
 
   // what's next?
-  enum token_id peek = parser_peek(parser);
+  enum token_id peek = parser_peek_with_nl(parser);
   switch (peek) {
     case TOKEN_INTEGER:
       // line number update - <int> <filename>
@@ -390,18 +405,30 @@ static struct ast_toplevel *parser_parse_preproc(struct parser *parser) {
       lexer_update_loc(parser->lexer, &loc);
 
       // consume the flags (if any) -- TODO: use the flags
-      while (parser_peek(parser) == TOKEN_INTEGER) {
+      while (parser_peek_with_nl(parser) == TOKEN_INTEGER) {
         parser_consume(parser, NULL, TOKEN_INTEGER);
       }
 
       break;
 
     default:
-      free(decl);
-      parser_diag(1, parser, NULL, "unexpected token %s in preprocessor line\n",
-                  token_id_to_string(peek));
-      return NULL;
+      // unknown decl, just eat it
+      break;
   }
+
+  // eat whatever remains in the preprocessor definition
+  while (1) {
+    peek = parser_peek_with_nl(parser);
+    if (peek == TOKEN_NEWLINE) {
+      break;
+    }
+
+    parser_consume(parser, NULL, peek);
+  }
+
+  fprintf(stderr, "done going to consume newline\n");
+  parser_consume(parser, NULL, TOKEN_NEWLINE);
+  fprintf(stderr, "yay\n");
 
   return decl;
 }
