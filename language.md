@@ -1,241 +1,446 @@
-```
-pub i32 x = 0; /* global definition, publicly visible */
-extern i32 y; /* external reference */
+# Haven Language Overview
 
-i32 z = 2; /* private definition, not publicly visible */
+## Key Characteristics
 
-// internal, not publicly visible
-fn i32 add(i32 a, i32 b) {
-    + a b // last statement is the return value; it is allowed to have no semicolon
-}
+### Interopability
 
-fn i32 another(i32 a) {
-    match a {
-        0 => 1
-        1 => 2
-        2 => 3
-        _ => -1
-    }
-}
+Haven is designed from the outset for interopability with C and other low-level languages.
 
-// publicly visible
-pub fn i32 main() {
-    i32 mut result = 0; // mut modifier creates a mutable value
-    result = + add(x, another(3)) z;
-    result
-}
-```
+### Default Const
+
+In Haven, mutability is opt-in, not opt-out. Variables that you expect to modify must be annotated as mutable.
+
+### Default Pure
+
+All functions are assumed "pure" (they do not read or write memory) unless explicitly annotated as `impure`.
 
 ## Types
 
-Core types:
+### Integers
 
-- `iN` = integer of N bits
-- `uN` = unsigned integer of N bits
-- `str` = string of ASCII characters
+To type a variable as a signed integer N bits wide, use `iN`:
 
-Builtin type aliases:
+- `i32` defines a 32-bit signed integer
+- `i8` defines an 8-bit signed integer
 
-- `char` = `i8`
-- `bool` = `u1`
+For an unsigned integer, use a `u` prefix instead of `i`.
 
-Custom type aliasing:
+### Floats
 
-```
-type <new-ty> = <ty>;
-```
+Use the type `float` for floating-point numbers.
 
-Structured types:
+### Vectors
 
-```
-struct [packed] <name> = {
-    /* type declarations */
-};
-```
+Haven offers a `fvecN` type defining a vector of floating point numbers.
 
-An optional alignment overrides the minimum alignment required for elements. For example, `1` would generate a "packed" struct.
+Vectors can be used with binary expressions and optimize to parallel arithmetic where available on the target machine.
 
-This creates a type alias `<name>` which can then be used anywhere a `<ty>` is expected.
-
-Arrays:
+For example, the following function returns a new vector with the result of element-wise addition of the two input vectors.
 
 ```
-<ty> <name>[<dimension>];
-```
-
-Pointers:
-
-```
-<ty> *
-```
-
-TODO: function pointers?
-
-## Modifiers
-
-- `pub` = make the declaration visible outside of this translation unit. Can only be used at file scope.
-- `mut` = make the declaration mutable, allowing its value to change in the current scope. Declarations are default-const.
-
-## Declarations
-
-### Variable
-
-```
-[vis] <ty> [mut] <name> [= <init-expr>];
-```
-
-This creates a fully-typed variable named `<name>`. At file scope, `<init-expr>` must be constant.
-
-```
-let [mut] <name> = <expr>;
-```
-
-This creates an optionally-mutable variable named `<name>` that is defined with the type of the given expression.
-
-### Function
-
-```
-[vis] fn <ret-ty> <name>([<decl>]*) [attrs] {
-    /* statements */
-    <optional return expr>
+pub fn fvec3 vector_add(fvec3 a, fvec3 b) {
+    a + b
 }
 ```
 
-An implied return is used in the final statement of the function if it is an expression. In this case, a terminating semicolon is _not_ required.
+> [!TIP]
+> When integrating Haven with C, `fvecN` is the equivalent of ([non-standard](https://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html)) `typedef float floatN __attribute__((vector_size(sizeof(float)) * N))`.
 
-Examples of attributes:
+### Strings
 
-- `noinline` = disallow inlining by optimization passes
+The `str` type carries string data. It is essentially a `const char *` under the hood.
+
+### Type Aliasing
+
+You may define your own aliases for types:
+
+```
+type int = i32;
+```
+
+These aliases are fully erased during compilation and are not accessible at runtime.
+
+### Structures
+
+Defining a structured type looks similar to defining a type alias:
+
+```
+type Point = struct {
+    i32 x;
+    i32 y;
+    i32 z;
+};
+```
+
+Structures may contain pointers to their own type:
+
+```
+type Node = struct {
+    i32 value;
+    Node *next;
+};
+```
+
+### Enums
+
+You may define an enum type using two forms.
+
+The first form simply defines a set of names:
+
+```
+type Number = enum {
+    One,
+    Two
+};
+```
+
+The second form allows for creating union types with bindings:
+
+```
+type Numeric = enum {
+    Int(i32),
+    Float(float)
+};
+```
+
+In expressions that accept enums, they must be fully qualfiied with the type name:
+
+```
+match x {
+    enum Numeric::Int(_) => 0,
+    enum Numeric::Float(_) => 1,
+}
+```
+
+### Arrays
+
+Arrays can be defined by adding a dimension to a type. The initializer must include the element type.
+
+```
+i32[2] arr = i32 {
+    0,
+    1
+};
+```
+
+## Declarations
+
+### Type Declarations
+
+Type declarations (`type X = ...`) may only appear at the file scope.
+
+### Variable Declarations
+
+#### File Scope
+
+At the file scope, only the following declaration form is supported:
+
+```
+[pub] [mut] <ty> <ident> [= <init-expr>];
+```
+
+File-scope variable declarations include:
+
+- an optional visibility modifier (`pub`) which determines whether the variable is accessible outside of the translation unit
+- an optional mutability modifier (`mut`) which determines whether Haven code is permitted to modify the variable
+- a required type
+- a name
+- an initialization expression, which is optional for public variables (creates an external reference) and required otherwise
+
+#### Function Scope
+
+Inside function definitions, variable declarations take a different form:
+
+```
+let [<ty>] <ident> = <init-expr>;
+```
+
+A type need not be specified. If unspecified, the type of the variable will be inferred from the initialization expression.
+
+Variables at function scope must be initialized.
+
+### Function Declarations
+
+Functions can be forward-declared without a body.
+
+```
+[pub] [impure] <ret-ty> <ident>(<arg-list>);
+[pub] [impure] <ret-ty> <ident>(<arg-list>) { <body> }
+```
+
+Specifying `pub` on declarations that have no definitions will create an external reference to the function.
+
+Specifying `impure` on declarations will mark the function as impure, which means it is allowed to read and write memory.
+
+An argument list can be ended with `*` to indicate that the function accepts a variable number of arguments.
+
+> [!WARNING]
+> Pure functions cannot call impure functions.
+
+The following example shows usage of both a declaration and a defined function:
+
+```
+pub fn i32 printf(str fmt, *);
+
+pub fn i32 main() {
+    printf("Hello, world!\n");
+    0
+}
+```
+
+## Blocks
+
+Blocks contain statements and expressions. Every function definition has at least one block. Defining a block creates a new scope: variables defined before a block begins are visible, but variables defined _inside_ the block are not visible outside the block.
+
+If the final statement in a block is an expression, the result of that expression is used as the result value of the block. In functions, this result value becomes the return value of the function.
+
+Blocks are themselves expressions, and can appear anywhere that an expression is expected:
+
+```
+let x = {
+    5 + 5
+};
+```
+
+Note that the addition in this example is not terminated with a semicolon. Terminating with a semicolon would convert the block's result to be `void`, thereby making it an invalid initializer.
+
+## Statements
+
+### Expression
+
+Any expression is also a valid statement. The last expression in a block must not be terminated with a semicolon.
+
+### Void
+
+An empty statement is also called a "void" statement. It has no effect and is omitted in code generation.
+
+### let
+
+The `let` statement defines new variables in the current scope:
+
+```
+let test = 5;
+let mut mutable = 6;
+let i32 typed = 7;
+```
+
+### iter
+
+TODO
+
+### store
+
+TODO
+
+### ret
+
+The `ret` statement sets the return value for the function and immediately returns to its caller.
+
+```
+ret <value>;
+```
+
+### defer
+
+The `defer` statement defers the execution of an expression to run right before the current function returns.
+
+In this example, the string "hello from defer" is printed after the string "Hello, world!". `defer` can be used anywhere within a function and can be very useful for memory and error management.
+
+```
+pub fn i32 printf(str fmt, *);
+
+pub fn i32 main() {
+    defer printf("hello from defer\n");
+
+    printf("Hello, world!\n");
+
+    as i32 0
+}
+```
 
 ## Expressions
 
-Expressions can be bracketed in parentheses to create sub-expressions and control precedence.
-
 ### Constants
 
-- `0` = integer value zero
-- `-1` = signed integer
-- `'c'` = `char`
-- `"foo"`
-- `*1234` = pointer to address `0x1234`
+A constant value can be used anywhere that an expression is expected:
 
-Integer constants will adopt the type of their destination. If truncation would be required to fit, an error will be thrown.
+```
+let integer = 5;
+let number = 5.0;
+let text = "hello";
+let vec = <1.0, 2.0, 3.0>;
+let obj = struct s { 1, 2, 3 };
+let foo = Numbers::One;
+```
 
-### Variables
+### Block
 
-- `a` = resolves to the value of the `a` variable
-- `&a` = resolves to the address of the `a` variable
-- `a(<expr>*)` = calls the function named `a` with the given expressions as parameters
+See [Blocks](#blocks) for more about blocks.
 
-### Unary
+### Binary Expressions
 
-- `~a` = 2's complement of `a`
-- `-a` = signed negation of `a`
-- `!a` = logical NOT of `a` (resolves to either 0 or 1, as an `i1`)
+```
+<expr> <op> <expr>
+```
 
-### Binary
+#### Operators and Precedence
 
-`<op> <expr-left> <expr-right>`
+| Operator          | Purpose                          | Precedence |
+| ----------------- | -------------------------------- | ---------- |
+| `\|\|`            | Logical OR                       | 5          |
+| `&&`              | Logical AND                      | 10         |
+| `\|`              | Bitwise OR                       | 15         |
+| `^`               | Bitwise XOR                      | 20         |
+| `&`               | Bitwise AND                      | 25         |
+| `==` `!=`         | Boolean Equal, Boolean Not Equal | 30         |
+| `<` `<=` `>` `>=` | Boolean Inequalities             | 35         |
+| `<<` `>>`         | Bitwise Shifts                   | 40         |
+| `+` `-`           | Addition, Subtraction            | 45         |
+| `*` `/` `%`       | Multiplication, Division, Modulo | 50         |
 
-Perform binary operation on the two expressions (e.g. `add`, `sub`).
+Note that parenthesis (`(` `)`) may be used to control order of operations.
 
-Logical operators (e.g. `||`, `&&`) short-circuit evaluation of the left and right expressions.
+#### Short Circuiting
 
-### Conditional
+Logical operators (`||` and `&&`) short-circuit their operation:
 
-`if <cond-expr> <expr-true> <expr-false>`
+- if the left side is true-ish, and the operator is `&&`, the right side will not be evaluated
+- if the left side is false-ish, and the operator is `||`, the right side will not be evaluated
 
-Resolve to `<expr-true>` if `<cond-expr>` is true(-ish), `<expr-false>` otherwise. Short-circuits, does not evaluate the unused expression.
+### Variable References
 
-### Blocks
+Any variable in scope may be used in an expression. Its value at the time of expression evaluation will be used.
 
-A block contains statements, separated by semicolons.
+### Dereferences & Indices
 
-The last statement of a block may be an expression, which does _not_ require a semicolon. The result of this expression will become the result of the block.
+#### Structures
+
+```
+let x = struct_var.x;
+```
+
+#### Arrays
+
+```
+let x = array_var[5];
+```
+
+#### Vectors
+
+Vectors can be dereferenced using `xyzw` or `rgba` letters, or a digit.
+
+```
+let x = vec.x; // 1st element
+let a = vec.a; // 4th element
+let v = vec.5; // 5th element
+```
+
+### Calls
+
+Functions may be called using parentheses:
+
+```
+let result = my_function(1, 2, 3);
+```
+
+### Casts
+
+The `as` keyword provides the ability to cast types. In general, casting is quite restricted and its use may indicate a bug in the compiler's type inference passes.
+
+```
+let x = as i32 5;
+```
+
+### Unary Expressions
+
+```
+let x = !0; // 1
+let y = 3 ^ 1; // 2
+let z = ~0; // (all bits set to one)
+```
+
+### If Expressions
+
+#### As an Expression
+
+`if` may be used as an expression to select between two values. Both the `then` and `else` expressions must resolve to the same type. An `else` is not optional in this context.
+
+```
+let sign = if x >= 0 { 0 } else { 1 };
+```
+
+> ![NOTE]
+> The braces are not required for an `if` expression. It is legal to use _any_ expression, including those not wrapped in a block, in the `then` or `else` blocks of an `if` expression.
+
+#### As a Statement
+
+When used as a statement, `if` does not require its blocks to have identical types, and an `else` is not required.
+
+```
+if x >= 0 {
+    // do things
+} else {
+    // do other things
+};
+```
+
+### References & Nil
+
+To create a pointer to an existing variable or object, use the `ref` keyword:
+
+```
+let tail = struct node { 1, nil };
+let head = struct node { 0, ref tail };
+```
+
+`nil` may be used in lieu of a reference to indicate `NULL`.
+
+### Load
+
+To read the contents of a pointer created using `ref`, use `load`:
 
 ```
 {
-    i32 x = 1;
-    i32 y = 2;
-    + x y
+    let node = load head.next;
+    node.value
 }
 ```
 
 ### Match
 
+`match` provides the main pattern matching syntax for Haven.
+
+#### Expression Match
+
+This variant simply evaluates comparisons between the condition and the arms of the `match`, returning the expression that matches.
+
 ```
-match <match-expr> {
-    <case-expr> => <expr>
-    [_ => <expr>]
+let v = match 5 {
+    5 => 0
+    4 => { 2 + 2 } // any expression is valid
+    _ => 1
+};
+```
+
+#### Match without Bindings
+
+Currently, the `enum` qualifier is required. Some compiler changes are planned to remove this constraint.
+
+```
+let v = match number(2) {
+    enum Numbers::Two => 0
+    _ => 1
 }
 ```
 
-Matches the given expression against a range of case values. The case values can be constants or patterns. All inner expressions must resolve to the same type.
+#### Match with Bindings
 
-An example of pattern matching to extract fields as local variables:
-
-```
-match some_struct {
-    struct_type(x: x, y: y) => + x y
-    _ => -1
-}
-```
-
-An example of pattern matching to change behavior based on values:
+It is an error to _not_ provide a binding if the enum value includes a binding. The `_` binding value allows you to explicitly opt-out of binding.
 
 ```
-match some_struct {
-    struct_type(x: 0, y: 0) => -1
-    struct_type(x: x, y: y) => + x y
-    _ => -2
-}
+let v = match numeric(0) {
+    enum Numeric::Int(x) => x // x is defined for the duration of the expression
+    enum Numeric::Float(_) => 0 // you may opt out of binding
+    _ => 10
+};
 ```
-
-### Type Conversion
-
-`<expr> as <ty>`
-
-Resolves the given expression as the given type.
-
-Widened integer types will zero-extend if unsigned, and sign-extend if signed. Narrowed types will truncate the high bits and cannot guarantee correct sign.
-
-## Statements
-
-All statements end in a semicolon (`;`).
-
-### Return
-
-Early return from a function.
-
-```
-
-return <expr>;
-
-```
-
-### Expression
-
-Any expression can be used as a statement. They should be terminated by a semicolon unless they are the last statement of the block.
-
-```
-
-```
-
-### Loops
-
-```
-iter <start>..<end>[..<step>] <index-var> { ... } // statement - iterate over a range of integers
-map <array-var> <element-var> { ... } // expression (returns array of block type, which may differ from the input)
-each <array-var> <element-var> { ... } // statement (void block)
-reduce <array-var> <init-value> <accumulator> { ... }
-```
-
-## Other ideas
-
-first class vector support: `fvec<N>` for floating point vectors, `ivec<N>` for integer vectors
-
-```
-
-```
-
-add defer!!!
