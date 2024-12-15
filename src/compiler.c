@@ -287,7 +287,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  fprintf(stderr, "result from parse: %d\n", rc);
+  // fprintf(stderr, "result from parse: %d\n", rc);
 
   if (rc == 0) {
     struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);
@@ -299,7 +299,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  fprintf(stderr, "result from cfold: %d\n", rc);
+  // fprintf(stderr, "result from cfold: %d\n", rc);
 
   if (rc == 0) {
     // pre-typecheck semantic pass
@@ -312,7 +312,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  fprintf(stderr, "result from first semantic pass: %d\n", rc);
+  // fprintf(stderr, "result from first semantic pass: %d\n", rc);
 
   if (rc == 0) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser), compiler);
@@ -324,7 +324,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  fprintf(stderr, "result from typecheck pass: %d\n", rc);
+  // fprintf(stderr, "result from typecheck pass: %d\n", rc);
 
   if (rc == 0) {
     struct purity *purity = purity_new(parser_get_ast(parser), compiler);
@@ -336,7 +336,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  fprintf(stderr, "result from purity pass: %d\n", rc);
+  // fprintf(stderr, "result from purity pass: %d\n", rc);
 
   if (rc == 0) {
     // post-typecheck semantic pass
@@ -349,7 +349,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  fprintf(stderr, "result from second semantic pass: %d\n", rc);
+  // fprintf(stderr, "result from second semantic pass: %d\n", rc);
 
   if (rc && (compiler->flags[0] & FLAG_DISPLAY_AST)) {
     fprintf(stderr, "== Partial AST after failure ==\n");
@@ -365,7 +365,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     struct codegen *codegen = new_codegen(parser_get_ast(parser), compiler);
     rc = codegen_run(codegen);
     if (rc == 0) {
-      codegen_emit_ir(codegen, stderr);
       switch (compiler->output_format) {
         case OutputIR:
           rc = codegen_emit_ir(codegen, out);

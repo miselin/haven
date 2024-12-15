@@ -101,14 +101,12 @@ int typecheck_run(struct typecheck *typecheck) {
   }
   int rc = 0;
   while (1) {
-    fprintf(stderr, "implicit pass...\n");
     rc = typecheck_implicit_ast(typecheck->ast);
     if (rc < 0) {
       return 1;
     }
 
     if (rc == 0) {
-      fprintf(stderr, "no implicit conversions, ending implicit conversion pass\n");
       break;
     }
   }

@@ -315,8 +315,6 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
         }
       }
 
-      fprintf(stderr, "iter direction %d\n", direction);
-
       LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->iter.index_vdecl->ty);
 
       codegen_internal_enter_scope(codegen, &ast->loc, 1);
