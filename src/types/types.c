@@ -43,6 +43,11 @@ int type_is_constant(struct ast_ty *ty) {
 }
 
 int type_is_complex(struct ast_ty *ty) {
+  // pointers are not complex even if their targets are
+  if (ty->flags & TYPE_FLAG_PTR) {
+    return 0;
+  }
+
   if (ty->ty == AST_TYPE_STRUCT || ty->ty == AST_TYPE_ARRAY) {
     return 1;
   }

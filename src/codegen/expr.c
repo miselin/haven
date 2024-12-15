@@ -271,8 +271,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       if (type_is_complex(&ast->ty)) {
         // put the result into a temporary and return that instead of the underlying value
-        LLVMValueRef temp = new_alloca(codegen, expr_type, "load");
-        LLVMBuildStore(codegen->llvm_builder, expr, temp);
+        LLVMValueRef temp = into ? into : new_alloca(codegen, expr_type, "load");
+        emit_store(codegen, &ast->ty, expr, temp);
         return temp;
       }
 
@@ -363,8 +363,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         struct ast_expr_list *node = ast->list;
         for (size_t i = 0; i < ast->list->num_elements; i++) {
           LLVMValueRef value = emit_expr(codegen, node->expr);
-          LLVMValueRef store =
-              LLVMBuildStructGEP2(codegen->llvm_builder, struct_type, dest, (unsigned int)i, "");
+          LLVMValueRef store = LLVMBuildStructGEP2(codegen->llvm_builder, struct_type, dest,
+                                                   (unsigned int)i, "struct_field");
           emit_store(codegen, &node->expr->ty, value, store);
           node = node->next;
         }

@@ -161,7 +161,7 @@ void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {
 }
 
 void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr) {
-  if (!type_is_complex(ty)) {
+  if (LLVMIsNull(value) || !type_is_complex(ty)) {
     LLVMBuildStore(codegen->llvm_builder, value, ptr);
     return;
   }

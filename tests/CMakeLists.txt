@@ -37,9 +37,7 @@ add_functional_test(ptr 5)
 add_functional_test(array 16)
 add_functional_test(defer 1)
 add_functional_test(type_alias 0)
-# fails, need to fix
 add_functional_test(block 0)
 add_functional_test(iter_up 0)
 add_functional_test(iter_down 0)
-# structs cause asan error at the moment
 add_functional_test(llist 1)

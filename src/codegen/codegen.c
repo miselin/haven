@@ -1,11 +1,11 @@
 
 #include "codegen.h"
 
-#include <llvm-c-18/llvm-c/Target.h>
-#include <llvm-c-18/llvm-c/TargetMachine.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
+#include <llvm-c/Target.h>
+#include <llvm-c/TargetMachine.h>
 #include <llvm-c/Types.h>
 #include <malloc.h>
 #include <string.h>
@@ -48,6 +48,14 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
   result->compile_unit = LLVMDIBuilderCreateCompileUnit(
       result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, COMPILER_IDENT, 5, 0,
       "", 0, 0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
+
+  LLVMAddModuleFlag(
+      result->llvm_module, LLVMModuleFlagBehaviorOverride, "Debug Info Version", 18,
+      LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(result->llvm_context), 3, 0)));
+
+  LLVMAddModuleFlag(
+      result->llvm_module, LLVMModuleFlagBehaviorOverride, "Dwarf Version", 13,
+      LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(result->llvm_context), 2, 0)));
 
   char *triple = LLVMGetDefaultTargetTriple();
 
