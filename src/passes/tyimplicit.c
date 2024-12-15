@@ -295,10 +295,14 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       }
       total += rc;
 
+      total += maybe_implicitly_convert(&ast->if_expr.then_block.ty, &ast->ty);
+
       rc = typecheck_implicit_block(&ast->if_expr.else_block);
       if (rc < 0) {
         return -1;
       }
+
+      total += maybe_implicitly_convert(&ast->if_expr.else_block.ty, &ast->ty);
 
       return total + rc;
     } break;
@@ -315,7 +319,12 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_UNARY: {
-      return typecheck_implicit_expr(ast->unary.expr);
+      int rc = typecheck_implicit_expr(ast->unary.expr);
+      if (rc < 0) {
+        return rc;
+      }
+
+      return maybe_implicitly_convert(&ast->unary.expr->ty, &ast->ty) + rc;
     } break;
 
     case AST_EXPR_TYPE_BOOLEAN: {

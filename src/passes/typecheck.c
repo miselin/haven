@@ -850,6 +850,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
           return NULL;
         }
 
+        maybe_implicitly_convert(else_ty, then_ty);
+
         if (!same_type(then_ty, else_ty)) {
           char thenstr[256], elsestr[256];
           type_name_into(then_ty, thenstr, 256);

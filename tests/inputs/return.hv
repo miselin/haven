@@ -1,0 +1,4 @@
+pub fn i32 sut() {
+    ret 0;
+    1
+}

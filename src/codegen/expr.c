@@ -288,8 +288,13 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           } else {
             return LLVMBuildNeg(codegen->llvm_builder, expr, "neg");
           }
-        case AST_UNARY_OP_NOT:
-          return LLVMBuildNot(codegen->llvm_builder, expr, "not");
+        case AST_UNARY_OP_NOT: {
+          // 0 -> 1, !0 -> 0
+          LLVMTypeRef expr_ty = LLVMTypeOf(expr);
+          LLVMValueRef cmp = LLVMBuildICmp(codegen->llvm_builder, LLVMIntEQ, expr,
+                                           LLVMConstInt(expr_ty, 0, 0), "cmp");
+          return LLVMBuildZExt(codegen->llvm_builder, cmp, LLVMTypeOf(expr), "zext");
+        } break;
         case AST_UNARY_OP_COMP:
           return LLVMBuildXor(
               codegen->llvm_builder, expr,

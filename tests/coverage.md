@@ -28,7 +28,7 @@
 - [ ] void
 - [x] cast
 - [ ] unary
-- [ ] if
+- [x] if
 - [ ] assign
 - [x] ref
 - [x] load
@@ -37,6 +37,6 @@
   - [x] numeric match
   - [x] enum match (no pattern)
   - [x] enum match (pattern)
-- [ ] struct init
-- [ ] nil
+- [x] struct init
+- [x] nil
 - [x] enum init
