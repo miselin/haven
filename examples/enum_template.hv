@@ -4,22 +4,13 @@ type Result = enum <T> {
     Error
 };
 
-type NoTemplate = {
-    Int(i32),
-    Float(float)
-};
-
 fn Result<i32> thing() {
-    Ok(5)
+    Result::Ok(5)
 }
 
-fn NoTemplate foo() {
-    Float(1.0)
-}
-
-pub fn main() {
+pub fn i32 main() {
     match thing() {
-        Ok(x) => x;
-        _ => 1;
+        Result::Ok(x) => x
+        _ => 1
     }
 }

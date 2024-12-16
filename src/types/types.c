@@ -236,7 +236,18 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf, maxlen, "nil");
       break;
     case AST_TYPE_TEMPLATE:
-      offset += snprintf(buf, maxlen, "template %s", ty->name);
+      offset += snprintf(buf, maxlen, "template ");
+      offset += type_name_into(ty->template.outer, buf + offset, maxlen - (size_t)offset);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "<");
+      struct ast_template_ty *inner = ty->template.inners;
+      while (inner) {
+        offset += type_name_into(&inner->resolved, buf + offset, maxlen - (size_t)offset);
+        if (inner->next) {
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+        }
+        inner = inner->next;
+      }
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;
     case AST_TYPE_ENUM:
       offset += snprintf(buf, maxlen, "enum %s <", ty->name);

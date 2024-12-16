@@ -966,12 +966,31 @@ static struct ast_ty parse_type(struct parser *parser) {
     if (peek == TOKEN_LT) {
       struct ast_ty *tmplty = calloc(1, sizeof(struct ast_ty));
       tmplty->ty = AST_TYPE_TEMPLATE;
+      tmplty->template.outer = calloc(1, sizeof(struct ast_ty));
       memcpy(tmplty->template.outer, &result, sizeof(struct ast_ty));
 
-      // TODO: multiple inner types
+      struct ast_template_ty *inner_prev = NULL;
+
       parser_consume(parser, NULL, TOKEN_LT);
-      // struct ast_ty inner = parse_type(parser);
-      // memcpy(tmplty->template.inner, &inner, sizeof(struct ast_ty));
+      while (parser_peek(parser) != TOKEN_GT) {
+        struct ast_template_ty *inner_ty = calloc(1, sizeof(struct ast_template_ty));
+        inner_ty->resolved = parse_type(parser);
+        inner_ty->is_resolved = 1;
+
+        if (inner_prev == NULL) {
+          tmplty->template.inners = inner_ty;
+        } else {
+          inner_prev->next = inner_ty;
+        }
+
+        inner_prev = inner_ty;
+
+        if (parser_peek(parser) == TOKEN_GT) {
+          break;
+        }
+
+        parser_consume(parser, NULL, TOKEN_COMMA);
+      }
       parser_consume(parser, NULL, TOKEN_GT);
 
       memcpy(&result, tmplty, sizeof(struct ast_ty));
