@@ -17,7 +17,7 @@ fn Numbers number(i32 x) {
 
 pub fn i32 sut() {
     match number(2) {
-        enum Numbers::Two => 0
+        Numbers::Two => 0
         _ => 1
     }
 }

@@ -13,14 +13,14 @@ fn Numeric numeric(i32 i) {
 
 pub fn i32 sut() {
     let left = match numeric(0) {
-        enum Numeric::Int(x) => x
-        enum Numeric::Float(_) => 0
+        Numeric::Int(x) => x
+        Numeric::Float(_) => 0
         _ => 10
     };
 
     let i32 right = match numeric(1) {
-        enum Numeric::Int(_) => 0
-        enum Numeric::Float(x) => 1
+        Numeric::Int(_) => 0
+        Numeric::Float(x) => 1
         _ => 10
     };
 

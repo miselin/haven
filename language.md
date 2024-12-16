@@ -103,12 +103,12 @@ type Numeric = enum {
 };
 ```
 
-In expressions that accept enums, they must be fully qualfiied with the type name:
+Use of enums in expressions requires both the enum name and the field name to be provided:
 
 ```
 match x {
-    enum Numeric::Int(_) => 0,
-    enum Numeric::Float(_) => 1,
+    Numeric::Int(_) => 0,
+    Numeric::Float(_) => 1,
 }
 ```
 
@@ -424,11 +424,9 @@ let v = match 5 {
 
 #### Match without Bindings
 
-Currently, the `enum` qualifier is required. Some compiler changes are planned to remove this constraint.
-
 ```
 let v = match number(2) {
-    enum Numbers::Two => 0
+    Numbers::Two => 0
     _ => 1
 }
 ```
@@ -439,8 +437,8 @@ It is an error to _not_ provide a binding if the enum value includes a binding. 
 
 ```
 let v = match numeric(0) {
-    enum Numeric::Int(x) => x // x is defined for the duration of the expression
-    enum Numeric::Float(_) => 0 // you may opt out of binding
+    Numeric::Int(x) => x // x is defined for the duration of the expression
+    Numeric::Float(_) => 0 // you may opt out of binding
     _ => 10
 };
 ```

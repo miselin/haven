@@ -13,7 +13,14 @@ extern "C" {
 struct tokenstream *new_tokenstream(struct lex_state *lexer);
 void destroy_tokenstream(struct tokenstream *stream);
 
+// Retrieves the next token from the stream. A token is read from the underlying lexer unless
+// the stream is currently rewound. If the stream is rewound, the next token from the buffer is
+// returned instead.
 int tokenstream_next_token(struct tokenstream *stream, struct token *token);
+
+// Peeks the next token from the stream. Operates the same as tokenstream_next_token, but does not
+// actually move the stream position when the stream is rewound.
+int tokenstream_peek(struct tokenstream *stream, struct token *token);
 
 // Commit tokens in the buffer since the last mark, or the entire buffer if no marks are set.
 // This frees up the tokens in the buffer. If no further rewinding will take place, you should

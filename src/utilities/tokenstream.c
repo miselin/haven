@@ -49,6 +49,34 @@ int tokenstream_next_token(struct tokenstream *stream, struct token *token) {
     struct tokenentry *entry = stream->position;
     memcpy(token, &entry->token, sizeof(struct token));
     stream->position = entry->prev;
+
+    return 0;
+  }
+
+  struct tokenentry *entry = calloc(1, sizeof(struct tokenentry));
+  int rc = lexer_token(stream->lexer, &entry->token);
+  if (rc < 0) {
+    return -1;
+  }
+
+  memcpy(token, &entry->token, sizeof(struct token));
+
+  // push to buffer
+  if (!stream->buffer) {
+    stream->buffer = entry;
+  } else {
+    entry->next = stream->buffer;
+    stream->buffer->prev = entry;
+    stream->buffer = entry;
+  }
+
+  return 0;
+}
+
+int tokenstream_peek(struct tokenstream *stream, struct token *token) {
+  if (stream->position) {
+    struct tokenentry *entry = stream->position;
+    memcpy(token, &entry->token, sizeof(struct token));
     return 0;
   }
 
@@ -88,7 +116,7 @@ void tokenstream_commit(struct tokenstream *stream) {
 
   stream->buffer = until;
 
-  // pop the marker
+  // pop the last marker, we won't rewind to it anymore
   if (stream->markers) {
     struct tokenmarker *marker = stream->markers;
     stream->markers = marker->next;
@@ -113,6 +141,11 @@ void tokenstream_rewind(struct tokenstream *stream) {
     return;
   }
   stream->position = stream->markers->position;
+
+  // pop the marker
+  struct tokenmarker *marker = stream->markers;
+  stream->markers = marker->next;
+  free(marker);
 }
 
 int tokenstream_buf_empty(struct tokenstream *stream) {

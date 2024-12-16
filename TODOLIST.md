@@ -10,5 +10,5 @@
 - [x] ranges stop before the terminal value (e.g. 10..0..-1's last iteration is 1)
 - [ ] finish on generic enums (for option types and such), some initial code is in there
 - [ ] `let node *p = ...` fails to parse (unexpected token \*)
-- [ ] avoid needing to explicitly tag `enum` in pattern matches
+- [x] avoid needing to explicitly tag `enum` in pattern matches
 - [ ] while/do-while loops

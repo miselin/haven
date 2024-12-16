@@ -12,6 +12,7 @@
 #include "compiler.h"
 #include "lex.h"
 #include "tokens.h"
+#include "tokenstream.h"
 #include "types.h"
 #include "utility.h"
 
@@ -27,6 +28,12 @@ struct parser {
   int warnings;
 
   struct compiler *compiler;
+
+  struct tokenstream *stream;
+
+  // Mute diagnostics temporarily. Used when trying multiple parse paths to avoid diagnostics from
+  // the failed paths.
+  int mute_diags;
 };
 
 static enum token_id parser_peek(struct parser *parser) __attribute__((warn_unused_result));
@@ -56,9 +63,25 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser);
 static int binary_op(enum token_id token);
 static int binary_op_prec(int token);
 
+// Rewind the parser and clear out the lookahead (peek) token so the next peek uses the rewound
+// location.
+static void parser_rewind(struct parser *parser) {
+  tokenstream_rewind(parser->stream);
+  parser->peek.ident = TOKEN_UNKNOWN;
+}
+
+// Commit the parser's backtrack buffer.
+static void parser_commit(struct parser *parser) {
+  tokenstream_commit(parser->stream);
+}
+
 __attribute__((format(printf, 4, 5))) static void parser_diag(int fatal, struct parser *parser,
                                                               struct token *token, const char *msg,
                                                               ...) {
+  if (parser->mute_diags) {
+    return;
+  }
+
   char msgbuf[1024];
   size_t offset = 0;
   int rc = 0;
@@ -99,6 +122,7 @@ struct parser *new_parser(struct lex_state *lexer, struct compiler *compiler) {
   struct parser *result = calloc(1, sizeof(struct parser));
   result->lexer = lexer;
   result->compiler = compiler;
+  result->stream = new_tokenstream(lexer);
   return result;
 }
 
@@ -142,15 +166,17 @@ struct ast_program *parser_get_ast(struct parser *parser) {
 
 void destroy_parser(struct parser *parser) {
   free_ast(&parser->ast);
+  destroy_tokenstream(parser->stream);
   free(parser);
 }
 
 // peeks the next token in the stream, without skipping over newlines
 static enum token_id parser_peek_with_nl(struct parser *parser) {
   // Eat comments - but in the future we will want to carry them with the AST
-  while (parser->peek.ident == 0 || parser->peek.ident == TOKEN_COMMENTLINE ||
+  while (parser->peek.ident == TOKEN_UNKNOWN || parser->peek.ident == TOKEN_COMMENTLINE ||
          parser->peek.ident == TOKEN_COMMENTLONG) {
-    int rc = lexer_token(parser->lexer, &parser->peek);
+    parser->peek.ident = TOKEN_UNKNOWN;
+    int rc = tokenstream_next_token(parser->stream, &parser->peek);
     if (rc < 0) {
       return TOKEN_UNKNOWN;
     } else if (parser->peek.ident == TOKEN_UNKNOWN) {
@@ -186,8 +212,6 @@ static enum token_id parser_consume(struct parser *parser, struct token *token,
                 token_id_to_string(parser->peek.ident), token_id_to_string(expected));
     return TOKEN_UNKNOWN;
   }
-
-  // fprintf(stderr, "consume: %s\n", token_id_to_string(parser->peek.ident));
 
   if (token) {
     memcpy(token, &parser->peek, sizeof(struct token));
@@ -426,9 +450,7 @@ static struct ast_toplevel *parser_parse_preproc(struct parser *parser) {
     parser_consume(parser, NULL, peek);
   }
 
-  fprintf(stderr, "done going to consume newline\n");
   parser_consume(parser, NULL, TOKEN_NEWLINE);
-  fprintf(stderr, "yay\n");
 
   return decl;
 }
@@ -552,6 +574,8 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
     parser_consume(parser, &token, TOKEN_SEMI);
     *ended_semi = 1;
   }
+
+  tokenstream_commit(parser->stream);
   return result;
 }
 
@@ -836,17 +860,25 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       while (parser_peek(parser) != TOKEN_RBRACE) {
         struct ast_expr_match_arm *arm = calloc(1, sizeof(struct ast_expr_match_arm));
         int is_otherwise = 0;
-        if (parser_peek(parser) == TOKEN_KW_ENUM) {
-          // enum pattern match
-          parser_consume(parser, NULL, TOKEN_KW_ENUM);
-          arm->pattern = parser_parse_pattern_match(parser);
-        } else if (parser_peek(parser) == TOKEN_UNDER) {
-          parser_consume(parser, NULL, TOKEN_UNDER);
-          arm->pattern = NULL;
-          is_otherwise = 1;
+
+        tokenstream_mark(parser->stream);
+        parser->mute_diags = 1;
+        arm->pattern = parser_parse_pattern_match(parser);
+        parser->mute_diags = 0;
+        if (!arm->pattern) {
+          parser_rewind(parser);
+
+          if (parser_peek(parser) == TOKEN_UNDER) {
+            parser_consume(parser, NULL, TOKEN_UNDER);
+            arm->pattern = NULL;
+            is_otherwise = 1;
+          } else {
+            arm->pattern = parse_expression(parser);
+          }
         } else {
-          arm->pattern = parse_expression(parser);
+          parser_commit(parser);
         }
+
         parser_consume(parser, NULL, TOKEN_INTO);
         arm->expr = parse_expression(parser);
 
@@ -1250,9 +1282,16 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
   result->type = AST_EXPR_TYPE_PATTERN_MATCH;
   lexer_locate(parser->lexer, &result->loc);
 
-  parser_consume(parser, &result->pattern_match.enum_name, TOKEN_IDENTIFIER);
-  parser_consume(parser, NULL, TOKEN_COLONCOLON);
-  parser_consume(parser, &result->pattern_match.name, TOKEN_IDENTIFIER);
+  if (parser_consume(parser, &result->pattern_match.enum_name, TOKEN_IDENTIFIER) !=
+      TOKEN_IDENTIFIER) {
+    goto fail;
+  }
+  if (parser_consume(parser, NULL, TOKEN_COLONCOLON) != TOKEN_COLONCOLON) {
+    goto fail;
+  }
+  if (parser_consume(parser, &result->pattern_match.name, TOKEN_IDENTIFIER) != TOKEN_IDENTIFIER) {
+    goto fail;
+  }
 
   if (parser_peek(parser) == TOKEN_LPAREN) {
     // enum pattern match
@@ -1261,15 +1300,21 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
     if (parser_peek(parser) == TOKEN_UNDER) {
       parser_consume(parser, NULL, TOKEN_UNDER);
       result->pattern_match.bindings_ignored = 1;
-    } else {
+    } else if (parser_peek(parser) == TOKEN_IDENTIFIER) {
       result->pattern_match.inner_vdecl = calloc(1, sizeof(struct ast_vdecl));
       result->pattern_match.inner_vdecl->ty = type_tbd();  // filled in by typecheck
       result->pattern_match.inner_vdecl->flags = DECL_FLAG_TEMPORARY;
       parser_consume(parser, &result->pattern_match.inner_vdecl->ident, TOKEN_IDENTIFIER);
+    } else {
+      goto fail;
     }
 
     parser_consume(parser, NULL, TOKEN_RPAREN);
   }
 
   return result;
+
+fail:
+  free(result);
+  return NULL;
 }
