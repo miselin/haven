@@ -283,6 +283,20 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     rc = 1;
   }
 
+  struct parser_diag *diag = parser_pop_diag(parser);
+  while (diag) {
+    enum ParserDiagSeverity severity = parser_diag_severity(diag);
+    enum DiagLevel level = DiagError;
+    if (severity == Warning) {
+      level = DiagWarning;
+    }
+    struct lex_locator *loc = parser_diag_loc(diag);
+    compiler_diag(compiler, level, "%s:%zd:%zd: %s\n", loc->file, loc->line + 1, loc->column,
+                  parser_diag_msg(diag));
+    parser_free_diag(diag);
+    diag = parser_pop_diag(parser);
+  }
+
   if (until == PassParse) {
     goto out;
   }
