@@ -680,6 +680,30 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
       }
       break;
 
+    case TOKEN_KW_WHILE:
+      parser_consume_peeked(parser, NULL);
+      result->type = AST_STMT_TYPE_WHILE;
+      result->while_stmt.cond = parse_expression(parser);
+      if (!result->while_stmt.cond) {
+        free(result);
+        return NULL;
+      }
+      if (parse_block(parser, &result->while_stmt.block) < 0) {
+        free(result);
+        return NULL;
+      }
+      break;
+
+    case TOKEN_KW_BREAK:
+      parser_consume_peeked(parser, NULL);
+      result->type = AST_STMT_TYPE_BREAK;
+      break;
+
+    case TOKEN_KW_CONTINUE:
+      parser_consume_peeked(parser, NULL);
+      result->type = AST_STMT_TYPE_CONTINUE;
+      break;
+
     default:
       // it's actually an expression
       result->expr = parse_expression(parser);

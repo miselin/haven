@@ -463,6 +463,20 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
       // expression type is irrelevant; defer is a void statement
     } break;
 
+    case AST_STMT_TYPE_WHILE: {
+      struct ast_ty *cond = typecheck_expr(typecheck, ast->while_stmt.cond);
+      if (!cond) {
+        return NULL;
+      }
+
+      typecheck_block(typecheck, &ast->while_stmt.block);
+    } break;
+
+    case AST_STMT_TYPE_BREAK:
+    case AST_STMT_TYPE_CONTINUE:
+      // no types to check
+      break;
+
     default:
       typecheck_diag_expr(typecheck, NULL, "typecheck: unhandled statement type %d\n", ast->type);
   }

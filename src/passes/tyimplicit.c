@@ -164,6 +164,19 @@ static int typecheck_implicit_stmt(struct ast_stmt *ast) {
       return typecheck_implicit_expr(ast->expr);
     } break;
 
+    case AST_STMT_TYPE_WHILE: {
+      int rc = typecheck_implicit_expr(ast->while_stmt.cond);
+      if (rc < 0) {
+        return -1;
+      }
+
+      return rc + typecheck_implicit_block(&ast->while_stmt.block);
+    } break;
+
+    case AST_STMT_TYPE_BREAK:
+    case AST_STMT_TYPE_CONTINUE:
+      break;
+
     default:
       fprintf(stderr, "tyverify: unhandled statement type %d\n", ast->type);
   }

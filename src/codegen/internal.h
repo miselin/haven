@@ -17,6 +17,9 @@ struct scope_entry {
   LLVMTypeRef variable_type;
 
   LLVMValueRef ref;
+
+  // some scope entries point to a block instead of a variable (e.g. loop labels)
+  LLVMBasicBlockRef block;
 };
 
 struct struct_entry {

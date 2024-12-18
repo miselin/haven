@@ -401,6 +401,51 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       codegen->defer_head = entry;
     } break;
 
+    case AST_STMT_TYPE_WHILE: {
+      LLVMBasicBlockRef cond_block = LLVMAppendBasicBlockInContext(
+          codegen->llvm_context, codegen->current_function, "while.cond");
+      LLVMBasicBlockRef body_block = LLVMAppendBasicBlockInContext(
+          codegen->llvm_context, codegen->current_function, "while.body");
+      LLVMBasicBlockRef end_block = LLVMAppendBasicBlockInContext(
+          codegen->llvm_context, codegen->current_function, "while.end");
+
+      struct scope_entry *loop_break = calloc(1, sizeof(struct scope_entry));
+      loop_break->block = end_block;
+
+      struct scope_entry *loop_continue = calloc(1, sizeof(struct scope_entry));
+      loop_continue->block = cond_block;
+
+      codegen_internal_enter_scope(codegen, &ast->loc, 1);
+      scope_insert(codegen->scope, "@loop.break", loop_break);
+      scope_insert(codegen->scope, "@loop.continue", loop_continue);
+
+      LLVMBuildBr(codegen->llvm_builder, cond_block);
+      LLVMPositionBuilderAtEnd(codegen->llvm_builder, cond_block);
+
+      LLVMValueRef cond = emit_expr(codegen, ast->while_stmt.cond);
+      LLVMValueRef comp = LLVMBuildICmp(
+          codegen->llvm_builder, LLVMIntNE, cond,
+          LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0), "while.cond");
+      LLVMBuildCondBr(codegen->llvm_builder, comp, body_block, end_block);
+
+      LLVMPositionBuilderAtEnd(codegen->llvm_builder, body_block);
+      emit_block(codegen, &ast->while_stmt.block);
+      LLVMBuildBr(codegen->llvm_builder, cond_block);
+
+      LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
+      codegen_internal_leave_scope(codegen, 1);
+    } break;
+
+    case AST_STMT_TYPE_BREAK: {
+      struct scope_entry *entry = scope_lookup(codegen->scope, "@loop.break", 1);
+      LLVMBuildBr(codegen->llvm_builder, entry->block);
+    } break;
+
+    case AST_STMT_TYPE_CONTINUE: {
+      struct scope_entry *entry = scope_lookup(codegen->scope, "@loop.continue", 1);
+      LLVMBuildBr(codegen->llvm_builder, entry->block);
+    } break;
+
     default:
       fprintf(stderr, "unhandled statement type %d\n", ast->type);
   }

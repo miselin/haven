@@ -26,6 +26,9 @@
 #define AST_STMT_TYPE_STORE 4
 #define AST_STMT_TYPE_RETURN 5
 #define AST_STMT_TYPE_DEFER 6
+#define AST_STMT_TYPE_WHILE 7
+#define AST_STMT_TYPE_BREAK 8
+#define AST_STMT_TYPE_CONTINUE 9
 
 #define AST_EXPR_TYPE_CONSTANT 1
 #define AST_EXPR_TYPE_BLOCK 2
@@ -283,6 +286,11 @@ struct ast_stmt_store {
   struct ast_expr *rhs;
 };
 
+struct ast_stmt_while {
+  struct ast_expr *cond;
+  struct ast_block block;
+};
+
 struct ast_stmt {
   int type;
   struct lex_locator loc;
@@ -292,6 +300,7 @@ struct ast_stmt {
     struct ast_vdecl let;
     struct ast_stmt_iter iter;
     struct ast_stmt_store store;
+    struct ast_stmt_while while_stmt;
   };
 
   struct ast_stmt *next;

@@ -122,6 +122,18 @@ static int check_purity_stmt(struct ast_stmt *ast) {
       return check_purity_expr(ast->expr);
     } break;
 
+    case AST_STMT_TYPE_WHILE: {
+      if (check_purity_expr(ast->while_stmt.cond) < 0) {
+        return -1;
+      }
+
+      return check_purity_block(&ast->while_stmt.block);
+    } break;
+
+    case AST_STMT_TYPE_BREAK:
+    case AST_STMT_TYPE_CONTINUE:
+      break;
+
     default:
       fprintf(stderr, "purity: unhandled statement type %d\n", ast->type);
   }

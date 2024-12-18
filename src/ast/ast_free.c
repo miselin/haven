@@ -79,6 +79,15 @@ void free_stmt(struct ast_stmt *ast) {
     case AST_STMT_TYPE_DEFER:
       free_expr(ast->expr);
       break;
+
+    case AST_STMT_TYPE_WHILE:
+      free_expr(ast->while_stmt.cond);
+      free_block(&ast->while_stmt.block, 0);
+      break;
+
+    case AST_STMT_TYPE_CONTINUE:
+    case AST_STMT_TYPE_BREAK:
+      break;
   }
 
   free(ast);

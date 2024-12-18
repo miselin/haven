@@ -19,6 +19,8 @@ struct semantic {
   struct ast_program *ast;
   struct compiler *compiler;
   int pass;
+
+  size_t loop_depth;
 };
 
 int check_semantic_ast(struct semantic *semantic, struct ast_program *ast);
@@ -190,7 +192,10 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
         }
       }
 
-      return check_semantic_block(semantic, &ast->iter.block);
+      semantic->loop_depth++;
+      int rc = check_semantic_block(semantic, &ast->iter.block);
+      semantic->loop_depth--;
+      return rc;
     } break;
 
     case AST_STMT_TYPE_STORE: {
@@ -210,8 +215,27 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
       return check_semantic_expr(semantic, ast->expr);
     } break;
 
+    case AST_STMT_TYPE_WHILE: {
+      if (check_semantic_expr(semantic, ast->while_stmt.cond) < 0) {
+        return -1;
+      }
+
+      semantic->loop_depth++;
+      int rc = check_semantic_block(semantic, &ast->while_stmt.block);
+      semantic->loop_depth--;
+      return rc;
+    } break;
+
+    case AST_STMT_TYPE_BREAK:
+    case AST_STMT_TYPE_CONTINUE:
+      if (semantic->loop_depth == 0) {
+        semantic_diag_at(semantic, DiagError, &ast->loc, "break/continue outside of loop");
+        return -1;
+      }
+      break;
+
     default:
-      semantic_diag_at(semantic, DiagError, &ast->loc, "unhandled statement type %d\n", ast->type);
+      semantic_diag_at(semantic, DiagError, &ast->loc, "unhandled statement type %d", ast->type);
       return -1;
   }
 
@@ -412,7 +436,7 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
     } break;
 
     default:
-      semantic_diag_at(semantic, DiagError, &ast->loc, "unhandled expression type %d\n", ast->type);
+      semantic_diag_at(semantic, DiagError, &ast->loc, "unhandled expression type %d", ast->type);
       return -1;
   }
 

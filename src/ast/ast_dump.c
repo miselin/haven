@@ -153,6 +153,21 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
       dump_expr(ast->expr, indent);
     } break;
 
+    case AST_STMT_TYPE_WHILE:
+      INDENTED(indent, "While ");
+      dump_expr(ast->while_stmt.cond, indent);
+      fprintf(stderr, " ");
+      dump_block(&ast->while_stmt.block, indent);
+      break;
+
+    case AST_STMT_TYPE_BREAK:
+      INDENTED(indent, "Break");
+      break;
+
+    case AST_STMT_TYPE_CONTINUE:
+      INDENTED(indent, "Continue");
+      break;
+
     default:
       INDENTED(indent, "<unknown-stmt>\n");
   }

@@ -155,6 +155,18 @@ static int typecheck_verify_stmt(struct ast_stmt *ast) {
       return typecheck_verify_expr(ast->expr);
     } break;
 
+    case AST_STMT_TYPE_WHILE: {
+      if (typecheck_verify_expr(ast->while_stmt.cond) < 0) {
+        return -1;
+      }
+
+      return typecheck_verify_block(&ast->while_stmt.block);
+    } break;
+
+    case AST_STMT_TYPE_BREAK:
+    case AST_STMT_TYPE_CONTINUE:
+      break;
+
     default:
       fprintf(stderr, "tyverify: unhandled statement type %d\n", ast->type);
   }

@@ -94,6 +94,15 @@ static void cfold_stmt(struct ast_stmt *ast) {
       ast->expr = cfold_expr(ast->expr);
       break;
 
+    case AST_STMT_TYPE_WHILE:
+      ast->while_stmt.cond = cfold_expr(ast->while_stmt.cond);
+      cfold_block(&ast->while_stmt.block);
+      break;
+
+    case AST_STMT_TYPE_BREAK:
+    case AST_STMT_TYPE_CONTINUE:
+      break;
+
     default:
       fprintf(stderr, "cfold: unhandled statement type %d\n", ast->type);
   }
