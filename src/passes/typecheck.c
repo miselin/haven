@@ -54,6 +54,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty);
 
 static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl);
+static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl);
 
 static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs);
 
@@ -150,46 +151,46 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
     scope_insert(typecheck->scope, ast->fdecl.ident.value.identv.ident, entry);
 
-    if (existing) {
-      if (entry->fdecl->flags != existing->fdecl->flags) {
-        fprintf(stderr, "function %s redeclared with different flags\n",
-                ast->fdecl.ident.value.identv.ident);
-        ++typecheck->errors;
-      }
+    if (existing && entry->fdecl->flags != existing->fdecl->flags) {
+      fprintf(stderr, "function %s redeclared with different flags\n",
+              ast->fdecl.ident.value.identv.ident);
+      ++typecheck->errors;
+    }
 
-      if (!same_type(&entry->fdecl->retty, &existing->fdecl->retty)) {
+    if (existing && !same_type(&entry->fdecl->retty, &existing->fdecl->retty)) {
+      char tystr[256], existingstr[256];
+      type_name_into(&entry->fdecl->retty, tystr, 256);
+      type_name_into(&existing->fdecl->retty, existingstr, 256);
+
+      fprintf(stderr, "function %s redeclared with different return type %s, expected %s\n",
+              ast->fdecl.ident.value.identv.ident, tystr, existingstr);
+      ++typecheck->errors;
+    }
+
+    if (existing && entry->fdecl->num_params != existing->fdecl->num_params) {
+      fprintf(stderr,
+              "function %s redeclared with different number of parameters %zu, expected %zu\n",
+              ast->fdecl.ident.value.identv.ident, entry->fdecl->num_params,
+              existing->fdecl->num_params);
+      ++typecheck->errors;
+    }
+
+    for (size_t i = 0; i < entry->fdecl->num_params; ++i) {
+      entry->fdecl->params[i]->ty = resolve_type(typecheck, &entry->fdecl->params[i]->ty);
+
+      if (existing && !same_type(&entry->fdecl->params[i]->ty, &existing->fdecl->params[i]->ty)) {
         char tystr[256], existingstr[256];
-        type_name_into(&entry->fdecl->retty, tystr, 256);
-        type_name_into(&existing->fdecl->retty, existingstr, 256);
+        type_name_into(&entry->fdecl->params[i]->ty, tystr, 256);
+        type_name_into(&existing->fdecl->params[i]->ty, existingstr, 256);
 
-        fprintf(stderr, "function %s redeclared with different return type %s, expected %s\n",
-                ast->fdecl.ident.value.identv.ident, tystr, existingstr);
+        fprintf(stderr, "function %s parameter %zu has type %s, expected %s\n",
+                ast->fdecl.ident.value.identv.ident, i, tystr, existingstr);
         ++typecheck->errors;
       }
+    }
 
-      if (entry->fdecl->num_params != existing->fdecl->num_params) {
-        fprintf(stderr,
-                "function %s redeclared with different number of parameters %zu, expected %zu\n",
-                ast->fdecl.ident.value.identv.ident, entry->fdecl->num_params,
-                existing->fdecl->num_params);
-        ++typecheck->errors;
-      }
-
-      for (size_t i = 0; i < entry->fdecl->num_params; ++i) {
-        entry->fdecl->params[i]->ty = resolve_type(typecheck, &entry->fdecl->params[i]->ty);
-
-        if (!same_type(&entry->fdecl->params[i]->ty, &existing->fdecl->params[i]->ty)) {
-          char tystr[256], existingstr[256];
-          type_name_into(&entry->fdecl->params[i]->ty, tystr, 256);
-          type_name_into(&existing->fdecl->params[i]->ty, existingstr, 256);
-
-          fprintf(stderr, "function %s parameter %zu has type %s, expected %s\n",
-                  ast->fdecl.ident.value.identv.ident, i, tystr, existingstr);
-          ++typecheck->errors;
-        }
-      }
-
-      // done with the old entry, new definition is compatible
+    // done with the old entry, new definition is compatible
+    if (existing) {
       free(existing);
     }
 
@@ -278,6 +279,8 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
     if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
       typecheck_struct_decl(typecheck, &ast->tydecl.ty);
+    } else if (ast->tydecl.ty.ty == AST_TYPE_ENUM) {
+      typecheck_enum_decl(typecheck, &ast->tydecl.ty);
     }
   }
 }
@@ -291,7 +294,17 @@ static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *de
   struct ast_struct_field *field = decl->structty.fields;
   while (field) {
     // TODO: check for recursive definition, ensure it's a pointer if so, or it's not representable
-    *field->ty = resolve_type(typecheck, field->ty);
+    struct ast_ty resolved = resolve_type(typecheck, field->ty);
+    free_ty(field->ty, 0);
+    *field->ty = resolved;
+    field = field->next;
+  }
+}
+
+static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl) {
+  struct ast_enum_field *field = decl->enumty.fields;
+  while (field) {
+    field->inner = resolve_type(typecheck, &field->inner);
     field = field->next;
   }
 }

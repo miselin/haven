@@ -1,4 +1,4 @@
-import vec;
+import "vec.hv";
 
 pub i32[9] G = i32 {
     247570,

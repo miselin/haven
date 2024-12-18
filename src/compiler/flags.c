@@ -71,7 +71,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         }
 
         struct stat st;
-        lstat(fullpath, &st);
+        stat(fullpath, &st);
         if (!S_ISDIR(st.st_mode)) {
           fprintf(stderr, "not a directory: %s\n", fullpath);
           return -1;
@@ -122,14 +122,14 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       return -1;
     }
 
-    into->input_file = copy_to_heap(argv[i]);
-
     // add the directory of the input file to the search path
-    char *input_file_abs = realpath(into->input_file, NULL);
+    char *input_file_abs = realpath(argv[i], NULL);
     if (!input_file_abs) {
       perror("realpath");
       return -1;
     }
+
+    into->input_file = strdup(input_file_abs);
 
     char *input_file_dir = dirname(input_file_abs);
     add_search_dir(into, input_file_dir);

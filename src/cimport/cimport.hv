@@ -1,0 +1,30 @@
+
+type FILE = struct {
+    i32 opaque;
+};
+
+import "clex.hv";
+
+pub fn FILE *fopen(str filename, str mode);
+pub fn i32 fclose(FILE *stream);
+
+pub fn i32 open(str filepath, i32 mode);
+pub fn i32 read(i32 fd, i8 *buf, i32 count);
+pub fn i32 close(i32 fd);
+
+pub fn i32 printf(str fmt, *);
+
+pub fn i32 haven_cimport_present() {
+    1
+}
+
+pub impure fn i32 haven_cimport_process(str filepath) {
+    let fp = fopen(filepath, "r");
+    printf("opened %s -> fp=%p\n", filepath, fp);
+
+    let tok = next_token(fp);
+
+    fclose(fp);
+
+    -1
+}

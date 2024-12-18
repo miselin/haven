@@ -1,13 +1,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "compiler.h"
 #include "internal.h"
 
 FILE *find_file(struct compiler *compiler, const char *filename) {
+  const char *path = NULL;
+  if (find_file_path(compiler, filename, &path) < 0) {
+    return NULL;
+  }
+
+  FILE *result = fopen(path, "r");
+  free((void *)path);
+  return result;
+}
+
+int find_file_path(struct compiler *compiler, const char *filename, const char **discovered_path) {
   if (filename[0] == '/') {
-    return fopen(filename, "r");
+    *discovered_path = strdup(filename);
+    return 0;
   }
 
   struct search_dir *dir = compiler->search_dirs;
@@ -16,15 +29,18 @@ FILE *find_file(struct compiler *compiler, const char *filename) {
     strcpy(path, dir->path);
     strcat(path, "/");
     strcat(path, filename);
-    FILE *result = fopen(path, "r");
-    free(path);
-    if (result) {
-      return result;
+
+    struct stat st;
+    if (stat(path, &st) == 0 && S_ISREG(st.st_mode)) {
+      *discovered_path = path;
+      return 0;
     }
+
+    free(path);
     dir = dir->next;
   }
 
-  return NULL;
+  return -1;
 }
 
 void add_search_dir(struct compiler *compiler, const char *path) {

@@ -117,7 +117,10 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         return lookup->ref;
       } else if (ast->ty.flags & TYPE_FLAG_PTR) {
         // if we WANT a pointer, don't load it
-        return lookup->ref;
+        // TODO: there's bugs here. pointers on the stack get broken if we just return the ref, but
+        // for actual objects we can't load? probably a bug in the deref codegen eagerly loading
+        // instead of trusting the value?
+        // return lookup->ref;
       } else if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
         // enum is actually a struct -- don't load
         // with no wrapped fields, it's an integer
@@ -420,7 +423,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         return tag_value;
       }
 
-      LLVMValueRef inner = emit_expr(codegen, ast->enum_init.inner);
+      LLVMValueRef inner = ast->enum_init.inner ? emit_expr(codegen, ast->enum_init.inner) : NULL;
 
       struct struct_entry *entry =
           kv_lookup(codegen->structs, ast->enum_init.enum_ty_name.value.identv.ident);
@@ -431,7 +434,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMValueRef buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 1, "buf");
 
       LLVMBuildStore(codegen->llvm_builder, tag_value, tag);
-      LLVMBuildStore(codegen->llvm_builder, inner, buf);
+      if (inner) {
+        LLVMBuildStore(codegen->llvm_builder, inner, buf);
+      }
 
       return storage;
     } break;

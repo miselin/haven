@@ -302,11 +302,17 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
 
   if (peek == TOKEN_POUND) {
     struct ast_toplevel *result = parser_parse_preproc(parser);
+    if (!result) {
+      return NULL;
+    }
     result->loc = loc;
     return result;
   } else if (peek == TOKEN_KW_TYPE) {
     parser_consume_peeked(parser, NULL);
     struct ast_toplevel *result = parser_parse_tydecl(parser);
+    if (!result) {
+      return NULL;
+    }
     result->loc = loc;
     return result;
   } else if (peek == TOKEN_KW_IMPORT || peek == TOKEN_KW_CIMPORT) {
@@ -922,6 +928,10 @@ static struct ast_expr *parse_factor(struct parser *parser) {
 
         if (parser_peek(parser) == TOKEN_LPAREN) {
           result->enum_init.inner = parse_factor(parser);
+          if (!result->enum_init.inner) {
+            free(result);
+            return NULL;
+          }
         } else {
           result->enum_init.inner = NULL;
         }
@@ -1192,11 +1202,13 @@ static struct ast_ty parse_type(struct parser *parser) {
     result.array.element_ty = element_ty;
     if (parser_consume(parser, &token, TOKEN_INTEGER) < 0) {
       result.ty = AST_TYPE_ERROR;
+      free(element_ty);
       return result;
     }
     result.array.width = token.value.tyv.dimension;
     if (parser_consume(parser, NULL, TOKEN_RBRACKET) < 0) {
       result.ty = AST_TYPE_ERROR;
+      free(element_ty);
       return result;
     }
 
@@ -1376,11 +1388,11 @@ static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into) 
 
     if (!last) {
       into->structty.fields = field;
-      last = field;
     } else {
       last->next = field;
-      last = field;
     }
+
+    last = field;
 
     ++into->structty.num_fields;
 
@@ -1569,16 +1581,17 @@ int parser_merge_asts(struct parser *parser, struct parser *other) {
     return -1;
   }
 
-  // insert the other AST at the start of the current AST
+  // insert the other AST at the end of the current AST
   struct ast_toplevel *last = parser->ast.decls;
   while (last && last->next) {
     last = last->next;
   }
 
   if (last) {
-    last->next = parser->ast.decls;
+    last->next = other->ast.decls;
+  } else {
+    parser->ast.decls = other->ast.decls;
   }
-  parser->ast.decls = other->ast.decls;
 
   // clear the other parser's AST
   other->ast.decls = NULL;
@@ -1588,11 +1601,11 @@ int parser_merge_asts(struct parser *parser, struct parser *other) {
 
 static struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType type) {
   struct token token;
-  if (parser_consume(parser, &token, TOKEN_IDENTIFIER) < 0) {
+  if (parser_consume(parser, &token, TOKEN_STRING) < 0) {
     return NULL;
   }
 
-  if (compiler_parse_import(parser->compiler, type, token.value.identv.ident) < 0) {
+  if (compiler_parse_import(parser->compiler, type, token.value.strv.s) < 0) {
     return NULL;
   }
 

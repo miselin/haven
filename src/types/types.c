@@ -348,12 +348,18 @@ size_t type_size(struct ast_ty *ty) {
 
       size_t size = 4;  // tag
       struct ast_enum_field *field = ty->enumty.fields;
+      size_t largest_inner = 0;
       while (field) {
         if (field->has_inner) {
-          size += type_size(&field->inner);
+          size_t tysz = type_size(&field->inner);
+          if (tysz > largest_inner) {
+            largest_inner = tysz;
+          }
         }
         field = field->next;
       }
+
+      size += largest_inner;
 
       return size;
     } break;

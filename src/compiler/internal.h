@@ -68,6 +68,7 @@ void present_diags(struct compiler *compiler, struct parser *parser);
 const char *outext(struct compiler *compiler);
 
 FILE *find_file(struct compiler *compiler, const char *filename);
+int find_file_path(struct compiler *compiler, const char *filename, const char **discovered_path);
 
 void add_search_dir(struct compiler *compiler, const char *path);
 

@@ -12,3 +12,4 @@
 - [ ] `let node *p = ...` fails to parse (unexpected token \*)
 - [x] avoid needing to explicitly tag `enum` in pattern matches
 - [ ] while/do-while loops
+- [ ] defers need to capture variables in scope

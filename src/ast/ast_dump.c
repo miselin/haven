@@ -410,8 +410,8 @@ static void dump_match_arm(struct ast_expr_match_arm *arm, int indent) {
 }
 
 static void dump_ty(struct ast_ty *ty) {
-  char buf[256];
-  type_name_into(ty, buf, 256);
+  char buf[1024];
+  type_name_into(ty, buf, 1024);
   fprintf(stderr, "%s", buf);
 }
 

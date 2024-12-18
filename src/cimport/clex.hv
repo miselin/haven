@@ -1,0 +1,117 @@
+
+pub fn i32 fgetc(FILE *stream);
+pub fn i32 ungetc(i32 c, FILE *stream);
+
+pub fn i32 read(i32 fd, i8 *buf, i32 count);
+pub fn i32 isdigit(i32 c);
+pub fn i32 isspace(i32 c);
+
+pub fn i32 printf(str fmt, *);
+
+type StringLiteral = struct {
+    i8[256] s;
+};
+
+type Identifier = struct {
+    i8[256] s;
+};
+
+type Token = enum {
+    EOF,
+    Error,
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
+    LBracket,
+    RBracket,
+    Semicolon,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    And,
+    Or,
+    Xor,
+    Not,
+    LNot,
+    Assign,
+    Lt,
+    Gt,
+    Cond,
+    Colon,
+    Dot,
+    Comma,
+    String(StringLiteral),
+    Ident(Identifier)
+};
+
+fn Token string_literal(FILE *fp) {
+    Token::Error
+}
+
+fn Token integer_literal(FILE *fp, i8 first_char) {
+    Token::Error
+}
+
+fn Token identifier(FILE *fp, i8 first_char) {
+    Token::Error
+}
+
+impure fn i8 next_char(FILE *fp) {
+    printf("fp=%p\n", fp);
+    let i32 n = fgetc(fp);
+    match n {
+        -1 => -1
+        0 => -1
+        _ => as i8 n
+    }
+}
+
+impure fn Token next_token(FILE *fp) {
+    let mut c = next_char(fp);
+    if c <= 0 {
+        ret Token::EOF;
+    };
+
+    if isspace(as i32 c) {
+        c = next_char(fp);
+        if c <= 0 {
+            ret Token::EOF;
+        }
+    };
+
+    if isdigit(as i32 c) {
+        ret integer_literal(fp, c);
+    };
+
+    match c {
+        '(' => Token::LParen
+        ')' => Token::RParen
+        '{' => Token::LBrace
+        '}' => Token::RBrace
+        '[' => Token::LBracket
+        ']' => Token::RBracket
+        ';' => Token::Semicolon
+        '+' => Token::Add
+        '-' => Token::Sub
+        '*' => Token::Mul
+        '/' => Token::Div
+        '%' => Token::Mod
+        '&' => Token::And
+        '|' => Token::Or
+        '^' => Token::Xor
+        '~' => Token::Not
+        '!' => Token::LNot
+        '=' => Token::Assign
+        '<' => Token::Lt
+        '>' => Token::Gt
+        '?' => Token::Cond
+        ':' => Token::Colon
+        '.' => Token::Dot
+        ',' => Token::Comma
+        '"' => string_literal(fp)
+        _ => Token::Error
+    }
+}

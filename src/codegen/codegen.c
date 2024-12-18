@@ -1,6 +1,7 @@
 
 #include "codegen.h"
 
+#include <libgen.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
@@ -42,9 +43,21 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
 
   result->structs = new_kv();
 
+  char *dup1 = NULL, *dup2 = NULL;
+  char *filename = NULL;
+  char *dir = NULL;
+  {
+    dup1 = strdup(ast->loc.file);
+    dir = dirname(dup1);
+  }
+  {
+    dup2 = strdup(ast->loc.file);
+    filename = basename(dup2);
+  }
+
   // TODO: split file into dir + file
-  result->file_metadata = LLVMDIBuilderCreateFile(result->llvm_dibuilder, ast->loc.file,
-                                                  strlen(ast->loc.file), "examples", 8);
+  result->file_metadata =
+      LLVMDIBuilderCreateFile(result->llvm_dibuilder, filename, strlen(filename), dir, strlen(dir));
   result->compile_unit = LLVMDIBuilderCreateCompileUnit(
       result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, COMPILER_IDENT, 5, 0,
       "", 0, 0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
@@ -56,6 +69,9 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
   LLVMAddModuleFlag(
       result->llvm_module, LLVMModuleFlagBehaviorOverride, "Dwarf Version", 13,
       LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(result->llvm_context), 2, 0)));
+
+  free(dup1);
+  free(dup2);
 
   char *triple = LLVMGetDefaultTargetTriple();
 
