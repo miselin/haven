@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "compiler.h"
@@ -27,6 +28,7 @@ static void usage() {
   fprintf(stderr, "  --emit-ir\n");
   fprintf(stderr, "  --emit-bitcode\n");
   fprintf(stderr, "  --verbose\n");
+  fprintf(stderr, "  -I <path>  add a path to the import search path\n");
 }
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]) {
@@ -53,13 +55,30 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {0, 0, 0, 0}};
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "o:S", long_options, &index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "o:SI:", long_options, &index)) != -1) {
     switch (opt) {
       case 'S':
         into->output_format = OutputASM;
         break;
       case 'o': {
         into->output_file = copy_to_heap(optarg);
+      } break;
+      case 'I': {
+        char *fullpath = realpath(optarg, NULL);
+        if (!fullpath) {
+          perror("realpath");
+          return -1;
+        }
+
+        struct stat st;
+        lstat(fullpath, &st);
+        if (!S_ISDIR(st.st_mode)) {
+          fprintf(stderr, "not a directory: %s\n", fullpath);
+          return -1;
+        }
+
+        add_search_dir(into, fullpath);
+        free(fullpath);
       } break;
       case O0:
         into->opt_level = OptNone;

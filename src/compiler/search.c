@@ -43,6 +43,10 @@ void add_search_dir(struct compiler *compiler, const char *path) {
   new_dir->path = strdup(path);
   new_dir->next = NULL;
 
+  if (compiler->flags[0] & FLAG_VERBOSE) {
+    fprintf(stderr, "adding search dir: %s\n", path);
+  }
+
   if (tail) {
     tail->next = new_dir;
   } else {
