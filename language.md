@@ -125,6 +125,24 @@ i32[2] arr = i32 {
 
 ## Declarations
 
+### Import Declarations
+
+#### Haven Imports
+
+Import declarations may only appear at the file scope. An import loads the contents of the imported file, allowing definitions from that file to be used locally.
+
+```
+import vec // imports vec.hv
+```
+
+#### C Imports (not yet implemented)
+
+A C import declaration parses a C header file and retains declarations for the purpose of C interopability.
+
+```
+cimport "stdio.h" // imports declarations from stdio.h as Haven declarations
+```
+
 ### Type Declarations
 
 Type declarations (`type X = ...`) may only appear at the file scope.

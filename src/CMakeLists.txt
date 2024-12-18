@@ -7,7 +7,7 @@ add_subdirectory(ast)
 add_subdirectory(utilities)
 add_subdirectory(types)
 
-add_library(compiler STATIC compiler.c)
+add_library(compiler STATIC compiler.c import.c)
 target_link_libraries(compiler PUBLIC lexer parser ir passes)
 target_link_libraries(compiler PRIVATE haven_compiler_options)
 

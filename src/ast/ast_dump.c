@@ -44,6 +44,8 @@ static void dump_toplevel(struct ast_toplevel *ast) {
     dump_tydecl(&ast->tydecl, 0);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     fprintf(stderr, "<preprocessor-decl>");
+  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+    fprintf(stderr, "<import-decl>");
   } else {
     fprintf(stderr, "<unknown-toplevel>");
   }

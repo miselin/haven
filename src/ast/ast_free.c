@@ -22,6 +22,10 @@ void free_toplevel(struct ast_toplevel *ast) {
     free_tydecl(&ast->tydecl, 0);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // nothing to be done here
+  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+    // nothing to be done here
+  } else {
+    fprintf(stderr, "unhandled free for toplevel type %d\n", ast->type);
   }
 
   free(ast);

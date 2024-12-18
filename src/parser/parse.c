@@ -55,6 +55,7 @@ static int parser_consume_peeked(struct parser *parser, struct token *token);
 
 static struct ast_toplevel *parser_parse_toplevel(struct parser *parser);
 static struct ast_toplevel *parser_parse_preproc(struct parser *parser);
+static struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType type);
 
 __attribute__((warn_unused_result)) static int parse_block(struct parser *parser,
                                                            struct ast_block *into);
@@ -155,6 +156,15 @@ int parser_run(struct parser *parser) {
         break;
       }
       return -1;
+    }
+
+    if (decl->type == AST_DECL_TYPE_IMPORT) {
+      // need to reiterate the AST to make last valid again
+      struct ast_toplevel *d = parser->ast.decls;
+      while (d) {
+        last = d;
+        d = d->next;
+      }
     }
 
     if (!parser->ast.decls) {
@@ -298,6 +308,17 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     parser_consume_peeked(parser, NULL);
     struct ast_toplevel *result = parser_parse_tydecl(parser);
     result->loc = loc;
+    return result;
+  } else if (peek == TOKEN_KW_IMPORT || peek == TOKEN_KW_CIMPORT) {
+    parser_consume_peeked(parser, NULL);
+    struct ast_toplevel *result =
+        parser_parse_import(parser, peek == TOKEN_KW_IMPORT ? ImportTypeHaven : ImportTypeC);
+    if (!result) {
+      return NULL;
+    }
+    if (parser_consume(parser, NULL, TOKEN_SEMI) < 0) {
+      return NULL;
+    }
     return result;
   }
 
@@ -1541,4 +1562,41 @@ const char *parser_diag_msg(struct parser_diag *diag) {
 
 enum ParserDiagSeverity parser_diag_severity(struct parser_diag *diag) {
   return diag->severity;
+}
+
+int parser_merge_asts(struct parser *parser, struct parser *other) {
+  if (!parser || !other) {
+    return -1;
+  }
+
+  // insert the other AST at the start of the current AST
+  struct ast_toplevel *last = parser->ast.decls;
+  while (last && last->next) {
+    last = last->next;
+  }
+
+  if (last) {
+    last->next = parser->ast.decls;
+  }
+  parser->ast.decls = other->ast.decls;
+
+  // clear the other parser's AST
+  other->ast.decls = NULL;
+
+  return 0;
+}
+
+static struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType type) {
+  struct token token;
+  if (parser_consume(parser, &token, TOKEN_IDENTIFIER) < 0) {
+    return NULL;
+  }
+
+  if (compiler_parse_import(parser->compiler, type, token.value.identv.ident) < 0) {
+    return NULL;
+  }
+
+  struct ast_toplevel *result = calloc(1, sizeof(struct ast_toplevel));
+  result->type = AST_DECL_TYPE_IMPORT;
+  return result;
 }

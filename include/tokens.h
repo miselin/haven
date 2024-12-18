@@ -77,6 +77,8 @@ enum token_id {
   TOKEN_KW_DEFER,      // defer
   TOKEN_KW_IMPURE,     // impure
   TOKEN_KW_ENUM,       // enum
+  TOKEN_KW_IMPORT,     // import
+  TOKEN_KW_CIMPORT,    // cimport
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

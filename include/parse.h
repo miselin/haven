@@ -26,4 +26,8 @@ struct lex_locator *parser_diag_loc(struct parser_diag *);
 const char *parser_diag_msg(struct parser_diag *);
 enum ParserDiagSeverity parser_diag_severity(struct parser_diag *);
 
+// Merges the AST of another parser into this one. The other parser's AST becomes empty in the
+// process.
+int parser_merge_asts(struct parser *parser, struct parser *other);
+
 #endif

@@ -250,7 +250,7 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
     } else {
       fprintf(stderr, "unhandled top level type declaration type %d\n", ast->tydecl.ty.ty);
     }
-  } else if (ast->type == AST_DECL_TYPE_PREPROC) {
+  } else if (ast->type == AST_DECL_TYPE_PREPROC || ast->type == AST_DECL_TYPE_IMPORT) {
     // no-op in codegen
   } else {
     fprintf(stderr, "unhandled toplevel type %d\n", ast->type);

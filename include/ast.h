@@ -18,6 +18,7 @@
 #define AST_DECL_TYPE_FDECL 2
 #define AST_DECL_TYPE_TYDECL 3
 #define AST_DECL_TYPE_PREPROC 4  // tracked in AST but not used after parse
+#define AST_DECL_TYPE_IMPORT 5   // fake AST node, import merges ASTs
 
 #define AST_STMT_TYPE_EXPR 1
 #define AST_STMT_TYPE_LET 2

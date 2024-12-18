@@ -2,6 +2,7 @@
 #include "compiler.h"
 
 #include <getopt.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,64 +10,13 @@
 
 #include "cfold.h"
 #include "codegen.h"
+#include "internal.h"
 #include "lex.h"
 #include "parse.h"
 #include "purity.h"
 #include "semantic.h"
 #include "typecheck.h"
 #include "utility.h"
-
-enum Options {
-  O0 = 1,
-  O1,
-  O2,
-  O3,
-  DebugAst,
-  EmitIR,
-  EmitBitcode,
-  Verbose,
-  NoColor,
-  OnlyParse,
-};
-
-enum Color {
-  Black,
-  Red,
-  Green,
-  Yellow,
-  Blue,
-  Purple,
-  Cyan,
-  White,
-
-  // not a real color
-  Reset,
-};
-
-enum Attribute {
-  None,
-  Bold,
-};
-
-struct compiler {
-  const char *input_file;
-  const char *output_file;
-
-  enum OptLevel opt_level;
-  enum OutputFormat output_format;
-  enum RelocationsType relocations_type;
-
-  struct parser *parser;
-  struct lex_state *lexer;
-
-  uint64_t flags[1];
-
-  enum Pass default_until;
-};
-
-static int parse_flags(struct compiler *into, int argc, char *const argv[]);
-
-static const char *outext(struct compiler *compiler);
 
 struct compiler *new_compiler(int argc, const char *argv[]) {
   struct compiler *result = calloc(1, sizeof(struct compiler));
@@ -105,6 +55,13 @@ const char *compiler_get_output_file(struct compiler *compiler) {
 }
 
 void destroy_compiler(struct compiler *compiler) {
+  struct search_dir *dir = compiler->search_dirs;
+  while (dir) {
+    struct search_dir *next = dir->next;
+    free((void *)dir->path);
+    free(dir);
+    dir = next;
+  }
   free((void *)compiler->input_file);
   free((void *)compiler->output_file);
   if (compiler->parser) {
@@ -137,7 +94,7 @@ static void usage() {
   fprintf(stderr, "  --verbose\n");
 }
 
-static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
+int parse_flags(struct compiler *into, int argc, char *const argv[]) {
   if (!argc && !argv) {
     // used for testing - retain default values
     return 0;
@@ -212,6 +169,18 @@ static int parse_flags(struct compiler *into, int argc, char *const argv[]) {
     }
 
     into->input_file = copy_to_heap(argv[i]);
+
+    // add the directory of the input file to the search path
+    char *input_file_abs = realpath(into->input_file, NULL);
+    if (!input_file_abs) {
+      perror("realpath");
+      return -1;
+    }
+
+    char *input_file_dir = dirname(input_file_abs);
+    add_search_dir(into, input_file_dir);
+
+    free(input_file_abs);
   }
 
   if (!into->input_file) {
@@ -283,19 +252,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     rc = 1;
   }
 
-  struct parser_diag *diag = parser_pop_diag(parser);
-  while (diag) {
-    enum ParserDiagSeverity severity = parser_diag_severity(diag);
-    enum DiagLevel level = DiagError;
-    if (severity == Warning) {
-      level = DiagWarning;
-    }
-    struct lex_locator *loc = parser_diag_loc(diag);
-    compiler_diag(compiler, level, "%s:%zd:%zd: %s\n", loc->file, loc->line + 1, loc->column,
-                  parser_diag_msg(diag));
-    parser_free_diag(diag);
-    diag = parser_pop_diag(parser);
-  }
+  present_diags(compiler, parser);
 
   if (until == PassParse) {
     goto out;
@@ -406,7 +363,7 @@ out:
   return rc;
 }
 
-static const char *outext(struct compiler *compiler) {
+const char *outext(struct compiler *compiler) {
   switch (compiler->output_format) {
     case OutputIR:
       return "ll";
@@ -480,4 +437,65 @@ int compiler_diag(struct compiler *compiler, enum DiagLevel level, const char *f
 
 struct ast_program *compiler_get_ast(struct compiler *compiler) {
   return parser_get_ast(compiler->parser);
+}
+
+void present_diags(struct compiler *compiler, struct parser *parser) {
+  struct parser_diag *diag = parser_pop_diag(parser);
+  while (diag) {
+    enum ParserDiagSeverity severity = parser_diag_severity(diag);
+    enum DiagLevel level = DiagError;
+    if (severity == Warning) {
+      level = DiagWarning;
+    }
+    struct lex_locator *loc = parser_diag_loc(diag);
+    compiler_diag(compiler, level, "%s:%zd:%zd: %s\n", loc->file, loc->line + 1, loc->column,
+                  parser_diag_msg(diag));
+    parser_free_diag(diag);
+    diag = parser_pop_diag(parser);
+  }
+}
+
+FILE *find_file(struct compiler *compiler, const char *filename) {
+  if (filename[0] == '/') {
+    return fopen(filename, "r");
+  }
+
+  struct search_dir *dir = compiler->search_dirs;
+  while (dir) {
+    char *path = (char *)malloc(strlen(dir->path) + 1 + strlen(filename) + 1);
+    strcpy(path, dir->path);
+    strcat(path, "/");
+    strcat(path, filename);
+    FILE *result = fopen(path, "r");
+    free(path);
+    if (result) {
+      return result;
+    }
+    dir = dir->next;
+  }
+
+  return NULL;
+}
+
+void add_search_dir(struct compiler *compiler, const char *path) {
+  // check for duplicates
+  struct search_dir *dir = compiler->search_dirs;
+  struct search_dir *tail = NULL;
+  while (dir) {
+    if (strcmp(dir->path, path) == 0) {
+      return;
+    }
+    tail = dir;
+    dir = dir->next;
+  }
+
+  struct search_dir *new_dir = (struct search_dir *)malloc(sizeof(struct search_dir));
+  new_dir->path = strdup(path);
+  new_dir->next = NULL;
+
+  if (tail) {
+    tail->next = new_dir;
+  } else {
+    compiler->search_dirs = new_dir;
+  }
 }

@@ -14,6 +14,8 @@ enum RelocationsType { RelocsPIC, RelocsStatic };
 
 enum DiagLevel { DiagError, DiagWarning, DiagNote, DiagDebug };
 
+enum ImportType { ImportTypeHaven, ImportTypeC };
+
 enum Pass {
   AllPasses,
   PassParse,
@@ -47,6 +49,8 @@ const char *compiler_get_input_file(struct compiler *compiler);
 const char *compiler_get_output_file(struct compiler *compiler);
 
 int compiler_run(struct compiler *compiler, enum Pass until);
+
+int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name);
 
 struct ast_program *compiler_get_ast(struct compiler *compiler);
 

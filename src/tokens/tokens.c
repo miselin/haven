@@ -161,6 +161,10 @@ const char *token_id_to_string(enum token_id token) {
       return "comment";
     case TOKEN_NEWLINE:
       return "<NL>";
+    case TOKEN_KW_IMPORT:
+      return "import";
+    case TOKEN_KW_CIMPORT:
+      return "cimport";
     case TOKEN_EOF:
       return "<EOF>";
   }

@@ -171,11 +171,9 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
 
   // need to use the intrinsic instead
   unsigned int memcpy_id = LLVMLookupIntrinsicID("llvm.memcpy", 11);
-  fprintf(stderr, "intrinsic id: %d\n", memcpy_id);
   LLVMValueRef memcpy_func =
       LLVMGetIntrinsicDeclaration(codegen->llvm_module, memcpy_id, memcpy_types, 3);
   LLVMTypeRef func_type = LLVMGlobalGetValueType(memcpy_func);
-  fprintf(stderr, "memcpy_func: %p\n", (void *)memcpy_func);
   LLVMValueRef args[4] = {
       ptr,                                                                            // dest
       value,                                                                          // src
