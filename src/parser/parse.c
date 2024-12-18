@@ -45,9 +45,9 @@ struct parser_diag {
 
 static enum token_id parser_peek(struct parser *parser) __attribute__((warn_unused_result));
 
-__attribute__((warn_unused_result(
-    "consume returns an error if the token is not the expected token"))) static int
-parser_consume(struct parser *parser, struct token *token, enum token_id expected);
+__attribute__((warn_unused_result)) static int parser_consume(struct parser *parser,
+                                                              struct token *token,
+                                                              enum token_id expected);
 
 // Consume a token from the lexer without any checks. Use this when you know the token is correct,
 // for example due to a previous peek. Without a previous peek, this function is unsafe.
