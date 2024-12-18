@@ -1,1 +1,1 @@
-add_haven_library(cimport cimport.hv clex.hv)
+add_bootstrap_haven_library(cimport cimport.hv clex.hv)

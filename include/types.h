@@ -24,9 +24,13 @@
 // type conversion for constants.
 #define TYPE_FLAG_CONSTANT (1U << 2)
 
+// This type creates a pointer reference. This changes how the inner expression is evaluated.
+// In most cases, this will cause variables to resolve to their stack address instead of its value.
+#define TYPE_FLAG_REFERENCE (1U << 3)
+
 // All flags that typically matter for type comparison.
 // indireect/constant are excluded as they are typically specific to an expression, not a type.
-#define TYPE_FLAG_MASK_ALL ((~0U) ^ (TYPE_FLAG_INDIRECT | TYPE_FLAG_CONSTANT))
+#define TYPE_FLAG_MASK_ALL ((~0U) ^ (TYPE_FLAG_INDIRECT | TYPE_FLAG_CONSTANT | TYPE_FLAG_REFERENCE))
 
 enum ast_ty_id {
   AST_TYPE_ERROR = 0,

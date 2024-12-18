@@ -115,12 +115,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       // temporaries are things like function parameters, and do not require loads
       if (lookup->vdecl->flags & DECL_FLAG_TEMPORARY) {
         return lookup->ref;
-      } else if (ast->ty.flags & TYPE_FLAG_PTR) {
-        // if we WANT a pointer, don't load it
-        // TODO: there's bugs here. pointers on the stack get broken if we just return the ref, but
-        // for actual objects we can't load? probably a bug in the deref codegen eagerly loading
-        // instead of trusting the value?
-        // return lookup->ref;
+      } else if (ast->ty.flags & TYPE_FLAG_REFERENCE) {
+        // refs require the address of the variable, not the value
+        return lookup->ref;
       } else if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
         // enum is actually a struct -- don't load
         // with no wrapped fields, it's an integer
@@ -262,6 +259,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_REF: {
+      // return the reference (which is usually an alloca or GEP result)
       return emit_expr(codegen, ast->ref.expr);
     } break;
 

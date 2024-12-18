@@ -9,6 +9,8 @@
 #include "compiler.h"
 #include "internal.h"
 
+static void usage(void);
+
 static const char *copy_to_heap(const char *str) {
   size_t len = strlen(str);
   char *result = (char *)malloc(len + 1);
@@ -16,7 +18,7 @@ static const char *copy_to_heap(const char *str) {
   return result;
 }
 
-static void usage() {
+static void usage(void) {
   fprintf(stderr, "usage: %s [options] [file]\n", COMPILER_IDENT);
   fprintf(stderr, "  -o <file>  output file\n");
   fprintf(stderr, "  -S         output assembly\n");

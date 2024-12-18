@@ -948,7 +948,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       ast->ty = entry->vdecl->ty;
       ast->ty.flags |= TYPE_FLAG_PTR;
-      ast->ref.expr->ty.flags |= TYPE_FLAG_PTR;
+      ast->ref.expr->ty.flags |= TYPE_FLAG_REFERENCE;
       ast->ty = resolve_type(typecheck, &ast->ty);
       return &ast->ty;
     } break;

@@ -5,21 +5,21 @@
 
 #include "typecheck.h"
 
-struct ast_ty type_tbd() {
+struct ast_ty type_tbd(void) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(ty));
   ty.ty = AST_TYPE_TBD;
   return ty;
 }
 
-struct ast_ty type_void() {
+struct ast_ty type_void(void) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(ty));
   ty.ty = AST_TYPE_VOID;
   return ty;
 }
 
-struct ast_ty type_error() {
+struct ast_ty type_error(void) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(ty));
   ty.ty = AST_TYPE_ERROR;

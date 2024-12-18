@@ -3,7 +3,7 @@
 
 static int llvm_initialized = 0;
 
-int initialize_llvm() {
+int initialize_llvm(void) {
   if (llvm_initialized) {
     return 0;
   }
@@ -20,7 +20,7 @@ int initialize_llvm() {
   return 0;
 }
 
-void shutdown_llvm() {
+void shutdown_llvm(void) {
   if (!llvm_initialized) {
     return;
   }

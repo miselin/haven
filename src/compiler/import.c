@@ -7,7 +7,7 @@
 #include "lex.h"
 #include "parse.h"
 
-extern int haven_cimport_present() __attribute__((weak));
+extern int haven_cimport_present(void) __attribute__((weak));
 
 extern int haven_cimport_process(const char *filename) __attribute__((weak));
 
@@ -32,7 +32,7 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
     int c = fgetc(fp);
     fclose(fp);
 
-    fprintf(stderr, "C side got fp=%p c=%d\n", (void*) fp, c);
+    fprintf(stderr, "C side got fp=%p c=%d\n", (void *)fp, c);
 
     int rc = haven_cimport_process(fullpath);
     if (rc < 0) {

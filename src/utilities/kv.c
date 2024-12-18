@@ -13,7 +13,7 @@ struct kv {
   struct kv_node *head;
 };
 
-struct kv *new_kv() {
+struct kv *new_kv(void) {
   struct kv *kv = calloc(1, sizeof(struct kv));
   kv->head = NULL;
   return kv;

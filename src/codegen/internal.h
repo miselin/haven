@@ -113,7 +113,7 @@ void update_debug_loc(struct codegen *codegen, struct lex_locator *loc);
 // Emits a store, whether through a store instruction or a memcpy intrinsic, based on the type
 void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr);
 
-int initialize_llvm();
-void shutdown_llvm();
+int initialize_llvm(void);
+void shutdown_llvm(void);
 
 #endif
