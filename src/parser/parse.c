@@ -368,8 +368,9 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       free(decl);
       return NULL;
     }
-    while (parser_peek(parser) != TOKEN_RPAREN) {
-      if (parser_peek(parser) == TOKEN_ASTERISK) {
+    peek = parser_peek(parser);
+    while (peek != TOKEN_RPAREN && peek != TOKEN_EOF && peek != TOKEN_UNKNOWN) {
+      if (peek == TOKEN_ASTERISK) {
         parser_consume_peeked(parser, NULL);
         fdecl->flags |= DECL_FLAG_VARARG;
         break;
@@ -399,6 +400,8 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       } else {
         break;
       }
+
+      peek = parser_peek(parser);
     }
     if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
       free(decl);
@@ -531,6 +534,10 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
     }
 
     struct ast_stmt *stmt = parse_statement(parser, &ended_semi);
+    if (!stmt) {
+      return -1;
+    }
+
     if (last) {
       last->next = stmt;
     } else {
@@ -594,6 +601,10 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
       }
       result->let.init_expr = parse_expression(parser);
       result->let.ty = ty;
+      if (!result->let.init_expr) {
+        free(result);
+        return NULL;
+      }
       break;
 
     case TOKEN_KW_ITER: {
@@ -616,24 +627,40 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
       result->type = AST_STMT_TYPE_STORE;
       result->store.lhs = parse_factor(parser);
       result->store.rhs = parse_expression(parser);
+      if (!(result->store.lhs && result->store.rhs)) {
+        free(result);
+        return NULL;
+      }
     } break;
 
     case TOKEN_KW_RETURN:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_RETURN;
       result->expr = parse_expression(parser);
+      if (!result->expr) {
+        free(result);
+        return NULL;
+      }
       break;
 
     case TOKEN_KW_DEFER:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_DEFER;
       result->expr = parse_expression(parser);
+      if (!result->expr) {
+        free(result);
+        return NULL;
+      }
       break;
 
     default:
       // it's actually an expression
       result->expr = parse_expression(parser);
       result->type = AST_STMT_TYPE_EXPR;
+      if (!result->expr) {
+        free(result);
+        return NULL;
+      }
   }
 
   // must end in either semicolon or rbrace
@@ -975,6 +1002,10 @@ static struct ast_expr *parse_factor(struct parser *parser) {
             is_otherwise = 1;
           } else {
             arm->pattern = parse_expression(parser);
+            if (!arm->pattern) {
+              free(result);
+              return NULL;
+            }
           }
         } else {
           parser_commit(parser);
@@ -1019,7 +1050,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       break;
 
     default:
-      parser_diag(1, parser, &parser->peek, "unknown token %s when parsing factor\n",
+      parser_diag(1, parser, &parser->peek, "unknown token %s when parsing factor",
                   token_id_to_string(peek));
   }
 
@@ -1445,14 +1476,13 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
   result->type = AST_EXPR_TYPE_PATTERN_MATCH;
   lexer_locate(parser->lexer, &result->loc);
 
-  if (parser_consume(parser, &result->pattern_match.enum_name, TOKEN_IDENTIFIER) !=
-      TOKEN_IDENTIFIER) {
+  if (parser_consume(parser, &result->pattern_match.enum_name, TOKEN_IDENTIFIER) < 0) {
     goto fail;
   }
-  if (parser_consume(parser, NULL, TOKEN_COLONCOLON) != TOKEN_COLONCOLON) {
+  if (parser_consume(parser, NULL, TOKEN_COLONCOLON) < 0) {
     goto fail;
   }
-  if (parser_consume(parser, &result->pattern_match.name, TOKEN_IDENTIFIER) != TOKEN_IDENTIFIER) {
+  if (parser_consume(parser, &result->pattern_match.name, TOKEN_IDENTIFIER) < 0) {
     goto fail;
   }
 
