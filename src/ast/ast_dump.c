@@ -311,7 +311,9 @@ void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_ASSIGN:
-      fprintf(stderr, "Assign(%s, ", ast->assign.ident.value.identv.ident);
+      fprintf(stderr, "Assign(");
+      dump_expr(ast->assign.lhs, indent);
+      fprintf(stderr, ", ");
       dump_expr(ast->assign.expr, indent);
       fprintf(stderr, ") -> ");
       dump_ty(&ast->ty);

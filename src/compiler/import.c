@@ -28,16 +28,24 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
     fprintf(stderr, "stdin %p stdout %p stderr %p\n", (void *)stdin, (void *)stdout,
             (void *)stderr);
 
-    FILE *fp = fopen(fullpath, "r");
-    int c = fgetc(fp);
-    fclose(fp);
+    char cmdbuf[1024];
+    snprintf(cmdbuf, sizeof(cmdbuf), "cpp -P %s > /tmp/haven_cimport_tempfile.c", fullpath);
 
-    fprintf(stderr, "C side got fp=%p c=%d\n", (void *)fp, c);
+    // run the C preprocessor on the file, output to a temp file for passing to the c importer
+    // module
+    FILE *fp = popen(cmdbuf, "r");
+    if (pclose(fp) < 0) {
+      compiler_diag(compiler, DiagError, "failed to run C preprocessor on %s\n", fullpath);
+      free((void *)fullpath);
+      return -1;
+    }
 
-    int rc = haven_cimport_process(fullpath);
+    int rc = haven_cimport_process("/tmp/haven_cimport_tempfile.c");
     if (rc < 0) {
       compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
     }
+
+    fprintf(stderr, "rc=%d\n", rc);
 
     free((void *)fullpath);
     return rc;

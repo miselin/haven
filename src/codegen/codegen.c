@@ -422,10 +422,11 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       LLVMBuildBr(codegen->llvm_builder, cond_block);
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, cond_block);
 
+      LLVMTypeRef cond_type = ast_ty_to_llvm_ty(codegen, &ast->while_stmt.cond->ty);
+
       LLVMValueRef cond = emit_expr(codegen, ast->while_stmt.cond);
-      LLVMValueRef comp = LLVMBuildICmp(
-          codegen->llvm_builder, LLVMIntNE, cond,
-          LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0), "while.cond");
+      LLVMValueRef comp = LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond,
+                                        LLVMConstInt(cond_type, 0, 0), "while.cond");
       LLVMBuildCondBr(codegen->llvm_builder, comp, body_block, end_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, body_block);

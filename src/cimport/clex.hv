@@ -5,15 +5,22 @@ pub fn i32 ungetc(i32 c, FILE *stream);
 pub fn i32 read(i32 fd, i8 *buf, i32 count);
 pub fn i32 isdigit(i32 c);
 pub fn i32 isspace(i32 c);
+pub fn i32 isalpha(i32 c);
 
 pub fn i32 printf(str fmt, *);
 
+pub fn i8 *malloc(i32 size);
+pub fn i8 *calloc(i32 nmemb, i32 size);
+pub fn void free(i8 *ptr);
+
 type StringLiteral = struct {
-    i8[256] s;
+    i8 *s;
+    i32 length;
 };
 
 type Identifier = struct {
-    i8[256] s;
+    i8 *s;
+    i32 length;
 };
 
 type Token = enum {
@@ -43,24 +50,14 @@ type Token = enum {
     Colon,
     Dot,
     Comma,
-    String(StringLiteral),
-    Ident(Identifier)
+    String(i8*),
+    Ident(i8*),
+    Integer(i64),
+    Comment,
+    DotDotDot
 };
 
-fn Token string_literal(FILE *fp) {
-    Token::Error
-}
-
-fn Token integer_literal(FILE *fp, i8 first_char) {
-    Token::Error
-}
-
-fn Token identifier(FILE *fp, i8 first_char) {
-    Token::Error
-}
-
 impure fn i8 next_char(FILE *fp) {
-    printf("fp=%p\n", fp);
     let i32 n = fgetc(fp);
     match n {
         -1 => -1
@@ -69,13 +66,119 @@ impure fn i8 next_char(FILE *fp) {
     }
 }
 
+impure fn Token string_literal(FILE *fp) {
+    let mut buf = malloc(256);
+    let mut i32 i = 0;
+
+    while 1 {
+        let c = next_char(fp);
+        if c <= 0 {
+            break;
+        };
+
+        if c == '"' {
+            break;
+        };
+
+        store (buf + i) c;
+        i = i + 1;
+    };
+
+    store (buf + i) as i8 0;
+
+    Token::String(buf)
+}
+
+impure fn Token integer_literal(FILE *fp, i8 first_char) {
+    let mut i64 n = as i64 (first_char - '0');
+    while 1 {
+        let c = next_char(fp);
+        if c <= 0 {
+            break;
+        };
+
+        if !isdigit(as i32 c) {
+            ungetc(as i32 c, fp);
+            break;
+        };
+
+        n = (n * 10) + as i64 (c - '0');
+    };
+
+    Token::Integer(n)
+}
+
+impure fn Token identifier(FILE *fp, i8 first_char) {
+    if isalpha(as i32 first_char) == 0 && first_char != '_' {
+        ret Token::Error;
+    };
+
+    let mut buf = malloc(256);
+    let mut i32 i = 0;
+
+    store (buf + i) first_char;
+    i = 1;
+
+    while 1 {
+        let c = next_char(fp);
+        if c <= 0 {
+            break;
+        };
+
+        if !isalpha(as i32 c) && !isdigit(as i32 c) && c != '_' {
+            ungetc(as i32 c, fp);
+            break;
+        };
+
+        store (buf + i) c;
+        i = i + 1;
+    };
+
+    store (buf + i) as i8 0;
+
+    Token::Ident(buf)
+}
+
+impure fn Token comment(FILE *fp) {
+    while 1  {
+        let c = next_char(fp);
+        if c <= 0 {
+            ret Token::EOF;
+        };
+
+        if c == '*' {
+            let c = next_char(fp);
+            if c == '/' {
+                break;
+            };
+        };
+    };
+
+    Token::Comment
+}
+
+impure fn Token commentline(FILE *fp) {
+    while 1 {
+        let c = next_char(fp);
+        if c <= 0 {
+            ret Token::EOF;
+        };
+
+        if c == 10 {
+            break;
+        };
+    };
+
+    Token::Comment
+}
+
 impure fn Token next_token(FILE *fp) {
     let mut c = next_char(fp);
     if c <= 0 {
         ret Token::EOF;
     };
 
-    if isspace(as i32 c) {
+    while isspace(as i32 c) {
         c = next_char(fp);
         if c <= 0 {
             ret Token::EOF;
@@ -97,7 +200,14 @@ impure fn Token next_token(FILE *fp) {
         '+' => Token::Add
         '-' => Token::Sub
         '*' => Token::Mul
-        '/' => Token::Div
+        '/' => {
+            let c_ = next_char(fp);
+            match c_ {
+            '*' => comment(fp)
+            '/' => commentline(fp)
+            _ => { ungetc(as i32 c_, fp); Token::Div }
+            }
+        }
         '%' => Token::Mod
         '&' => Token::And
         '|' => Token::Or
@@ -109,9 +219,21 @@ impure fn Token next_token(FILE *fp) {
         '>' => Token::Gt
         '?' => Token::Cond
         ':' => Token::Colon
-        '.' => Token::Dot
+        '.' => {
+            let c_ = next_char(fp);
+            match c {
+                '.' => {
+                    let c__ = next_char(fp);
+                    match c__ {
+                        '.' => Token::DotDotDot
+                        _ => Token::Error
+                    }
+                }
+                _ => { ungetc(as i32 c_, fp); Token::Dot }
+            }
+        }
         ',' => Token::Comma
         '"' => string_literal(fp)
-        _ => Token::Error
+        _ => identifier(fp, c)
     }
 }

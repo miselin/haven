@@ -11,28 +11,28 @@
 #include "utility.h"
 
 LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *name) {
-#if 0
   LLVMBasicBlockRef current_block = LLVMGetInsertBlock(codegen->llvm_builder);
 
-  // insert allocas at the start of the entry block
-  if (codegen->last_alloca) {
-    LLVMValueRef next = LLVMGetNextInstruction(codegen->last_alloca);
-    if (next) {
-      LLVMPositionBuilderBefore(codegen->llvm_builder, next);
-    } else {
-      LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->entry_block);
+  // default to end of entry block in case no instructions have been added yet
+  LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->entry_block);
+
+  LLVMValueRef inst = LLVMGetFirstInstruction(codegen->entry_block);
+  if (inst) {
+    // find the first non-alloca instruction in the entry block
+    while (inst && LLVMGetInstructionOpcode(inst) == LLVMAlloca) {
+      inst = LLVMGetNextInstruction(inst);
     }
-  } else {
-    LLVMPositionBuilderAtEnd(codegen->llvm_builder, codegen->entry_block);
+
+    // and now insert the alloca before the first non-alloca instruction
+    if (inst) {
+      LLVMPositionBuilderBefore(codegen->llvm_builder, inst);
+    }
   }
-#endif
 
   LLVMValueRef var = LLVMBuildAlloca(codegen->llvm_builder, type, name);
   codegen->last_alloca = var;
 
-#if 0
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, current_block);
-#endif
 
   return var;
 }
@@ -158,6 +158,10 @@ void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {
 }
 
 void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr) {
+  if (!value) {
+    return;
+  }
+
   if (LLVMIsNull(value) || !type_is_complex(ty)) {
     LLVMBuildStore(codegen->llvm_builder, value, ptr);
     return;

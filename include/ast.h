@@ -184,7 +184,7 @@ struct ast_expr_if {
 };
 
 struct ast_expr_assign {
-  struct token ident;
+  struct ast_expr *lhs;
   struct ast_expr *expr;
 };
 
@@ -328,5 +328,7 @@ const char *ast_logical_op_to_str(int op);
 
 int ast_binary_op_conditional(int op);
 int ast_binary_op_logical(int op);
+
+const char *ast_expr_ident(struct ast_expr *expr);
 
 #endif

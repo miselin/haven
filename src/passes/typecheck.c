@@ -469,6 +469,8 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
         return NULL;
       }
 
+      // TODO: needs to be an integer condition
+
       typecheck_block(typecheck, &ast->while_stmt.block);
     } break;
 
@@ -617,16 +619,23 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      if (entry->vdecl->ty.ty != AST_TYPE_ARRAY) {
+      if (entry->vdecl->ty.ty != AST_TYPE_ARRAY && (entry->vdecl->ty.flags & TYPE_FLAG_PTR) == 0) {
         char tystr[256];
         type_name_into(&entry->vdecl->ty, tystr, 256);
 
-        fprintf(stderr, "array index %s has type %s, expected an array type\n", ident, tystr);
+        fprintf(stderr, "array index %s has type %s, expected an array or pointer type\n", ident,
+                tystr);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
 
-      ast->ty = resolve_type(typecheck, entry->vdecl->ty.array.element_ty);
+      if (entry->vdecl->ty.ty == AST_TYPE_ARRAY) {
+        ast->ty = resolve_type(typecheck, entry->vdecl->ty.array.element_ty);
+      } else {
+        // type of expression is the type pointed to by the pointer
+        ast->ty = resolve_type(typecheck, &entry->vdecl->ty);
+        ast->ty.flags &= ~TYPE_FLAG_PTR;
+      }
       return &ast->ty;
     } break;
 
@@ -899,7 +908,16 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     } break;
 
     case AST_EXPR_TYPE_ASSIGN: {
-      const char *ident = ast->assign.ident.value.identv.ident;
+      struct ast_ty *lhs_ty = typecheck_expr(typecheck, ast->assign.lhs);
+      if (!lhs_ty) {
+        return NULL;
+      }
+
+      const char *ident = ast_expr_ident(ast->assign.lhs);
+      if (!ident) {
+        return NULL;  // TODO: this should happen in semantic pass not here
+      }
+
       struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
       if (!entry || !entry->vdecl) {
         fprintf(stderr, "%s not found or not a variable\n", ident);
@@ -1279,6 +1297,11 @@ static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
   if ((lhs->ty == AST_TYPE_FVEC && rhs->ty == AST_TYPE_FLOAT) ||
       (lhs->ty == AST_TYPE_FLOAT && rhs->ty == AST_TYPE_FVEC)) {
     return op == AST_BINARY_OP_MUL || op == AST_BINARY_OP_DIV || op == AST_BINARY_OP_MOD;
+  }
+
+  // pointer arithmetic
+  if (lhs->flags & TYPE_FLAG_PTR || rhs->flags & TYPE_FLAG_PTR) {
+    return op == AST_BINARY_OP_ADD || op == AST_BINARY_OP_SUB;
   }
 
   return 0;

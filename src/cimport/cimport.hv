@@ -14,17 +14,117 @@ pub fn i32 close(i32 fd);
 
 pub fn i32 printf(str fmt, *);
 
+pub fn void free(i8 *ptr);
+
 pub fn i32 haven_cimport_present() {
     1
 }
 
+type Keyword = enum {
+    NotAKeyword,
+    Typedef,
+    Int,
+    Long,
+    Unsigned,
+    Char,
+    Short,
+    Float,
+    Double,
+    Struct,
+    Enum,
+    Union,
+    Extern,
+    Static,
+};
+
+pub fn i32 strcmp(i8 *s1, str other);
+
+fn Keyword keyword(i8* s) {
+    if strcmp(s, "typedef") == 0 {
+        ret Keyword::Typedef;
+    };
+    if strcmp(s, "int") == 0 {
+        ret Keyword::Int;
+    };
+    if strcmp(s, "long") == 0 {
+        ret Keyword::Long;
+    };
+    if strcmp(s, "unsigned") == 0 {
+        ret Keyword::Unsigned;
+    };
+    if strcmp(s, "char") == 0 {
+        ret Keyword::Char;
+    };
+    if strcmp(s, "short") == 0 {
+        ret Keyword::Short;
+    };
+    if strcmp(s, "float") == 0 {
+        ret Keyword::Float;
+    };
+    if strcmp(s, "double") == 0 {
+        ret Keyword::Double;
+    };
+    if strcmp(s, "struct") == 0 {
+        ret Keyword::Struct;
+    };
+    if strcmp(s, "enum") == 0 {
+        ret Keyword::Enum;
+    };
+    if strcmp(s, "union") == 0 {
+        ret Keyword::Union;
+    };
+    if strcmp(s, "extern") == 0 {
+        ret Keyword::Extern;
+    };
+    if strcmp(s, "static") == 0 {
+        ret Keyword::Static;
+    };
+    Keyword::NotAKeyword
+}
+
 pub impure fn i32 haven_cimport_process(str filepath) {
     let fp = fopen(filepath, "r");
-    printf("opened %s -> fp=%p\n", filepath, fp);
 
-    let tok = next_token(fp);
+    let mut token = next_token(fp);
+
+    while 1 {
+        match token {
+            Token::EOF => { printf("got an EOF\n"); break; }
+            Token::Error => { printf("got an error\n"); break; }
+            Token::Comment => { printf("comment\n"); }
+            Token::Ident(ident) => {
+                match keyword(ident) {
+                    Keyword::NotAKeyword => {
+                        printf("got an identifier: %s\n", ident);
+                    }
+                    _ => {
+                        printf("got a keyword: %s\n", ident);
+                    }
+                };
+                free(ident);
+            }
+            Token::Integer(n) => {
+                printf("got an integer: %lld\n", n);
+            }
+            Token::String(s) => {
+                printf("got a string literal: %s\n", s);
+                free(s);
+            }
+            Token::DotDotDot => {
+                printf("got a dotdotdot\n");
+            }
+            _ => {
+                printf("got another type of token\n");
+            }
+        };
+
+        token = next_token(fp);
+    };
 
     fclose(fp);
 
-    -1
+    match token {
+        Token::EOF => 0
+        _ => -1
+    }
 }

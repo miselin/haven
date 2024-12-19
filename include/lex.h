@@ -13,8 +13,7 @@ struct lex_state;
 struct lex_locator {
   size_t line;
   size_t column;
-  // shared - part of lex_state, don't modify
-  const char *file;
+  char file[256];
 };
 
 struct token {

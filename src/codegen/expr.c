@@ -242,10 +242,11 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_ASSIGN: {
+      // TODO: evaluate LHS for things like arrays etc
+      const char *ident = ast_expr_ident(ast->assign.lhs);
       LLVMValueRef expr = emit_expr(codegen, ast->assign.expr);
 
-      struct scope_entry *entry =
-          scope_lookup(codegen->scope, ast->call.ident.value.identv.ident, 1);
+      struct scope_entry *entry = scope_lookup(codegen->scope, ident, 1);
 
       if (entry->vdecl->flags & DECL_FLAG_TEMPORARY) {
         // swap the reference to this expression from now on
@@ -429,10 +430,10 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMValueRef storage = into ? into : new_alloca(codegen, enum_type, "enum");
       LLVMValueRef tag = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 0, "tag");
-      LLVMValueRef buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 1, "buf");
 
       LLVMBuildStore(codegen->llvm_builder, tag_value, tag);
       if (inner) {
+        LLVMValueRef buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 1, "buf");
         LLVMBuildStore(codegen->llvm_builder, inner, buf);
       }
 

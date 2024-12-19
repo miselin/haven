@@ -163,6 +163,7 @@ void free_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_ASSIGN:
+      free_expr(ast->assign.lhs);
       free_expr(ast->assign.expr);
       break;
 
@@ -213,6 +214,7 @@ void free_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
+      free_ty(&ast->enum_init.field_ty, 0);
       free_expr(ast->enum_init.inner);
       break;
 

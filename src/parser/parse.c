@@ -935,11 +935,6 @@ static struct ast_expr *parse_factor(struct parser *parser) {
           free(result);
           return NULL;
         }
-      } else if (next == TOKEN_ASSIGN) {
-        parser_consume_peeked(parser, NULL);
-        result->type = AST_EXPR_TYPE_ASSIGN;
-        result->assign.ident = token;
-        result->assign.expr = parse_expression(parser);
       } else if (next == TOKEN_COLONCOLON) {
         parser_consume_peeked(parser, NULL);
         result->type = AST_EXPR_TYPE_ENUM_INIT;
@@ -962,6 +957,18 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       } else {
         result->type = AST_EXPR_TYPE_VARIABLE;
         result->variable.ident = token;
+      }
+
+      next = parser_peek(parser);
+      if (next == TOKEN_ASSIGN) {
+        parser_consume_peeked(parser, NULL);
+
+        // swap out the result when we encounter an assignment
+        struct ast_expr *lhs = result;
+        result = calloc(1, sizeof(struct ast_expr));
+        result->type = AST_EXPR_TYPE_ASSIGN;
+        result->assign.lhs = lhs;
+        result->assign.expr = parse_expression(parser);
       }
     } break;
 
