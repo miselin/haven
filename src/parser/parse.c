@@ -77,6 +77,9 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser);
 static int binary_op(enum token_id token);
 static int binary_op_prec(int token);
 
+// Add preamble definitions to the AST - builtin types, type aliases, and functions.
+static int parser_add_preamble(struct parser *parser);
+
 // Rewind the parser and clear out the lookahead (peek) token so the next peek uses the rewound
 // location.
 static void parser_rewind(struct parser *parser) {
@@ -176,7 +179,7 @@ int parser_run(struct parser *parser) {
     last = decl;
   }
 
-  return 0;
+  return parser_add_preamble(parser);
 }
 
 struct ast_program *parser_get_ast(struct parser *parser) {
@@ -1612,6 +1615,10 @@ int parser_merge_asts(struct parser *parser, struct parser *other) {
     return -1;
   }
 
+  return parser_merge_program(parser, &other->ast);
+}
+
+int parser_merge_program(struct parser *parser, struct ast_program *program) {
   // insert the other AST at the end of the current AST
   struct ast_toplevel *last = parser->ast.decls;
   while (last && last->next) {
@@ -1619,13 +1626,13 @@ int parser_merge_asts(struct parser *parser, struct parser *other) {
   }
 
   if (last) {
-    last->next = other->ast.decls;
+    last->next = program->decls;
   } else {
-    parser->ast.decls = other->ast.decls;
+    parser->ast.decls = program->decls;
   }
 
   // clear the other parser's AST
-  other->ast.decls = NULL;
+  program->decls = NULL;
 
   return 0;
 }
@@ -1643,4 +1650,42 @@ static struct ast_toplevel *parser_parse_import(struct parser *parser, enum Impo
   struct ast_toplevel *result = calloc(1, sizeof(struct ast_toplevel));
   result->type = AST_DECL_TYPE_IMPORT;
   return result;
+}
+
+static int parser_add_preamble(struct parser *parser) {
+  // we'll insert all of these at the start of the AST
+  struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
+  struct ast_toplevel *preamble = decl;
+
+  // __va_list_tag type
+  // TODO: platform specific
+  decl->type = AST_DECL_TYPE_TYDECL;
+  decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
+  strncpy(decl->tydecl.ident.value.identv.ident, "__va_list_tag", 256);
+  decl->tydecl.ty.ty = AST_TYPE_STRUCT;
+  strncpy(decl->tydecl.ty.name, "__va_list_tag", 256);
+  decl->tydecl.ty.structty.fields = calloc(1, sizeof(struct ast_struct_field));
+  decl->tydecl.ty.structty.fields->ty = calloc(1, sizeof(struct ast_ty));
+  decl->tydecl.ty.structty.fields->ty->ty = AST_TYPE_INTEGER;
+  decl->tydecl.ty.structty.fields->ty->integer.is_signed = 1;
+  decl->tydecl.ty.structty.fields->ty->integer.width = 64;
+  strncpy(decl->tydecl.ty.structty.fields->name, "gp_offset", 256);
+  decl->tydecl.ty.structty.num_fields = 1;
+
+  // __builtin_va_list is an array of one __va_list_tag
+  decl->next = calloc(1, sizeof(struct ast_toplevel));
+  decl = decl->next;
+  decl->type = AST_DECL_TYPE_TYDECL;
+  decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
+  strncpy(decl->tydecl.ident.value.identv.ident, "__builtin_va_list", 256);
+  decl->tydecl.ty.ty = AST_TYPE_ARRAY;
+  decl->tydecl.ty.array.width = 1;
+  decl->tydecl.ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
+  decl->tydecl.ty.array.element_ty->ty = AST_TYPE_CUSTOM;
+  strncpy(decl->tydecl.ty.array.element_ty->name, "__va_list_tag", 256);
+
+  decl->next = parser->ast.decls;
+  parser->ast.decls = preamble;
+
+  return 0;
 }

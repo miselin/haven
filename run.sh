@@ -3,10 +3,13 @@
 set -e
 set -o pipefail
 
-./build/bin/haven --verbose --debug-ast --emit-ir $1 2> >(tee log.log >&2)
-clang-18 -O2 -c -o ${1%.*}.o ${1%.*}.ll
-clang-18 -O2 -S -emit-llvm -o ${1%.*}.opt.ll ${1%.*}.ll
-objdump -S ${1%.*}.o >${1%.*}.s
-clang-18 -o ${1%.*} ${1%.*}.o -lm
+FILENAME=$1
+shift
 
-time ${1%.*}
+./build/bin/haven --verbose --debug-ast --emit-ir ${FILENAME} "$@" 2> >(tee log.log >&2)
+clang-18 -O2 -c -o ${FILENAME%.*}.o ${FILENAME%.*}.ll
+clang-18 -O2 -S -emit-llvm -o ${FILENAME%.*}.opt.ll ${FILENAME%.*}.ll
+objdump -S ${FILENAME%.*}.o >${FILENAME%.*}.s
+clang-18 -o ${FILENAME%.*} ${FILENAME%.*}.o -lm
+
+time ${FILENAME%.*}

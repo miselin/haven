@@ -30,4 +30,6 @@ enum ParserDiagSeverity parser_diag_severity(struct parser_diag *);
 // process.
 int parser_merge_asts(struct parser *parser, struct parser *other);
 
+int parser_merge_program(struct parser *parser, struct ast_program *program);
+
 #endif

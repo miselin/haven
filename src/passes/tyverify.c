@@ -51,8 +51,8 @@ static int typecheck_verify_toplevel(struct ast_toplevel *ast) {
     for (size_t i = 0; i < ast->fdecl.num_params; i++) {
       struct ast_ty *param_ty = &ast->fdecl.params[i]->ty;
       if (is_bad_type(param_ty)) {
-        fprintf(stderr, "function %s has unresolved parameter type\n",
-                ast->fdecl.ident.value.identv.ident);
+        fprintf(stderr, "function %s has unresolved parameter type for parameter %zd\n",
+                ast->fdecl.ident.value.identv.ident, i + 1);
         return -1;
       }
     }

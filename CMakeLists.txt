@@ -8,7 +8,11 @@ include(build-etc/macros.cmake)
 
 find_library(MALLOC NAMES jemalloc tcmalloc)
 
+set(LLVM_DIR /usr/lib/llvm-18/cmake)
+set(Clang_DIR /usr/lib/llvm-18/lib/cmake/clang)
+
 find_package(LLVM REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
 find_package(Doxygen)
 find_package(GTest REQUIRED)
 find_package(benchmark REQUIRED)

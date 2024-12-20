@@ -1,4 +1,5 @@
 cimport "stdio.h";
+cimport "cimport.h";
 
 pub fn i32 main() {
     printf("Hello, world!\n");

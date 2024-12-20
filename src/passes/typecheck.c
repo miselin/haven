@@ -176,7 +176,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     }
 
     for (size_t i = 0; i < entry->fdecl->num_params; ++i) {
+      struct ast_ty old_ty = entry->fdecl->params[i]->ty;
       entry->fdecl->params[i]->ty = resolve_type(typecheck, &entry->fdecl->params[i]->ty);
+      free_ty(&old_ty, 0);
 
       if (existing && !same_type(&entry->fdecl->params[i]->ty, &existing->fdecl->params[i]->ty)) {
         char tystr[256], existingstr[256];
@@ -1319,6 +1321,11 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
   struct alias_entry *entry = kv_lookup(typecheck->aliases, ty->name);
   if (!entry) {
     return type_error();
+  }
+
+  if (entry->ty.ty == AST_TYPE_CUSTOM) {
+    // recurse until we find a non-alias type
+    return resolve_type(typecheck, &entry->ty);
   }
 
   // copy flags from original type (e.g. ptr); don't mutate original type

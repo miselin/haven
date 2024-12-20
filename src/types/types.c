@@ -67,6 +67,25 @@ int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
   if (ty1->ty == AST_TYPE_ARRAY) {
     same = same && same_type_class(ty1->array.element_ty, ty2->array.element_ty, flagmask);
   }
+
+  if (same) {
+    return same;
+  }
+
+  if (ty1->ty == AST_TYPE_STRING || ty2->ty == AST_TYPE_STRING) {
+    // struct ast_ty *strty = ty1->ty == AST_TYPE_STRING ? ty1 : ty2;
+    struct ast_ty *otherty = ty1->ty == AST_TYPE_STRING ? ty2 : ty1;
+
+    // strings are identical to i8*
+    if (!(otherty->flags & TYPE_FLAG_PTR)) {
+      return 0;
+    }
+
+    if (otherty->ty == AST_TYPE_INTEGER && otherty->integer.width == 8) {
+      return 1;
+    }
+  }
+
   return same;
 }
 
@@ -101,6 +120,7 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
       }
 
       return ty1->integer.width == ty2->integer.width;
+
     default:
       return 0;
   }

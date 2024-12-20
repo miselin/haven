@@ -11,6 +11,8 @@ extern int haven_cimport_present(void) __attribute__((weak));
 
 extern int haven_cimport_process(const char *filename) __attribute__((weak));
 
+int cimport(struct parser *parser, const char *filename);
+
 int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name) {
   const char *fullpath = NULL;
   if (find_file_path(compiler, name, &fullpath) < 0) {
@@ -25,9 +27,16 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
       return -1;
     }
 
-    fprintf(stderr, "stdin %p stdout %p stderr %p\n", (void *)stdin, (void *)stdout,
-            (void *)stderr);
+    if (cimport(compiler->parser, fullpath) < 0) {
+      compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
+      free((void *)fullpath);
+      return -1;
+    }
 
+    free((void *)fullpath);
+    return 0;
+
+    /*
     char cmdbuf[1024];
     snprintf(cmdbuf, sizeof(cmdbuf), "cpp -P %s > /tmp/haven_cimport_tempfile.c", fullpath);
 
@@ -49,6 +58,7 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
 
     free((void *)fullpath);
     return rc;
+    */
   }
 
   FILE *in = fopen(fullpath, "r");

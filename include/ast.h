@@ -13,6 +13,7 @@
 #define DECL_FLAG_VARARG (1U << 2)
 #define DECL_FLAG_TEMPORARY (1U << 3)
 #define DECL_FLAG_IMPURE (1U << 4)
+#define DECL_FLAG_EXTERN (1U << 5)
 
 #define AST_DECL_TYPE_VDECL 1
 #define AST_DECL_TYPE_FDECL 2

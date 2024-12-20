@@ -7,6 +7,7 @@
 #include <llvm-c/DebugInfo.h>
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
+#include <llvm-c/Transforms/PassBuilder.h>
 #include <llvm-c/Types.h>
 #include <malloc.h>
 #include <string.h>
@@ -133,6 +134,8 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
 }
 
 int codegen_run(struct codegen *codegen) {
+  emit_preamble(codegen);
+
   emit_ast(codegen, codegen->ast);
 
   char *error = NULL;
@@ -141,6 +144,33 @@ int codegen_run(struct codegen *codegen) {
     fprintf(stderr, "Internal module verification failed:\n%s\n", error);
   }
   LLVMDisposeMessage(error);
+
+  if (rc == 0) {
+    // verification completed, run unconditional optimizations that tidy up the IR ready for further
+    // optimizations and emission
+
+    LLVMPassBuilderOptionsRef pass_options = LLVMCreatePassBuilderOptions();
+
+    // run function passes
+    LLVMErrorRef result = LLVMRunPasses(codegen->llvm_module, "mem2reg,sccp,simplifycfg,dce",
+                                        codegen->llvm_target_machine, pass_options);
+    if (result != NULL) {
+      char *msg = LLVMGetErrorMessage(result);
+      fprintf(stderr, "Error running function passes: %s\n", msg);
+      LLVMDisposeErrorMessage(msg);
+    }
+
+    // run module passes now
+    result = LLVMRunPasses(codegen->llvm_module, "globaldce,strip-dead-prototypes",
+                           codegen->llvm_target_machine, pass_options);
+    if (result != NULL) {
+      char *msg = LLVMGetErrorMessage(result);
+      fprintf(stderr, "Error running module passes: %s\n", msg);
+      LLVMDisposeErrorMessage(msg);
+    }
+
+    LLVMDisposePassBuilderOptions(pass_options);
+  }
 
   return 0;
 }
@@ -264,6 +294,7 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
     } else if (ast->tydecl.ty.ty == AST_TYPE_ENUM) {
       emit_enum_type(codegen, &ast->tydecl.ty);
     } else {
+      // just make the type alias
       fprintf(stderr, "unhandled top level type declaration type %d\n", ast->tydecl.ty.ty);
     }
   } else if (ast->type == AST_DECL_TYPE_PREPROC || ast->type == AST_DECL_TYPE_IMPORT) {
