@@ -17,7 +17,7 @@ jobs:
           sudo ./llvm.sh ${LLVM_VERSION}
 
       - name: Install other dependencies
-        run: sudo apt-get install -y ninja-build libbenchmark-dev googletest libglm-dev doxygen libgtest-dev libzstd-dev libzstd1
+        run: sudo apt-get install -y ninja-build libbenchmark-dev googletest libglm-dev doxygen libgtest-dev libzstd-dev libzstd1 libclang-${LLVM_VERSION}-dev
 
       - uses: lukka/get-cmake@latest
 
