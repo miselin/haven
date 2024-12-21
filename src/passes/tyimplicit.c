@@ -56,7 +56,7 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
         return -1;
       }
 
-      total += rc;
+      total += rc + maybe_implicitly_convert(&ast->fdecl.body->ty, &ast->fdecl.retty);
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
     if (ast->vdecl.init_expr) {
@@ -398,7 +398,36 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      // TODO: implicit conversion to the enum's field type
+      if (ast->enum_init.inner) {
+        int total = 0;
+        int rc = typecheck_implicit_expr(ast->enum_init.inner);
+        if (rc < 0) {
+          return -1;
+        }
+
+        total = rc;
+
+        struct ast_enum_field *field = ast->ty.enumty.fields;
+        while (field) {
+          if (!strcmp(ast->enum_init.enum_val_name.value.identv.ident, field->name)) {
+            break;
+          }
+
+          field = field->next;
+        }
+
+        if (field) {
+          total += maybe_implicitly_convert(&ast->enum_init.inner->ty, &field->inner);
+        }
+
+        // if after conversion the result type is a specialization, make sure the enum is set
+        // accordingly
+        if (ast->ty.specialization_of) {
+          strncpy(ast->enum_init.enum_ty_name.value.identv.ident, ast->ty.name, 256);
+        }
+
+        return total;
+      }
       break;
 
     default:

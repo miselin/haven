@@ -335,8 +335,37 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT: {
-      if (ast->enum_init.inner && typecheck_verify_expr(ast->enum_init.inner) < 0) {
-        return -1;
+      if (ast->enum_init.inner) {
+        if (typecheck_verify_expr(ast->enum_init.inner) < 0) {
+          return -1;
+        }
+
+        // final sanity check of all field types
+        struct ast_enum_field *field = ast->ty.enumty.fields;
+        while (field) {
+          if (!strcmp(ast->enum_init.enum_val_name.value.identv.ident, field->name)) {
+            break;
+          }
+
+          field = field->next;
+        }
+
+        if (!field) {
+          fprintf(stderr, "tyverify: enum field %s not found in enum %s\n",
+                  ast->enum_init.enum_val_name.value.identv.ident,
+                  ast->enum_init.enum_ty_name.value.identv.ident);
+          return -1;
+        }
+
+        if (!field->has_inner) {
+          fprintf(stderr, "tyverify: enum field %s does not have an inner\n", field->name);
+          return -1;
+        }
+
+        if (!same_type(&field->inner, &ast->enum_init.inner->ty)) {
+          fprintf(stderr, "tyverify: enum field %s inner type does not match\n", field->name);
+          return -1;
+        }
       }
     } break;
 

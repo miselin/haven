@@ -118,6 +118,8 @@ void emit_preamble(struct codegen *codegen);
 // Emits a store, whether through a store instruction or a memcpy intrinsic, based on the type
 void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, LLVMValueRef ptr);
 
+LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty);
+
 int initialize_llvm(void);
 void shutdown_llvm(void);
 

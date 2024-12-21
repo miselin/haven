@@ -10,6 +10,7 @@
 #include "compiler.h"
 #include "kv.h"
 #include "scope.h"
+#include "tokens.h"
 #include "types.h"
 #include "utility.h"
 
@@ -51,6 +52,10 @@ static struct ast_ty *typecheck_expr(struct typecheck *typecheck, struct ast_exp
 static struct ast_ty *typecheck_expr_with_tbds(struct typecheck *typecheck, struct ast_expr *ast);
 static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr *ast);
 
+static struct ast_ty *typecheck_pattern_match(struct typecheck *typecheck, struct ast_expr *ast,
+                                              struct ast_expr_pattern_match *pattern,
+                                              struct ast_ty *match_ty);
+
 static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty);
 
 static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl);
@@ -63,6 +68,9 @@ static int deref_to_index(const char *deref);
 // If allowed, makes from and to the same type using implicit conversion rules
 // Does nothing if implicit conversion is disallowed or irrelevant.
 int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to);
+
+static void resolve_template_type(struct typecheck *typecheck, struct ast_template_ty *templates,
+                                  struct ast_ty *ty);
 
 __attribute__((format(printf, 3, 4))) static void typecheck_diag_expr(struct typecheck *typecheck,
                                                                       struct ast_expr *expr,
@@ -97,9 +105,6 @@ int typecheck_run(struct typecheck *typecheck) {
   if (typecheck->errors) {
     return typecheck->errors;
   }
-  if (typecheck_verify_ast(typecheck->ast) < 0) {
-    return 1;
-  }
   int rc = 0;
   while (1) {
     rc = typecheck_implicit_ast(typecheck->ast);
@@ -110,6 +115,9 @@ int typecheck_run(struct typecheck *typecheck) {
     if (rc == 0) {
       break;
     }
+  }
+  if (typecheck_verify_ast(typecheck->ast) < 0) {
+    return 1;
   }
   return 0;
 }
@@ -135,12 +143,39 @@ static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast) 
 
 static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    ast->fdecl.retty = resolve_type(typecheck, &ast->fdecl.retty);
+    struct ast_ty resolved = resolve_type(typecheck, &ast->fdecl.retty);
+    free_ty(&ast->fdecl.retty, 0);
+    ast->fdecl.retty = resolved;
     if (type_is_error(&ast->fdecl.retty) || type_is_tbd(&ast->fdecl.retty)) {
       fprintf(stderr, "function %s has unresolved return type\n",
               ast->fdecl.ident.value.identv.ident);
       ++typecheck->errors;
       return;
+    }
+
+    // specialize the return type if it's a template
+    if (ast->fdecl.retty.ty == AST_TYPE_ENUM && ast->fdecl.retty.enumty.templates) {
+      // create a specialized type and use it here
+      struct ast_ty new_type;
+      memset(&new_type, 0, sizeof(struct ast_ty));
+      new_type.ty = AST_TYPE_ENUM;
+      snprintf(new_type.name, 256, "%s_spec_%s", ast->fdecl.ident.value.identv.ident,
+               ast->fdecl.retty.name);
+
+      new_type.enumty.fields = ast->fdecl.retty.enumty.fields;
+      new_type.enumty.no_wrapped_fields = ast->fdecl.retty.enumty.no_wrapped_fields;
+      new_type.enumty.num_fields = ast->fdecl.retty.enumty.num_fields;
+      new_type.enumty.templates = ast->fdecl.retty.enumty.templates;
+
+      new_type.specialization_of = strdup(ast->fdecl.retty.name);
+
+      /*
+          new_type.enumty.fields = ast->fdecl.retty.template.outer->enumty.fields;
+          new_type.enumty.no_wrapped_fields =
+         ast->fdecl.retty.template.outer->enumty.no_wrapped_fields; new_type.enumty.num_fields =
+         ast->fdecl.retty.template.outer->enumty.num_fields;
+          */
+      ast->fdecl.retty = new_type;
     }
 
     struct scope_entry *existing =
@@ -306,7 +341,10 @@ static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *de
 static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl) {
   struct ast_enum_field *field = decl->enumty.fields;
   while (field) {
-    field->inner = resolve_type(typecheck, &field->inner);
+    resolve_template_type(typecheck, decl->enumty.templates, &field->inner);
+    struct ast_ty resolved = resolve_type(typecheck, &field->inner);
+    free_ty(&field->inner, 0);
+    field->inner = resolved;
     field = field->next;
   }
 }
@@ -1079,7 +1117,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       // first pass: check that all arms have the same pattern type, and check their expressions
       struct ast_expr_match_arm *arm = ast->match.arms;
       while (arm) {
-        struct ast_ty *pattern_ty = typecheck_expr(typecheck, arm->pattern);
+        struct ast_ty *pattern_ty =
+            typecheck_pattern_match(typecheck, arm->pattern, &arm->pattern->pattern_match, expr_ty);
         if (!pattern_ty) {
           return NULL;
         }
@@ -1222,23 +1261,21 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
         maybe_implicitly_convert(inner_ty, &field->inner);
 
-        if (!same_type(inner_ty, &field->inner)) {
-          char innerstr[256], fieldstr[256];
-          type_name_into(inner_ty, innerstr, 256);
-          type_name_into(&field->inner, fieldstr, 256);
+        field->inner = resolve_type(typecheck, &field->inner);
 
-          typecheck_diag_expr(typecheck, ast,
-                              "enum field %s wraps type %s, but was given type %s instead\n",
-                              field->name, fieldstr, innerstr);
-          return &typecheck->error_type;
+        if (field->inner.ty != AST_TYPE_CUSTOM) {
+          // can't check types if the inner is as yet unresolved
+          if (!same_type(inner_ty, &field->inner)) {
+            char innerstr[256], fieldstr[256];
+            type_name_into(inner_ty, innerstr, 256);
+            type_name_into(&field->inner, fieldstr, 256);
+
+            typecheck_diag_expr(typecheck, ast,
+                                "enum field %s wraps type %s, but was given type %s instead\n",
+                                field->name, fieldstr, innerstr);
+            return &typecheck->error_type;
+          }
         }
-
-        ast->enum_init.field_ty = resolve_type(typecheck, &field->inner);
-      } else {
-        // default to integer if no inner is provided
-        ast->enum_init.field_ty.ty = AST_TYPE_INTEGER;
-        ast->enum_init.field_ty.integer.is_signed = 1;
-        ast->enum_init.field_ty.integer.width = 32;
       }
 
       ast->ty = resolve_type(typecheck, &entry->ty);
@@ -1246,43 +1283,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     } break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH: {
-      struct alias_entry *entry =
-          kv_lookup(typecheck->aliases, ast->enum_init.enum_ty_name.value.identv.ident);
-      if (!entry) {
-        typecheck_diag_expr(typecheck, ast, "enum type %s not found\n",
-                            ast->enum_init.enum_ty_name.value.identv.ident);
-        return &typecheck->error_type;
-      }
-
-      if (entry->ty.ty != AST_TYPE_ENUM) {
-        typecheck_diag_expr(typecheck, ast, "type %s is not an enum\n",
-                            ast->enum_init.enum_ty_name.value.identv.ident);
-        return &typecheck->error_type;
-      }
-
-      struct ast_enum_field *field = entry->ty.enumty.fields;
-      while (field) {
-        if (!strcmp(field->name, ast->enum_init.enum_val_name.value.identv.ident)) {
-          break;
-        }
-        field = field->next;
-      }
-
-      if (!field) {
-        typecheck_diag_expr(typecheck, ast, "enum field %s not found in enum %s\n",
-                            ast->enum_init.enum_val_name.value.identv.ident,
-                            ast->enum_init.enum_ty_name.value.identv.ident);
-        return &typecheck->error_type;
-      }
-
-      if (ast->pattern_match.inner_vdecl) {
-        ast->pattern_match.inner_vdecl->ty = resolve_type(typecheck, &field->inner);
-      }
-
-      // no need to check inner, it'll become the type of the pattern match in the handler for the
-      // match expression
-      ast->ty = resolve_type(typecheck, &entry->ty);
-      return &ast->ty;
+      typecheck_diag_expr(typecheck, ast, "typecheck: pattern match without a match expression\n");
     } break;
 
     default:
@@ -1314,7 +1315,65 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
     return *ty;
   }
 
-  if (ty->ty != AST_TYPE_CUSTOM) {
+  if (ty->ty == AST_TYPE_ENUM && ty->enumty.templates) {
+    struct ast_ty new_ty = copy_type(ty);
+
+    // can we resolve?
+    struct ast_template_ty *template = new_ty.enumty.templates;
+    while (template) {
+      if (!template->is_resolved) {
+        template->resolved = type_tbd();
+      }
+
+      template = template->next;
+    }
+
+    return new_ty;
+  }
+
+  if (ty->ty == AST_TYPE_TEMPLATE) {
+    // step 1: resolve the outer type as the main return type
+    struct ast_ty result = resolve_type(typecheck, ty->template.outer);
+    if (result.ty != AST_TYPE_ENUM) {
+      // can't template non-enums
+      fprintf(stderr, "template outer type is not an enum\n");
+      return type_error();
+    }
+
+    // step 2: resolve the inner types into the specialized enum type
+    struct ast_enum_field *field = result.enumty.fields;
+    while (field) {
+      if (field->has_inner && field->inner.ty == AST_TYPE_CUSTOM) {
+        // match to the template list
+        struct ast_template_ty *inner = result.enumty.templates;
+        struct ast_template_ty *inner_specific = ty->template.inners;
+        while (inner) {
+          if (strcmp(inner->name, field->inner.name) == 0) {
+            break;
+          }
+          inner = inner->next;
+          inner_specific = inner_specific->next;
+        }
+
+        if (!inner) {
+          fprintf(stderr, "template %s not found\n", field->inner.name);
+          return type_error();
+        }
+
+        if (!inner_specific->is_resolved) {
+          fprintf(stderr, "template %s is not resolved\n", field->inner.name);
+          return type_error();
+        }
+
+        field->inner = resolve_type(typecheck, &inner_specific->resolved);
+      }
+      field = field->next;
+    }
+
+    return result;
+  }
+
+  if (ty->ty != AST_TYPE_CUSTOM || ty->custom.is_template) {
     return copy_type(ty);
   }
 
@@ -1332,6 +1391,7 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
   struct ast_ty resolved_type = copy_type(&entry->ty);
   resolved_type.flags |= ty->flags;
   resolved_type.flags |= TYPE_FLAG_INDIRECT;
+
   return resolved_type;
 }
 
@@ -1405,7 +1465,105 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
     // convert the source width to the destinaiton width
     from->integer.width = to->integer.width;
     return 1;
+  } else if (from->ty == AST_TYPE_ENUM && to->ty == AST_TYPE_ENUM) {
+    if (!(from->enumty.templates)) {
+      // no implicit conversion, source must have templates
+      return 0;
+    }
+
+    if (strcmp(from->name, to->specialization_of ? to->specialization_of : to->name) != 0) {
+      // no implicit conversion, enum name must match
+      return 0;
+    }
+
+    int coerced = 0;
+
+    // ensure the most specific type is used (e.g. resolved type)
+    struct ast_enum_field *from_field = from->enumty.fields;
+    struct ast_enum_field *to_field = to->enumty.fields;
+    while (from_field && to_field) {
+      if (from_field->has_inner && to_field->has_inner) {
+        if (from_field->inner.ty == AST_TYPE_CUSTOM && to_field->inner.ty != AST_TYPE_CUSTOM) {
+          // bring across the resolved type
+          free_ty(&from_field->inner, 0);
+          from_field->inner = copy_type(&to_field->inner);
+          coerced = 1;
+        }
+      }
+
+      from_field = from_field->next;
+      to_field = to_field->next;
+    }
+
+    if (coerced) {
+      // copy names and specialization to allow further implicit conversions
+      strncpy(from->name, to->name, sizeof(from->name));
+      if (to->specialization_of) {
+        from->specialization_of = strdup(to->specialization_of);
+      }
+    }
+
+    return coerced;
   }
 
   return 0;
+}
+
+static void resolve_template_type(struct typecheck *typecheck, struct ast_template_ty *templates,
+                                  struct ast_ty *ty) {
+  UNUSED(typecheck);
+
+  if (ty->ty != AST_TYPE_CUSTOM) {
+    return;
+  }
+
+  // match to template types if present
+  struct ast_template_ty *template = templates;
+  while (template) {
+    if (!strcmp(template->name, ty->name)) {
+      if (template->is_resolved) {
+        free_ty(ty, 0);
+        *ty = copy_type(&template->resolved);
+      } else {
+        ty->custom.is_template = 1;
+      }
+    }
+    template = template->next;
+  }
+}
+
+static struct ast_ty *typecheck_pattern_match(struct typecheck *typecheck, struct ast_expr *ast,
+                                              struct ast_expr_pattern_match *pattern,
+                                              struct ast_ty *match_ty) {
+  if (ast->type != AST_EXPR_TYPE_PATTERN_MATCH) {
+    return typecheck_expr(typecheck, ast);
+  }
+
+  if (match_ty->ty != AST_TYPE_ENUM) {
+    typecheck_diag_expr(typecheck, ast, "match type is not an enum\n");
+    return &typecheck->error_type;
+  }
+
+  struct ast_enum_field *field = match_ty->enumty.fields;
+  while (field) {
+    if (!strcmp(field->name, pattern->name.value.identv.ident)) {
+      break;
+    }
+    field = field->next;
+  }
+
+  if (!field) {
+    typecheck_diag_expr(typecheck, ast, "enum field %s not found in enum %s\n",
+                        pattern->name.value.identv.ident, pattern->enum_name.value.identv.ident);
+    return &typecheck->error_type;
+  }
+
+  if (pattern->inner_vdecl) {
+    pattern->inner_vdecl->ty = resolve_type(typecheck, &field->inner);
+  }
+
+  // no need to check inner, it'll become the type of the pattern match in the handler for the
+  // match expression
+  ast->ty = resolve_type(typecheck, match_ty);
+  return &ast->ty;
 }

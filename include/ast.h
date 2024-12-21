@@ -236,8 +236,6 @@ struct ast_expr_enum_init {
   struct token enum_ty_name;
   struct token enum_val_name;
   struct ast_expr *inner;
-  // field type, resolved during typecheck
-  struct ast_ty field_ty;
 };
 
 struct ast_expr {

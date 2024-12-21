@@ -261,6 +261,8 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "<");
       struct ast_template_ty *inner = ty->template.inners;
       while (inner) {
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %d -> ", inner->name,
+                           inner->is_resolved);
         offset += type_name_into(&inner->resolved, buf + offset, maxlen - (size_t)offset);
         if (inner->next) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
@@ -273,7 +275,8 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf, maxlen, "enum %s <", ty->name);
       struct ast_template_ty *template = ty->enumty.templates;
       while (template) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s", template->name);
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s (%s)", template->name,
+                           template->is_resolved ? "resolved" : "unresolved");
         if (template->next) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
         }
@@ -384,14 +387,22 @@ size_t type_size(struct ast_ty *ty) {
       return size;
     } break;
 
+    case AST_TYPE_CUSTOM:
+      // unresolved, emit the smallest possible storage for it
+      return 1;
+
     default:
-      fprintf(stderr, "type_size unhandled %d\n", ty->ty);
+      fprintf(stderr, "type_size unhandled %d [%s]\n", ty->ty, ty->name);
       return 0;
   }
 }
 
 struct ast_ty copy_type(struct ast_ty *ty) {
   struct ast_ty new_type = *ty;
+
+  if (ty->specialization_of) {
+    new_type.specialization_of = strdup(ty->specialization_of);
+  }
 
   if (ty->ty == AST_TYPE_ARRAY) {
     new_type.array.element_ty = calloc(1, sizeof(struct ast_ty));
@@ -433,6 +444,47 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       }
 
       last = new_field;
+    }
+
+    struct ast_template_ty *template = ty->enumty.templates;
+    struct ast_template_ty *last_template = NULL;
+    while (template) {
+      struct ast_template_ty *new_template = calloc(1, sizeof(struct ast_template_ty));
+      *new_template = *template;
+      if (template->is_resolved) {
+        new_template->resolved = copy_type(&template->resolved);
+      }
+      template = template->next;
+
+      if (last_template == NULL) {
+        new_type.enumty.templates = new_template;
+      } else {
+        last_template->next = new_template;
+      }
+
+      last_template = new_template;
+    }
+  } else if (ty->ty == AST_TYPE_TEMPLATE) {
+    new_type.template.outer = calloc(1, sizeof(struct ast_ty));
+    *new_type.template.outer = copy_type(ty->template.outer);
+
+    struct ast_template_ty *inner = ty->template.inners;
+    struct ast_template_ty *last_inner = NULL;
+    while (inner) {
+      struct ast_template_ty *new_inner = calloc(1, sizeof(struct ast_template_ty));
+      *new_inner = *inner;
+      if (inner->is_resolved) {
+        new_inner->resolved = copy_type(&inner->resolved);
+      }
+      inner = inner->next;
+
+      if (last_inner == NULL) {
+        new_type.template.inners = new_inner;
+      } else {
+        last_inner->next = new_inner;
+      }
+
+      last_inner = new_inner;
     }
   }
 

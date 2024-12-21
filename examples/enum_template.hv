@@ -10,7 +10,7 @@ fn Result<i32> thing() {
 
 pub fn i32 main() {
     match thing() {
-        Result::Ok(x) => x
+        Ok(x) => x
         _ => 1
     }
 }

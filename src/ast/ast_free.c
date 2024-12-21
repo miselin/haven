@@ -214,7 +214,6 @@ void free_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      free_ty(&ast->enum_init.field_ty, 0);
       free_expr(ast->enum_init.inner);
       break;
 
@@ -264,6 +263,11 @@ void free_tydecl(struct ast_tydecl *ast, int heap) {
 }
 
 void free_ty(struct ast_ty *ty, int heap) {
+  if (ty->specialization_of) {
+    free(ty->specialization_of);
+    ty->specialization_of = NULL;
+  }
+
   if (ty->ty == AST_TYPE_ARRAY) {
     free_ty(ty->array.element_ty, 1);
     ty->array.element_ty = NULL;
@@ -292,7 +296,30 @@ void free_ty(struct ast_ty *ty, int heap) {
       field = next;
     }
 
+    struct ast_template_ty *template = ty->enumty.templates;
+    while (template) {
+      struct ast_template_ty *next = template->next;
+      free_ty(&template->resolved, 0);
+      free(template);
+      template = next;
+    }
+
     ty->enumty.fields = NULL;
+    ty->enumty.templates = NULL;
+  }
+
+  if (ty->ty == AST_TYPE_TEMPLATE) {
+    struct ast_template_ty *inner = ty->template.inners;
+    while (inner) {
+      struct ast_template_ty *next = inner->next;
+      free_ty(&inner->resolved, 0);
+      free(inner);
+      inner = next;
+    }
+
+    ty->template.inners = NULL;
+
+    free_ty(ty->template.outer, 1);
   }
 
   if (heap) {

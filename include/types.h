@@ -57,7 +57,9 @@ struct ast_struct_field {
 struct ast_ty {
   enum ast_ty_id ty;
   uint64_t flags;
-  char name[256];  // filled for custom, struct, templat, and enum types
+  char name[256];           // filled for custom, struct, templat, and enum types
+  char *specialization_of;  // if this is a specialization of a generic type, the original type name
+                            // will be here
   union {
     struct {
       int is_signed;
@@ -82,7 +84,8 @@ struct ast_ty {
       struct ast_ty *element_ty;
     } array;
     struct {
-      int empty;
+      // if 1, the custom type is a template that will be resolved in instantiation
+      int is_template;
     } custom;
     struct {
       // both of these are CUSTOM after parsing and real types after type checking

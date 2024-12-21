@@ -242,7 +242,7 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
   return entry->type;
 }
 
-static LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
+LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
   char buf[256 + 8];
   snprintf(buf, 256 + 8, "enum.%s", ty->name);
 
@@ -266,7 +266,6 @@ static LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
         total_size = sz;
       }
     }
-    total_size += field->has_inner ? 2 : 1;
     field = field->next;
   }
 
@@ -276,7 +275,7 @@ static LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
                     (unsigned int)total_size),  // data storage for largest possible field
   };
 
-  LLVMStructSetBody(entry->type, fields, 2, 0);
+  LLVMStructSetBody(entry->type, fields, total_size ? 2 : 1, 0);
 
   return entry->type;
 }

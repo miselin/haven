@@ -175,6 +175,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMValueRef complex = NULL;
       if (is_complex) {
+        if (!args) {
+          args = malloc(sizeof(LLVMValueRef));
+        }
         // build retval
         args[0] = into ? into : new_alloca(codegen, ret_ty, "sret");
         complex = args[0];

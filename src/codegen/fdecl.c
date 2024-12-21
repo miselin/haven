@@ -14,6 +14,11 @@
 #include "utility.h"
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at) {
+  if (fdecl->retty.specialization_of) {
+    // we need to create the return type as a new global
+    emit_enum_type(codegen, &fdecl->retty);
+  }
+
   LLVMValueRef func = NULL;
   LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, &fdecl->retty);
   LLVMTypeRef orig_ret_ty = ret_ty;
