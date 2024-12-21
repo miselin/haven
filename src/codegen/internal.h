@@ -120,6 +120,8 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
 
 LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty);
 
+int extract_constant_int(struct ast_expr *expr, int64_t *into);
+
 int initialize_llvm(void);
 void shutdown_llvm(void);
 

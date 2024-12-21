@@ -152,7 +152,7 @@ int codegen_run(struct codegen *codegen) {
     LLVMPassBuilderOptionsRef pass_options = LLVMCreatePassBuilderOptions();
 
     // run function passes
-    LLVMErrorRef result = LLVMRunPasses(codegen->llvm_module, "mem2reg,sccp,simplifycfg,dce",
+    LLVMErrorRef result = LLVMRunPasses(codegen->llvm_module, "sccp,simplifycfg,dce",
                                         codegen->llvm_target_machine, pass_options);
     if (result != NULL) {
       char *msg = LLVMGetErrorMessage(result);
@@ -392,14 +392,12 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
                               : LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context), 1, 0);
 
       int direction = 1;
+      int64_t iter_step = 1;
       if (ast->iter.range.step) {
-        struct ast_expr *step_expr = ast->iter.range.step;
-        if (step_expr->type == AST_EXPR_TYPE_CAST) {
-          step_expr = step_expr->cast.expr;
-        }
-
-        if ((int64_t)step_expr->constant.constant.value.intv.val < 0) {
-          direction = -1;
+        if (extract_constant_int(ast->iter.range.step, &iter_step) == 0) {
+          if (iter_step < 0) {
+            direction = -1;
+          }
         }
       }
 
@@ -434,7 +432,8 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       LLVMValueRef index_val = LLVMBuildLoad2(codegen->llvm_builder, var_type, index, "index");
       LLVMValueRef cmp = LLVMBuildICmp(
           codegen->llvm_builder, direction > 0 ? LLVMIntSLE : LLVMIntSGE, index_val, end, "cmp");
-      LLVMBuildCondBr(codegen->llvm_builder, cmp, body_block, end_block);
+      LLVMValueRef loop_cond_br =
+          LLVMBuildCondBr(codegen->llvm_builder, cmp, body_block, end_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, body_block);
       emit_block(codegen, &ast->iter.block);
@@ -447,6 +446,41 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
       LLVMBuildBr(codegen->llvm_builder, cond_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
+
+      int64_t istart = 0;
+      int64_t iend = 0;
+      int rcstart = extract_constant_int(ast->iter.range.start, &istart);
+      int rcend = extract_constant_int(ast->iter.range.end, &iend);
+
+      if (rcstart == 0 && rcend == 0) {
+        // range is constant, we can annotate an unroll count
+        int64_t iters = ((iend - istart) / iter_step) + 1;
+
+        fprintf(stderr, "loop has %ld iterations\n", iters);
+
+        LLVMMetadataRef count_md = LLVMValueAsMetadata(
+            LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context), (uint64_t)iters, 1));
+
+        LLVMMetadataRef unroll_enable = LLVMMDStringInContext2(
+            codegen->llvm_context, "llvm.loop.unroll.enable", strlen("llvm.loop.unroll.enable"));
+        LLVMMetadataRef unroll_count_str = LLVMMDStringInContext2(
+            codegen->llvm_context, "llvm.loop.unroll.count", strlen("llvm.loop.unroll.count"));
+
+        LLVMMetadataRef unroll_count[2] = {unroll_count_str, count_md};
+
+        LLVMMetadataRef unroll_enable_node =
+            LLVMMDNodeInContext2(codegen->llvm_context, &unroll_enable, 1);
+        LLVMMetadataRef unroll_count_node =
+            LLVMMDNodeInContext2(codegen->llvm_context, unroll_count, 2);
+
+        LLVMMetadataRef mds[] = {unroll_enable_node, unroll_count_node};
+
+        LLVMMetadataRef loop_node = LLVMMDNodeInContext2(codegen->llvm_context, mds, 2);
+
+        LLVMValueRef md_value = LLVMMetadataAsValue(codegen->llvm_context, loop_node);
+        LLVMSetMetadata(loop_cond_br,
+                        LLVMGetMDKindIDInContext(codegen->llvm_context, "llvm.loop", 9), md_value);
+      }
 
       codegen_internal_leave_scope(codegen, 1);
     } break;
