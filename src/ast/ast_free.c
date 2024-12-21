@@ -217,6 +217,11 @@ void free_expr(struct ast_expr *ast) {
       free_expr(ast->enum_init.inner);
       break;
 
+    case AST_EXPR_TYPE_UNION_INIT:
+      free_ty(&ast->union_init.ty, 0);
+      free_expr(ast->union_init.inner);
+      break;
+
     default:
       fprintf(stderr, "unhandled free for expr type %d\n", ast->type);
   }
@@ -320,6 +325,15 @@ void free_ty(struct ast_ty *ty, int heap) {
     ty->template.inners = NULL;
 
     free_ty(ty->template.outer, 1);
+  }
+
+  if (ty->ty == AST_TYPE_FUNCTION) {
+    free_ty(ty->function.retty, 1);
+    for (size_t i = 0; i < ty->function.num_args; i++) {
+      free_ty(ty->function.args[i], 1);
+    }
+
+    free(ty->function.args);
   }
 
   if (heap) {

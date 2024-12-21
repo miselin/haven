@@ -2,6 +2,7 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
 #include <llvm-c/Types.h>
+#include <stdlib.h>
 
 #include "ast.h"
 #include "codegen.h"
@@ -124,6 +125,19 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
         return NULL;
       }
       inner = entry->type;
+    } break;
+    case AST_TYPE_CUSTOM:
+      fprintf(stderr, "custom type %s not resolved before codegen\n", ty->name);
+      return NULL;
+    case AST_TYPE_FUNCTION: {
+      LLVMTypeRef retty = ast_ty_to_llvm_ty(codegen, ty->function.retty);
+      LLVMTypeRef *param_types = malloc(sizeof(LLVMTypeRef) * ty->function.num_args);
+      for (size_t i = 0; i < ty->function.num_args; i++) {
+        param_types[i] = ast_ty_to_llvm_ty(codegen, ty->function.args[i]);
+      }
+      inner = LLVMFunctionType(retty, param_types, (unsigned int)ty->function.num_args,
+                               ty->function.vararg);
+      free(param_types);
     } break;
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);

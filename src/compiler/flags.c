@@ -54,6 +54,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"verbose", no_argument, 0, Verbose},
                                   {"no-color", no_argument, 0, NoColor},
                                   {"only-parse", no_argument, 0, OnlyParse},
+                                  {"debug-ir", no_argument, 0, DebugIR},
                                   {0, 0, 0, 0}};
 
   int opt;
@@ -111,6 +112,9 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         break;
       case OnlyParse:
         into->default_until = PassParse;
+        break;
+      case DebugIR:
+        into->flags[0] |= FLAG_DEBUG_IR;
         break;
       default:
         usage();

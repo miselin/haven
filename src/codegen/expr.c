@@ -220,6 +220,11 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
 
+      // union -> read from first field, direct pointer access
+      if (entry->vdecl->ty.structty.is_union) {
+        return LLVMBuildLoad2(codegen->llvm_builder, target_ty, entry->ref, "union.load");
+      }
+
       // struct -> getelementptr
       LLVMValueRef gep =
           LLVMBuildStructGEP2(codegen->llvm_builder, entry->variable_type, entry->ref,
@@ -441,6 +446,16 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       }
 
       return storage;
+    } break;
+
+    case AST_EXPR_TYPE_UNION_INIT: {
+      LLVMTypeRef ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+      LLVMValueRef result = into ? into : new_alloca(codegen, ty, "union");
+
+      LLVMValueRef inner = emit_expr(codegen, ast->union_init.inner);
+
+      emit_store(codegen, &ast->union_init.inner->ty, inner, result);
+      return result;
     } break;
 
     default:

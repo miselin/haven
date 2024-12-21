@@ -435,6 +435,12 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       }
     } break;
 
+    case AST_EXPR_TYPE_UNION_INIT: {
+      if (check_semantic_expr(semantic, ast->union_init.inner) < 0) {
+        return -1;
+      }
+    } break;
+
     default:
       semantic_diag_at(semantic, DiagError, &ast->loc, "unhandled expression type %d", ast->type);
       return -1;

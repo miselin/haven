@@ -308,6 +308,10 @@ static int check_purity_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_PATTERN_MATCH:
       break;
 
+    case AST_EXPR_TYPE_UNION_INIT:
+      return check_purity_expr(ast->union_init.inner);
+      break;
+
     default:
       fprintf(stderr, "purity: unhandled expression type %d\n", ast->type);
   }

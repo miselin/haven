@@ -165,6 +165,8 @@ const char *token_id_to_string(enum token_id token) {
       return "import";
     case TOKEN_KW_CIMPORT:
       return "cimport";
+    case TOKEN_KW_UNION:
+      return "union";
     case TOKEN_EOF:
       return "<EOF>";
   }

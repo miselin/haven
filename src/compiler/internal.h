@@ -16,6 +16,7 @@ enum Options {
   Verbose,
   NoColor,
   OnlyParse,
+  DebugIR,
 };
 
 enum Color {

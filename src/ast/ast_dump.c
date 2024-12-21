@@ -400,6 +400,15 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_ty(&ast->ty);
       break;
 
+    case AST_EXPR_TYPE_UNION_INIT:
+      fprintf(stderr, "UnionInit(");
+      dump_ty(&ast->union_init.ty);
+      fprintf(stderr, ", %s, ", ast->union_init.field.value.identv.ident);
+      dump_expr(ast->union_init.inner, indent);
+      fprintf(stderr, ") -> ");
+      dump_ty(&ast->ty);
+      break;
+
     default:
       fprintf(stderr, "<unknown-expr %d>", ast->type);
   }

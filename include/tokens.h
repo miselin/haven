@@ -79,6 +79,7 @@ enum token_id {
   TOKEN_KW_ENUM,       // enum
   TOKEN_KW_IMPORT,     // import
   TOKEN_KW_CIMPORT,    // cimport
+  TOKEN_KW_UNION,      // union
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

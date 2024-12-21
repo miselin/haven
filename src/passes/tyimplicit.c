@@ -225,6 +225,10 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       return total;
     } break;
 
+    case AST_EXPR_TYPE_UNION_INIT:
+      return typecheck_implicit_expr(ast->union_init.inner);
+      break;
+
     case AST_EXPR_TYPE_VARIABLE:
       break;
 

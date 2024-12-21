@@ -71,7 +71,7 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
   struct lex_state *lexer = new_lexer(in, fullpath, compiler);
   struct parser *parser = new_parser(lexer, compiler);
 
-  int rc = parser_run(parser);
+  int rc = parser_run(parser, 0);
 
   present_diags(compiler, parser);
 

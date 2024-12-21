@@ -15,6 +15,8 @@ static uint64_t next = 0;
 struct ast_ty parse_cursor_type(CXCursor cursor);
 struct ast_ty parse_type(CXType type);
 
+static void analyze_function_type(CXType type, struct ast_fdecl *fdecl);
+
 static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty);
 
 static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor parent,
@@ -39,7 +41,6 @@ enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCursor par
 
   if (clang_getCursorKind(field_cursor) != CXCursor_FieldDecl) {
     // TODO: we actually want to handle RecordDecl for anonymous types, but not as a field
-    fprintf(stderr, "got kind %d that is not FieldDecl\n", clang_getCursorKind(field_cursor));
     return CXChildVisit_Continue;
   }
 
@@ -109,9 +110,110 @@ static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty) {
   }
 }
 
+int parse_simple_type(CXType type, struct ast_ty *into) {
+  int rc = 0;
+
+  // TODO: are there cases where we don't want to do this indirection?
+  if (type.kind == CXType_Elaborated) {
+    type = clang_Type_getNamedType(type);
+  }
+
+  type = clang_getUnqualifiedType(type);
+
+  CXString spelling = clang_getTypeSpelling(type);
+
+  const char *spelling_c = clang_getCString(spelling);
+
+  // remove type tags
+  while (1) {
+    if (!strncmp(spelling_c, "enum ", 5)) {
+      spelling_c += 5;
+    } else if (!strncmp(spelling_c, "struct ", 7)) {
+      spelling_c += 7;
+    } else {
+      break;
+    }
+  }
+
+  strncpy(into->name, spelling_c, 256);
+
+  switch (type.kind) {
+    case CXType_Invalid:
+      into->ty = AST_TYPE_ERROR;
+      break;
+
+    case CXType_Void:
+      into->ty = AST_TYPE_VOID;
+      break;
+
+    case CXType_Bool:
+    case CXType_Char_U:
+    case CXType_UChar:
+    case CXType_UShort:
+    case CXType_UInt:
+    case CXType_ULong:
+    case CXType_ULongLong:
+    case CXType_UInt128:
+      into->ty = AST_TYPE_INTEGER;
+      into->integer.is_signed = 0;
+      into->integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
+      break;
+
+    case CXType_Char_S:
+    case CXType_SChar:
+    case CXType_Short:
+    case CXType_Int:
+    case CXType_Long:
+    case CXType_LongLong:
+    case CXType_Int128:
+      into->ty = AST_TYPE_INTEGER;
+      into->integer.is_signed = 1;
+      into->integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
+      break;
+
+    case CXType_Float:
+    case CXType_Double:      // HACK
+    case CXType_LongDouble:  // HACK
+      into->ty = AST_TYPE_FLOAT;
+      break;
+
+    // not technically built in, but doesn't get a name by any other means
+    case CXType_FunctionProto: {
+      into->ty = AST_TYPE_FUNCTION;
+      into->flags |= TYPE_FLAG_PTR;
+
+      struct ast_fdecl fdecl;
+      analyze_function_type(type, &fdecl);
+
+      into->function.retty = calloc(1, sizeof(struct ast_ty));
+      *into->function.retty = fdecl.retty;
+
+      free_fdecl(&fdecl, 0);
+    } break;
+
+    case CXType_Pointer:
+      if (parse_simple_type(clang_getPointeeType(type), into) == 0) {
+        into->flags |= TYPE_FLAG_PTR;
+      } else {
+        rc = -1;
+      }
+      break;
+
+    default:
+      rc = -1;
+  }
+
+  clang_disposeString(spelling);
+  return rc;
+}
+
 struct ast_ty parse_type(CXType type) {
   struct ast_ty result;
   memset(&result, 0, sizeof(struct ast_ty));
+
+  if (parse_simple_type(type, &result) == 0) {
+    return result;
+  }
 
   // TODO: are there cases where we don't want to do this indirection?
   if (type.kind == CXType_Elaborated) {
@@ -138,45 +240,6 @@ struct ast_ty parse_type(CXType type) {
   strncpy(result.name, spelling_c, 256);
 
   switch (type.kind) {
-    case CXType_Invalid:
-      result.ty = AST_TYPE_ERROR;
-      break;
-
-    case CXType_Void:
-      result.ty = AST_TYPE_VOID;
-      break;
-
-    case CXType_Bool:
-    case CXType_Char_U:
-    case CXType_UChar:
-    case CXType_UShort:
-    case CXType_UInt:
-    case CXType_ULong:
-    case CXType_ULongLong:
-    case CXType_UInt128:
-      result.ty = AST_TYPE_INTEGER;
-      result.integer.is_signed = 0;
-      result.integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
-      break;
-
-    case CXType_Char_S:
-    case CXType_SChar:
-    case CXType_Short:
-    case CXType_Int:
-    case CXType_Long:
-    case CXType_LongLong:
-    case CXType_Int128:
-      result.ty = AST_TYPE_INTEGER;
-      result.integer.is_signed = 1;
-      result.integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
-      break;
-
-    case CXType_Float:
-    case CXType_Double:      // HACK
-    case CXType_LongDouble:  // HACK
-      result.ty = AST_TYPE_FLOAT;
-      break;
-
     case CXType_Pointer:
       result = parse_type(clang_getPointeeType(type));
       result.flags |= TYPE_FLAG_PTR;
@@ -209,8 +272,13 @@ struct ast_ty parse_type(CXType type) {
       *result.array.element_ty = parse_type(clang_getArrayElementType(type));
       break;
 
+    case CXType_IncompleteArray:
+      result = parse_type(clang_getArrayElementType(type));
+      result.flags |= TYPE_FLAG_PTR;
+      break;
+
     default:
-      fprintf(stderr, "unhandled type kind %d\n", type.kind);
+      fprintf(stderr, "cimport: unhandled type kind %d\n", type.kind);
       result.ty = AST_TYPE_ERROR;
       break;
   }
@@ -300,18 +368,33 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
       }
 
       CXString underlying_name = clang_getTypeSpelling(underlying);
+      const char *underlying_name_c = clang_getCString(underlying_name);
+
+      while (1) {
+        if (!strncmp(underlying_name_c, "struct ", 7)) {
+          underlying_name_c += 7;
+        } else {
+          break;
+        }
+      }
 
       decl->type = AST_DECL_TYPE_TYDECL;
       decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
       strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
-      decl->tydecl.ty.ty = AST_TYPE_CUSTOM;
-      decl->tydecl.ty = parse_type(underlying);
+
+      if (parse_simple_type(underlying, &decl->tydecl.ty) < 0) {
+        decl->tydecl.ty.ty = AST_TYPE_CUSTOM;
+        strncpy(decl->tydecl.ty.name, underlying_name_c, 256);
+      }
 
       clang_disposeString(underlying_name);
-
-      if (underlying.kind == CXType_Record) {
-        collect_struct_fields(cursor, &decl->tydecl.ty);
-      }
+    } else if (kind == CXCursor_StructDecl) {
+      // make it.
+      decl->type = AST_DECL_TYPE_TYDECL;
+      decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
+      strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
+      decl->tydecl.ty = parse_cursor_type(cursor);
+      collect_struct_fields(cursor, &decl->tydecl.ty);
     } else {
       free(decl);
       decl = NULL;

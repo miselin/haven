@@ -38,6 +38,7 @@ struct lookup {
     {"enum", TOKEN_KW_ENUM},
     {"import", TOKEN_KW_IMPORT},
     {"cimport", TOKEN_KW_CIMPORT},
+    {"union", TOKEN_KW_UNION},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {

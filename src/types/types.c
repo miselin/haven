@@ -235,7 +235,8 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf, maxlen, "Ty(%s)", ty->name);
       break;
     case AST_TYPE_STRUCT: {
-      offset += snprintf(buf, maxlen, "struct %s { ", ty->name);
+      offset +=
+          snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
       struct ast_struct_field *field = ty->structty.fields;
       while (field) {
         if (!strcmp(field->ty->name, ty->name)) {
@@ -302,6 +303,17 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
 
       break;
+    case AST_TYPE_FUNCTION:
+      offset += snprintf(buf, maxlen, "fn (");
+      for (size_t i = 0; i < ty->function.num_args; i++) {
+        offset += type_name_into(ty->function.args[i], buf + offset, maxlen - (size_t)offset);
+        if (i + 1 < ty->function.num_args) {
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+        }
+      }
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, ") -> ");
+      offset += type_name_into(ty->function.retty, buf + offset, maxlen - (size_t)offset);
+      break;
     default:
       offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
       return offset;
@@ -357,12 +369,17 @@ size_t type_size(struct ast_ty *ty) {
       return ty->array.width * type_size(ty->array.element_ty);
     case AST_TYPE_STRUCT: {
       size_t size = 0;
+      size_t largest_field = 0;
       struct ast_struct_field *field = ty->structty.fields;
       while (field) {
-        size += type_size(field->ty);
+        size_t field_size = type_size(field->ty);
+        size += field_size;
+        if (field_size > largest_field) {
+          largest_field = field_size;
+        }
         field = field->next;
       }
-      return size;
+      return ty->structty.is_union ? largest_field : size;
     }
     case AST_TYPE_ENUM: {
       if (ty->enumty.no_wrapped_fields) {
@@ -486,6 +503,14 @@ struct ast_ty copy_type(struct ast_ty *ty) {
 
       last_inner = new_inner;
     }
+  } else if (ty->ty == AST_TYPE_FUNCTION) {
+    new_type.function.args = calloc(ty->function.num_args, sizeof(struct ast_ty));
+    for (size_t i = 0; i < ty->function.num_args; i++) {
+      *new_type.function.args[i] = copy_type(ty->function.args[i]);
+    }
+
+    new_type.function.retty = calloc(1, sizeof(struct ast_ty));
+    *new_type.function.retty = copy_type(ty->function.retty);
   }
 
   return new_type;
@@ -534,7 +559,8 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf, maxlen, "%s", ty->name);
       break;
     case AST_TYPE_STRUCT: {
-      offset += snprintf(buf, maxlen, "struct %s { ", ty->name);
+      offset +=
+          snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
       struct ast_struct_field *field = ty->structty.fields;
       while (field) {
         if (!strcmp(field->ty->name, ty->name)) {

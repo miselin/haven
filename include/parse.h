@@ -15,7 +15,7 @@ enum ParserDiagSeverity {
 };
 
 struct parser *new_parser(struct lex_state *, struct compiler *);
-int parser_run(struct parser *);
+int parser_run(struct parser *, int);
 struct ast_program *parser_get_ast(struct parser *);
 void destroy_parser(struct parser *);
 

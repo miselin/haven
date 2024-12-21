@@ -26,9 +26,14 @@ enum Pass {
   PassSemantic2,
 };
 
+// Display verbose output including compiler internal logging during compilation
 #define FLAG_VERBOSE (1U << 0)
+// Display the parsed AST before emission (after all passes)
 #define FLAG_DISPLAY_AST (1U << 1)
+// Do not use color in diagnostics and other compiler messages
 #define FLAG_NO_COLOR (1U << 2)
+// Display the generated IR before emission
+#define FLAG_DEBUG_IR (1U << 3)
 
 struct compiler;
 

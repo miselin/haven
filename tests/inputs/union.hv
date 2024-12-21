@@ -1,0 +1,10 @@
+
+type Thing = union {
+    i32 a;
+    float b;
+};
+
+pub fn i32 sut() {
+    let t = union Thing::a(5);
+    t.a
+}

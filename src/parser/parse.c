@@ -69,7 +69,7 @@ static struct ast_range parse_range(struct parser *parser);
 
 static int parse_braced_initializer(struct parser *parser, struct ast_expr *into);
 
-static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into);
+static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into, int is_union);
 static int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into);
 
 static struct ast_expr *parser_parse_pattern_match(struct parser *parser);
@@ -147,7 +147,7 @@ struct parser *new_parser(struct lex_state *lexer, struct compiler *compiler) {
   return result;
 }
 
-int parser_run(struct parser *parser) {
+int parser_run(struct parser *parser, int root_tu) {
   lexer_locate(parser->lexer, &parser->ast.loc);
 
   struct ast_toplevel *last = NULL;
@@ -179,7 +179,7 @@ int parser_run(struct parser *parser) {
     last = decl;
   }
 
-  return parser_add_preamble(parser);
+  return root_tu ? parser_add_preamble(parser) : 0;
 }
 
 struct ast_program *parser_get_ast(struct parser *parser) {
@@ -886,6 +886,37 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       result->type = AST_EXPR_TYPE_STRUCT_INIT;
     } break;
 
+    // struct literals union <ty>::<field>(<expr>)
+    case TOKEN_KW_UNION: {
+      parser_consume_peeked(parser, NULL);
+
+      result->type = AST_EXPR_TYPE_UNION_INIT;
+      result->union_init.ty = parse_type(parser);
+      if (parser_consume(parser, NULL, TOKEN_COLONCOLON) < 0) {
+        free(result);
+        return NULL;
+      }
+
+      if (parser_consume(parser, &result->union_init.field, TOKEN_IDENTIFIER) < 0) {
+        free(result);
+        return NULL;
+      }
+
+      if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
+        free(result);
+        return NULL;
+      }
+      result->union_init.inner = parse_expression(parser);
+      if (!result->union_init.inner) {
+        free(result);
+        return NULL;
+      }
+      if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
+        free(result);
+        return NULL;
+      }
+    } break;
+
     // vec literals
     case TOKEN_LT: {
       parser_consume_peeked(parser, NULL);
@@ -1205,10 +1236,10 @@ static struct ast_ty parse_type(struct parser *parser) {
       memcpy(&result, tmplty, sizeof(struct ast_ty));
       free(tmplty);
     }
-  } else if (peek == TOKEN_KW_STRUCT) {
+  } else if (peek == TOKEN_KW_STRUCT || peek == TOKEN_KW_UNION) {
     parser_consume_peeked(parser, NULL);
 
-    if (parser_parse_struct_decl(parser, &result) < 0) {
+    if (parser_parse_struct_decl(parser, &result, peek == TOKEN_KW_UNION) < 0) {
       result.ty = AST_TYPE_ERROR;
       return result;
     }
@@ -1394,12 +1425,13 @@ static int parse_braced_initializer(struct parser *parser, struct ast_expr *into
   return 0;
 }
 
-static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into) {
+static int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into, int is_union) {
   if (parser_consume(parser, NULL, TOKEN_LBRACE) < 0) {
     return -1;
   }
 
   into->ty = AST_TYPE_STRUCT;
+  into->structty.is_union = is_union;
 
   struct ast_struct_field *last = into->structty.fields;
 

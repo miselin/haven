@@ -324,7 +324,27 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       typecheck_struct_decl(typecheck, &ast->tydecl.ty);
     } else if (ast->tydecl.ty.ty == AST_TYPE_ENUM) {
       typecheck_enum_decl(typecheck, &ast->tydecl.ty);
+    } else if (ast->tydecl.ty.ty == AST_TYPE_ARRAY) {
+      struct ast_ty resolved = resolve_type(typecheck, ast->tydecl.ty.array.element_ty);
+      free_ty(ast->tydecl.ty.array.element_ty, 0);
+      *ast->tydecl.ty.array.element_ty = resolved;
+    } else if (ast->tydecl.ty.ty == AST_TYPE_FUNCTION) {
+      struct ast_ty resolved = resolve_type(typecheck, ast->tydecl.ty.function.retty);
+      free_ty(ast->tydecl.ty.function.retty, 0);
+      *ast->tydecl.ty.function.retty = resolved;
+
+      for (size_t i = 0; i < ast->tydecl.ty.function.num_args; i++) {
+        struct ast_ty arg_resolved = resolve_type(typecheck, ast->tydecl.ty.function.args[i]);
+        free_ty(ast->tydecl.ty.function.args[i], 0);
+        *ast->tydecl.ty.function.args[i] = arg_resolved;
+      }
+    } else {
+      struct ast_ty resolved = resolve_type(typecheck, &ast->tydecl.ty);
+      free_ty(&ast->tydecl.ty, 0);
+      ast->tydecl.ty = resolved;
     }
+
+    entry->ty = ast->tydecl.ty;
   }
 }
 
@@ -642,6 +662,54 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       // original got copied when we resolved
       *ast->ty.array.element_ty = resolved;
       return ast->ty.array.element_ty;
+    } break;
+
+    case AST_EXPR_TYPE_UNION_INIT: {
+      // unions are a simplified variant of structs - they initialize one field, and that's it
+      struct ast_ty union_ty = resolve_type(typecheck, &ast->union_init.ty);
+      free_ty(&ast->union_init.ty, 0);
+      ast->union_init.ty = union_ty;
+
+      if (type_is_error(&union_ty)) {
+        typecheck_diag_expr(typecheck, ast, "union type could not be resolved\n");
+        return &typecheck->error_type;
+      }
+
+      // find the field
+      struct ast_struct_field *field = union_ty.structty.fields;
+      while (field) {
+        if (strcmp(field->name, ast->union_init.field.value.identv.ident) == 0) {
+          break;
+        }
+        field = field->next;
+      }
+
+      if (!field) {
+        typecheck_diag_expr(typecheck, ast, "union field %s not found\n",
+                            ast->union_init.field.value.identv.ident);
+        return &typecheck->error_type;
+      }
+
+      struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->union_init.inner);
+      if (!expr_ty) {
+        return NULL;
+      }
+
+      maybe_implicitly_convert(expr_ty, field->ty);
+
+      if (!same_type(expr_ty, field->ty)) {
+        char exprty[256];
+        char fieldty[256];
+        type_name_into(expr_ty, exprty, 256);
+        type_name_into(field->ty, fieldty, 256);
+
+        fprintf(stderr, "union initializer field %s has type %s, expected %s\n",
+                ast->union_init.field.value.identv.ident, exprty, fieldty);
+        ++typecheck->errors;
+      }
+
+      ast->ty = resolve_type(typecheck, &union_ty);
+      return &ast->ty;
     } break;
 
     case AST_EXPR_TYPE_VARIABLE: {
@@ -1321,6 +1389,14 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
     return *ty;
   }
 
+  if (ty->ty == AST_TYPE_ARRAY) {
+    struct ast_ty new_ty = copy_type(ty);
+    struct ast_ty resolved = resolve_type(typecheck, ty->array.element_ty);
+    free_ty(new_ty.array.element_ty, 0);
+    *new_ty.array.element_ty = resolved;
+    return new_ty;
+  }
+
   if (ty->ty == AST_TYPE_ENUM && ty->enumty.templates) {
     struct ast_ty new_ty = copy_type(ty);
 
@@ -1386,6 +1462,13 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
   struct alias_entry *entry = kv_lookup(typecheck->aliases, ty->name);
   if (!entry) {
     return type_error();
+  }
+
+  if (ty->ty == AST_TYPE_CUSTOM && entry->ty.ty == AST_TYPE_CUSTOM) {
+    if (!strcmp(ty->name, entry->ty.name)) {
+      fprintf(stderr, "alias loop detected for %s\n", ty->name);
+      return type_error();
+    }
   }
 
   if (entry->ty.ty == AST_TYPE_CUSTOM) {

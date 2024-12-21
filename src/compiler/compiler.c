@@ -101,7 +101,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   compiler->parser = parser;
   compiler->lexer = lexer;
 
-  if (parser_run(parser) < 0) {
+  if (parser_run(parser, 1) < 0) {
     rc = 1;
   }
 
@@ -189,6 +189,10 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     struct codegen *codegen = new_codegen(parser_get_ast(parser), compiler);
     rc = codegen_run(codegen);
     if (rc == 0) {
+      if (compiler->flags[0] & FLAG_DEBUG_IR) {
+        codegen_emit_ir(codegen, stderr);
+      }
+
       switch (compiler->output_format) {
         case OutputIR:
           rc = codegen_emit_ir(codegen, out);

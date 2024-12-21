@@ -211,6 +211,10 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
       }
     } break;
 
+    case AST_EXPR_TYPE_UNION_INIT:
+      return typecheck_verify_expr(ast->union_init.inner);
+      break;
+
     case AST_EXPR_TYPE_VARIABLE:
       break;
 

@@ -254,20 +254,31 @@ static void emit_ast(struct codegen *codegen, struct ast_program *ast) {
 
 static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) {
   char buf[256 + 8];
-  snprintf(buf, 256 + 8, "struct.%s", ty->name);
+  snprintf(buf, 256 + 8, "%s.%s", ty->structty.is_union ? "union" : "struct", ty->name);
 
   struct struct_entry *entry = calloc(1, sizeof(struct struct_entry));
   kv_insert(codegen->structs, ty->name, entry);
   entry->type = LLVMStructCreateNamed(codegen->llvm_context, buf);
 
-  LLVMTypeRef *element_types = malloc(sizeof(LLVMTypeRef) * ty->structty.num_fields);
-  struct ast_struct_field *field = ty->structty.fields;
-  for (size_t i = 0; i < ty->structty.num_fields; i++) {
-    element_types[i] = ast_ty_to_llvm_ty(codegen, field->ty);
-    field = field->next;
+  unsigned int num_fields = ty->structty.is_union ? 1 : (unsigned int)ty->structty.num_fields;
+
+  size_t size = type_size(ty);
+
+  LLVMTypeRef *element_types = NULL;
+  if (ty->structty.is_union) {
+    element_types = malloc(sizeof(LLVMTypeRef));
+    element_types[0] =
+        LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context), (unsigned int)size);
+  } else {
+    element_types = malloc(sizeof(LLVMTypeRef) * ty->structty.num_fields);
+    struct ast_struct_field *field = ty->structty.fields;
+    for (size_t i = 0; i < ty->structty.num_fields; i++) {
+      element_types[i] = ast_ty_to_llvm_ty(codegen, field->ty);
+      field = field->next;
+    }
   }
 
-  LLVMStructSetBody(entry->type, element_types, (unsigned int)ty->structty.num_fields, 0);
+  LLVMStructSetBody(entry->type, element_types, num_fields, 0);
 
   free(element_types);
   return entry->type;
@@ -325,7 +336,7 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
       emit_enum_type(codegen, &ast->tydecl.ty);
     } else {
       // just make the type alias
-      fprintf(stderr, "unhandled top level type declaration type %d\n", ast->tydecl.ty.ty);
+      // fprintf(stderr, "unhandled top level type declaration type %d\n", ast->tydecl.ty.ty);
     }
   } else if (ast->type == AST_DECL_TYPE_PREPROC || ast->type == AST_DECL_TYPE_IMPORT) {
     // no-op in codegen

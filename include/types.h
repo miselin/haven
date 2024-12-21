@@ -46,6 +46,7 @@ enum ast_ty_id {
   AST_TYPE_CUSTOM,    // unresolved type name that might be a custom type
   AST_TYPE_NIL,       // for integers/floats/chars, zero, for pointers, null
   AST_TYPE_TEMPLATE,  // present in type definitions, replaced in concrete types
+  AST_TYPE_FUNCTION,  // for function pointers
 };
 
 struct ast_struct_field {
@@ -78,6 +79,7 @@ struct ast_ty {
     struct {
       struct ast_struct_field *fields;
       size_t num_fields;
+      int is_union;  // if 1, all the fields consume the same memory space
     } structty;
     struct {
       size_t width;
@@ -92,6 +94,12 @@ struct ast_ty {
       struct ast_ty *outer;
       struct ast_template_ty *inners;
     } template;
+    struct {
+      struct ast_ty *retty;
+      struct ast_ty **args;
+      size_t num_args;
+      int vararg;
+    } function;
   };
 };
 
