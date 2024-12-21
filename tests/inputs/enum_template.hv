@@ -1,0 +1,16 @@
+
+type Result = enum <T> {
+    Ok(T),
+    Error
+};
+
+fn Result<i32> thing() {
+    Result::Ok(5)
+}
+
+pub fn i32 sut() {
+    match thing() {
+        Ok(x) => x
+        _ => 1
+    }
+}
