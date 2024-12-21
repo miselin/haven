@@ -21,6 +21,8 @@ void emit_vdecl(struct codegen *codegen, struct ast_vdecl *vdecl) {
     LLVMSetLinkage(global, LLVMInternalLinkage);
   }
 
+  LLVMSetGlobalConstant(global, (vdecl->flags & DECL_FLAG_MUT) == 0);
+
   struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
   entry->vdecl = vdecl;
   entry->variable_type = variable_type;

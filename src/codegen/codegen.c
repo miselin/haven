@@ -152,7 +152,7 @@ int codegen_run(struct codegen *codegen) {
     LLVMPassBuilderOptionsRef pass_options = LLVMCreatePassBuilderOptions();
 
     // run function passes
-    LLVMErrorRef result = LLVMRunPasses(codegen->llvm_module, "sccp,simplifycfg,dce",
+    LLVMErrorRef result = LLVMRunPasses(codegen->llvm_module, "mem2reg,sccp,simplifycfg,dce",
                                         codegen->llvm_target_machine, pass_options);
     if (result != NULL) {
       char *msg = LLVMGetErrorMessage(result);
