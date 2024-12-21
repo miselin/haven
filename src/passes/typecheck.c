@@ -159,8 +159,14 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       struct ast_ty new_type;
       memset(&new_type, 0, sizeof(struct ast_ty));
       new_type.ty = AST_TYPE_ENUM;
-      snprintf(new_type.name, 256, "%s_spec_%s", ast->fdecl.ident.value.identv.ident,
-               ast->fdecl.retty.name);
+      char new_name[1024];
+      if (snprintf(new_name, 1024, "%s_spec_%s", ast->fdecl.ident.value.identv.ident,
+                   ast->fdecl.retty.name) > 256) {
+        fprintf(stderr, "enum specialization name too long\n");
+        ++typecheck->errors;
+        return;
+      }
+      strcpy(new_type.name, new_name);
 
       new_type.enumty.fields = ast->fdecl.retty.enumty.fields;
       new_type.enumty.no_wrapped_fields = ast->fdecl.retty.enumty.no_wrapped_fields;
