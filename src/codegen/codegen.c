@@ -169,6 +169,37 @@ int codegen_run(struct codegen *codegen) {
       LLVMDisposeErrorMessage(msg);
     }
 
+    // after the normal defaults, run opt level optimizations based on opt flags passed to the
+    // compiler
+    const char *opts = "default<Os>";
+    switch (compiler_get_opt_level(codegen->compiler)) {
+      case OptNone:
+        opts = "default<O0>";
+        break;
+      case OptLight:
+        opts = "default<O1>";
+        break;
+      case OptNormal:
+        opts = "default<O2>";
+        break;
+      case OptAggressive:
+        opts = "default<O3>";
+        LLVMPassBuilderOptionsSetLoopInterleaving(pass_options, 1);
+        LLVMPassBuilderOptionsSetLoopVectorization(pass_options, 1);
+        LLVMPassBuilderOptionsSetLoopUnrolling(pass_options, 1);
+        LLVMPassBuilderOptionsSetMergeFunctions(pass_options, 1);
+        break;
+      default:
+        break;
+    }
+
+    result = LLVMRunPasses(codegen->llvm_module, opts, codegen->llvm_target_machine, pass_options);
+    if (result != NULL) {
+      char *msg = LLVMGetErrorMessage(result);
+      fprintf(stderr, "Error running module passes: %s\n", msg);
+      LLVMDisposeErrorMessage(msg);
+    }
+
     LLVMDisposePassBuilderOptions(pass_options);
   }
 
