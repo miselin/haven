@@ -66,6 +66,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
             LLVMBuildStore(codegen->llvm_builder, zero, vec_stack);
             LLVMValueRef vec = LLVMBuildLoad2(
                 codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), vec_stack, "vec");
+
             for (size_t j = 0; j < i; j++) {
               LLVMValueRef idx = LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), j, 0);
               vec = LLVMBuildInsertElement(codegen->llvm_builder, vec, fields[j], idx, "element");
@@ -121,6 +122,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       } else if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
         // enum is actually a struct -- don't load
         // with no wrapped fields, it's an integer
+        return lookup->ref;
+      } else if (ast->ty.ty == AST_TYPE_STRUCT) {
+        // don't load structs, they need to be accessed via GEP
         return lookup->ref;
       }
 
@@ -201,6 +205,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
+      char name[256];
+
       const char *ident = ast->deref.ident.value.identv.ident;
       struct scope_entry *entry = scope_lookup(codegen->scope, ident, 1);
 
@@ -213,23 +219,28 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           ref = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, ref, ident);
         }
 
+        snprintf(name, 256, "deref.vec.%zd", ast->deref.field_idx);
+
         LLVMValueRef index = LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context),
                                           (unsigned int)ast->deref.field_idx, 0);
-        return LLVMBuildExtractElement(codegen->llvm_builder, ref, index, "deref");
+        return LLVMBuildExtractElement(codegen->llvm_builder, ref, index, name);
       }
 
       LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
 
       // union -> read from first field, direct pointer access
       if (entry->vdecl->ty.structty.is_union) {
-        return LLVMBuildLoad2(codegen->llvm_builder, target_ty, entry->ref, "union.load");
+        snprintf(name, 256, "deref.union.%s", ast->deref.field.value.identv.ident);
+        return LLVMBuildLoad2(codegen->llvm_builder, target_ty, entry->ref, name);
       }
+
+      snprintf(name, 256, "deref.struct.%s", ast->deref.field.value.identv.ident);
 
       // struct -> getelementptr
       LLVMValueRef gep =
           LLVMBuildStructGEP2(codegen->llvm_builder, entry->variable_type, entry->ref,
                               (unsigned int)ast->deref.field_idx, "deref.gep");
-      return LLVMBuildLoad2(codegen->llvm_builder, target_ty, gep, "deref.load");
+      return LLVMBuildLoad2(codegen->llvm_builder, target_ty, gep, name);
     }; break;
 
     case AST_EXPR_TYPE_VOID:
@@ -442,7 +453,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMBuildStore(codegen->llvm_builder, tag_value, tag);
       if (inner) {
         LLVMValueRef buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 1, "buf");
-        LLVMBuildStore(codegen->llvm_builder, inner, buf);
+        emit_store(codegen, &ast->enum_init.inner->ty, inner, buf);
+        // LLVMBuildStore(codegen->llvm_builder, inner, buf);
       }
 
       return storage;

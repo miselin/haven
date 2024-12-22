@@ -1,3 +1,4 @@
+#include <llvm-c-18/llvm-c/Target.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
@@ -55,7 +56,6 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
   }
 
   if (narrower_type(from, to)) {
-    // TODO: sext if signed integer
     if (from->ty == AST_TYPE_INTEGER && from->integer.is_signed) {
       return LLVMBuildSExtOrBitCast(codegen->llvm_builder, value, dest_ty, "widening");
     }
@@ -181,6 +181,10 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
     return;
   }
 
+  // use LLVM's size, not ours, as we may have padding
+  LLVMTypeRef llvm_ty = ast_ty_to_llvm_ty(codegen, ty);
+  uint64_t ty_size = LLVMABISizeOfType(codegen->llvm_data_layout, llvm_ty);
+
   LLVMTypeRef memcpy_types[3] = {
       LLVMPointerTypeInContext(codegen->llvm_context, 0),
       LLVMPointerTypeInContext(codegen->llvm_context, 0),
@@ -193,10 +197,10 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
       LLVMGetIntrinsicDeclaration(codegen->llvm_module, memcpy_id, memcpy_types, 3);
   LLVMTypeRef func_type = LLVMGlobalGetValueType(memcpy_func);
   LLVMValueRef args[4] = {
-      ptr,                                                                            // dest
-      value,                                                                          // src
-      LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), type_size(ty), 0),  // len
-      LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0),               // isvolatile
+      ptr,                                                                      // dest
+      value,                                                                    // src
+      LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), ty_size, 0),  // len
+      LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0),         // isvolatile
   };
   LLVMBuildCall2(codegen->llvm_builder, func_type, memcpy_func, args, 4, "");
 }

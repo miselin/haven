@@ -1,3 +1,4 @@
+#include <llvm-c-18/llvm-c/TargetMachine.h>
 #include <llvm-c/BitWriter.h>
 #include <llvm-c/Core.h>
 #include <stdio.h>

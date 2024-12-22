@@ -299,6 +299,8 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
 
   entry->type = LLVMStructCreateNamed(codegen->llvm_context, buf);
 
+  struct ast_enum_field *largest_field = NULL;
+
   size_t total_size = 0;
   struct ast_enum_field *field = ty->enumty.fields;
   while (field) {
@@ -306,18 +308,44 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
       size_t sz = type_size(&field->inner);
       if (sz > total_size) {
         total_size = sz;
+
+        largest_field = field;
       }
     }
     field = field->next;
   }
 
-  LLVMTypeRef fields[2] = {
-      LLVMInt32Type(),  // identifying tag
-      LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context),
-                    (unsigned int)total_size),  // data storage for largest possible field
-  };
+  LLVMTypeRef *fields = NULL;
+  unsigned int num_fields = 0;
 
-  LLVMStructSetBody(entry->type, fields, total_size ? 2 : 1, 0);
+  if (largest_field) {
+    // largest type + i8 array for the remaining bytes
+    size_t bytes_remaining = total_size - type_size(&largest_field->inner);
+    if (bytes_remaining) {
+      num_fields = 3;
+    } else {
+      num_fields = 2;
+    }
+
+    fields = malloc(sizeof(LLVMTypeRef) * num_fields);
+    fields[0] = LLVMInt32TypeInContext(codegen->llvm_context);      // tag
+    fields[1] = ast_ty_to_llvm_ty(codegen, &largest_field->inner);  // largest type
+    if (bytes_remaining) {
+      fields[2] = LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context),
+                                (unsigned int)bytes_remaining);
+    }
+  } else {
+    // just a tag and a byte array
+    num_fields = 2;
+    fields = malloc(sizeof(LLVMTypeRef) * num_fields);
+    fields[0] = LLVMInt32TypeInContext(codegen->llvm_context);  // tag
+    fields[1] = LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context),
+                              (unsigned int)total_size);  // data storage for largest possible field
+  }
+
+  LLVMStructSetBody(entry->type, fields, num_fields, 0);
+
+  free(fields);
 
   return entry->type;
 }

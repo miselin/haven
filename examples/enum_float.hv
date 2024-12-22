@@ -1,0 +1,19 @@
+cimport "stdio.h";
+
+type Inner = struct {
+    float x;
+};
+
+type Wrapped = enum {
+    Inner(Inner)
+    Error
+};
+
+pub fn i32 main() {
+    let inner = struct Inner { 5.0 };
+    let foo = Wrapped::Inner(inner);
+    match foo {
+        Inner(x) => { printf("float: %f\n", x.x); 0 }
+        _ => 1
+    }
+}

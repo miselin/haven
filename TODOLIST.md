@@ -13,3 +13,4 @@
 - [x] avoid needing to explicitly tag `enum` in pattern matches
 - [x] while/do-while loops
 - [ ] defers need to capture variables in scope
+- [ ] match expressions should not require an otherwise arm if they fully exhaust all possible enum options

@@ -367,7 +367,12 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
         }
 
         if (!same_type(&field->inner, &ast->enum_init.inner->ty)) {
-          fprintf(stderr, "tyverify: enum field %s inner type does not match\n", field->name);
+          char innerstr[256], fieldstr[256];
+          type_name_into(&ast->enum_init.inner->ty, innerstr, 256);
+          type_name_into(&field->inner, fieldstr, 256);
+          fprintf(stderr,
+                  "tyverify: enum field %s inner type does not match: wanted %s but got %s\n",
+                  field->name, fieldstr, innerstr);
           return -1;
         }
       }

@@ -217,7 +217,9 @@ void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_STRUCT_INIT:
+      fprintf(stderr, "StructInit {");
       dump_array(ast, indent);
+      fprintf(stderr, "}");
       break;
 
     case AST_EXPR_TYPE_BLOCK:

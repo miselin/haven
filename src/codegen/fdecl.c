@@ -67,12 +67,44 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       unsigned int memory = LLVMGetEnumAttributeKindForName("memory", 6);
       unsigned int nounwind = LLVMGetEnumAttributeKindForName("nounwind", 8);
 
+      const char *frameptr_name = "frame-pointer";
+      LLVMAttributeRef frameptr_attr = LLVMCreateStringAttribute(
+          codegen->llvm_context, frameptr_name, (unsigned)strlen(frameptr_name), "all",
+          (unsigned)strlen("all"));
+
       // sanitize_address for ASAN - need cli flags for this
       LLVMContextRef context = codegen->llvm_context;
       LLVMAttributeRef sanitize_attr = LLVMCreateEnumAttribute(context, sanitize, 0);
       LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, sanitize_attr);
       LLVMAttributeRef nounwind_attr = LLVMCreateEnumAttribute(context, nounwind, 0);
       LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, nounwind_attr);
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, frameptr_attr);
+
+      {
+        const char *attr_name = "target-cpu";
+        const char *attr_value = "x86-64";
+        LLVMAttributeRef attr =
+            LLVMCreateStringAttribute(codegen->llvm_context, attr_name, (unsigned)strlen(attr_name),
+                                      attr_value, (unsigned)strlen(attr_value));
+        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, attr);
+      }
+      {
+        const char *attr_name = "tune-cpu";
+        const char *attr_value = "generic";
+        LLVMAttributeRef attr =
+            LLVMCreateStringAttribute(codegen->llvm_context, attr_name, (unsigned)strlen(attr_name),
+                                      attr_value, (unsigned)strlen(attr_value));
+        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, attr);
+      }
+      {
+        const char *attr_name = "target-features";
+        const char *attr_value = LLVMGetHostCPUFeatures();
+        LLVMAttributeRef attr =
+            LLVMCreateStringAttribute(codegen->llvm_context, attr_name, (unsigned)strlen(attr_name),
+                                      attr_value, (unsigned)strlen(attr_value));
+        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, attr);
+        LLVMDisposeMessage((char *)attr_value);
+      }
 
       LLVMAttributeRef mem_attr = NULL;
       if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {

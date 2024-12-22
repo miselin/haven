@@ -1,0 +1,15 @@
+
+// This enum should become a <4 * float>, [16 x i8] in IR
+type Thing = enum {
+    Vec(fvec4),
+    Array(i8[32]),
+    Other
+};
+
+pub fn i32 main() {
+    let x = Thing::Vec(<1.0, 2.0, 3.0, 4.0>);
+    match x {
+        Thing::Vec(_) => 0
+        _ => 1
+    }
+}

@@ -7,6 +7,7 @@
 #include "codegen.h"
 #include "internal.h"
 #include "scope.h"
+#include "types.h"
 #include "utility.h"
 
 LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
@@ -95,7 +96,9 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
       entry->variable_type =
           ast_ty_to_llvm_ty(codegen, &arm->pattern->pattern_match.inner_vdecl->ty);
       entry->ref =
-          LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, main_expr_buf, "inner");
+          type_is_complex(&arm->pattern->pattern_match.inner_vdecl->ty)
+              ? main_expr_buf
+              : LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, main_expr_buf, "inner");
       scope_insert(codegen->scope,
                    arm->pattern->pattern_match.inner_vdecl->ident.value.identv.ident, entry);
     }

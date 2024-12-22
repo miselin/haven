@@ -349,9 +349,6 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 }
 
 static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl) {
-  UNUSED(typecheck);
-  UNUSED(decl);
-
   // TODO: causes infinite recursive loop on recursive struct definitions
 
   struct ast_struct_field *field = decl->structty.fields;
@@ -367,10 +364,12 @@ static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *de
 static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl) {
   struct ast_enum_field *field = decl->enumty.fields;
   while (field) {
-    resolve_template_type(typecheck, decl->enumty.templates, &field->inner);
-    struct ast_ty resolved = resolve_type(typecheck, &field->inner);
-    free_ty(&field->inner, 0);
-    field->inner = resolved;
+    if (field->has_inner) {
+      resolve_template_type(typecheck, decl->enumty.templates, &field->inner);
+      struct ast_ty resolved = resolve_type(typecheck, &field->inner);
+      free_ty(&field->inner, 0);
+      field->inner = resolved;
+    }
     field = field->next;
   }
 }
@@ -1335,7 +1334,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
         maybe_implicitly_convert(inner_ty, &field->inner);
 
-        field->inner = resolve_type(typecheck, &field->inner);
+        struct ast_ty resolved = resolve_type(typecheck, &field->inner);
+        free_ty(&field->inner, 0);
+        field->inner = resolved;
 
         if (field->inner.ty != AST_TYPE_CUSTOM) {
           // can't check types if the inner is as yet unresolved

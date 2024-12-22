@@ -2,6 +2,7 @@
 include(GoogleTest)
 
 add_haven_library(haven_vec inputs/vec.hv)
+add_haven_library(haven_float inputs/sqrt.hv)
 
 add_executable(vec_test vec_test.cc)
 target_link_libraries(vec_test haven_compiler_options_no_warnings haven_vec GTest::gtest_main)
