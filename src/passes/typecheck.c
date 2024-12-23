@@ -410,6 +410,13 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
       entry->vdecl = &ast->let;
 
+      // if a type was actually specified we need to resolve it
+      if (!type_is_tbd(&ast->let.ty)) {
+        struct ast_ty resolved = resolve_type(typecheck, &ast->let.ty);
+        free_ty(&ast->let.ty, 0);
+        ast->let.ty = resolved;
+      }
+
       // insert before checking the initializer to allow recursive references
       scope_insert(typecheck->scope, ast->let.ident.value.identv.ident, entry);
 
@@ -420,7 +427,7 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
 
       if (type_is_tbd(&ast->let.ty)) {
         // inferred type
-        ast->let.ty = *init_ty;
+        ast->let.ty = copy_type(init_ty);
         ast->let.ty.flags &= ~TYPE_FLAG_CONSTANT;  // no longer a constant
       }
 
@@ -439,6 +446,7 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
 
       // fully resolve the let type now that the initializer is known
       struct ast_ty resolved = resolve_type(typecheck, &ast->let.ty);
+      free_ty(&ast->let.ty, 0);
       ast->let.ty = resolved;
     } break;
 
@@ -681,6 +689,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
           ++typecheck->errors;
         }
 
+        maybe_implicitly_convert(expr_ty, field->ty);
+
         if (!same_type(expr_ty, field->ty)) {
           char exprty[256];
           char fieldty[256];
@@ -918,7 +928,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         ++i;
       }
 
-      ast->ty = resolve_type(typecheck, &entry->fdecl->retty);
+      struct ast_ty resolved = resolve_type(typecheck, &entry->fdecl->retty);
+      free_ty(&ast->ty, 0);
+      ast->ty = resolved;
       return &ast->ty;
     } break;
 
@@ -1029,7 +1041,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      ast->ty = resolve_type(typecheck, &ast->cast.ty);
+      struct ast_ty resolved = resolve_type(typecheck, &ast->cast.ty);
+      free_ty(&ast->ty, 0);
+      ast->ty = resolved;
       return &ast->ty;
     } break;
 
@@ -1110,14 +1124,51 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         entry->vdecl->ty.flags &= ~TYPE_FLAG_CONSTANT;
       }
 
-      maybe_implicitly_convert(expr_ty, &entry->vdecl->ty);
+      struct ast_ty *desired_ty = &entry->vdecl->ty;
 
-      if (!same_type(&entry->vdecl->ty, expr_ty)) {
+      const char *field_name = NULL;
+
+      if (ast->assign.lhs->type == AST_EXPR_TYPE_DEREF) {
+        // all the checks in this block are probably already handled fine by DEREF, but let's make
+        // sure
+
+        if (entry->vdecl->ty.ty != AST_TYPE_STRUCT) {
+          fprintf(stderr, "in field assignment, lhs %s has non-struct type\n", ident);
+          ++typecheck->errors;
+          return &typecheck->error_type;
+        }
+
+        struct ast_struct_field *field = entry->vdecl->ty.structty.fields;
+        while (field) {
+          if (strcmp(field->name, ast->assign.lhs->deref.field.value.identv.ident) == 0) {
+            field_name = field->name;
+            desired_ty = field->ty;
+            break;
+          }
+          field = field->next;
+        }
+
+        if (!field) {
+          fprintf(stderr, "field %s not found in struct %s\n",
+                  ast->assign.lhs->deref.field.value.identv.ident, ident);
+          ++typecheck->errors;
+          return &typecheck->error_type;
+        }
+      }
+
+      maybe_implicitly_convert(expr_ty, desired_ty);
+
+      if (!same_type(desired_ty, expr_ty)) {
         char tystr[256], exprstr[256];
-        type_name_into(&entry->vdecl->ty, tystr, 256);
+        type_name_into(desired_ty, tystr, 256);
         type_name_into(expr_ty, exprstr, 256);
 
-        fprintf(stderr, "assignment to %s has type %s, expected %s\n", ident, exprstr, tystr);
+        if (field_name) {
+          fprintf(stderr, "field assignment to %s.%s has type %s, expected %s\n", ident, field_name,
+                  exprstr, tystr);
+        } else {
+          fprintf(stderr, "assignment to %s has type %s, expected %s\n", ident, exprstr, tystr);
+        }
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -1602,6 +1653,10 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
         from->integer.width = to->integer.width;
       }
 
+      // TODO: there be some additional checks around signed/unsigned conversion
+      // e.g. make sure the conversion doesn't change the sign
+      from->integer.is_signed = to->integer.is_signed;
+
       return conversion;
     }
 
@@ -1612,6 +1667,7 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
 
     // convert the source width to the destinaiton width
     from->integer.width = to->integer.width;
+    from->integer.is_signed = to->integer.is_signed;
     return 1;
   } else if (from->ty == AST_TYPE_ENUM && to->ty == AST_TYPE_ENUM) {
     if (!(from->enumty.templates)) {

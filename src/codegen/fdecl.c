@@ -12,6 +12,7 @@
 #include "kv.h"
 #include "lex.h"
 #include "scope.h"
+#include "types.h"
 #include "utility.h"
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at) {
@@ -127,6 +128,8 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     codegen->retval = LLVMGetParam(func, 0);
   } else if (fdecl->retty.ty != AST_TYPE_VOID) {
     codegen->retval = new_alloca(codegen, ret_ty, "retval");
+  } else {
+    codegen->retval = NULL;
   }
 
   codegen->current_function = func;
@@ -147,6 +150,10 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   LLVMValueRef block_result = emit_block(codegen, fdecl->body);
   if (fdecl->retty.ty != AST_TYPE_VOID) {
     // complex_return path sets retval to the return parameter
+    if (fdecl->retty.flags & TYPE_FLAG_PTR && !LLVMIsNull(block_result)) {
+      block_result =
+          LLVMBuildLoad2(codegen->llvm_builder, ret_ty, block_result, "deref.ptr.retval");
+    }
     emit_store(codegen, &fdecl->retty, block_result, codegen->retval);
   }
 
@@ -173,7 +180,8 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   if (fdecl->retty.ty == AST_TYPE_VOID || complex_return) {
     LLVMBuildRetVoid(codegen->llvm_builder);
   } else {
-    LLVMValueRef retval = LLVMBuildLoad2(codegen->llvm_builder, ret_ty, codegen->retval, "");
+    LLVMValueRef retval =
+        LLVMBuildLoad2(codegen->llvm_builder, ret_ty, codegen->retval, "load.retval");
     LLVMBuildRet(codegen->llvm_builder, retval);
   }
 

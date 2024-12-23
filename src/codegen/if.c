@@ -15,6 +15,8 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMContextRef context = codegen->llvm_context;
 
+  LLVMTypeRef expr_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+
   LLVMBasicBlockRef then_block = LLVMCreateBasicBlockInContext(context, "if.expr.then");
   LLVMBasicBlockRef end_block = LLVMCreateBasicBlockInContext(context, "if.expr.end");
   LLVMBasicBlockRef else_block =
@@ -36,8 +38,7 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMAppendExistingBasicBlock(codegen->current_function, end_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
-  LLVMValueRef phi =
-      LLVMBuildPhi(codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), "phi");
+  LLVMValueRef phi = LLVMBuildPhi(codegen->llvm_builder, expr_ty, "phi");
   LLVMValueRef values[] = {then_val, else_val};
   LLVMBasicBlockRef blocks[] = {final_then_block, final_else_block};
   LLVMAddIncoming(phi, values, blocks, 2);

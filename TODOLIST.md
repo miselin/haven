@@ -9,8 +9,11 @@
 - [ ] figure out a better way to handle attribute values like "argmem: readwrite" which are now just a hardcoded constant
 - [x] ranges stop before the terminal value (e.g. 10..0..-1's last iteration is 1)
 - [x] finish on generic enums (for option types and such), some initial code is in there
-- [ ] `let node *p = ...` fails to parse (unexpected token \*)
+- [x] `let node *p = ...` fails to parse (unexpected token \*)
 - [x] avoid needing to explicitly tag `enum` in pattern matches
 - [x] while/do-while loops
 - [ ] defers need to capture variables in scope
 - [ ] match expressions should not require an otherwise arm if they fully exhaust all possible enum options
+- [ ] make field assignment work on pointers (maybe just use a different syntax like C?)
+- [ ] sizeof
+- [ ] expose matrix transpose somehow (more generally - how to expose intrinsics effectively?)

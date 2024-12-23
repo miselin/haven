@@ -336,6 +336,12 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH:
+      if (ast->pattern_match.inner_vdecl) {
+        if (is_bad_type(&ast->pattern_match.inner_vdecl->ty)) {
+          fprintf(stderr, "pattern match inner vdecl has unresolved type\n");
+          return -1;
+        }
+      }
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT: {

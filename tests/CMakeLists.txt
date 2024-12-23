@@ -19,6 +19,10 @@ add_executable(trie_test trie_test.cc)
 target_link_libraries(trie_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(trie_test)
 
+#add_executable(trie_haven_test trie_test.cc)
+#target_link_libraries(trie_haven_test haven_compiler_options_no_warnings compiler -Wl,--whole-archive utilities_haven -Wl,--no-whole-archive GTest::gtest_main)
+#gtest_discover_tests(trie_haven_test)
+
 add_executable(kw_test kw_test.cc)
 target_link_libraries(kw_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(kw_test)
@@ -33,7 +37,7 @@ gtest_discover_tests(lex_test)
 
 add_executable(parse_test parse_test.cc)
 target_link_libraries(parse_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
-# gtest_discover_tests(parse_test)
+gtest_discover_tests(parse_test)
 
 macro(add_functional_test name expectedrc)
     add_executable(${name}_test rc_test.cc)

@@ -94,6 +94,11 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
     return 1;
   }
 
+  // pointers can be converted to each other
+  if (ty1->flags & TYPE_FLAG_PTR && ty2->flags & TYPE_FLAG_PTR) {
+    return 1;
+  }
+
   if (type_is_constant(ty1) != type_is_constant(ty2)) {
     // make sure ty1 is the non-constant type
     if (type_is_constant(ty1)) {
@@ -110,10 +115,6 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
 
   switch (ty1->ty) {
     case AST_TYPE_INTEGER:
-      if (ty1->integer.is_signed != ty2->integer.is_signed) {
-        return 0;
-      }
-
       // destination type must be at least large enough for the constant
       if (type_is_constant(ty2)) {
         return ty1->integer.width >= ty2->integer.width;
@@ -149,6 +150,11 @@ int same_type_masked(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) 
 }
 
 int same_type(struct ast_ty *ty1, struct ast_ty *ty2) {
+  if (type_is_nil(ty1) || type_is_nil(ty2)) {
+    // nil is magic
+    return 1;
+  }
+
   return same_type_masked(ty1, ty2, TYPE_FLAG_MASK_ALL);
 }
 

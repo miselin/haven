@@ -21,12 +21,6 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
   }
 
   if (type == ImportTypeC) {
-    if (!haven_cimport_present) {
-      compiler_diag(compiler, DiagError, "C imports not supported in this build of the compiler\n");
-      free((void *)fullpath);
-      return -1;
-    }
-
     if (cimport(compiler->parser, fullpath) < 0) {
       compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
       free((void *)fullpath);
@@ -35,30 +29,6 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
 
     free((void *)fullpath);
     return 0;
-
-    /*
-    char cmdbuf[1024];
-    snprintf(cmdbuf, sizeof(cmdbuf), "cpp -P %s > /tmp/haven_cimport_tempfile.c", fullpath);
-
-    // run the C preprocessor on the file, output to a temp file for passing to the c importer
-    // module
-    FILE *fp = popen(cmdbuf, "r");
-    if (pclose(fp) < 0) {
-      compiler_diag(compiler, DiagError, "failed to run C preprocessor on %s\n", fullpath);
-      free((void *)fullpath);
-      return -1;
-    }
-
-    int rc = haven_cimport_process("/tmp/haven_cimport_tempfile.c");
-    if (rc < 0) {
-      compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
-    }
-
-    fprintf(stderr, "rc=%d\n", rc);
-
-    free((void *)fullpath);
-    return rc;
-    */
   }
 
   FILE *in = fopen(fullpath, "r");

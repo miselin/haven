@@ -25,7 +25,7 @@
 
 static void emit_ast(struct codegen *codegen, struct ast_program *ast);
 static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast);
-static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast);
+static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueRef into);
 
 struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) {
   if (initialize_llvm() != 0) {
@@ -383,19 +383,18 @@ LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast) {
   struct ast_stmt *stmt = ast->stmt;
   LLVMValueRef last = NULL;
   while (stmt) {
-    last = emit_stmt(codegen, stmt);
+    last = emit_stmt(codegen, stmt, NULL);
     stmt = stmt->next;
   }
   codegen_internal_leave_scope(codegen, 1);
   return last;
 }
 
-static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast) {
+static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueRef into) {
   update_debug_loc(codegen, &ast->loc);
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR: {
-      LLVMValueRef expr = emit_expr(codegen, ast->expr);
-      return expr;
+      return emit_expr_into(codegen, ast->expr, into);
     } break;
 
     case AST_STMT_TYPE_LET: {

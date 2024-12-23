@@ -62,12 +62,6 @@ int tokenstream_next_token(struct tokenstream *stream, struct token *token) {
 
   memcpy(token, &entry->token, sizeof(struct token));
 
-  // if there's no markers, there's no point collecting a buffer as there's no rewind points
-  if (!stream->markers) {
-    free(entry);
-    return 0;
-  }
-
   // push to buffer
   if (!stream->buffer) {
     stream->buffer = entry;

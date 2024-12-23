@@ -617,10 +617,22 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
         parser_consume_peeked(parser, NULL);
         result->let.flags |= DECL_FLAG_MUT;
       }
-      struct ast_ty ty = type_tbd();
-      if (parser_peek(parser) != TOKEN_IDENTIFIER) {
-        ty = parse_type(parser);
+
+      int is_typed = 1;
+
+      // seek ahead a bit to see if it's typed or not
+      if (parser_peek(parser) == TOKEN_IDENTIFIER) {
+        tokenstream_mark(parser->stream);
+        parser_consume_peeked(parser, NULL);
+        if (parser_peek(parser) == TOKEN_ASSIGN) {
+          is_typed = 0;
+        }
+        parser_rewind(parser);
       }
+
+      struct ast_ty ty = is_typed ? parse_type(parser) : type_tbd();
+
+      // var name
       if (parser_consume(parser, &token, TOKEN_IDENTIFIER) < 0) {
         free(result);
         return NULL;

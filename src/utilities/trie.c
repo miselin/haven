@@ -3,6 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 
+extern struct trie *haven_new_trie(void) __attribute__((weak));
+extern void haven_trie_insert(struct trie *, const char *key, void *value) __attribute__((weak));
+extern void *haven_trie_lookup(struct trie *, const char *key) __attribute__((weak));
+extern void haven_destroy_trie(struct trie *trie) __attribute__((weak));
+
 struct trie_node {
   size_t id;
   char key[256];
@@ -19,6 +24,10 @@ struct trie {
 };
 
 struct trie *new_trie(void) {
+  if (haven_new_trie) {
+    return haven_new_trie();
+  }
+
   struct trie *trie = calloc(1, sizeof(struct trie));
   trie->root = calloc(1, sizeof(struct trie_node));
   return trie;
@@ -39,6 +48,11 @@ static int has_children(struct trie_node *node) {
 }
 
 void trie_insert(struct trie *trie, const char *key, void *value) {
+  if (haven_trie_insert) {
+    haven_trie_insert(trie, key, value);
+    return;
+  }
+
   if (!*key) {
     // no-op
     return;
@@ -117,6 +131,10 @@ void trie_insert(struct trie *trie, const char *key, void *value) {
 }
 
 void *trie_lookup(struct trie *trie, const char *key) {
+  if (haven_trie_lookup) {
+    return haven_trie_lookup(trie, key);
+  }
+
   struct trie_node *node = trie->root;
   size_t i = 0;
   while (node && *key) {
@@ -156,6 +174,10 @@ static void dump_trie_node(FILE *stream, struct trie_node *node) {
 }
 
 void dump_trie(struct trie *trie) {
+  if (haven_trie_lookup) {
+    return;
+  }
+
   FILE *stream = fopen("trie.dot", "w");
 
   fprintf(stream, "digraph trie {\n");
@@ -185,6 +207,11 @@ static void destroy_trie_node(struct trie_node *node) {
 }
 
 void destroy_trie(struct trie *trie) {
+  if (haven_destroy_trie) {
+    haven_destroy_trie(trie);
+    return;
+  }
+
   destroy_trie_node(trie->root);
   free(trie);
 }

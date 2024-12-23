@@ -47,6 +47,11 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
     return value;
   }
 
+  if (from->flags & TYPE_FLAG_PTR && to->flags & TYPE_FLAG_PTR) {
+    // pointer to pointer cast, no IR cast needed
+    return value;
+  }
+
   LLVMTypeRef dest_ty = ast_ty_to_llvm_ty(codegen, to);
 
   if (!same_type_class(from, to, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT)) {
