@@ -791,6 +791,18 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
+      // try to coerce the index to a 32-bit integer
+      struct ast_ty *index_ty = typecheck_expr(typecheck, ast->array_index.index);
+      if (!index_ty) {
+        return NULL;
+      }
+
+      struct ast_ty int_ty;
+      int_ty.ty = AST_TYPE_INTEGER;
+      int_ty.integer.is_signed = 1;
+      int_ty.integer.width = 32;
+      maybe_implicitly_convert(index_ty, &int_ty);
+
       if (entry->vdecl->ty.ty == AST_TYPE_ARRAY) {
         ast->ty = resolve_type(typecheck, entry->vdecl->ty.array.element_ty);
       } else {
@@ -935,18 +947,19 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
-      struct scope_entry *entry =
-          scope_lookup(typecheck->scope, ast->deref.ident.value.identv.ident, 1);
-      if (!entry || !entry->vdecl) {
-        fprintf(stderr, "%s not found or not a variable\n", ast->deref.ident.value.identv.ident);
-        ++typecheck->errors;
-        return &typecheck->error_type;
+      struct ast_ty *target_ty = typecheck_expr(typecheck, ast->deref.target);
+      if (!target_ty) {
+        return NULL;
       }
 
-      if (entry->vdecl->ty.ty != AST_TYPE_FVEC && entry->vdecl->ty.ty != AST_TYPE_STRUCT &&
-          entry->vdecl->ty.ty != AST_TYPE_MATRIX) {
+      struct ast_ty *ty = target_ty;
+      if (ty->ty == AST_TYPE_POINTER) {
+        ty = ptr_pointee_type(ty);
+      }
+
+      if (ty->ty != AST_TYPE_FVEC && ty->ty != AST_TYPE_STRUCT && ty->ty != AST_TYPE_MATRIX) {
         char tystr[256];
-        type_name_into(&entry->vdecl->ty, tystr, 256);
+        type_name_into(ty, tystr, 256);
 
         fprintf(stderr, "deref %s has type %s, expected a vector or struct type\n",
                 ast->variable.ident.value.identv.ident, tystr);
@@ -956,7 +969,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       size_t max_field = 0;
 
-      if (entry->vdecl->ty.ty == AST_TYPE_FVEC) {
+      if (ty->ty == AST_TYPE_FVEC) {
         int deref = deref_to_index(ast->deref.field.value.identv.ident);
         if (deref < 0) {
           fprintf(stderr, "fvec deref %s has unknown field %s\n",
@@ -966,11 +979,11 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
           ;
         }
         ast->deref.field_idx = (size_t)deref;
-        max_field = entry->vdecl->ty.fvec.width;
+        max_field = ty->fvec.width;
 
         ast->ty.ty = AST_TYPE_FLOAT;
-      } else if (entry->vdecl->ty.ty == AST_TYPE_STRUCT) {
-        struct ast_struct_field *field = entry->vdecl->ty.structty.fields;
+      } else if (ty->ty == AST_TYPE_STRUCT) {
+        struct ast_struct_field *field = ty->structty.fields;
         size_t i = 0;
         while (field) {
           if (strcmp(field->name, ast->deref.field.value.identv.ident) == 0) {
@@ -990,8 +1003,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         }
 
         ast->ty = *field->ty;
-        max_field = entry->vdecl->ty.structty.num_fields;
-      } else if (entry->vdecl->ty.ty == AST_TYPE_MATRIX) {
+        max_field = ty->structty.num_fields;
+      } else if (ty->ty == AST_TYPE_MATRIX) {
         int deref = deref_to_index(ast->deref.field.value.identv.ident);
         if (deref < 0) {
           fprintf(stderr, "matrix deref %s has unknown field %s\n",
@@ -1001,10 +1014,10 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
           ;
         }
         ast->deref.field_idx = (size_t)deref;
-        max_field = entry->vdecl->ty.matrix.rows;
+        max_field = ty->matrix.rows;
 
         ast->ty.ty = AST_TYPE_FVEC;
-        ast->ty.fvec.width = entry->vdecl->ty.matrix.cols;
+        ast->ty.fvec.width = ty->matrix.cols;
       }
 
       // can't deref past the width of the vector
@@ -1024,7 +1037,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       return &ast->ty;
 
     case AST_EXPR_TYPE_CAST: {
-      ast->cast.ty = resolve_type(typecheck, &ast->cast.ty);
+      struct ast_ty resolved = resolve_type(typecheck, &ast->cast.ty);
+      free_ty(&ast->cast.ty, 0);
+      ast->cast.ty = resolved;
 
       struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->cast.expr);
       if (!expr_ty) {
@@ -1041,7 +1056,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      struct ast_ty resolved = resolve_type(typecheck, &ast->cast.ty);
+      resolved = resolve_type(typecheck, &ast->cast.ty);
       free_ty(&ast->ty, 0);
       ast->ty = resolved;
       return &ast->ty;
@@ -1636,6 +1651,12 @@ static int deref_to_index(const char *deref) {
 int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
   if (type_is_tbd(to)) {
     *to = *from;
+    return 1;
+  }
+
+  if (from->ty == AST_TYPE_NIL) {
+    // nil can be coerced to any type
+    *from = *to;
     return 1;
   }
 

@@ -812,6 +812,25 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
     new_left->binary.op = binop;
     new_left->binary.lhs = left;
     new_left->binary.rhs = parse_expression_inner(parser, prec + 1);
+
+    if (binop == AST_BINARY_OP_DEREF) {
+      // convert to a deref
+      struct ast_expr *lhs = left;
+      struct ast_expr *rhs = new_left->binary.rhs;
+
+      if (rhs->type != AST_EXPR_TYPE_VARIABLE) {
+        parser_diag(1, parser, NULL,
+                    "expected variable on right-hand side of dereference (got %d instead)",
+                    rhs->type);
+        return NULL;
+      }
+
+      new_left->type = AST_EXPR_TYPE_DEREF;
+      new_left->deref.target = lhs;
+      new_left->deref.field = rhs->variable.ident;
+      free_expr(rhs);
+    }
+
     left = new_left;
   }
 
@@ -960,15 +979,6 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       enum token_id next = parser_peek(parser);
       if (next == TOKEN_UNKNOWN) {
         parser_diag(1, parser, NULL, "unexpected lexer token in factor");
-      } else if (next == TOKEN_PERIOD) {
-        parser_consume_peeked(parser, NULL);
-
-        result->type = AST_EXPR_TYPE_DEREF;
-        result->deref.ident = token;
-        if (parser_consume(parser, &result->deref.field, TOKEN_IDENTIFIER) < 0) {
-          free(result);
-          return NULL;
-        }
       } else if (next == TOKEN_LBRACKET) {
         parser_consume_peeked(parser, NULL);
         result->type = AST_EXPR_TYPE_ARRAY_INDEX;
@@ -1279,7 +1289,7 @@ static struct ast_ty parse_type(struct parser *parser) {
                 token_id_to_string(peek));
   }
 
-  if (parser_peek(parser) == TOKEN_ASTERISK) {
+  while (parser_peek(parser) == TOKEN_ASTERISK) {
     parser_consume_peeked(parser, NULL);
     result = ptr_type(result);
   }
@@ -1345,6 +1355,8 @@ static int binary_op(enum token_id token) {
       return AST_BINARY_OP_LOGICAL_OR;
     case TOKEN_AND:
       return AST_BINARY_OP_LOGICAL_AND;
+    case TOKEN_PERIOD:
+      return AST_BINARY_OP_DEREF;
     default:
       return -1;
   }
@@ -1420,6 +1432,8 @@ static int binary_op_prec(int op) {
     case AST_BINARY_OP_DIV:
     case AST_BINARY_OP_MOD:
       return 50;
+    case AST_BINARY_OP_DEREF:
+      return 60;
     default:
       fprintf(stderr, "returning lowest possible precedence for unknown binary op %d \n", op);
   }

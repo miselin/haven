@@ -115,30 +115,23 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
 
     case AST_STMT_TYPE_ITER:
       INDENTED(indent, "Iter\n");
-      INDENTED(indent + 1, "Range ");
-      dump_expr(ast->iter.range.start, indent);
-      fprintf(stderr, " to ");
-      dump_expr(ast->iter.range.end, indent);
+      INDENTED(indent + 1, "Range\n");
+      dump_expr(ast->iter.range.start, indent + 2);
+      dump_expr(ast->iter.range.end, indent + 2);
       if (ast->iter.range.step) {
-        fprintf(stderr, " by ");
-        dump_expr(ast->iter.range.step, indent);
+        dump_expr(ast->iter.range.step, indent + 2);
       }
-      fprintf(stderr, " for %s -> ", ast->iter.index.ident.value.identv.ident);
+      INDENTED(indent + 2, "%s -> ", ast->iter.index.ident.value.identv.ident);
       dump_ty(&ast->iter.index_vdecl->ty);
       fprintf(stderr, "\n");
 
-      dump_block(&ast->iter.block, indent);
+      dump_block(&ast->iter.block, indent + 3);
       break;
 
     case AST_STMT_TYPE_STORE:
       INDENTED(indent, "Store\n");
       dump_expr(ast->store.lhs, indent + 1);
-      fprintf(stderr, " -> ");
-      dump_ty(&ast->store.lhs->ty);
-      fprintf(stderr, "\n");
       dump_expr(ast->store.rhs, indent + 1);
-      fprintf(stderr, " -> ");
-      dump_ty(&ast->store.rhs->ty);
       break;
 
     case AST_STMT_TYPE_RETURN:
@@ -243,7 +236,9 @@ void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_VARIABLE:
-      INDENTED(indent, "VariableExpr %s", ast->variable.ident.value.identv.ident);
+      INDENTED(indent, "VariableExpr %s -> ", ast->variable.ident.value.identv.ident);
+      dump_ty(&ast->ty);
+      fprintf(stderr, "\n");
       break;
 
     case AST_EXPR_TYPE_LOGICAL:
@@ -268,10 +263,12 @@ void dump_expr(struct ast_expr *ast, int indent) {
     } break;
 
     case AST_EXPR_TYPE_DEREF:
-      INDENTED(indent, "Deref %s %s [#%zd] -> ", ast->deref.ident.value.identv.ident,
-               ast->deref.field.value.identv.ident, ast->deref.field_idx);
+      INDENTED(indent, "Deref %s [#%zd] -> ", ast->deref.field.value.identv.ident,
+               ast->deref.field_idx);
       dump_ty(&ast->ty);
       fprintf(stderr, "\n");
+
+      dump_expr(ast->deref.target, indent + 1);
       break;
 
     case AST_EXPR_TYPE_CALL: {
@@ -286,7 +283,6 @@ void dump_expr(struct ast_expr *ast, int indent) {
           dump_expr(node->expr, indent + 2);
           node = node->next;
         }
-        fprintf(stderr, "\n");
       }
     } break;
 

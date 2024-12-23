@@ -109,7 +109,7 @@ pub impure fn i32 main() {
                 p = p + contrib;
             };
 
-            printf("%c%c%c", as i32 p.x, as i32 p.y, as i32 p.z);
+            printf("%c%c%c", as i32 (p.x), as i32 (p.y), as i32 (p.z));
         };
     };
 
@@ -183,7 +183,7 @@ impure fn fvec3 S(fvec3 o, fvec3 d) {
 impure fn TraceResult T(fvec3 o, fvec3 d) {
     let mut result = TraceResult::Sky;
     let mut t = 1000000000.0;
-    let p = -o.z / d.z;
+    let p = -(o.z) / (d.z);
     if 0.01 < p {
         let inner = struct TraceData {p, <0.0, 0.0, 1.0>};
         let n = inner.n;

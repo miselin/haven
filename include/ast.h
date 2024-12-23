@@ -73,6 +73,7 @@
 #define AST_BINARY_OP_LTE 16
 #define AST_BINARY_OP_GT 17
 #define AST_BINARY_OP_GTE 18
+#define AST_BINARY_OP_DEREF 19
 
 #define AST_UNARY_OP_NEG 1
 #define AST_UNARY_OP_NOT 2
@@ -151,7 +152,7 @@ struct ast_expr_variable {
 };
 
 struct ast_expr_deref {
-  struct token ident;
+  struct ast_expr *target;
   struct token field;  // typecheck resolves this and fills field_idx
   size_t field_idx;
 };

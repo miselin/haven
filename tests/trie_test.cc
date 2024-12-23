@@ -4,6 +4,7 @@
 
 TEST(TrieTest, InsertLookup) {
   struct trie *trie = new_trie();
+
   trie_insert(trie, "hello", (void *)1);
   trie_insert(trie, "world", (void *)2);
 

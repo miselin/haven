@@ -288,6 +288,14 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       if (check_semantic_expr(semantic, ast->binary.rhs) < 0) {
         return -1;
       }
+
+      if (ast->binary.op == AST_BINARY_OP_DEREF) {
+        if (ast->binary.rhs->type != AST_EXPR_TYPE_VARIABLE) {
+          semantic_diag_at(semantic, DiagError, &ast->loc,
+                           "dereference field must be an identifier");
+          return -1;
+        }
+      }
     } break;
 
     case AST_EXPR_TYPE_LOGICAL: {

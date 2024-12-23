@@ -48,7 +48,7 @@ int type_is_complex(struct ast_ty *ty) {
     return 0;
   }
 
-  if (ty->ty == AST_TYPE_STRUCT || ty->ty == AST_TYPE_ARRAY) {
+  if (ty->ty == AST_TYPE_STRUCT) {
     return 1;
   }
 
@@ -97,6 +97,13 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
 
   // pointers can be converted to each other
   if (ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_POINTER) {
+    return 1;
+  }
+
+  // integers can become pointers
+  if (ty1->ty == AST_TYPE_INTEGER && ty2->ty == AST_TYPE_POINTER) {
+    return 1;
+  } else if (ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_INTEGER) {
     return 1;
   }
 

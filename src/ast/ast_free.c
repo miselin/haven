@@ -138,6 +138,7 @@ void free_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_DEREF:
+      free_expr(ast->deref.target);
       break;
 
     case AST_EXPR_TYPE_CALL: {
@@ -148,6 +149,7 @@ void free_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_CAST:
+      free_ty(&ast->cast.ty, 0);
       free_expr(ast->cast.expr);
       break;
 
