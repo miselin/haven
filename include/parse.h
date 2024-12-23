@@ -14,6 +14,10 @@ enum ParserDiagSeverity {
   Warning,
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct parser *new_parser(struct lex_state *, struct compiler *);
 int parser_run(struct parser *, int);
 struct ast_program *parser_get_ast(struct parser *);
@@ -31,5 +35,9 @@ enum ParserDiagSeverity parser_diag_severity(struct parser_diag *);
 int parser_merge_asts(struct parser *parser, struct parser *other);
 
 int parser_merge_program(struct parser *parser, struct ast_program *program);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

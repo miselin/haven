@@ -1474,7 +1474,7 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
 
   if (ty->ty == AST_TYPE_TEMPLATE) {
     // step 1: resolve the outer type as the main return type
-    struct ast_ty result = resolve_type(typecheck, ty->template.outer);
+    struct ast_ty result = resolve_type(typecheck, ty->tmpl.outer);
     if (result.ty != AST_TYPE_ENUM) {
       // can't template non-enums
       fprintf(stderr, "template outer type is not an enum\n");
@@ -1487,7 +1487,7 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
       if (field->has_inner && field->inner.ty == AST_TYPE_CUSTOM) {
         // match to the template list
         struct ast_template_ty *inner = result.enumty.templates;
-        struct ast_template_ty *inner_specific = ty->template.inners;
+        struct ast_template_ty *inner_specific = ty->tmpl.inners;
         while (inner) {
           if (strcmp(inner->name, field->inner.name) == 0) {
             break;

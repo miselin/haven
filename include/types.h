@@ -94,7 +94,7 @@ struct ast_ty {
       // both of these are CUSTOM after parsing and real types after type checking
       struct ast_ty *outer;
       struct ast_template_ty *inners;
-    } template;
+    } tmpl;
     struct {
       struct ast_ty *retty;
       struct ast_ty **args;

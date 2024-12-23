@@ -315,7 +315,7 @@ void free_ty(struct ast_ty *ty, int heap) {
   }
 
   if (ty->ty == AST_TYPE_TEMPLATE) {
-    struct ast_template_ty *inner = ty->template.inners;
+    struct ast_template_ty *inner = ty->tmpl.inners;
     while (inner) {
       struct ast_template_ty *next = inner->next;
       free_ty(&inner->resolved, 0);
@@ -323,9 +323,9 @@ void free_ty(struct ast_ty *ty, int heap) {
       inner = next;
     }
 
-    ty->template.inners = NULL;
+    ty->tmpl.inners = NULL;
 
-    free_ty(ty->template.outer, 1);
+    free_ty(ty->tmpl.outer, 1);
   }
 
   if (ty->ty == AST_TYPE_FUNCTION) {

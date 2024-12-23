@@ -1204,8 +1204,8 @@ static struct ast_ty parse_type(struct parser *parser) {
     if (peek == TOKEN_LT) {
       struct ast_ty *tmplty = calloc(1, sizeof(struct ast_ty));
       tmplty->ty = AST_TYPE_TEMPLATE;
-      tmplty->template.outer = calloc(1, sizeof(struct ast_ty));
-      memcpy(tmplty->template.outer, &result, sizeof(struct ast_ty));
+      tmplty->tmpl.outer = calloc(1, sizeof(struct ast_ty));
+      memcpy(tmplty->tmpl.outer, &result, sizeof(struct ast_ty));
 
       struct ast_template_ty *inner_prev = NULL;
 
@@ -1216,7 +1216,7 @@ static struct ast_ty parse_type(struct parser *parser) {
         inner_ty->is_resolved = 1;
 
         if (inner_prev == NULL) {
-          tmplty->template.inners = inner_ty;
+          tmplty->tmpl.inners = inner_ty;
         } else {
           inner_prev->next = inner_ty;
         }

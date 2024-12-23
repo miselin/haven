@@ -258,9 +258,9 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       break;
     case AST_TYPE_TEMPLATE:
       offset += snprintf(buf, maxlen, "template ");
-      offset += type_name_into(ty->template.outer, buf + offset, maxlen - (size_t)offset);
+      offset += type_name_into(ty->tmpl.outer, buf + offset, maxlen - (size_t)offset);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "<");
-      struct ast_template_ty *inner = ty->template.inners;
+      struct ast_template_ty *inner = ty->tmpl.inners;
       while (inner) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %d -> ", inner->name,
                            inner->is_resolved);
@@ -485,10 +485,10 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       last_template = new_template;
     }
   } else if (ty->ty == AST_TYPE_TEMPLATE) {
-    new_type.template.outer = calloc(1, sizeof(struct ast_ty));
-    *new_type.template.outer = copy_type(ty->template.outer);
+    new_type.tmpl.outer = calloc(1, sizeof(struct ast_ty));
+    *new_type.tmpl.outer = copy_type(ty->tmpl.outer);
 
-    struct ast_template_ty *inner = ty->template.inners;
+    struct ast_template_ty *inner = ty->tmpl.inners;
     struct ast_template_ty *last_inner = NULL;
     while (inner) {
       struct ast_template_ty *new_inner = calloc(1, sizeof(struct ast_template_ty));
@@ -499,7 +499,7 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       inner = inner->next;
 
       if (last_inner == NULL) {
-        new_type.template.inners = new_inner;
+        new_type.tmpl.inners = new_inner;
       } else {
         last_inner->next = new_inner;
       }
