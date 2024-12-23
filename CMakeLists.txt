@@ -62,7 +62,7 @@ add_subdirectory(tests)
 add_subdirectory(bench)
 
 if (DOXYGEN_FOUND)
-    doxygen_add_docs(doxygen src include ALL)
+    doxygen_add_docs(doxygen src include)
 endif ()
 
 include(CTest)

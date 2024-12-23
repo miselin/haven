@@ -27,6 +27,10 @@ add_executable(tokenstream_test tokenstream_test.cc)
 target_link_libraries(tokenstream_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(tokenstream_test)
 
+add_executable(lex_test lex_test.cc)
+target_link_libraries(lex_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
+gtest_discover_tests(lex_test)
+
 macro(add_functional_test name expectedrc)
     add_executable(${name}_test rc_test.cc)
     add_haven_library(${name}_sut inputs/${name}.hv)
