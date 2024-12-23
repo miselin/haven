@@ -263,3 +263,29 @@ LLVMTypeRef codegen_pointer_type(struct codegen *codegen) {
 LLVMTypeRef codegen_i32_type(struct codegen *codegen) {
   return LLVMInt32TypeInContext(codegen->llvm_context);
 }
+
+LLVMAttributeRef codegen_string_attribute(struct codegen *codegen, const char *attr_name,
+                                          const char *attr_value) {
+  return LLVMCreateStringAttribute(codegen->llvm_context, attr_name, (unsigned)strlen(attr_name),
+                                   attr_value, (unsigned)strlen(attr_value));
+}
+
+LLVMAttributeRef codegen_enum_attribute(struct codegen *codegen, const char *attr_name,
+                                        uint64_t value) {
+  unsigned int kind = LLVMGetEnumAttributeKindForName(attr_name, strlen(attr_name));
+  if (!kind) {
+    return NULL;
+  }
+
+  return LLVMCreateEnumAttribute(codegen->llvm_context, kind, value);
+}
+
+LLVMAttributeRef codegen_type_attribute(struct codegen *codegen, const char *attr_name,
+                                        LLVMTypeRef type) {
+  unsigned int kind = LLVMGetEnumAttributeKindForName(attr_name, strlen(attr_name));
+  if (!kind) {
+    return NULL;
+  }
+
+  return LLVMCreateTypeAttribute(codegen->llvm_context, kind, type);
+}

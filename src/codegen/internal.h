@@ -132,6 +132,13 @@ LLVMValueRef create_scale_vector(struct codegen *codegen, size_t count, LLVMValu
 LLVMTypeRef codegen_pointer_type(struct codegen *codegen);
 LLVMTypeRef codegen_i32_type(struct codegen *codegen);
 
+LLVMAttributeRef codegen_string_attribute(struct codegen *codegen, const char *attr_name,
+                                          const char *attr_value);
+LLVMAttributeRef codegen_enum_attribute(struct codegen *codegen, const char *attr_name,
+                                        uint64_t value);
+LLVMAttributeRef codegen_type_attribute(struct codegen *codegen, const char *attr_name,
+                                        LLVMTypeRef type);
+
 int initialize_llvm(void);
 void shutdown_llvm(void);
 

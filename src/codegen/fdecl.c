@@ -1,4 +1,5 @@
 #include <llvm-c-18/llvm-c/DebugInfo.h>
+#include <llvm-c-18/llvm-c/TargetMachine.h>
 #include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
@@ -57,65 +58,36 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     }
 
     if (complex_return) {
-      unsigned int kind = LLVMGetEnumAttributeKindForName("sret", 4);
-      LLVMAttributeRef attr = LLVMCreateTypeAttribute(codegen->llvm_context, kind, orig_ret_ty);
-      LLVMAddAttributeAtIndex(func, 1, attr);
+      LLVMAddAttributeAtIndex(func, 1, codegen_type_attribute(codegen, "sret", orig_ret_ty));
     }
 
-    {
-      unsigned int sanitize = LLVMGetEnumAttributeKindForName("sanitize_address", 16);
-      unsigned int memory = LLVMGetEnumAttributeKindForName("memory", 6);
-      unsigned int nounwind = LLVMGetEnumAttributeKindForName("nounwind", 8);
+    // TODO: asan/msan/* flag
+    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                            codegen_enum_attribute(codegen, "sanitize_address", 0));
+    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                            codegen_enum_attribute(codegen, "nounwind", 0));
+    // TODO: frame pointer flag
+    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                            codegen_string_attribute(codegen, "frame-pointer", "all"));
 
-      const char *frameptr_name = "frame-pointer";
-      LLVMAttributeRef frameptr_attr = LLVMCreateStringAttribute(
-          codegen->llvm_context, frameptr_name, (unsigned)strlen(frameptr_name), "all",
-          (unsigned)strlen("all"));
+    char *cpu_name = LLVMGetHostCPUName();
+    LLVMAddTargetDependentFunctionAttr(func, "target-cpu", cpu_name);
+    LLVMDisposeMessage(cpu_name);
 
-      // sanitize_address for ASAN - need cli flags for this
-      LLVMContextRef context = codegen->llvm_context;
-      LLVMAttributeRef sanitize_attr = LLVMCreateEnumAttribute(context, sanitize, 0);
-      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, sanitize_attr);
-      LLVMAttributeRef nounwind_attr = LLVMCreateEnumAttribute(context, nounwind, 0);
-      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, nounwind_attr);
-      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, frameptr_attr);
+    LLVMAddTargetDependentFunctionAttr(func, "tune-cpu", "generic");
+    char *features = LLVMGetHostCPUFeatures();
+    LLVMAddTargetDependentFunctionAttr(func, "target-features", features);
+    LLVMDisposeMessage(features);
 
-      {
-        const char *attr_name = "target-cpu";
-        const char *attr_value = "x86-64";
-        LLVMAttributeRef attr =
-            LLVMCreateStringAttribute(codegen->llvm_context, attr_name, (unsigned)strlen(attr_name),
-                                      attr_value, (unsigned)strlen(attr_value));
-        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, attr);
-      }
-      {
-        const char *attr_name = "tune-cpu";
-        const char *attr_value = "generic";
-        LLVMAttributeRef attr =
-            LLVMCreateStringAttribute(codegen->llvm_context, attr_name, (unsigned)strlen(attr_name),
-                                      attr_value, (unsigned)strlen(attr_value));
-        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, attr);
-      }
-      {
-        const char *attr_name = "target-features";
-        const char *attr_value = LLVMGetHostCPUFeatures();
-        LLVMAttributeRef attr =
-            LLVMCreateStringAttribute(codegen->llvm_context, attr_name, (unsigned)strlen(attr_name),
-                                      attr_value, (unsigned)strlen(attr_value));
-        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, attr);
-        LLVMDisposeMessage((char *)attr_value);
-      }
-
-      LLVMAttributeRef mem_attr = NULL;
-      if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {
-        // argmem: readwrite (allow struct returns to be pure)
-        mem_attr = LLVMCreateEnumAttribute(context, memory, 3);
-      } else {
-        // allow all types of access
-        mem_attr = LLVMCreateEnumAttribute(context, memory, ~0U);
-      }
-      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, mem_attr);
+    LLVMAttributeRef mem_attr = NULL;
+    if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {
+      // argmem: readwrite (allow struct returns to be pure)
+      mem_attr = codegen_enum_attribute(codegen, "memory", 3);
+    } else {
+      // allow all types of access
+      mem_attr = codegen_enum_attribute(codegen, "memory", ~0U);
     }
+    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, mem_attr);
 
     entry = calloc(1, sizeof(struct scope_entry));
     entry->fdecl = fdecl;
