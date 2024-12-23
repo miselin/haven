@@ -30,6 +30,9 @@ static int lex_check_either(struct lex_state *state, struct token *token, char e
 }
 
 int lexer_token(struct lex_state *state, struct token *token) {
+  // load an initial locator in case of EOF or other error
+  lexer_locate(state, &token->loc);
+
   char c = lex_getc(state);
   if (c < 0) {
     if (lexer_eof(state)) {

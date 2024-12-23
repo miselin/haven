@@ -203,6 +203,8 @@ static enum token_id parser_peek_with_nl(struct parser *parser) {
       return TOKEN_UNKNOWN;
     } else if (parser->peek.ident == TOKEN_UNKNOWN) {
       return TOKEN_UNKNOWN;
+    } else if (parser->peek.ident == TOKEN_EOF) {
+      return TOKEN_EOF;
     }
   }
 
@@ -218,7 +220,7 @@ static enum token_id parser_peek(struct parser *parser) {
       // eat it.
       parser->peek.ident = TOKEN_UNKNOWN;
     }
-  } while (peeked == TOKEN_NEWLINE);
+  } while (peeked == TOKEN_NEWLINE && peeked != TOKEN_UNKNOWN && peeked != TOKEN_EOF);
 
   return peeked;
 }

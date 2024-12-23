@@ -7,6 +7,10 @@ char lex_getc(struct lex_state *state) {
     state->buf_head = (state->buf_head + 1) % LEXER_BUFFER_SIZE;
     c = head;
   } else {
+    if (!state->stream) {
+      // "EOF"
+      return -1;
+    }
     c = fgetc(state->stream);
   }
 

@@ -20,7 +20,7 @@ struct lex_state *new_lexer(FILE *stream, const char *filename, struct compiler 
 }
 
 int lexer_eof(struct lex_state *state) {
-  return feof(state->stream) && state->buf_head == state->buf_tail;
+  return state->buf_head == state->buf_tail && (state->stream && feof(state->stream));
 }
 
 void lexer_locate(struct lex_state *state, struct lex_locator *loc) {
@@ -28,7 +28,7 @@ void lexer_locate(struct lex_state *state, struct lex_locator *loc) {
 }
 
 void lexer_locate_str(struct lex_state *state, char *buf, size_t len) {
-  snprintf(buf, len, "%s:%zu:%zu", state->loc.file, state->loc.line, state->loc.column + 1);
+  snprintf(buf, len, "%s:%zu:%zu", state->loc.file, state->loc.line + 1, state->loc.column + 1);
 }
 
 void lexer_update_loc(struct lex_state *state, struct lex_locator *loc) {

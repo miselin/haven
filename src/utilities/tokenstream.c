@@ -56,10 +56,17 @@ int tokenstream_next_token(struct tokenstream *stream, struct token *token) {
   struct tokenentry *entry = calloc(1, sizeof(struct tokenentry));
   int rc = lexer_token(stream->lexer, &entry->token);
   if (rc < 0) {
+    free(entry);
     return -1;
   }
 
   memcpy(token, &entry->token, sizeof(struct token));
+
+  // if there's no markers, there's no point collecting a buffer as there's no rewind points
+  if (!stream->markers) {
+    free(entry);
+    return 0;
+  }
 
   // push to buffer
   if (!stream->buffer) {
@@ -83,6 +90,7 @@ int tokenstream_peek(struct tokenstream *stream, struct token *token) {
   struct tokenentry *entry = calloc(1, sizeof(struct tokenentry));
   int rc = lexer_token(stream->lexer, &entry->token);
   if (rc < 0) {
+    free(entry);
     return -1;
   }
 
@@ -90,6 +98,7 @@ int tokenstream_peek(struct tokenstream *stream, struct token *token) {
 
   // if there's no markers, there's no point collecting a buffer as there's no rewind points
   if (!stream->markers) {
+    free(entry);
     return 0;
   }
 
