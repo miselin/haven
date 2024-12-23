@@ -34,6 +34,8 @@ enum Pass {
 #define FLAG_NO_COLOR (1U << 2)
 // Display the generated IR before emission
 #define FLAG_DEBUG_IR (1U << 3)
+// Turn on debugging in LLVM
+#define FLAG_DEBUG_LLVM (1U << 4)
 
 struct compiler;
 

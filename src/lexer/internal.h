@@ -66,6 +66,9 @@ int lex_block_comment(struct lex_state *state, struct token *token);
 // lex a line comment (// ...)
 int lex_line_comment(struct lex_state *state, struct token *token);
 
+// lex the width and height of a matrix type (e.g. mat4x4)
+int lex_matrix_type(struct lex_state *state, struct token *token);
+
 int initialize_keyword_trie(struct lex_state *state);
 int destroy_keyword_trie(struct lex_state *state);
 

@@ -122,7 +122,16 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty);
 
 int extract_constant_int(struct ast_expr *expr, int64_t *into);
 
+LLVMValueRef call_intrinsic(struct codegen *codegen, const char *intrinsic_name,
+                            const char *inst_name, size_t num_types, size_t num_args, ...);
+
+LLVMValueRef const_i32(struct codegen *codegen, int32_t val);
+
+LLVMValueRef create_scale_vector(struct codegen *codegen, size_t count, LLVMValueRef scale);
+
 int initialize_llvm(void);
 void shutdown_llvm(void);
+
+void configure_llvm(struct compiler *compiler);
 
 #endif

@@ -5,6 +5,7 @@
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
+#include <llvm-c/Support.h>
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
 #include <llvm-c/Transforms/PassBuilder.h>
@@ -14,6 +15,7 @@
 
 #include "ast.h"
 #include "compiler.h"
+#include "compiler/internal.h"
 #include "internal.h"
 #include "kv.h"
 #include "scope.h"
@@ -127,6 +129,8 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
 
   LLVMDisposeMessage(host_features);
   LLVMDisposeMessage(triple);
+
+  configure_llvm(compiler);
 
   codegen_internal_enter_scope(result, &ast->loc, 0);
 

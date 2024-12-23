@@ -17,6 +17,7 @@ enum Options {
   NoColor,
   OnlyParse,
   DebugIR,
+  DebugLLVM,
 };
 
 enum Color {

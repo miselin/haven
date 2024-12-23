@@ -20,17 +20,19 @@ static const char *copy_to_heap(const char *str) {
 
 static void usage(void) {
   fprintf(stderr, "usage: %s [options] [file]\n", COMPILER_IDENT);
-  fprintf(stderr, "  -o <file>  output file\n");
-  fprintf(stderr, "  -S         output assembly\n");
-  fprintf(stderr, "  -O0        no optimizations\n");
-  fprintf(stderr, "  -O1        light optimizations\n");
-  fprintf(stderr, "  -O2        normal optimizations\n");
-  fprintf(stderr, "  -O3        aggressive optimizations\n");
-  fprintf(stderr, "  --debug-ast\n");
-  fprintf(stderr, "  --emit-ir\n");
-  fprintf(stderr, "  --emit-bitcode\n");
-  fprintf(stderr, "  --verbose\n");
-  fprintf(stderr, "  -I <path>  add a path to the import search path\n");
+  fprintf(stderr, "  -o <file>      output file\n");
+  fprintf(stderr, "  -S             output assembly\n");
+  fprintf(stderr, "  -O0            no optimizations\n");
+  fprintf(stderr, "  -O1            light optimizations\n");
+  fprintf(stderr, "  -O2            normal optimizations\n");
+  fprintf(stderr, "  -O3            aggressive optimizations\n");
+  fprintf(stderr, "  --debug-ast    display the parsed AST\n");
+  fprintf(stderr, "  --debug-ir     display the generated LLVM IR before emission\n");
+  fprintf(stderr, "  --debug-llvm   enable LLVM internal logging\n");
+  fprintf(stderr, "  --emit-ir      emit textual IR instead of an object file\n");
+  fprintf(stderr, "  --emit-bitcode emit binary IR instead of an object file\n");
+  fprintf(stderr, "  --verbose      enable internal compiler logging\n");
+  fprintf(stderr, "  -I <path>      add a path to the import search path\n");
 }
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]) {
@@ -55,6 +57,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"no-color", no_argument, 0, NoColor},
                                   {"only-parse", no_argument, 0, OnlyParse},
                                   {"debug-ir", no_argument, 0, DebugIR},
+                                  {"debug-llvm", no_argument, 0, DebugLLVM},
                                   {0, 0, 0, 0}};
 
   int opt;
@@ -115,6 +118,9 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         break;
       case DebugIR:
         into->flags[0] |= FLAG_DEBUG_IR;
+        break;
+      case DebugLLVM:
+        into->flags[0] |= FLAG_DEBUG_LLVM;
         break;
       default:
         usage();

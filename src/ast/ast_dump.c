@@ -208,6 +208,19 @@ void dump_expr(struct ast_expr *ast, int indent) {
           dump_array(ast, 0);
         } break;
 
+        case AST_TYPE_MATRIX: {
+          fprintf(stderr, "mat%zdx%zd {", ast->ty.matrix.cols, ast->ty.matrix.rows);
+          struct ast_expr_list *node = ast->list;
+          for (size_t i = 0; i < ast->ty.matrix.rows; i++) {
+            if (i > 0) {
+              fprintf(stderr, ", ");
+            }
+            dump_expr(node->expr, indent);
+            node = node->next;
+          }
+          fprintf(stderr, "}");
+        } break;
+
         default:
           fprintf(stderr, "<unknown-constant>");
       }

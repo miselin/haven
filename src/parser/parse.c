@@ -867,7 +867,8 @@ static struct ast_expr *parse_factor(struct parser *parser) {
     case TOKEN_TY_SIGNED:
     case TOKEN_TY_UNSIGNED:
     case TOKEN_TY_STR:
-    case TOKEN_TY_VOID: {
+    case TOKEN_TY_VOID:
+    case TOKEN_TY_MAT: {
       if (parse_braced_initializer(parser, result) < 0) {
         free(result);
         return NULL;
@@ -920,6 +921,9 @@ static struct ast_expr *parse_factor(struct parser *parser) {
     // vec literals
     case TOKEN_LT: {
       parser_consume_peeked(parser, NULL);
+
+      // < <expr>, <expr>, ... >
+
       result->type = AST_EXPR_TYPE_CONSTANT;
       result->ty.ty = AST_TYPE_FVEC;
       result->list = parse_expression_list(parser, TOKEN_GT, 1);
@@ -1250,6 +1254,12 @@ static struct ast_ty parse_type(struct parser *parser) {
       result.ty = AST_TYPE_ERROR;
       return result;
     }
+  } else if (peek == TOKEN_TY_MAT) {
+    parser_consume_peeked(parser, &token);
+
+    result.ty = AST_TYPE_MATRIX;
+    result.matrix.cols = token.value.matv.x;
+    result.matrix.rows = token.value.matv.y;
   } else {
     parser_diag(1, parser, &parser->peek, "unexpected token of type %s when parsing type\n",
                 token_id_to_string(peek));

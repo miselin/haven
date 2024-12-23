@@ -89,6 +89,7 @@ enum token_id {
   TOKEN_TY_STR,           // str
   TOKEN_TY_CHAR,          // char
   TOKEN_TY_VOID,          // void
+  TOKEN_TY_MAT,           // mat[1-9][0-9]*x[1-9][0-9]*
 
   TOKEN_EOF,
 };

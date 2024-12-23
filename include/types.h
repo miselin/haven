@@ -47,6 +47,7 @@ enum ast_ty_id {
   AST_TYPE_NIL,       // for integers/floats/chars, zero, for pointers, null
   AST_TYPE_TEMPLATE,  // present in type definitions, replaced in concrete types
   AST_TYPE_FUNCTION,  // for function pointers
+  AST_TYPE_MATRIX,
 };
 
 struct ast_struct_field {
@@ -100,6 +101,10 @@ struct ast_ty {
       size_t num_args;
       int vararg;
     } function;
+    struct {
+      size_t cols;
+      size_t rows;
+    } matrix;
   };
 };
 

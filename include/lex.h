@@ -44,6 +44,10 @@ struct token {
       char buf[256];
       size_t length;
     } commentv;
+    struct {
+      size_t x;
+      size_t y;
+    } matv;
   } value;
 
   struct lex_locator loc;

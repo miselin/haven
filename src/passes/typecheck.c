@@ -62,6 +62,7 @@ static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *de
 static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl);
 
 static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs);
+static int check_matrix_binary_op(int op, struct ast_ty *lhs, struct ast_ty *rhs);
 
 static int deref_to_index(const char *deref);
 
@@ -590,7 +591,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       switch (ast->ty.ty) {
         case AST_TYPE_FVEC:
-        case AST_TYPE_ARRAY: {
+        case AST_TYPE_ARRAY:
+        case AST_TYPE_MATRIX: {
           struct ast_expr_list *node = ast->list;
           while (node) {
             struct ast_ty *ty = typecheck_expr(typecheck, node->expr);
@@ -599,12 +601,48 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
             }
 
             if (ast->ty.ty == AST_TYPE_ARRAY) {
+              if (ast->ty.array.element_ty->ty == AST_TYPE_MATRIX) {
+                // swap to matrix type after checking the inners are actually fvecs
+                if (ty->ty != AST_TYPE_FVEC) {
+                  typecheck_diag_expr(typecheck, node->expr,
+                                      "matrix initializer has non-fvec type\n");
+                  return NULL;
+                }
+              }
+
               maybe_implicitly_convert(ty, ast->ty.array.element_ty);
             }
 
             node = node->next;
           }
 
+          // convert from array to full matrix type
+          if (ast->ty.ty == AST_TYPE_ARRAY) {
+            if (ast->ty.array.element_ty->ty == AST_TYPE_MATRIX) {
+              size_t correct_cols = ast->ty.array.element_ty->matrix.cols;
+              size_t correct_rows = ast->ty.array.element_ty->matrix.rows;
+
+              size_t rows = ast->ty.array.width;
+              free_ty(ast->ty.array.element_ty, 1);
+
+              ast->ty.ty = AST_TYPE_MATRIX;
+              ast->ty.matrix.cols = ast->list->num_elements;
+              ast->ty.matrix.rows = rows;
+
+              if (ast->list->num_elements != correct_cols) {
+                typecheck_diag_expr(typecheck, ast,
+                                    "matrix initializer has %zu columns, expected %zu\n",
+                                    ast->list->num_elements, correct_cols);
+                return NULL;
+              }
+              if (rows != correct_rows) {
+                typecheck_diag_expr(typecheck, ast,
+                                    "matrix initializer has %zu rows, expected %zu\n",
+                                    ast->list->num_elements, correct_rows);
+                return NULL;
+              }
+            }
+          }
         } break;
         default:
           break;
@@ -893,7 +931,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      if (entry->vdecl->ty.ty != AST_TYPE_FVEC && entry->vdecl->ty.ty != AST_TYPE_STRUCT) {
+      if (entry->vdecl->ty.ty != AST_TYPE_FVEC && entry->vdecl->ty.ty != AST_TYPE_STRUCT &&
+          entry->vdecl->ty.ty != AST_TYPE_MATRIX) {
         char tystr[256];
         type_name_into(&entry->vdecl->ty, tystr, 256);
 
@@ -940,6 +979,20 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
         ast->ty = *field->ty;
         max_field = entry->vdecl->ty.structty.num_fields;
+      } else if (entry->vdecl->ty.ty == AST_TYPE_MATRIX) {
+        int deref = deref_to_index(ast->deref.field.value.identv.ident);
+        if (deref < 0) {
+          fprintf(stderr, "matrix deref %s has unknown field %s\n",
+                  ast->variable.ident.value.identv.ident, ast->deref.field.value.identv.ident);
+          ++typecheck->errors;
+          return &typecheck->error_type;
+          ;
+        }
+        ast->deref.field_idx = (size_t)deref;
+        max_field = entry->vdecl->ty.matrix.rows;
+
+        ast->ty.ty = AST_TYPE_FVEC;
+        ast->ty.fvec.width = entry->vdecl->ty.matrix.cols;
       }
 
       // can't deref past the width of the vector
@@ -1382,6 +1435,11 @@ static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
     return op == AST_BINARY_OP_ADD || op == AST_BINARY_OP_SUB;
   }
 
+  // matrix math
+  if (lhs->ty == AST_TYPE_MATRIX || rhs->ty == AST_TYPE_MATRIX) {
+    return check_matrix_binary_op(op, lhs, rhs);
+  }
+
   return 0;
 }
 
@@ -1656,4 +1714,56 @@ static struct ast_ty *typecheck_pattern_match(struct typecheck *typecheck, struc
   // match expression
   ast->ty = resolve_type(typecheck, match_ty);
   return &ast->ty;
+}
+
+static int check_matrix_binary_op(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
+  if (lhs->ty != AST_TYPE_MATRIX && rhs->ty != AST_TYPE_MATRIX) {
+    return 0;
+  }
+
+  // matrix vs matrix ops
+  if (lhs->ty == AST_TYPE_MATRIX && rhs->ty == AST_TYPE_MATRIX) {
+    if (op == AST_BINARY_OP_MUL) {
+      // # of columns in left must match # of rows in right for multiplication
+      return lhs->matrix.cols == rhs->matrix.rows;
+    }
+
+    // other ops require the same dimensions
+    if (lhs->matrix.cols != rhs->matrix.cols || lhs->matrix.rows != rhs->matrix.rows) {
+      return 0;
+    }
+
+    // only addition and subtraction are valid for matrices
+    return op == AST_BINARY_OP_ADD || op == AST_BINARY_OP_SUB;
+  }
+
+  if (lhs->ty == AST_TYPE_MATRIX && rhs->ty == AST_TYPE_FVEC) {
+    // fvec must be on the LHS for matrix multiplication
+    return 0;
+  }
+
+  if (lhs->ty == AST_TYPE_FVEC && rhs->ty == AST_TYPE_MATRIX) {
+    if (op != AST_BINARY_OP_MUL) {
+      return 0;
+    }
+
+    // # of rows must match the width of the vector
+    return lhs->matrix.cols == rhs->fvec.width;
+  }
+
+  if (lhs->ty != AST_TYPE_MATRIX || rhs->ty != AST_TYPE_MATRIX) {
+    // make LHS the matrix type for comparisons
+    if (lhs->ty != AST_TYPE_MATRIX) {
+      struct ast_ty tmp = *lhs;
+      *lhs = *rhs;
+      *rhs = tmp;
+    }
+  }
+
+  if (lhs->ty == AST_TYPE_MATRIX && rhs->ty == AST_TYPE_FLOAT) {
+    // matrix scalar multiply is valid
+    return op == AST_BINARY_OP_MUL;
+  }
+
+  return 0;
 }

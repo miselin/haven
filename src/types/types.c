@@ -314,6 +314,9 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ") -> ");
       offset += type_name_into(ty->function.retty, buf + offset, maxlen - (size_t)offset);
       break;
+    case AST_TYPE_MATRIX:
+      offset += snprintf(buf, maxlen, "matrix %zdx%zd", ty->matrix.cols, ty->matrix.rows);
+      break;
     default:
       offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
       return offset;

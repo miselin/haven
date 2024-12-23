@@ -5,6 +5,7 @@
 #include "ast.h"
 #include "codegen.h"
 #include "internal.h"
+#include "types.h"
 #include "utility.h"
 
 LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *binary,
@@ -127,26 +128,53 @@ LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *b
 
   if (ty->ty == AST_TYPE_FVEC) {
     unsigned int element_count = (unsigned int)ty->fvec.width;
-    if (binary->lhs->ty.ty != binary->rhs->ty.ty) {
-      // TODO: order of ops, find which one is the scalar broadcast vector
-      LLVMTypeRef vecty =
+    if (binary->rhs->ty.ty == AST_TYPE_MATRIX) {
+      LLVMTypeRef matrix_ty =
+          LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
+                         (unsigned int)(binary->rhs->ty.matrix.cols * binary->rhs->ty.matrix.rows));
+      LLVMTypeRef vec_ty =
           LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context), element_count);
-      LLVMValueRef zero = LLVMConstNull(vecty);
-      LLVMValueRef undef = LLVMGetUndef(vecty);
-      LLVMValueRef bvec = LLVMBuildInsertElement(
-          codegen->llvm_builder, undef, rhs,
-          LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0), "broadcast");
-      rhs = LLVMBuildShuffleVector(codegen->llvm_builder, bvec, undef, zero, "shuffle");
+
+      // A = <OuterRows> x <Inner> matrix
+      // B = <Inner> x <OuterColumns> matrix
+      // because... cols of left matrix must match rows of right matrix
+      return call_intrinsic(codegen, "llvm.matrix.multiply", "matrix.multiply.vec", 3, 5, vec_ty,
+                            vec_ty, matrix_ty, lhs, rhs, const_i32(codegen, 1),
+                            const_i32(codegen, (int32_t)binary->rhs->ty.matrix.cols),
+                            const_i32(codegen, (int32_t)binary->rhs->ty.matrix.rows));
+    } else if (binary->lhs->ty.ty != binary->rhs->ty.ty) {
+      // TODO: order of ops, find which one is the scalar broadcast vector
+      rhs = create_scale_vector(codegen, element_count, rhs);
     }
   }
 
-  if (ty->ty == AST_TYPE_FLOAT || ty->ty == AST_TYPE_FVEC) {
+  if (ty->ty == AST_TYPE_FLOAT || ty->ty == AST_TYPE_FVEC || ty->ty == AST_TYPE_MATRIX) {
     switch (binary->op) {
       case AST_BINARY_OP_ADD:
         return LLVMBuildFAdd(codegen->llvm_builder, lhs, rhs, "fadd");
       case AST_BINARY_OP_SUB:
         return LLVMBuildFSub(codegen->llvm_builder, lhs, rhs, "fsub");
       case AST_BINARY_OP_MUL:
+        if (ty->ty == AST_TYPE_MATRIX) {
+          if (binary->lhs->ty.ty == AST_TYPE_MATRIX && binary->rhs->ty.ty == AST_TYPE_MATRIX) {
+            LLVMTypeRef out_ty = ast_ty_to_llvm_ty(codegen, ty);
+
+            // need to use the intrinsic instead
+            LLVMTypeRef left_ty = ast_ty_to_llvm_ty(codegen, &binary->lhs->ty);
+            LLVMTypeRef right_ty = ast_ty_to_llvm_ty(codegen, &binary->rhs->ty);
+
+            LLVMValueRef result = call_intrinsic(
+                codegen, "llvm.matrix.multiply", "matrix.multiply", 3, 5, out_ty, left_ty, right_ty,
+                lhs, rhs, const_i32(codegen, (int32_t)binary->lhs->ty.matrix.rows),
+                const_i32(codegen, (int32_t)binary->rhs->ty.matrix.cols),
+                const_i32(codegen, (int32_t)binary->rhs->ty.matrix.cols));
+
+            return result;
+          } else if (binary->rhs->ty.ty == AST_TYPE_FLOAT) {
+            rhs = create_scale_vector(codegen, ty->matrix.cols * ty->matrix.rows, rhs);
+          }
+        }
+
         return LLVMBuildFMul(codegen->llvm_builder, lhs, rhs, "fmul");
       case AST_BINARY_OP_DIV:
         return LLVMBuildFDiv(codegen->llvm_builder, lhs, rhs, "fdiv");

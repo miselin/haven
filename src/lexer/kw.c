@@ -66,6 +66,8 @@ int lex_maybe_keyword_inner(struct lex_state *state, struct token *token, const 
 
   if (!strncmp(ident, "fvec", 4)) {
     return lex_vector_type(state, token);
+  } else if (!strncmp(ident, "mat", 3)) {
+    return lex_matrix_type(state, token);
   }
 
   return 0;
@@ -81,6 +83,8 @@ int lex_maybe_keyword_trie_inner(struct lex_state *state, struct token *token, c
 
   if (!strncmp(ident, "fvec", 4)) {
     return lex_vector_type(state, token);
+  } else if (!strncmp(ident, "mat", 3)) {
+    return lex_matrix_type(state, token);
   }
 
   return 0;

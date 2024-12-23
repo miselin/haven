@@ -1,0 +1,30 @@
+pub fn i32 printf(str fmt, *);
+
+pub impure fn void madd(mat3x3 *out, mat3x3 *a, mat3x3 *b) {
+    let a_ = load a;
+    let b_ = load b;
+    store out a_ + b_;
+}
+
+pub impure fn void mscale(mat3x3 *out, mat3x3 *a, float b) {
+    let a_ = load a;
+    store out a_ * b
+}
+
+pub impure fn void msub(mat3x3 *out, mat3x3 *a, mat3x3 *b) {
+    let a_ = load a;
+    let b_ = load b;
+    store out a_ - b_;
+}
+
+pub impure fn void mmult(mat3x3 *out, mat3x3 *a, mat3x3 *b) {
+    let a_ = load a;
+    let b_ = load b;
+    store out a_ * b_;
+}
+
+pub impure fn void vec_mult_mat(fvec3 *out, fvec3 *a, mat3x3 *b) {
+    let a_ = load a;
+    let b_ = load b;
+    store out a_ * b_;
+}

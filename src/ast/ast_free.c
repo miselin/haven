@@ -103,6 +103,7 @@ void free_expr(struct ast_expr *ast) {
       switch (ast->ty.ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY:
+        case AST_TYPE_MATRIX:
           free_expr_list(ast->list);
           break;
 

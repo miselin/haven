@@ -101,6 +101,62 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           return array;
         } break;
 
+        case AST_TYPE_MATRIX: {
+          // size_t total_elements = ast->ty.matrix.cols * ast->ty.matrix.rows;
+          //  LLVMValueRef zero = LLVMConstNull(LLVMVectorType(
+          //  LLVMFloatTypeInContext(codegen->llvm_context), (unsigned int)total_elements));
+
+          // declare void @llvm.matrix.column.major.store.*(vectorty %In, ptrty %Ptr, i64 %Stride,
+          // i1 <IsVolatile>, i32 <Rows>, i32 <Cols>)
+
+          LLVMTypeRef vec_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+          LLVMValueRef vec_stack = new_alloca(codegen, vec_ty, "vec");
+          // LLVMBuildStore(codegen->llvm_builder, zero, vec_stack);
+          // LLVMValueRef vec = LLVMBuildLoad2(codegen->llvm_builder,
+          //                                 ast_ty_to_llvm_ty(codegen, &ast->ty), vec_stack,
+          //                                 "vec");
+
+          LLVMValueRef vec = LLVMBuildLoad2(codegen->llvm_builder,
+                                            ast_ty_to_llvm_ty(codegen, &ast->ty), vec_stack, "vec");
+
+          // LLVMTypeRef row_ty = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
+          // (unsigned int)ast->ty.matrix.cols);
+
+          struct ast_expr_list *node = ast->list;
+          for (size_t j = 0; j < ast->list->num_elements; j++) {
+            LLVMValueRef expr = emit_expr(codegen, node->expr);
+
+            /*
+
+            LLVMValueRef indicies[2] = {
+                LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
+                LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), j * ast->ty.matrix.cols,
+                             0),
+            };
+
+            LLVMValueRef row = LLVMBuildGEP2(codegen->llvm_builder, row_ty, vec_stack, indicies, 2,
+                                             "matrix.create.row");
+            emit_store(codegen, &node->expr->ty, expr, row);
+            */
+
+            for (size_t col = 0; col < ast->ty.matrix.cols; col++) {
+              LLVMValueRef col_idx =
+                  LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), col, 0);
+              LLVMValueRef matrix_idx = LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context),
+                                                     j * ast->ty.matrix.cols + col, 0);
+              LLVMValueRef element =
+                  LLVMBuildExtractElement(codegen->llvm_builder, expr, col_idx, "element");
+              vec = LLVMBuildInsertElement(codegen->llvm_builder, vec, element, matrix_idx,
+                                           "element");
+            }
+
+            node = node->next;
+          }
+
+          // LLVMBuildStore(codegen->llvm_builder, vec, vec_stack);
+          return vec;
+        } break;
+
         default: {
           char buf[256];
           type_name_into(&ast->ty, buf, 256);
@@ -209,6 +265,20 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       const char *ident = ast->deref.ident.value.identv.ident;
       struct scope_entry *entry = scope_lookup(codegen->scope, ident, 1);
+
+      if (entry->vdecl->ty.ty == AST_TYPE_MATRIX) {
+        // matrix -> gep -> load
+        LLVMValueRef indicies[2] = {
+            LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
+            LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context),
+                         ast->deref.field_idx * ast->ty.matrix.rows, 0),
+        };
+
+        LLVMValueRef row = LLVMBuildGEP2(codegen->llvm_builder, entry->variable_type, entry->ref,
+                                         indicies, 2, "matrix.deref.row");
+        return LLVMBuildLoad2(codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), row,
+                              "matrix.deref.load");
+      }
 
       // vector -> extractelement
       if (LLVMGetTypeKind(entry->variable_type) == LLVMVectorTypeKind) {

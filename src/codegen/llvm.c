@@ -1,5 +1,9 @@
 #include <llvm-c/Core.h>
+#include <llvm-c/Support.h>
 #include <llvm-c/TargetMachine.h>
+#include <stdlib.h>
+
+#include "compiler.h"
 
 static int llvm_initialized = 0;
 
@@ -15,8 +19,6 @@ int initialize_llvm(void) {
   LLVMInitializeAllAsmPrinters();
   llvm_initialized = 1;
 
-  LLVMShutdown();
-
   return 0;
 }
 
@@ -27,4 +29,29 @@ void shutdown_llvm(void) {
 
   llvm_initialized = 0;
   LLVMShutdown();
+}
+
+void configure_llvm(struct compiler *compiler) {
+  const char **args = malloc(sizeof(char *));
+  int nargs = 1;
+
+  args[0] = COMPILER_IDENT;
+
+  size_t flags = compiler_get_flags(compiler);
+
+  // lower matrix intrinsics
+  {
+    args = realloc(args, sizeof(char *) * (size_t)(nargs + 1));
+    args[nargs++] = "-enable-matrix";
+  }
+
+  // enable debugging if requested
+  if (flags & FLAG_DEBUG_LLVM) {
+    args = realloc(args, sizeof(char *) * (size_t)(nargs + 1));
+    args[nargs++] = "-debug";
+  }
+
+  LLVMParseCommandLineOptions(nargs, args, "LLVM internal options");
+
+  free(args);
 }

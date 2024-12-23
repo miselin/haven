@@ -3,7 +3,9 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
 #include <llvm-c/Types.h>
+#include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ast.h"
 #include "codegen.h"
@@ -139,6 +141,11 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
                                ty->function.vararg);
       free(param_types);
     } break;
+    case AST_TYPE_MATRIX: {
+      // matrix is actually a flat fvec (Rows * Cols)
+      inner = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
+                             (unsigned int)(ty->matrix.cols * ty->matrix.rows));
+    } break;
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
       return NULL;
@@ -216,4 +223,49 @@ int extract_constant_int(struct ast_expr *expr, int64_t *into) {
 
   *into = (int64_t)expr->constant.constant.value.intv.val;
   return 0;
+}
+
+LLVMValueRef call_intrinsic(struct codegen *codegen, const char *intrinsic_name,
+                            const char *inst_name, size_t num_types, size_t num_args, ...) {
+  va_list ap;
+  va_start(ap, num_args);
+  LLVMTypeRef *types = malloc(sizeof(LLVMTypeRef) * num_types);
+  for (size_t i = 0; i < num_types; i++) {
+    types[i] = va_arg(ap, LLVMTypeRef);
+  }
+
+  LLVMValueRef *args = malloc(sizeof(LLVMValueRef) * num_args);
+  for (size_t i = 0; i < num_args; i++) {
+    args[i] = va_arg(ap, LLVMValueRef);
+  }
+
+  va_end(ap);
+
+  unsigned int intrinsic_id = LLVMLookupIntrinsicID(intrinsic_name, strlen(intrinsic_name));
+  LLVMValueRef intrinsic_decl =
+      LLVMGetIntrinsicDeclaration(codegen->llvm_module, intrinsic_id, types, num_types);
+  LLVMTypeRef intrinsic_func = LLVMGlobalGetValueType(intrinsic_decl);
+
+  LLVMValueRef result = LLVMBuildCall2(codegen->llvm_builder, intrinsic_func, intrinsic_decl, args,
+                                       (unsigned int)num_args, inst_name);
+
+  free(types);
+  free(args);
+
+  return result;
+}
+
+LLVMValueRef const_i32(struct codegen *codegen, int32_t val) {
+  return LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), (uint64_t)val, 0);
+}
+
+LLVMValueRef create_scale_vector(struct codegen *codegen, size_t count, LLVMValueRef scale) {
+  LLVMTypeRef vecty =
+      LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context), (unsigned int)count);
+  LLVMValueRef zero = LLVMConstNull(vecty);
+  LLVMValueRef undef = LLVMGetUndef(vecty);
+  LLVMValueRef bvec = LLVMBuildInsertElement(
+      codegen->llvm_builder, undef, scale,
+      LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0), "broadcast");
+  return LLVMBuildShuffleVector(codegen->llvm_builder, bvec, undef, zero, "shuffle");
 }

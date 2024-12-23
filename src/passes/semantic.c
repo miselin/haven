@@ -247,7 +247,8 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
     case AST_EXPR_TYPE_CONSTANT: {
       switch (ast->ty.ty) {
         case AST_TYPE_FVEC:
-        case AST_TYPE_ARRAY: {
+        case AST_TYPE_ARRAY:
+        case AST_TYPE_MATRIX: {
           struct ast_expr_list *node = ast->list;
           while (node) {
             if (check_semantic_expr(semantic, node->expr) < 0) {
