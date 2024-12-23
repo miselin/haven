@@ -261,7 +261,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
-      char name[256];
+      char name[512];
 
       const char *ident = ast->deref.ident.value.identv.ident;
       struct scope_entry *entry = scope_lookup(codegen->scope, ident, 1);
@@ -289,7 +289,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           ref = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, ref, ident);
         }
 
-        snprintf(name, 256, "deref.vec.%zd", ast->deref.field_idx);
+        snprintf(name, 512, "deref.vec.%zd", ast->deref.field_idx);
 
         LLVMValueRef index = LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context),
                                           (unsigned int)ast->deref.field_idx, 0);
@@ -300,11 +300,11 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       // union -> read from first field, direct pointer access
       if (entry->vdecl->ty.structty.is_union) {
-        snprintf(name, 256, "deref.union.%s", ast->deref.field.value.identv.ident);
+        snprintf(name, 512, "deref.union.%s", ast->deref.field.value.identv.ident);
         return LLVMBuildLoad2(codegen->llvm_builder, target_ty, entry->ref, name);
       }
 
-      snprintf(name, 256, "deref.struct.%s", ast->deref.field.value.identv.ident);
+      snprintf(name, 512, "deref.struct.%s", ast->deref.field.value.identv.ident);
 
       // struct -> getelementptr
       LLVMValueRef gep =

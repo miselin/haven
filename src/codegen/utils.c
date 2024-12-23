@@ -256,7 +256,7 @@ LLVMValueRef call_intrinsic(struct codegen *codegen, const char *intrinsic_name,
 }
 
 LLVMValueRef const_i32(struct codegen *codegen, int32_t val) {
-  return LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), (uint64_t)val, 0);
+  return LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), (unsigned long long)val, 0);
 }
 
 LLVMValueRef create_scale_vector(struct codegen *codegen, size_t count, LLVMValueRef scale) {

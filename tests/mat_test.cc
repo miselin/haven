@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 
 // actually a vec4, due to alignment, but we only use the first 3 components
-typedef float float3 __attribute__((vector_size(sizeof(float) * 4)));
+typedef float float3 __attribute__((vector_size(sizeof(float) * 3)));
 
 // actually a mat3x3
 typedef float float3x3 __attribute__((vector_size(sizeof(float) * 3 * 3)));
@@ -18,7 +18,7 @@ extern "C" void vec_mult_mat(float3 *out, float3 *a, float3x3 *b);
 extern "C" void dump_mat(float3x3 m);
 
 static float3 glm2vec(glm::vec3 v) {
-  float3 result = {v.x, v.y, v.z, 0.0f};
+  float3 result = {v.x, v.y, v.z};
   return result;
 }
 

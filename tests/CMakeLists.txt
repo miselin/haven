@@ -4,13 +4,16 @@ include(GoogleTest)
 add_haven_library(haven_vec inputs/vec.hv)
 add_haven_library(haven_mat inputs/mat.hv)
 
-add_executable(vec_test vec_test.cc)
-target_link_libraries(vec_test haven_compiler_options_no_warnings haven_vec GTest::gtest_main)
-gtest_discover_tests(vec_test)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    # vec/mat tests use the Clang vector/matrix extensions
+    add_executable(vec_test vec_test.cc)
+    target_link_libraries(vec_test haven_compiler_options_no_warnings haven_vec GTest::gtest_main)
+    gtest_discover_tests(vec_test)
 
-add_executable(mat_test mat_test.cc)
-target_link_libraries(mat_test haven_compiler_options_no_warnings haven_mat GTest::gtest_main)
-gtest_discover_tests(mat_test)
+    add_executable(mat_test mat_test.cc)
+    target_link_libraries(mat_test haven_compiler_options_no_warnings haven_mat GTest::gtest_main)
+    gtest_discover_tests(mat_test)
+endif ()
 
 add_executable(trie_test trie_test.cc)
 target_link_libraries(trie_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
