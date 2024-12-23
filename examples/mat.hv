@@ -1,0 +1,37 @@
+cimport "stdio.h";
+
+pub fn mat3x3 madd(mat3x3 a, mat3x3 b) {
+    a + b
+}
+
+pub fn mat3x3 mscale(mat3x3 a, float b) {
+    a * b
+}
+
+pub fn mat3x3 msub(mat3x3 a, mat3x3 b) {
+    a - b
+}
+
+pub fn mat3x3 mmult(mat3x3 a, mat3x3 b) {
+    a * b
+}
+
+pub fn fvec3 vec_mult_mat(fvec3 a, mat3x3 b) {
+    a * b
+}
+
+
+// TODO: transpose
+
+pub fn i32 main() {
+    let x = mat3x3 {<1.0, 0.0, 0.0>,
+                    <0.0, 1.0, 0.0>,
+                    <0.0, 0.0, 1.0>};
+
+    let y = <1.0, 2.0, 3.0>;
+
+    let test = vec_mult_mat(y, x);
+
+    printf("row0: %f %f %f\n", test.x, test.y, test.z);
+    0
+}
