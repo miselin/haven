@@ -47,7 +47,7 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
     return value;
   }
 
-  if (from->flags & TYPE_FLAG_PTR && to->flags & TYPE_FLAG_PTR) {
+  if (from->ty == AST_TYPE_POINTER && to->ty == AST_TYPE_POINTER) {
     // pointer to pointer cast, no IR cast needed
     return value;
   }
@@ -151,13 +151,11 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       inner = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
                              (unsigned int)(ty->matrix.cols * ty->matrix.rows));
     } break;
+    case AST_TYPE_POINTER:
+      return LLVMPointerTypeInContext(codegen->llvm_context, 0);
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
       return NULL;
-  }
-
-  if (ty->flags & TYPE_FLAG_PTR) {
-    return LLVMPointerTypeInContext(codegen->llvm_context, 0);
   }
 
   return inner;

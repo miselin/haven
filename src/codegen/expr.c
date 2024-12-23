@@ -269,25 +269,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMValueRef target = entry->ref;
 
-      LLVMTypeRef gep_ty = entry->variable_type;
-
-      /*
-        %a.addr = alloca ptr, align 8
-  store ptr %a, ptr %a.addr, align 8
-    #dbg_declare(ptr %a.addr, !20, !DIExpression(), !21)
-  %0 = load ptr, ptr %a.addr, align 8, !dbg !22
-  %x = getelementptr inbounds nuw %struct.blah, ptr %0, i32 0, i32 0, !dbg !23
-  store i32 5, ptr %x, align 4, !dbg !24
-  ret void, !dbg !25
-
-*/
-
-      // pointer -> load the value inside
-      if (entry->vdecl->ty.flags & TYPE_FLAG_PTR) {
-        entry->vdecl->ty.flags &= ~TYPE_FLAG_PTR;
-        gep_ty = ast_ty_to_llvm_ty(codegen, &entry->vdecl->ty);
-        entry->vdecl->ty.flags |= TYPE_FLAG_PTR;
-      }
+      // TODO: load pointer to get to underlying type if needed
 
       if (entry->vdecl->ty.ty == AST_TYPE_MATRIX) {
         // matrix -> gep -> load
@@ -328,6 +310,13 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       }
 
       snprintf(name, 512, "deref.struct.%s", ast->deref.field.value.identv.ident);
+
+      LLVMTypeRef gep_ty = entry->variable_type;
+
+      // pointer -> load the value inside
+      if (entry->vdecl->ty.ty == AST_TYPE_POINTER) {
+        gep_ty = ast_ty_to_llvm_ty(codegen, ptr_pointee_type(&entry->vdecl->ty));
+      }
 
       // struct -> getelementptr
       LLVMValueRef gep = LLVMBuildStructGEP2(codegen->llvm_builder, gep_ty, target,

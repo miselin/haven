@@ -508,15 +508,16 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
         return NULL;
       }
 
-      if (!(lhs->flags & TYPE_FLAG_PTR)) {
+      if (lhs->ty != AST_TYPE_POINTER) {
         fprintf(stderr, "store lhs is not a pointer\n");
         ++typecheck->errors;
       }
 
-      // for type checks, remove the pointer flag
-      if (!same_type_masked(lhs, rhs, ~TYPE_FLAG_PTR)) {
+      struct ast_ty *pointee = ptr_pointee_type(lhs);
+
+      if (!same_type(pointee, rhs)) {
         char lhsstr[256], rhsstr[256];
-        type_name_into(lhs, lhsstr, 256);
+        type_name_into(pointee, lhsstr, 256);
         type_name_into(rhs, rhsstr, 256);
 
         fprintf(stderr, "store lhs has type %s, rhs has type %s\n", lhsstr, rhsstr);
@@ -780,7 +781,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      if (entry->vdecl->ty.ty != AST_TYPE_ARRAY && (entry->vdecl->ty.flags & TYPE_FLAG_PTR) == 0) {
+      if (entry->vdecl->ty.ty != AST_TYPE_ARRAY && entry->vdecl->ty.ty != AST_TYPE_POINTER) {
         char tystr[256];
         type_name_into(&entry->vdecl->ty, tystr, 256);
 
@@ -794,8 +795,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         ast->ty = resolve_type(typecheck, entry->vdecl->ty.array.element_ty);
       } else {
         // type of expression is the type pointed to by the pointer
-        ast->ty = resolve_type(typecheck, &entry->vdecl->ty);
-        ast->ty.flags &= ~TYPE_FLAG_PTR;
+        ast->ty = resolve_type(typecheck, ptr_pointee_type(&entry->vdecl->ty));
       }
       return &ast->ty;
     } break;
@@ -1195,10 +1195,10 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      ast->ty = entry->vdecl->ty;
-      ast->ty.flags |= TYPE_FLAG_PTR;
       ast->ref.expr->ty.flags |= TYPE_FLAG_REFERENCE;
-      ast->ty = resolve_type(typecheck, &ast->ty);
+      struct ast_ty resolved = resolve_type(typecheck, &expr->ty);
+      free_ty(&ast->ty, 0);
+      ast->ty = ptr_type(resolved);
       return &ast->ty;
     } break;
 
@@ -1210,15 +1210,13 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return NULL;
       }
 
-      if (!(expr_ty->flags & TYPE_FLAG_PTR)) {
+      if (expr_ty->ty != AST_TYPE_POINTER) {
         fprintf(stderr, "load expression must resolve to a pointer\n");
         ++typecheck->errors;
         return &typecheck->error_type;
       }
 
-      ast->ty = *expr_ty;
-      ast->ty.flags &= ~TYPE_FLAG_PTR;
-      ast->ty = resolve_type(typecheck, &ast->ty);
+      ast->ty = resolve_type(typecheck, ptr_pointee_type(expr_ty));
       return &ast->ty;
     } break;
 
@@ -1482,7 +1480,7 @@ static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
   }
 
   // pointer arithmetic
-  if (lhs->flags & TYPE_FLAG_PTR || rhs->flags & TYPE_FLAG_PTR) {
+  if (lhs->ty == AST_TYPE_POINTER || rhs->ty == AST_TYPE_POINTER) {
     return op == AST_BINARY_OP_ADD || op == AST_BINARY_OP_SUB;
   }
 
@@ -1497,6 +1495,14 @@ static int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
 static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
   if (ty == &typecheck->void_type) {
     return *ty;
+  }
+
+  if (ty->ty == AST_TYPE_POINTER) {
+    struct ast_ty new_ty = copy_type(ty);
+    struct ast_ty resolved = resolve_type(typecheck, ty->pointer.pointee);
+    free_ty(new_ty.pointer.pointee, 0);
+    *new_ty.pointer.pointee = resolved;
+    return new_ty;
   }
 
   if (ty->ty == AST_TYPE_ARRAY) {

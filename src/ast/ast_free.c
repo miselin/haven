@@ -337,6 +337,11 @@ void free_ty(struct ast_ty *ty, int heap) {
     free(ty->function.args);
   }
 
+  if (ty->ty == AST_TYPE_POINTER) {
+    free_ty(ty->pointer.pointee, 1);
+    ty->pointer.pointee = NULL;
+  }
+
   if (heap) {
     free(ty);
   }

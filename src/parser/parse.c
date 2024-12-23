@@ -1281,7 +1281,7 @@ static struct ast_ty parse_type(struct parser *parser) {
 
   if (parser_peek(parser) == TOKEN_ASTERISK) {
     parser_consume_peeked(parser, NULL);
-    result.flags |= TYPE_FLAG_PTR;
+    result = ptr_type(result);
   }
 
   if (parser_peek(parser) == TOKEN_LBRACKET) {

@@ -107,18 +107,16 @@ LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *b
   LLVMValueRef rhs = emit_expr(codegen, binary->rhs);
 
   // pointer arithmetic?
-  if (ty->flags & TYPE_FLAG_PTR) {
+  if (ty->ty == AST_TYPE_POINTER) {
     // make sure LHS is the pointer
-    if ((binary->lhs->ty.flags & TYPE_FLAG_PTR) == 0) {
+    if ((binary->lhs->ty.ty != AST_TYPE_POINTER) == 0) {
       LLVMValueRef tmp = lhs;
       lhs = rhs;
       rhs = tmp;
     }
     if (binary->op == AST_BINARY_OP_ADD) {
       // get the underlying pointer type
-      ty->flags &= ~TYPE_FLAG_PTR;
-      LLVMTypeRef ptr_ty = ast_ty_to_llvm_ty(codegen, ty);
-      ty->flags |= TYPE_FLAG_PTR;
+      LLVMTypeRef ptr_ty = ast_ty_to_llvm_ty(codegen, ptr_pointee_type(ty));
       return LLVMBuildGEP2(codegen->llvm_builder, ptr_ty, lhs, &rhs, 1, "ptr.add");
     } else if (binary->op == AST_BINARY_OP_SUB) {
       // TODO

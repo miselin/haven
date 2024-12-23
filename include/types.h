@@ -15,7 +15,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define TYPE_FLAG_PTR (1U << 0)
+// Use AST_TYPE_POINTER instead.
+// #define TYPE_FLAG_PTR (1U << 0)
 
 // References another type. Used to avoid freeing struct field types in particular.
 #define TYPE_FLAG_INDIRECT (1U << 1)
@@ -48,6 +49,7 @@ enum ast_ty_id {
   AST_TYPE_TEMPLATE,  // present in type definitions, replaced in concrete types
   AST_TYPE_FUNCTION,  // for function pointers
   AST_TYPE_MATRIX,
+  AST_TYPE_POINTER,  // points at another type
 };
 
 struct ast_struct_field {
@@ -105,6 +107,9 @@ struct ast_ty {
       size_t cols;
       size_t rows;
     } matrix;
+    struct {
+      struct ast_ty *pointee;
+    } pointer;
   };
 };
 
@@ -229,5 +234,15 @@ struct ast_ty copy_type(struct ast_ty *);
  * whether to clean up a type or not.
  */
 int same_type(struct ast_ty *, struct ast_ty *);
+
+/**
+ * @brief Wrap the given type in a pointer type.
+ */
+struct ast_ty ptr_type(struct ast_ty);
+
+/**
+ * @brief Unwrap a pointer type to get the inner type.
+ */
+struct ast_ty *ptr_pointee_type(struct ast_ty *);
 
 #endif

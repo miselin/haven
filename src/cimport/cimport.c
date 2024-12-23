@@ -180,7 +180,6 @@ int parse_simple_type(CXType type, struct ast_ty *into) {
     // not technically built in, but doesn't get a name by any other means
     case CXType_FunctionProto: {
       into->ty = AST_TYPE_FUNCTION;
-      into->flags |= TYPE_FLAG_PTR;
 
       struct ast_fdecl fdecl;
       analyze_function_type(type, &fdecl);
@@ -189,11 +188,13 @@ int parse_simple_type(CXType type, struct ast_ty *into) {
       *into->function.retty = fdecl.retty;
 
       free_fdecl(&fdecl, 0);
+
+      *into = ptr_type(*into);
     } break;
 
     case CXType_Pointer:
       if (parse_simple_type(clang_getPointeeType(type), into) == 0) {
-        into->flags |= TYPE_FLAG_PTR;
+        *into = ptr_type(*into);
       } else {
         rc = -1;
       }
@@ -242,7 +243,7 @@ struct ast_ty parse_type(CXType type) {
   switch (type.kind) {
     case CXType_Pointer:
       result = parse_type(clang_getPointeeType(type));
-      result.flags |= TYPE_FLAG_PTR;
+      result = ptr_type(result);
       break;
 
     case CXType_Enum:
@@ -274,7 +275,7 @@ struct ast_ty parse_type(CXType type) {
 
     case CXType_IncompleteArray:
       result = parse_type(clang_getArrayElementType(type));
-      result.flags |= TYPE_FLAG_PTR;
+      result = ptr_type(result);
       break;
 
     default:

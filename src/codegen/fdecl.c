@@ -150,10 +150,12 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   LLVMValueRef block_result = emit_block(codegen, fdecl->body);
   if (fdecl->retty.ty != AST_TYPE_VOID) {
     // complex_return path sets retval to the return parameter
-    if (fdecl->retty.flags & TYPE_FLAG_PTR && !LLVMIsNull(block_result)) {
+    /*
+    if (fdecl->retty.flags == TYPE_FLAG_PTR && !LLVMIsNull(block_result)) {
       block_result =
           LLVMBuildLoad2(codegen->llvm_builder, ret_ty, block_result, "deref.ptr.retval");
     }
+    */
     emit_store(codegen, &fdecl->retty, block_result, codegen->retval);
   }
 

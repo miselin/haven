@@ -44,7 +44,7 @@ int type_is_constant(struct ast_ty *ty) {
 
 int type_is_complex(struct ast_ty *ty) {
   // pointers are not complex even if their targets are
-  if (ty->flags & TYPE_FLAG_PTR) {
+  if (ty->ty == AST_TYPE_POINTER) {
     return 0;
   }
 
@@ -77,11 +77,12 @@ int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
     struct ast_ty *otherty = ty1->ty == AST_TYPE_STRING ? ty2 : ty1;
 
     // strings are identical to i8*
-    if (!(otherty->flags & TYPE_FLAG_PTR)) {
+    if (otherty->ty != AST_TYPE_POINTER) {
       return 0;
     }
 
-    if (otherty->ty == AST_TYPE_INTEGER && otherty->integer.width == 8) {
+    struct ast_ty *pointee = ptr_pointee_type(otherty);
+    if (pointee->ty == AST_TYPE_INTEGER && pointee->integer.width == 8) {
       return 1;
     }
   }
@@ -95,7 +96,7 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
   }
 
   // pointers can be converted to each other
-  if (ty1->flags & TYPE_FLAG_PTR && ty2->flags & TYPE_FLAG_PTR) {
+  if (ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_POINTER) {
     return 1;
   }
 
@@ -192,6 +193,23 @@ int wider_type(struct ast_ty *ty1, struct ast_ty *ty2) {
   }
 }
 
+struct ast_ty ptr_type(struct ast_ty pointee) {
+  struct ast_ty ty;
+  memset(&ty, 0, sizeof(ty));
+  ty.ty = AST_TYPE_POINTER;
+  ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
+  *ty.pointer.pointee = pointee;
+  return ty;
+}
+
+struct ast_ty *ptr_pointee_type(struct ast_ty *ty) {
+  if (ty->ty != AST_TYPE_POINTER) {
+    return NULL;
+  }
+
+  return ty->pointer.pointee;
+}
+
 const char *type_name(struct ast_ty *ty) {
   static char buf[256];
   type_name_into(ty, buf, 256);
@@ -245,12 +263,13 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
           snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
       struct ast_struct_field *field = ty->structty.fields;
       while (field) {
-        if (!strcmp(field->ty->name, ty->name)) {
+        if (field->ty->ty == AST_TYPE_POINTER &&
+            !strcmp(ptr_pointee_type(field->ty)->name, ty->name)) {
           // recursive def
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s%s; ",
-                             field->ty->flags & TYPE_FLAG_PTR ? "*" : "", ty->name);
+          offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s *%s; ", ty->name,
+                             field->name);
         } else {
-          char field_ty[256];
+          char field_ty[256] = {0};
           type_name_into(field->ty, field_ty, 256);
           offset +=
               snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_ty, field->name);
@@ -323,18 +342,20 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
     case AST_TYPE_MATRIX:
       offset += snprintf(buf, maxlen, "matrix %zdx%zd", ty->matrix.cols, ty->matrix.rows);
       break;
+    case AST_TYPE_POINTER:
+      offset += snprintf(buf, maxlen, "Pointer <");
+      offset += type_name_into(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
+      break;
     default:
       offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
       return offset;
   }
 
-  if (ty->flags & TYPE_FLAG_PTR) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
-  }
   if (ty->flags & TYPE_FLAG_CONSTANT) {
     offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
   }
-  if (ty->flags & ~(TYPE_FLAG_PTR | TYPE_FLAG_CONSTANT)) {
+  if (ty->flags & ~TYPE_FLAG_CONSTANT) {
     offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %lx)", ty->flags);
   }
 
@@ -362,7 +383,7 @@ int can_cast(struct ast_ty *ty1, struct ast_ty *ty2) {
 }
 
 size_t type_size(struct ast_ty *ty) {
-  if (ty->flags & TYPE_FLAG_PTR) {
+  if (ty->ty == AST_TYPE_POINTER) {
     // TODO: 64-bit assumption
     return 8;
   }
@@ -520,6 +541,9 @@ struct ast_ty copy_type(struct ast_ty *ty) {
 
     new_type.function.retty = calloc(1, sizeof(struct ast_ty));
     *new_type.function.retty = copy_type(ty->function.retty);
+  } else if (ty->ty == AST_TYPE_POINTER) {
+    new_type.pointer.pointee = calloc(1, sizeof(struct ast_ty));
+    *new_type.pointer.pointee = copy_type(ty->pointer.pointee);
   }
 
   return new_type;
@@ -575,7 +599,7 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
         if (!strcmp(field->ty->name, ty->name)) {
           // recursive def
           offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s%s; ",
-                             field->ty->flags & TYPE_FLAG_PTR ? "*" : "", ty->name);
+                             field->ty->ty == AST_TYPE_POINTER ? "*" : "", ty->name);
         } else {
           char field_ty[256];
           type_name_into(field->ty, field_ty, 256);
@@ -617,13 +641,10 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       return offset;
   }
 
-  if (ty->flags & TYPE_FLAG_PTR) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
-  }
   if (ty->flags & TYPE_FLAG_CONSTANT) {
     offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
   }
-  if (ty->flags & ~(TYPE_FLAG_PTR | TYPE_FLAG_CONSTANT)) {
+  if (ty->flags & ~TYPE_FLAG_CONSTANT) {
     offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %lx)", ty->flags);
   }
 
