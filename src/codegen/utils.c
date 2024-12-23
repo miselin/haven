@@ -192,24 +192,10 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
   LLVMTypeRef llvm_ty = ast_ty_to_llvm_ty(codegen, ty);
   uint64_t ty_size = LLVMABISizeOfType(codegen->llvm_data_layout, llvm_ty);
 
-  LLVMTypeRef memcpy_types[3] = {
-      LLVMPointerTypeInContext(codegen->llvm_context, 0),
-      LLVMPointerTypeInContext(codegen->llvm_context, 0),
-      LLVMInt32TypeInContext(codegen->llvm_context),
-  };
-
-  // need to use the intrinsic instead
-  unsigned int memcpy_id = LLVMLookupIntrinsicID("llvm.memcpy", 11);
-  LLVMValueRef memcpy_func =
-      LLVMGetIntrinsicDeclaration(codegen->llvm_module, memcpy_id, memcpy_types, 3);
-  LLVMTypeRef func_type = LLVMGlobalGetValueType(memcpy_func);
-  LLVMValueRef args[4] = {
-      ptr,                                                                      // dest
-      value,                                                                    // src
-      LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), ty_size, 0),  // len
-      LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0),         // isvolatile
-  };
-  LLVMBuildCall2(codegen->llvm_builder, func_type, memcpy_func, args, 4, "");
+  call_intrinsic(codegen, "llvm.memcpy", "", 3, 4, codegen_pointer_type(codegen),
+                 codegen_pointer_type(codegen), codegen_i32_type(codegen), ptr, value,
+                 const_i32(codegen, (int32_t)ty_size),
+                 LLVMConstInt(LLVMInt1TypeInContext(codegen->llvm_context), 0, 0));
 }
 
 int extract_constant_int(struct ast_expr *expr, int64_t *into) {
@@ -268,4 +254,12 @@ LLVMValueRef create_scale_vector(struct codegen *codegen, size_t count, LLVMValu
       codegen->llvm_builder, undef, scale,
       LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0), "broadcast");
   return LLVMBuildShuffleVector(codegen->llvm_builder, bvec, undef, zero, "shuffle");
+}
+
+LLVMTypeRef codegen_pointer_type(struct codegen *codegen) {
+  return LLVMPointerTypeInContext(codegen->llvm_context, 0);
+}
+
+LLVMTypeRef codegen_i32_type(struct codegen *codegen) {
+  return LLVMInt32TypeInContext(codegen->llvm_context);
 }

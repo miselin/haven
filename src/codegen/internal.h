@@ -129,6 +129,9 @@ LLVMValueRef const_i32(struct codegen *codegen, int32_t val);
 
 LLVMValueRef create_scale_vector(struct codegen *codegen, size_t count, LLVMValueRef scale);
 
+LLVMTypeRef codegen_pointer_type(struct codegen *codegen);
+LLVMTypeRef codegen_i32_type(struct codegen *codegen);
+
 int initialize_llvm(void);
 void shutdown_llvm(void);
 
