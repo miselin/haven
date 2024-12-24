@@ -657,3 +657,8 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
   buf[offset] = '\0';
   return offset;
 }
+
+int type_is_indexable(struct ast_ty *ty) {
+  return ty->ty == AST_TYPE_ARRAY || ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_FVEC ||
+         ty->ty == AST_TYPE_MATRIX;
+}

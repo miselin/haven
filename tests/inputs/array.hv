@@ -11,6 +11,6 @@ i32[9] G = i32 {
     16
 };
 
-pub fn i32 sut() {
+pub impure fn i32 sut() {
     G[7]
 }

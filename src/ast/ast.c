@@ -97,7 +97,7 @@ const char *ast_expr_ident(struct ast_expr *expr) {
     case AST_EXPR_TYPE_VARIABLE:
       return expr->variable.ident.value.identv.ident;
     case AST_EXPR_TYPE_ARRAY_INDEX:
-      return expr->array_index.ident.value.identv.ident;
+      return ast_expr_ident(expr->array_index.target);
     default:
       return NULL;
   }

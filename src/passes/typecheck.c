@@ -783,20 +783,16 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
-      const char *ident = ast->array_index.ident.value.identv.ident;
-      struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
-      if (!entry || !entry->vdecl) {
-        fprintf(stderr, "%s not found or not a variable\n", ident);
-        ++typecheck->errors;
-        return &typecheck->error_type;
+      struct ast_ty *target_ty = typecheck_expr(typecheck, ast->array_index.target);
+      if (!target_ty) {
+        return NULL;
       }
 
-      if (entry->vdecl->ty.ty != AST_TYPE_ARRAY && entry->vdecl->ty.ty != AST_TYPE_POINTER) {
-        char tystr[256];
-        type_name_into(&entry->vdecl->ty, tystr, 256);
+      const char *ident = ast_expr_ident(ast->array_index.target);
 
-        fprintf(stderr, "array index %s has type %s, expected an array or pointer type\n", ident,
-                tystr);
+      // is the target indexable?
+      if (!type_is_indexable(target_ty)) {
+        typecheck_diag_expr(typecheck, ast->array_index.target, "%s is not indexable\n", ident);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -813,11 +809,18 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       int_ty.integer.width = 32;
       maybe_implicitly_convert(index_ty, &int_ty);
 
-      if (entry->vdecl->ty.ty == AST_TYPE_ARRAY) {
-        ast->ty = resolve_type(typecheck, entry->vdecl->ty.array.element_ty);
-      } else {
+      struct ast_expr *target_expr = ast->array_index.target;
+
+      if (target_expr->ty.ty == AST_TYPE_ARRAY) {
+        ast->ty = resolve_type(typecheck, target_expr->ty.array.element_ty);
+      } else if (target_expr->ty.ty == AST_TYPE_POINTER) {
         // type of expression is the type pointed to by the pointer
-        ast->ty = resolve_type(typecheck, ptr_pointee_type(&entry->vdecl->ty));
+        ast->ty = resolve_type(typecheck, ptr_pointee_type(&target_expr->ty));
+      } else {
+        typecheck_diag_expr(typecheck, ast->array_index.target,
+                            "indexable type has an unimplemented type resolve\n");
+        ++typecheck->errors;
+        return &typecheck->error_type;
       }
       return &ast->ty;
     } break;
@@ -1152,39 +1155,42 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return NULL;
       }
 
-      const char *ident = ast_expr_ident(ast->assign.lhs);
-      if (!ident) {
-        compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "assign lhs not an ident");
-        return NULL;  // TODO: this should happen in semantic pass not here
-      }
-
-      struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
-      if (!entry || !entry->vdecl) {
-        fprintf(stderr, "%s not found or not a variable\n", ident);
-        ++typecheck->errors;
-        return &typecheck->error_type;
-      }
-
-      if (!(entry->vdecl->flags & DECL_FLAG_MUT)) {
-        fprintf(stderr, "%s is not mutable\n", ident);
-        ++typecheck->errors;
-        return &typecheck->error_type;
-      }
-
       struct ast_ty *expr_ty = typecheck_expr_with_tbds(typecheck, ast->assign.expr);
       if (!expr_ty) {
         return NULL;
       }
 
-      if (type_is_tbd(&entry->vdecl->ty)) {
-        // inferred type
-        entry->vdecl->ty = *expr_ty;
+      const char *ident = ast_expr_ident(ast->assign.lhs);
 
-        // remove constant flag if it was inferred
-        entry->vdecl->ty.flags &= ~TYPE_FLAG_CONSTANT;
+      {
+        if (!ident) {
+          compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "assign lhs not an ident");
+          return NULL;  // TODO: this should happen in semantic pass not here
+        }
+
+        struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
+        if (!entry || !entry->vdecl) {
+          fprintf(stderr, "%s not found or not a variable\n", ident);
+          ++typecheck->errors;
+          return &typecheck->error_type;
+        }
+
+        if (!(entry->vdecl->flags & DECL_FLAG_MUT)) {
+          fprintf(stderr, "%s is not mutable\n", ident);
+          ++typecheck->errors;
+          return &typecheck->error_type;
+        }
+
+        if (type_is_tbd(&entry->vdecl->ty)) {
+          // inferred type
+          entry->vdecl->ty = *expr_ty;
+
+          // remove constant flag if it was inferred
+          entry->vdecl->ty.flags &= ~TYPE_FLAG_CONSTANT;
+        }
       }
 
-      struct ast_ty *desired_ty = &entry->vdecl->ty;
+      struct ast_ty *desired_ty = lhs_ty;
 
       const char *field_name = NULL;
 
@@ -1192,14 +1198,19 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         // all the checks in this block are probably already handled fine by DEREF, but let's make
         // sure
 
-        struct ast_ty *deref_ty = &entry->vdecl->ty;
+        struct ast_ty *deref_ty = &ast->assign.lhs->deref.target->ty;
         if (ast->assign.lhs->deref.is_ptr) {
           deref_ty = ptr_pointee_type(deref_ty);
+          if (!deref_ty) {
+            fprintf(stderr, "dereference of non-pointer type\n");
+            ++typecheck->errors;
+            return &typecheck->error_type;
+          }
         }
 
         if (deref_ty->ty != AST_TYPE_STRUCT) {
           char tyname[256];
-          type_name_into(&entry->vdecl->ty, tyname, 256);
+          type_name_into(lhs_ty, tyname, 256);
           fprintf(stderr, "in field assignment, lhs %s has non-struct type %s\n", ident, tyname);
           ++typecheck->errors;
           return &typecheck->error_type;

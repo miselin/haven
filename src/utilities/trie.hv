@@ -36,12 +36,12 @@ impure fn i8* char_to_i8ptr(i8 c) {
 }
 
 pub impure fn Trie* haven_new_trie() {
-    let mut heap_root_node = as TrieNode* calloc(1, 2128);
+    let mut heap_root_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
     heap_root_node->id = 0;
     heap_root_node->key = as i8* malloc(256);
     store (heap_root_node->key + 0) as i8 0;
     heap_root_node->value = TrieValue::NoValue;
-    heap_root_node->children = as TrieChild* calloc(256, 16);
+    heap_root_node->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
     iter 0:255 i {
         store (heap_root_node->children + i) TrieChild::NoChild;
     };
@@ -84,13 +84,13 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
             child
         }
         _ => {
-            let mut new_node = as TrieNode* calloc(1, 2128);
+            let mut new_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
             new_node->id = next_id(trie);
             new_node->key = as i8* malloc(256);
             store (new_node->key + 0) (load key);
             store (new_node->key + 1) as i8 0;
             new_node->value = TrieValue::NoValue;
-            new_node->children = as TrieChild* calloc(256, 16);
+            new_node->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
             iter 0:255 i {
                 store (new_node->children + i) TrieChild::NoChild;
             };
@@ -115,7 +115,7 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
 
         if nk > 0 {
             // split the node
-            let mut split_node = as TrieNode* calloc(1, 2128);
+            let mut split_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
             split_node->id = next_id(trie);
 
             split_node->key = as i8* malloc(256);
@@ -123,7 +123,7 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
 
             split_node->value = node->value;
 
-            split_node->children = as TrieChild* calloc(256, 16);
+            split_node->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
             iter 0:255 i {
                 store (split_node->children + i) TrieChild::NoChild;
             };
@@ -158,12 +158,12 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
                 child
             }
             _ => {
-                let mut new_child = as TrieNode* calloc(1, 2128);
+                let mut new_child = as TrieNode* calloc(1, as u64 sizeof TrieNode);
                 new_child->id = next_id(trie);
                 new_child->key = as i8* malloc(256);
                 strcpy(new_child->key, key + ikey);
                 new_child->value = TrieValue::NoValue;
-                new_child->children = as TrieChild* calloc(256, 16);
+                new_child->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
                 iter 0:255 i {
                     store (new_child->children + i) TrieChild::NoChild;
                 };

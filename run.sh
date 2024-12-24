@@ -9,7 +9,7 @@ shift
 COMPILER="./build/bin/haven"
 # COMPILER="./build/bin/haven_bootstrap"
 
-OPT="O2"
+OPT="O0"
 ASAN="-fsanitize=address"
 # ASAN=""
 

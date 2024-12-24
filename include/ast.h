@@ -214,7 +214,7 @@ struct ast_expr_boolean {
 };
 
 struct ast_expr_array_index {
-  struct token ident;
+  struct ast_expr *target;
   struct ast_expr *index;
 };
 

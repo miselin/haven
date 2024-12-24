@@ -1017,15 +1017,6 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       enum token_id next = parser_peek(parser);
       if (next == TOKEN_UNKNOWN) {
         parser_diag(1, parser, NULL, "unexpected lexer token in factor");
-      } else if (next == TOKEN_LBRACKET) {
-        parser_consume_peeked(parser, NULL);
-        result->type = AST_EXPR_TYPE_ARRAY_INDEX;
-        result->array_index.ident = token;
-        result->array_index.index = parse_expression(parser);
-        if (parser_consume(parser, NULL, TOKEN_RBRACKET) < 0) {
-          free(result);
-          return NULL;
-        }
       } else if (next == TOKEN_LPAREN) {
         parser_consume_peeked(parser, NULL);
         result->type = AST_EXPR_TYPE_CALL;
@@ -1058,20 +1049,6 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         result->type = AST_EXPR_TYPE_VARIABLE;
         result->variable.ident = token;
       }
-
-      /*
-      next = parser_peek(parser);
-      if (next == TOKEN_ASSIGN) {
-        parser_consume_peeked(parser, NULL);
-
-        // swap out the result when we encounter an assignment
-        struct ast_expr *lhs = result;
-        result = calloc(1, sizeof(struct ast_expr));
-        result->type = AST_EXPR_TYPE_ASSIGN;
-        result->assign.lhs = lhs;
-        result->assign.expr = parse_expression(parser);
-      }
-      */
     } break;
 
     // sub-expressions
@@ -1219,7 +1196,6 @@ static struct ast_expr *parse_factor(struct parser *parser) {
             last->next = arm;
           }
 
-          // TODO: need a semantic analysis pass to yell if there's no arms!
           result->match.num_arms++;
         }
       }
@@ -1266,24 +1242,51 @@ static struct ast_expr *parse_factor(struct parser *parser) {
   }
 
   // handle postfix operators on factors - deref, index, etc
-  enum token_id next = parser_peek(parser);
-  if (next == TOKEN_PERIOD || next == TOKEN_DASHGT) {
-    parser_consume_peeked(parser, NULL);
-    compiler_log(parser->compiler, LogLevelDebug, "parser",
-                 "found period in factor, need to deref?");
+  while (1) {
+    enum token_id next = parser_peek(parser);
+    if (next == TOKEN_PERIOD || next == TOKEN_DASHGT) {
+      parser_consume_peeked(parser, NULL);
+      compiler_log(parser->compiler, LogLevelDebug, "parser",
+                   "found period in factor, wrapping with deref");
 
-    struct ast_expr *deref = calloc(1, sizeof(struct ast_expr));
-    deref->type = AST_EXPR_TYPE_DEREF;
-    lexer_locate(parser->lexer, &deref->loc);
-    deref->deref.is_ptr = next == TOKEN_DASHGT;
-    deref->deref.target = result;
-    if (parser_consume(parser, &deref->deref.field, TOKEN_IDENTIFIER) < 0) {
-      free(deref);
-      free(result);
-      return NULL;
+      struct ast_expr *deref = calloc(1, sizeof(struct ast_expr));
+      deref->type = AST_EXPR_TYPE_DEREF;
+      lexer_locate(parser->lexer, &deref->loc);
+      deref->deref.is_ptr = next == TOKEN_DASHGT;
+      deref->deref.target = result;
+      if (parser_consume(parser, &deref->deref.field, TOKEN_IDENTIFIER) < 0) {
+        free(deref);
+        free(result);
+        return NULL;
+      }
+
+      result = deref;
+    } else if (next == TOKEN_LBRACKET) {
+      parser_consume_peeked(parser, NULL);
+      compiler_log(parser->compiler, LogLevelDebug, "parser",
+                   "found '[' in factor, wrapping with array index");
+
+      struct ast_expr *new_expr = calloc(1, sizeof(struct ast_expr));
+      new_expr->type = AST_EXPR_TYPE_ARRAY_INDEX;
+      lexer_locate(parser->lexer, &new_expr->loc);
+      new_expr->array_index.target = result;
+      new_expr->array_index.index = parse_expression(parser);
+      if (!new_expr->array_index.index) {
+        free(new_expr);
+        free(result);
+        return NULL;
+      }
+
+      if (parser_consume(parser, NULL, TOKEN_RBRACKET) < 0) {
+        free(new_expr);
+        free(result);
+        return NULL;
+      }
+
+      result = new_expr;
+    } else {
+      break;
     }
-
-    result = deref;
   }
 
   return result;

@@ -196,6 +196,7 @@ void free_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX:
+      free_expr(ast->array_index.target);
       free_expr(ast->array_index.index);
       break;
 

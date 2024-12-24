@@ -67,26 +67,29 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
     }; break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
-      struct scope_entry *entry =
-          scope_lookup(codegen->scope, ast->array_index.ident.value.identv.ident, 1);
-
+      struct ast_ty *lhs_ty = &ast->array_index.target->ty;
       LLVMValueRef index = emit_expr(codegen, ast->array_index.index);
 
-      struct ast_ty *underlying = &entry->vdecl->ty;
-      if (underlying->ty == AST_TYPE_POINTER) {
-        // underlying = ptr_pointee_type(&entry->vdecl->ty);
+      LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+
+      if (lhs_ty->ty == AST_TYPE_POINTER) {
+        LLVMValueRef lhs = emit_expr(codegen, ast->array_index.target);
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen", "array index on pointer type");
+        return LLVMBuildGEP2(codegen->llvm_builder, result_ty, lhs, &index, 1, "ptr.index.lvalue");
+      } else if (lhs_ty->ty == AST_TYPE_FVEC) {
+        // TODO
+      } else if (lhs_ty->ty == AST_TYPE_MATRIX) {
+        // TODO
+      } else if (lhs_ty->ty == AST_TYPE_ARRAY) {
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen", "array index on array");
+
+        LLVMValueRef lhs = emit_lvalue(codegen, ast->array_index.target);
+        return LLVMBuildGEP2(codegen->llvm_builder, result_ty, lhs, &index, 1,
+                             "array.index.lvalue");
+      } else {
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen",
+                     "array index unimplemented for type %d", lhs_ty->ty);
       }
-
-      LLVMTypeRef underlying_ty = ast_ty_to_llvm_ty(codegen, underlying);
-
-      LLVMValueRef src = entry->ref;
-      if (underlying->ty == AST_TYPE_POINTER) {
-        return LLVMBuildGEP2(codegen->llvm_builder, underlying_ty, src, &index, 1, "ptr.index.gep");
-      }
-
-      LLVMValueRef gep[] = {LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
-                            index};
-      return LLVMBuildGEP2(codegen->llvm_builder, underlying_ty, src, gep, 2, "");
     } break;
 
     default:

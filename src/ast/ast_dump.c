@@ -365,10 +365,11 @@ void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX:
-      INDENTED(indent, "ArrayIndex %s -> ", ast->array_index.ident.value.identv.ident);
+      INDENTED(indent, "ArrayIndex -> ");
       dump_ty(&ast->ty);
       fprintf(stderr, "\n");
 
+      dump_expr(ast->array_index.target, indent + 1);
       dump_expr(ast->array_index.index, indent + 1);
       break;
 

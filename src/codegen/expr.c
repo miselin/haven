@@ -430,39 +430,10 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
-      struct scope_entry *entry =
-          scope_lookup(codegen->scope, ast->array_index.ident.value.identv.ident, 1);
+      LLVMValueRef val = emit_lvalue(codegen, ast);
 
-      LLVMTypeRef target_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
-      LLVMValueRef index = emit_expr(codegen, ast->array_index.index);
-      LLVMValueRef gep[] = {LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
-                            index};
-
-      struct ast_ty *underlying = &entry->vdecl->ty;
-      if (underlying->ty == AST_TYPE_POINTER) {
-        // underlying = ptr_pointee_type(&entry->vdecl->ty);
-      }
-
-      LLVMTypeRef underlying_ty = ast_ty_to_llvm_ty(codegen, underlying);
-
-      LLVMValueRef src = entry->ref;
-      if (entry->vdecl->ty.ty == AST_TYPE_POINTER) {
-        // deref the pointer first
-        // src = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, entry->ref, "load");
-      }
-
-      if (underlying->ty == AST_TYPE_POINTER) {
-        // it's still a pointer, index into it
-
-        // indexing into a pointer
-        LLVMValueRef retrieve =
-            LLVMBuildGEP2(codegen->llvm_builder, underlying_ty, src, &gep[1], 1, "ptr.index.gep");
-        return LLVMBuildLoad2(codegen->llvm_builder, underlying_ty, retrieve, "ptr.index.load");
-      }
-
-      // it's not a pointer anymore, GEP it
-      LLVMValueRef retrieve = LLVMBuildGEP2(codegen->llvm_builder, underlying_ty, src, gep, 2, "");
-      return LLVMBuildLoad2(codegen->llvm_builder, target_ty, retrieve, "load");
+      return LLVMBuildLoad2(codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), val,
+                            "array.index.load");
     } break;
 
     case AST_EXPR_TYPE_MATCH: {

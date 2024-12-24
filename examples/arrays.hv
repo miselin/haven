@@ -1,0 +1,20 @@
+
+pub impure fn i8* malloc(i32 size);
+pub impure fn i32 free(i8 *ptr);
+pub impure fn i32 printf(str fmt, *);
+pub impure fn i8* strcpy(i8 *dest, i8 *src);
+
+pub impure fn i32 main() {
+    let mut s = as i8* malloc(256);
+    strcpy(s, "hello, World!");
+
+    printf("before: %s\n", s);
+
+    s[0] = 'H';
+
+    printf("result: %s\n", s);
+
+    free(s);
+
+    0
+}

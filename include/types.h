@@ -245,4 +245,9 @@ struct ast_ty ptr_type(struct ast_ty);
  */
 struct ast_ty *ptr_pointee_type(struct ast_ty *);
 
+/**
+ * @brief Can the type be indexed?
+ */
+int type_is_indexable(struct ast_ty *);
+
 #endif
