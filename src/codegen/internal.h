@@ -80,6 +80,7 @@ struct codegen {
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast);
+LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast);
 LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMValueRef into);
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at);

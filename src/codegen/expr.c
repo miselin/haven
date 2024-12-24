@@ -333,21 +333,15 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_ASSIGN: {
-      // TODO: evaluate LHS for things like arrays etc
-      const char *ident = ast_expr_ident(ast->assign.lhs);
-      LLVMValueRef expr = emit_expr(codegen, ast->assign.expr);
-
-      struct scope_entry *entry = scope_lookup(codegen->scope, ident, 1);
-
-      if (entry->vdecl->flags & DECL_FLAG_TEMPORARY) {
-        // swap the reference to this expression from now on
-        entry->ref = expr;
-        return expr;
-      } else {
-        emit_store(codegen, &ast->assign.expr->ty, expr, entry->ref);
+      LLVMValueRef lhs = emit_lvalue(codegen, ast->assign.lhs);
+      if (!lhs) {
+        return NULL;
       }
 
-      return expr;
+      LLVMValueRef expr = emit_expr(codegen, ast->assign.expr);
+      emit_store(codegen, &ast->ty, expr, lhs);
+
+      return lhs;
     } break;
 
     case AST_EXPR_TYPE_REF: {
