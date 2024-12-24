@@ -33,13 +33,12 @@ fn fvec2 apply(fvec2 v, AffineTransform *xform) {
 }
 
 fn fvec4 build_cdf(fvec4 probabilities) {
-    let x = probabilities.x;
-    let y = x + probabilities.y;
-    let z = y + probabilities.z;
-    let w = z + probabilities.w;
-
-    // Parser needs to be reworked to allow expressions in vec inits
-    <x, y, z, w>
+    <
+        probabilities.x,
+        (probabilities.x + probabilities.y),
+        (probabilities.x + probabilities.y + probabilities.z),
+        (probabilities.x + probabilities.y + probabilities.z + probabilities.w)
+    >
 }
 
 impure fn i32 cdf_random(fvec4 cdf) {
