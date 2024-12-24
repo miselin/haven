@@ -80,6 +80,15 @@ static int binary_op_prec(int token);
 // Add preamble definitions to the AST - builtin types, type aliases, and functions.
 static int parser_add_preamble(struct parser *parser);
 
+// Calling tokenstream_mark without a token peeked will rewind one more token than expected
+// This is by design, but confusing. Use parser_mark to ensure there's always a token peeked.
+static void parser_mark(struct parser *parser) {
+  if (parser_peek(parser) == TOKEN_UNKNOWN) {
+    // no-op to avoid warnings
+  }
+  tokenstream_mark(parser->stream);
+}
+
 // Rewind the parser and clear out the lookahead (peek) token so the next peek uses the rewound
 // location.
 static void parser_rewind(struct parser *parser) {
@@ -622,7 +631,7 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
 
       // seek ahead a bit to see if it's typed or not
       if (parser_peek(parser) == TOKEN_IDENTIFIER) {
-        tokenstream_mark(parser->stream);
+        parser_mark(parser);
         parser_consume_peeked(parser, NULL);
         if (parser_peek(parser) == TOKEN_ASSIGN) {
           is_typed = 0;
@@ -680,8 +689,7 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
     case TOKEN_KW_RETURN:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_RETURN;
-      (void)parser_peek(parser);  // hack for tokenstream
-      tokenstream_mark(parser->stream);
+      parser_mark(parser);
       parser->mute_diags = 1;
       result->expr = parse_expression(parser);
       parser->mute_diags = 0;
@@ -1122,7 +1130,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         struct ast_expr_match_arm *arm = calloc(1, sizeof(struct ast_expr_match_arm));
         int is_otherwise = 0;
 
-        tokenstream_mark(parser->stream);
+        parser_mark(parser);
         parser->mute_diags = 1;
         arm->pattern = parser_parse_pattern_match(parser);
         parser->mute_diags = 0;
@@ -1187,10 +1195,8 @@ static struct ast_expr *parse_factor(struct parser *parser) {
 
       result->type = AST_EXPR_TYPE_SIZEOF;
 
-      (void)parser_peek(parser);  // needed to advance the stream
-
       parser->mute_diags = 1;
-      tokenstream_mark(parser->stream);
+      parser_mark(parser);
       result->sizeof_expr.ty = type_void();
       result->sizeof_expr.expr = parse_expression(parser);
       if (!result->sizeof_expr.expr) {

@@ -182,6 +182,7 @@ int parse_simple_type(CXType type, struct ast_ty *into) {
       into->ty = AST_TYPE_FUNCTION;
 
       struct ast_fdecl fdecl;
+      memset(&fdecl, 0, sizeof(struct ast_fdecl));
       analyze_function_type(type, &fdecl);
 
       into->function.retty = calloc(1, sizeof(struct ast_ty));

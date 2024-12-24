@@ -86,7 +86,7 @@ static void dump_vdecl(struct ast_vdecl *ast, int indent) {
 
 static void dump_tydecl(struct ast_tydecl *ast, int indent) {
   INDENTED(indent, "TypeDecl %s\n", ast->ident.value.identv.ident);
-  INDENTED(indent + 1, "");
+  print_indent(indent + 1);
   dump_ty(&ast->ty);
   fprintf(stderr, "\n");
 }
