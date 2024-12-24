@@ -10,7 +10,7 @@
 #include "utility.h"
 
 LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
-  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit_if %p\n", (void *)ast);
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit_if %p", (void *)ast);
 
   LLVMValueRef cond = emit_expr(codegen, ast->if_expr.cond);
   LLVMTypeKind kind = LLVMGetTypeKind(LLVMTypeOf(cond));

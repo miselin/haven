@@ -488,11 +488,12 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLV
       int rcstart = extract_constant_int(ast->iter.range.start, &istart);
       int rcend = extract_constant_int(ast->iter.range.end, &iend);
 
-      if (rcstart == 0 && rcend == 0) {
+      // ok llvm is going a little far on unrolling some loops... let's not do this
+      if (0 && rcstart == 0 && rcend == 0) {
         // range is constant, we can annotate an unroll count
         int64_t iters = ((iend - istart) / iter_step) + 1;
 
-        fprintf(stderr, "loop has %ld iterations\n", iters);
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen", "loop has %ld iterations", iters);
 
         LLVMMetadataRef count_md = LLVMValueAsMetadata(
             LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context), (uint64_t)iters, 1));

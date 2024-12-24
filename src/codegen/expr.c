@@ -265,30 +265,13 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     case AST_EXPR_TYPE_DEREF: {
       char name[512];
 
-      LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
-      LLVMValueRef target = emit_expr(codegen, ast->deref.target);
-
       struct ast_ty *target_ty = &ast->deref.target->ty;
       if (target_ty->ty == AST_TYPE_POINTER) {
         target_ty = ptr_pointee_type(target_ty);
       }
 
-      LLVMTypeRef expr_ty = ast_ty_to_llvm_ty(codegen, target_ty);
-
-      if (target_ty->ty == AST_TYPE_MATRIX) {
-        // matrix -> gep -> load
-        LLVMValueRef indicies[2] = {
-            LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
-            LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context),
-                         ast->deref.field_idx * ast->ty.matrix.rows, 0),
-        };
-
-        LLVMValueRef row =
-            LLVMBuildGEP2(codegen->llvm_builder, expr_ty, target, indicies, 2, "matrix.deref.row");
-        return LLVMBuildLoad2(codegen->llvm_builder, result_ty, row, "matrix.deref.load");
-      }
-
       // vector -> extractelement
+      LLVMValueRef target = emit_expr(codegen, ast->deref.target);
       if (target_ty->ty == AST_TYPE_FVEC) {
         snprintf(name, 512, "deref.vec.%zd", ast->deref.field_idx);
 
@@ -297,23 +280,12 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         return LLVMBuildExtractElement(codegen->llvm_builder, target, index, name);
       }
 
-      // union -> read from first field, direct pointer access
-      if (target_ty->ty == AST_TYPE_STRUCT && target_ty->structty.is_union) {
-        snprintf(name, 512, "deref.union.%s", ast->deref.field.value.identv.ident);
-        return LLVMBuildLoad2(codegen->llvm_builder, result_ty, target, name);
-      }
-
-      // struct -> getelementptr
-      LLVMValueRef gep = LLVMBuildStructGEP2(codegen->llvm_builder, expr_ty, target,
-                                             (unsigned int)ast->deref.field_idx, "deref.gep");
-
+      LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+      LLVMValueRef lvalue = emit_lvalue(codegen, ast);
       if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
-        return gep;
+        return lvalue;
       }
-
-      snprintf(name, 512, "deref.struct.%s", ast->deref.field.value.identv.ident);
-      LLVMValueRef load = LLVMBuildLoad2(codegen->llvm_builder, result_ty, gep, name);
-      return load;
+      return LLVMBuildLoad2(codegen->llvm_builder, result_ty, lvalue, "deref");
     }; break;
 
     case AST_EXPR_TYPE_VOID:

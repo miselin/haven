@@ -25,6 +25,8 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
+      char name[512];
+
       LLVMValueRef target = emit_expr(codegen, ast->deref.target);
 
       struct ast_ty *target_ty = &ast->deref.target->ty;
@@ -57,13 +59,14 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
       }
 
       // union -> read from first field, direct pointer access
-      if (target_ty->structty.is_union) {
+      if (target_ty->ty == AST_TYPE_STRUCT && target_ty->structty.is_union) {
         return target;
       }
 
       // struct -> GEP the field
+      snprintf(name, 512, "deref.gep.%s", ast->deref.field.value.identv.ident);
       return LLVMBuildStructGEP2(codegen->llvm_builder, expr_ty, target,
-                                 (unsigned int)ast->deref.field_idx, "deref.gep");
+                                 (unsigned int)ast->deref.field_idx, name);
     }; break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
@@ -90,6 +93,12 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
         compiler_log(codegen->compiler, LogLevelDebug, "codegen",
                      "array index unimplemented for type %d", lhs_ty->ty);
       }
+    } break;
+
+    case AST_EXPR_TYPE_CAST: {
+      LLVMValueRef expr = emit_lvalue(codegen, ast->cast.expr);
+      LLVMValueRef result = cast(codegen, expr, &ast->cast.expr->ty, &ast->ty);
+      return result;
     } break;
 
     default:
