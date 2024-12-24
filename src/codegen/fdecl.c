@@ -8,6 +8,7 @@
 
 #include "ast.h"
 #include "codegen.h"
+#include "compiler.h"
 #include "internal.h"
 #include "kv.h"
 #include "lex.h"
@@ -16,7 +17,8 @@
 #include "utility.h"
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at) {
-  // fprintf(stderr, "emit fdecl %s\n", fdecl->ident.value.identv.ident);
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit fdecl %s",
+               fdecl->ident.value.identv.ident);
 
   if (fdecl->retty.specialization_of) {
     // we need to create the return type as a new global

@@ -76,3 +76,43 @@ void present_diags(struct compiler *compiler, struct parser *parser) {
     diag = parser_pop_diag(parser);
   }
 }
+
+int compiler_log(struct compiler *compiler, enum LogLevel level, const char *subsys,
+                 const char *fmt, ...) {
+  if ((level == LogLevelDebug || level == LogLevelInfo) && !(compiler->flags[0] & FLAG_VERBOSE)) {
+    return 0;
+  }
+
+  const char *prefix = "";
+  enum Color level_color = White;
+  switch (level) {
+    case LogLevelError:
+      level_color = Red;
+      prefix = "E";
+      break;
+    case LogLevelWarning:
+      level_color = Yellow;
+      prefix = "W";
+      break;
+    case LogLevelInfo:
+      level_color = White;
+      prefix = "I";
+      break;
+    case LogLevelDebug:
+      level_color = Blue;
+      prefix = "D";
+      break;
+  }
+
+  va_list ap;
+  va_start(ap, fmt);
+
+  color(compiler, level_color, Bold);
+  int n = fprintf(stderr, "%s: %s: ", prefix, subsys);
+  n += vfprintf(stderr, fmt, ap);
+  n += fprintf(stderr, "\n");
+  color(compiler, Reset, None);
+  va_end(ap);
+
+  return n;
+}

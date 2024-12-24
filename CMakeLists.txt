@@ -45,6 +45,10 @@ option(OTHER_MALLOC "use jemalloc or tcmalloc if present" ON)
 # Enable LTO?
 option(LTO "enable link-time optimization" OFF)
 
+# Flags for compiling Haven code
+set(HAVEN_BOOTSTRAP_COMPILE_FLAGS "-I /usr/include --O2" CACHE STRING "flags to use when compiling Haven code with the bootstrap compiler")
+set(HAVEN_COMPILE_FLAGS "-I /usr/include --O2" CACHE STRING "flags to use when compiling Haven code with the main compiler")
+
 include(build-etc/compiler.cmake)
 
 # Use jemalloc?

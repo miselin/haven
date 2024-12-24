@@ -1,9 +1,10 @@
 
 macro(add_bootstrap_haven_library name source)
+    separate_arguments(HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST NATIVE_COMMAND ${HAVEN_BOOTSTRAP_COMPILE_FLAGS})
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven_bootstrap -I /usr/include --debug-ast --debug-ir --O0 ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_bootstrap ${ARGN}
     )
@@ -14,10 +15,11 @@ macro(add_bootstrap_haven_library name source)
 endmacro()
 
 macro(add_haven_library name source)
+    separate_arguments(HAVEN_COMPILE_FLAGS_LIST NATIVE_COMMAND ${HAVEN_COMPILE_FLAGS})
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven -I /usr/include --O2 ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven ${ARGN}
     )

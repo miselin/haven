@@ -12,6 +12,8 @@ enum OutputFormat { OutputIR, OutputASM, OutputBitcode, OutputObject };
 
 enum RelocationsType { RelocsPIC, RelocsStatic };
 
+enum LogLevel { LogLevelError, LogLevelWarning, LogLevelInfo, LogLevelDebug };
+
 enum DiagLevel { DiagError, DiagWarning, DiagNote, DiagDebug };
 
 enum ImportType { ImportTypeHaven, ImportTypeC };
@@ -68,6 +70,11 @@ __attribute__((__format__(__printf__, 3, 0))) int compiler_vdiag(struct compiler
                                                                  const char *fmt, va_list args);
 __attribute__((format(printf, 3, 4))) int compiler_diag(struct compiler *compiler,
                                                         enum DiagLevel level, const char *fmt, ...);
+
+__attribute__((__format__(__printf__, 4, 5))) int compiler_log(struct compiler *compiler,
+                                                               enum LogLevel level,
+                                                               const char *subsys, const char *fmt,
+                                                               ...);
 
 #ifdef __cplusplus
 }
