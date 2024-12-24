@@ -408,6 +408,20 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr(ast->union_init.inner, indent + 1);
       break;
 
+    case AST_EXPR_TYPE_SIZEOF:
+      INDENTED(indent, "Sizeof -> ");
+      dump_ty(&ast->ty);
+      fprintf(stderr, "\n");
+
+      if (ast->sizeof_expr.expr) {
+        dump_expr(ast->sizeof_expr.expr, indent + 1);
+      } else {
+        INDENTED(indent + 1, "Type ");
+        dump_ty(&ast->sizeof_expr.ty);
+        fprintf(stderr, "\n");
+      }
+      break;
+
     default:
       INDENTED(indent, "<unknown-expr %d>\n", ast->type);
   }

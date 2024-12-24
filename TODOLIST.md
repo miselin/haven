@@ -15,5 +15,5 @@
 - [ ] defers need to capture variables in scope
 - [ ] match expressions should not require an otherwise arm if they fully exhaust all possible enum options
 - [ ] make field assignment work on pointers (maybe just use a different syntax like C?)
-- [ ] sizeof
+- [x] sizeof
 - [ ] expose matrix transpose somehow (more generally - how to expose intrinsics effectively?)

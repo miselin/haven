@@ -1173,6 +1173,32 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       result->type = AST_EXPR_TYPE_NIL;
       break;
 
+    case TOKEN_KW_SIZEOF: {
+      parser_consume_peeked(parser, NULL);
+
+      result->type = AST_EXPR_TYPE_SIZEOF;
+
+      (void)parser_peek(parser);  // needed to advance the stream
+
+      parser->mute_diags = 1;
+      tokenstream_mark(parser->stream);
+      result->sizeof_expr.ty = type_void();
+      result->sizeof_expr.expr = parse_expression(parser);
+      if (!result->sizeof_expr.expr) {
+        parser_rewind(parser);
+        parser->mute_diags = 0;
+        result->sizeof_expr.ty = parse_type(parser);
+        if (type_is_error(&result->sizeof_expr.ty)) {
+          parser_diag(1, parser, &parser->peek, "expected expression or type after sizeof");
+          free(result);
+          return NULL;
+        }
+      } else {
+        parser_commit(parser);
+      }
+      parser->mute_diags = 0;
+    } break;
+
     default:
       parser_diag(1, parser, &parser->peek, "unknown token %s when parsing factor",
                   token_id_to_string(peek));

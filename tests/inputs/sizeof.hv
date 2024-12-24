@@ -1,0 +1,5 @@
+
+pub fn i32 sut() {
+    let i32 x = 5;
+    (sizeof i32) + (sizeof x)
+}

@@ -54,6 +54,7 @@
 #define AST_EXPR_TYPE_PATTERN_MATCH 21
 #define AST_EXPR_TYPE_ENUM_INIT 22
 #define AST_EXPR_TYPE_UNION_INIT 23
+#define AST_EXPR_TYPE_SIZEOF 24
 
 #define AST_BINARY_OP_ADD 1
 #define AST_BINARY_OP_SUB 2
@@ -246,6 +247,11 @@ struct ast_expr_union_init {
   struct ast_expr *inner;
 };
 
+struct ast_expr_sizeof {
+  struct ast_ty ty;
+  struct ast_expr *expr;
+};
+
 struct ast_expr {
   int type;
   struct ast_ty ty;
@@ -271,6 +277,7 @@ struct ast_expr {
     struct ast_expr_pattern_match pattern_match;
     struct ast_expr_enum_init enum_init;
     struct ast_expr_union_init union_init;
+    struct ast_expr_sizeof sizeof_expr;
   };
 };
 

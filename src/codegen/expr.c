@@ -1,3 +1,4 @@
+#include <llvm-c-18/llvm-c/Target.h>
 #include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
@@ -561,6 +562,16 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       emit_store(codegen, &ast->union_init.inner->ty, inner, result);
       return result;
+    } break;
+
+    case AST_EXPR_TYPE_SIZEOF: {
+      LLVMTypeRef result_ty;
+      if (ast->sizeof_expr.expr) {
+        result_ty = ast_ty_to_llvm_ty(codegen, &ast->sizeof_expr.expr->ty);
+      } else {
+        result_ty = ast_ty_to_llvm_ty(codegen, &ast->sizeof_expr.ty);
+      }
+      return const_i32(codegen, (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout, result_ty));
     } break;
 
     default:

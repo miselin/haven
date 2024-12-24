@@ -450,6 +450,12 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       }
     } break;
 
+    case AST_EXPR_TYPE_SIZEOF: {
+      if (ast->sizeof_expr.expr) {
+        return check_semantic_expr(semantic, ast->sizeof_expr.expr);
+      }
+    } break;
+
     default:
       semantic_diag_at(semantic, DiagError, &ast->loc, "unhandled expression type %d", ast->type);
       return -1;

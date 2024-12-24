@@ -225,6 +225,14 @@ void free_expr(struct ast_expr *ast) {
       free_expr(ast->union_init.inner);
       break;
 
+    case AST_EXPR_TYPE_SIZEOF:
+      if (ast->sizeof_expr.expr) {
+        free_expr(ast->sizeof_expr.expr);
+      } else {
+        free_ty(&ast->sizeof_expr.ty, 0);
+      }
+      break;
+
     default:
       fprintf(stderr, "unhandled free for expr type %d\n", ast->type);
   }

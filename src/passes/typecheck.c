@@ -1478,6 +1478,23 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       typecheck_diag_expr(typecheck, ast, "typecheck: pattern match without a match expression\n");
     } break;
 
+    case AST_EXPR_TYPE_SIZEOF: {
+      if (ast->sizeof_expr.expr) {
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->sizeof_expr.expr);
+        if (!expr_ty) {
+          return NULL;
+        }
+      } else {
+        ast->sizeof_expr.ty = resolve_type(typecheck, &ast->sizeof_expr.ty);
+      }
+
+      ast->ty.ty = AST_TYPE_INTEGER;
+      ast->ty.integer.is_signed = 1;
+      ast->ty.integer.width = 32;
+      ast->ty = resolve_type(typecheck, &ast->ty);
+      return &ast->ty;
+    } break;
+
     default:
       typecheck_diag_expr(typecheck, ast, "typecheck: unhandled expression type %d\n", ast->type);
   }
