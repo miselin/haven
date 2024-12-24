@@ -19,8 +19,7 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMBasicBlockRef then_block = LLVMCreateBasicBlockInContext(context, "if.expr.then");
   LLVMBasicBlockRef end_block = LLVMCreateBasicBlockInContext(context, "if.expr.end");
-  LLVMBasicBlockRef else_block =
-      ast->if_expr.has_else ? LLVMCreateBasicBlockInContext(context, "if.expr.else") : end_block;
+  LLVMBasicBlockRef else_block = LLVMCreateBasicBlockInContext(context, "if.expr.else");
 
   LLVMBuildCondBr(codegen->llvm_builder, cond, then_block, else_block);
 
@@ -59,7 +58,7 @@ void emit_void_if(struct codegen *codegen, struct ast_expr *ast) {
   LLVMBasicBlockRef else_block =
       ast->if_expr.has_else ? LLVMCreateBasicBlockInContext(context, "if.stmt.else") : end_block;
 
-  LLVMBuildCondBr(codegen->llvm_builder, cond, then_block, end_block);
+  LLVMBuildCondBr(codegen->llvm_builder, cond, then_block, else_block);
 
   LLVMAppendExistingBasicBlock(codegen->current_function, then_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, then_block);

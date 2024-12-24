@@ -15,6 +15,8 @@
 #include "types.h"
 #include "utility.h"
 
+locale_t x;
+
 int typecheck_verify_ast(struct ast_program *ast);
 static int typecheck_verify_toplevel(struct ast_toplevel *ast);
 static int typecheck_verify_block(struct ast_block *ast);
@@ -148,7 +150,9 @@ static int typecheck_verify_stmt(struct ast_stmt *ast) {
     } break;
 
     case AST_STMT_TYPE_RETURN: {
-      return typecheck_verify_expr(ast->expr);
+      if (ast->expr) {
+        return typecheck_verify_expr(ast->expr);
+      }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
@@ -379,6 +383,19 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
           fprintf(stderr,
                   "tyverify: enum field %s inner type does not match: wanted %s but got %s\n",
                   field->name, fieldstr, innerstr);
+          return -1;
+        }
+      }
+    } break;
+
+    case AST_EXPR_TYPE_SIZEOF: {
+      if (ast->sizeof_expr.expr) {
+        if (typecheck_verify_expr(ast->sizeof_expr.expr) < 0) {
+          return -1;
+        }
+      } else {
+        if (is_bad_type(&ast->sizeof_expr.ty)) {
+          fprintf(stderr, "tyverify: sizeof expression has unresolved type\n");
           return -1;
         }
       }

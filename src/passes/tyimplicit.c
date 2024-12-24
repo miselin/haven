@@ -157,7 +157,9 @@ static int typecheck_implicit_stmt(struct ast_stmt *ast) {
     } break;
 
     case AST_STMT_TYPE_RETURN: {
-      return typecheck_implicit_expr(ast->expr);
+      if (ast->expr) {
+        return typecheck_implicit_expr(ast->expr);
+      }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
@@ -433,6 +435,12 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
         return total;
       }
       break;
+
+    case AST_EXPR_TYPE_SIZEOF: {
+      if (ast->sizeof_expr.expr) {
+        return typecheck_implicit_expr(ast->sizeof_expr.expr);
+      }
+    } break;
 
     default:
       fprintf(stderr, "tyimplicit: unhandled expression type %d\n", ast->type);

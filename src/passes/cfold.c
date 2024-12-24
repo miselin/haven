@@ -87,7 +87,9 @@ static void cfold_stmt(struct ast_stmt *ast) {
       break;
 
     case AST_STMT_TYPE_RETURN:
-      ast->expr = cfold_expr(ast->expr);
+      if (ast->expr) {
+        ast->expr = cfold_expr(ast->expr);
+      }
       break;
 
     case AST_STMT_TYPE_DEFER:

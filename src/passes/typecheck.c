@@ -317,9 +317,14 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       }
     }
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    struct alias_entry *entry = calloc(1, sizeof(struct alias_entry));
+    struct alias_entry *entry =
+        NULL;  // kv_lookup(typecheck->aliases, ast->tydecl.ident.value.identv.ident);
+    if (!entry) {
+      entry = calloc(1, sizeof(struct alias_entry));
+      kv_insert(typecheck->aliases, ast->tydecl.ident.value.identv.ident, entry);
+    }
+
     entry->ty = ast->tydecl.ty;
-    kv_insert(typecheck->aliases, ast->tydecl.ident.value.identv.ident, entry);
 
     if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
       typecheck_struct_decl(typecheck, &ast->tydecl.ty);
@@ -528,7 +533,11 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
 
     case AST_STMT_TYPE_RETURN: {
       // TODO: make sure this expr type matches the function's return type
-      return typecheck_expr(typecheck, ast->expr);
+      if (ast->expr) {
+        return typecheck_expr(typecheck, ast->expr);
+      } else {
+        return &typecheck->void_type;
+      }
     } break;
 
     case AST_STMT_TYPE_DEFER: {

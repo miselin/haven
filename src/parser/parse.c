@@ -680,10 +680,16 @@ static struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) 
     case TOKEN_KW_RETURN:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_RETURN;
+      (void)parser_peek(parser);  // hack for tokenstream
+      tokenstream_mark(parser->stream);
+      parser->mute_diags = 1;
       result->expr = parse_expression(parser);
+      parser->mute_diags = 0;
       if (!result->expr) {
-        free(result);
-        return NULL;
+        // probably a void return
+        parser_rewind(parser);
+      } else {
+        parser_commit(parser);
       }
       break;
 
@@ -788,6 +794,9 @@ static struct ast_expr *parse_expression(struct parser *parser) {
 
 static struct ast_expr *parse_expression_inner(struct parser *parser, int min_prec) {
   struct ast_expr *left = parse_factor(parser);
+  if (!left) {
+    return NULL;
+  }
 
   while (1) {
     enum token_id peek = parser_peek(parser);
@@ -1202,6 +1211,8 @@ static struct ast_expr *parse_factor(struct parser *parser) {
     default:
       parser_diag(1, parser, &parser->peek, "unknown token %s when parsing factor",
                   token_id_to_string(peek));
+      free(result);
+      return NULL;
   }
 
   return result;

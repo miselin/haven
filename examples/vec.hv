@@ -18,7 +18,7 @@ fn fvec3 vcross(fvec3 a, fvec3 b) {
     <x, y, z>
 }
 
-fn fvec3 vnorm(fvec3 v) {
+impure fn fvec3 vnorm(fvec3 v) {
     let denom = 1.0 / sqrtf(vdot(v, v));
     v * denom
 }

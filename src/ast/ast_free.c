@@ -73,7 +73,9 @@ void free_stmt(struct ast_stmt *ast) {
       break;
 
     case AST_STMT_TYPE_RETURN:
-      free_expr(ast->expr);
+      if (ast->expr) {
+        free_expr(ast->expr);
+      }
       break;
 
     case AST_STMT_TYPE_DEFER:

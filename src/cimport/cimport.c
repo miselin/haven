@@ -302,6 +302,8 @@ static void analyze_function_type(CXType type, struct ast_fdecl *fdecl) {
   // Get the return type
   CXType return_type = clang_getResultType(type);
 
+  fdecl->flags |= DECL_FLAG_EXTERN | DECL_FLAG_IMPURE;
+
   fdecl->retty = parse_type(return_type);
 
   // Get the number of arguments

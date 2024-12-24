@@ -6,7 +6,7 @@ set_target_properties(haven_bootstrap PROPERTIES LINKER_LANGUAGE CXX)
 
 # final compiler build including Haven code
 add_executable(haven main.c)
-target_link_libraries(haven haven_compiler_options compiler cimport_c)
+target_link_libraries(haven haven_compiler_options compiler cimport_c -Wl,--whole-archive utilities_haven -Wl,--no-whole-archive)
 
 # Use C compiler to build, but C++ compiler for linking due to LLVM
 set_target_properties(haven PROPERTIES LINKER_LANGUAGE CXX)

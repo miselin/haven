@@ -444,7 +444,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       struct ast_ty *underlying = &entry->vdecl->ty;
       if (underlying->ty == AST_TYPE_POINTER) {
-        underlying = ptr_pointee_type(&entry->vdecl->ty);
+        // underlying = ptr_pointee_type(&entry->vdecl->ty);
       }
 
       LLVMTypeRef underlying_ty = ast_ty_to_llvm_ty(codegen, underlying);
@@ -452,7 +452,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMValueRef src = entry->ref;
       if (entry->vdecl->ty.ty == AST_TYPE_POINTER) {
         // deref the pointer first
-        src = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, entry->ref, "load");
+        // src = LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, entry->ref, "load");
       }
 
       if (underlying->ty == AST_TYPE_POINTER) {

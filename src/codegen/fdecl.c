@@ -16,6 +16,8 @@
 #include "utility.h"
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at) {
+  // fprintf(stderr, "emit fdecl %s\n", fdecl->ident.value.identv.ident);
+
   if (fdecl->retty.specialization_of) {
     // we need to create the return type as a new global
     emit_enum_type(codegen, &fdecl->retty);

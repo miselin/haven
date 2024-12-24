@@ -135,10 +135,14 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
       break;
 
     case AST_STMT_TYPE_RETURN:
-      INDENTED(indent, "Return -> ");
-      dump_ty(&ast->expr->ty);
-      fprintf(stderr, "\n");
-      dump_expr(ast->expr, indent + 1);
+      if (ast->expr) {
+        INDENTED(indent, "Return -> ");
+        dump_ty(&ast->expr->ty);
+        fprintf(stderr, "\n");
+        dump_expr(ast->expr, indent + 1);
+      } else {
+        INDENTED(indent, "Return\n");
+      }
       break;
 
     case AST_STMT_TYPE_DEFER: {
@@ -299,9 +303,9 @@ void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_IF:
-      INDENTED(indent, "If -> ");
+      INDENTED(indent, "If [has_else=%d] -> ", ast->if_expr.has_else);
       dump_ty(&ast->ty);
-      fprintf(stderr, "\n");
+      fprintf(stderr, " \n");
 
       dump_expr(ast->if_expr.cond, indent + 1);
       dump_block(&ast->if_expr.then_block, indent + 1);

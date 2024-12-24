@@ -17,3 +17,4 @@
 - [ ] make field assignment work on pointers (maybe just use a different syntax like C?)
 - [x] sizeof
 - [ ] expose matrix transpose somehow (more generally - how to expose intrinsics effectively?)
+- [ ] typecheck/codegen depend on a bug in KV where inserts of the same key don't overwrite the old value (and the new value is inaccessible)

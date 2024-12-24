@@ -517,8 +517,10 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLV
     } break;
 
     case AST_STMT_TYPE_RETURN: {
-      LLVMValueRef ret = emit_expr(codegen, ast->expr);
-      emit_store(codegen, &ast->expr->ty, ret, codegen->retval);
+      if (ast->expr) {
+        LLVMValueRef ret = emit_expr(codegen, ast->expr);
+        emit_store(codegen, &ast->expr->ty, ret, codegen->retval);
+      }
       LLVMBuildBr(codegen->llvm_builder, codegen->return_block);
       LLVMBasicBlockRef new_block = LLVMAppendBasicBlockInContext(
           codegen->llvm_context, codegen->current_function, "after.return");

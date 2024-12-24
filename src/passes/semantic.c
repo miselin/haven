@@ -208,7 +208,9 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
     } break;
 
     case AST_STMT_TYPE_RETURN: {
-      return check_semantic_expr(semantic, ast->expr);
+      if (ast->expr) {
+        return check_semantic_expr(semantic, ast->expr);
+      }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
