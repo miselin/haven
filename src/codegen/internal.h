@@ -92,11 +92,7 @@ LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *n
 
 LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty);
 
-// emit the expression variant of if (i.e. returns a value) - requires else
 LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast);
-
-// emit the statement variant of if (i.e. does not return a value) - does not require else
-void emit_void_if(struct codegen *codegen, struct ast_expr *ast);
 
 LLVMValueRef emit_logical_expr(struct codegen *codegen, struct ast_expr_binary *binary,
                                struct ast_ty *ty);

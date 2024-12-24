@@ -162,6 +162,16 @@ void free_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_IF:
       free_expr(ast->if_expr.cond);
       free_block(&ast->if_expr.then_block, 0);
+      if (ast->if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+        while (elseif) {
+          struct ast_expr_elseif *next = elseif->next;
+          free_expr(elseif->cond);
+          free_block(&elseif->block, 0);
+          free(elseif);
+          elseif = next;
+        }
+      }
       if (ast->if_expr.has_else) {
         free_block(&ast->if_expr.else_block, 0);
       }

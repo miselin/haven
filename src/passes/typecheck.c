@@ -1083,6 +1083,35 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return NULL;
       }
 
+      if (ast->if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+        while (elseif) {
+          struct ast_ty *cond_ty = typecheck_expr(typecheck, elseif->cond);
+          if (!cond_ty) {
+            return NULL;
+          }
+
+          struct ast_ty *block_ty = typecheck_block(typecheck, &elseif->block);
+          if (!block_ty) {
+            return NULL;
+          }
+
+          maybe_implicitly_convert(block_ty, then_ty);
+
+          if (!same_type(then_ty, block_ty)) {
+            char thenstr[256], blockstr[256];
+            type_name_into(then_ty, thenstr, 256);
+            type_name_into(block_ty, blockstr, 256);
+
+            fprintf(stderr, "elseif block has type %s, expected %s\n", blockstr, thenstr);
+            ++typecheck->errors;
+            return &typecheck->error_type;
+          }
+
+          elseif = elseif->next;
+        }
+      }
+
       if (ast->if_expr.has_else) {
         struct ast_ty *else_ty = typecheck_block(typecheck, &ast->if_expr.else_block);
         if (!else_ty) {

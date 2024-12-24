@@ -180,8 +180,15 @@ struct ast_expr_unary {
   struct ast_expr *expr;
 };
 
+struct ast_expr_elseif {
+  struct ast_expr *cond;
+  struct ast_block block;
+  struct ast_expr_elseif *next;
+};
+
 struct ast_expr_if {
   struct ast_expr *cond;
+  struct ast_expr_elseif *elseifs;
   int has_else;
   struct ast_block then_block;
   struct ast_block else_block;

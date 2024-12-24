@@ -1,6 +1,7 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/Support.h>
 #include <llvm-c/TargetMachine.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "compiler.h"
@@ -49,6 +50,8 @@ void configure_llvm(struct compiler *compiler) {
   if (flags & FLAG_DEBUG_LLVM) {
     args = realloc(args, sizeof(char *) * (size_t)(nargs + 1));
     args[nargs++] = "-debug";
+
+    fprintf(stderr, "enabling llvm debug\n");
   }
 
   LLVMParseCommandLineOptions(nargs, args, "LLVM internal options");

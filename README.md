@@ -45,16 +45,14 @@ fn fvec4 build_cdf(fvec4 probabilities) {
 impure fn i32 cdf_random(fvec4 cdf) {
     let r = (as float rand()) / 2147483647.0;
     if r < cdf.x {
-        ret 0;
-    };
-    if r < cdf.y {
-        ret 1;
-    };
-    if r < cdf.z {
-        ret 2;
-    };
-
-    3
+        0
+    } else if r < cdf.y {
+        1
+    } else if r < cdf.z {
+        2
+    } else {
+        3
+    }
 }
 
 pub impure fn i32 main() {

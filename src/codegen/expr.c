@@ -325,7 +325,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
     case AST_EXPR_TYPE_IF: {
       if (ast->ty.ty == AST_TYPE_VOID) {
-        emit_void_if(codegen, ast);
+        emit_if(codegen, ast);
         return NULL;
       } else {
         return emit_if(codegen, ast);

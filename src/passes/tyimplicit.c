@@ -316,6 +316,27 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
 
       total += maybe_implicitly_convert(&ast->if_expr.then_block.ty, &ast->ty);
 
+      if (ast->if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+        while (elseif) {
+          rc = typecheck_implicit_expr(elseif->cond);
+          if (rc < 0) {
+            return -1;
+          }
+          total += rc;
+
+          rc = typecheck_implicit_block(&elseif->block);
+          if (rc < 0) {
+            return -1;
+          }
+          total += rc;
+
+          total += maybe_implicitly_convert(&elseif->block.ty, &ast->ty);
+
+          elseif = elseif->next;
+        }
+      }
+
       rc = typecheck_implicit_block(&ast->if_expr.else_block);
       if (rc < 0) {
         return -1;

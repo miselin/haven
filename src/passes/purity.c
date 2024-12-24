@@ -245,6 +245,21 @@ static int check_purity_expr(struct ast_expr *ast) {
         return -1;
       }
 
+      if (ast->if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+        while (elseif) {
+          if (check_purity_expr(elseif->cond) < 0) {
+            return -1;
+          }
+
+          if (check_purity_block(&elseif->block) < 0) {
+            return -1;
+          }
+
+          elseif = elseif->next;
+        }
+      }
+
       if (check_purity_block(&ast->if_expr.else_block) < 0) {
         return -1;
       }

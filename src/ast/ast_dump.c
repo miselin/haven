@@ -309,6 +309,17 @@ void dump_expr(struct ast_expr *ast, int indent) {
 
       dump_expr(ast->if_expr.cond, indent + 1);
       dump_block(&ast->if_expr.then_block, indent + 1);
+
+      if (ast->if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+        while (elseif) {
+          INDENTED(indent + 1, "ElseIf\n");
+          dump_expr(elseif->cond, indent + 2);
+          dump_block(&elseif->block, indent + 2);
+          elseif = elseif->next;
+        }
+      }
+
       if (ast->if_expr.else_block.stmt) {
         dump_block(&ast->if_expr.else_block, indent + 1);
       }

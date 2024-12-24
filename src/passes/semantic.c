@@ -343,6 +343,21 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
         return -1;
       }
 
+      if (ast->if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+        while (elseif) {
+          if (check_semantic_expr(semantic, elseif->cond) < 0) {
+            return -1;
+          }
+
+          if (check_semantic_block(semantic, &elseif->block) < 0) {
+            return -1;
+          }
+
+          elseif = elseif->next;
+        }
+      }
+
       if (check_semantic_block(semantic, &ast->if_expr.else_block) < 0) {
         return -1;
       }

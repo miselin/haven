@@ -1105,15 +1105,36 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         free(result);
         return NULL;
       }
-      if (parser_peek(parser) == TOKEN_KW_ELSE) {
-        result->if_expr.has_else = 1;
+      result->if_expr.has_else = 0;
+      struct ast_expr_elseif *prev_elseif = NULL;
+      while (parser_peek(parser) == TOKEN_KW_ELSE) {
         parser_consume_peeked(parser, NULL);
-        if (parse_block(parser, &result->if_expr.else_block) < 0) {
-          free(result);
-          return NULL;
+        if (parser_peek(parser) == TOKEN_KW_IF) {
+          parser_consume_peeked(parser, NULL);
+
+          struct ast_expr_elseif *elseif = calloc(1, sizeof(struct ast_expr_elseif));
+          elseif->cond = parse_expression(parser);
+          if (parse_block(parser, &elseif->block) < 0) {
+            free(result);
+            return NULL;
+          }
+
+          if (prev_elseif) {
+            prev_elseif->next = elseif;
+          } else {
+            result->if_expr.elseifs = elseif;
+          }
+
+          prev_elseif = elseif;
+        } else {
+          result->if_expr.has_else = 1;
+          if (parse_block(parser, &result->if_expr.else_block) < 0) {
+            free(result);
+            return NULL;
+          }
+
+          break;
         }
-      } else {
-        result->if_expr.has_else = 0;
       }
       break;
 

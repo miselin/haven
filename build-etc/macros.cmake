@@ -7,6 +7,7 @@ macro(add_bootstrap_haven_library name source)
         COMMAND haven_bootstrap ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_bootstrap ${ARGN}
+        COMMENT "Building ${name} from ${source} [bootstrap]"
     )
 
     add_library(${name} STATIC ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
@@ -22,6 +23,7 @@ macro(add_haven_library name source)
         COMMAND haven ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven ${ARGN}
+        COMMENT "Building ${name} from ${source}"
     )
 
     add_library(${name} STATIC ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)

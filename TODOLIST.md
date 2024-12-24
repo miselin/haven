@@ -20,3 +20,8 @@
 - [ ] typecheck/codegen depend on a bug in KV where inserts of the same key don't overwrite the old value (and the new value is inaccessible)
 - [ ] migrate more of the C code into Haven
 - [ ] full self host
+- [x] `else if`
+- [ ] expressions in fvec init
+- [ ] dvec, dmat, double types
+- [ ] emit_lvalue in codegen to stop the ref/not-ref/load/dont-load madness
+- [ ] `<stmt> unless <cond>`
