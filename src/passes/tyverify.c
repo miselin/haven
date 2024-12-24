@@ -180,7 +180,7 @@ static int typecheck_verify_stmt(struct ast_stmt *ast) {
 
 static int typecheck_verify_expr(struct ast_expr *ast) {
   if (is_bad_type(&ast->ty)) {
-    fprintf(stderr, "expression node with type %d has unresolved type\n", ast->type);
+    fprintf(stderr, "tyverify: expression node with type %d has unresolved type\n", ast->type);
     return -1;
   }
 

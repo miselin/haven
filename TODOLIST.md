@@ -14,7 +14,7 @@
 - [x] while/do-while loops
 - [ ] defers need to capture variables in scope
 - [ ] match expressions should not require an otherwise arm if they fully exhaust all possible enum options
-- [ ] make field assignment work on pointers (maybe just use a different syntax like C?)
+- [x] make field assignment work on pointers (maybe just use a different syntax like C?)
 - [x] sizeof
 - [ ] expose matrix transpose somehow (more generally - how to expose intrinsics effectively?)
 - [ ] typecheck/codegen depend on a bug in KV where inserts of the same key don't overwrite the old value (and the new value is inaccessible)
@@ -23,5 +23,5 @@
 - [x] `else if`
 - [ ] expressions in fvec init
 - [ ] dvec, dmat, double types
-- [ ] emit_lvalue in codegen to stop the ref/not-ref/load/dont-load madness
+- [x] emit_lvalue in codegen to stop the ref/not-ref/load/dont-load madness
 - [ ] `<stmt> unless <cond>`

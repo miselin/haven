@@ -145,7 +145,12 @@ int codegen_run(struct codegen *codegen) {
   char *error = NULL;
   int rc = LLVMVerifyModule(codegen->llvm_module, LLVMReturnStatusAction, &error);
   if (rc) {
-    fprintf(stderr, "Internal module verification failed:\n%s\n", error);
+    fprintf(stderr,
+            "Internal module verification failed:\n%s\n\nGenerated IR that failed verification "
+            "follows:\n\n",
+            error);
+
+    codegen_emit_ir(codegen, stderr);
   }
   LLVMDisposeMessage(error);
 
@@ -207,7 +212,7 @@ int codegen_run(struct codegen *codegen) {
     LLVMDisposePassBuilderOptions(pass_options);
   }
 
-  return 0;
+  return rc;
 }
 
 char *codegen_ir(struct codegen *codegen) {

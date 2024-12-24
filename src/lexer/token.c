@@ -107,8 +107,17 @@ int lexer_token(struct lex_state *state, struct token *token) {
   switch (c) {
     case '+':
       return lex_check_either(state, token, '+', TOKEN_INCREMENT, TOKEN_PLUS);
-    case '-':
-      return lex_check_either(state, token, '-', TOKEN_DECREMENT, TOKEN_MINUS);
+    case '-': {
+      char next = lex_getc(state);
+      if (next == '>') {
+        token->ident = TOKEN_DASHGT;
+      } else if (next == '-') {
+        token->ident = TOKEN_DECREMENT;
+      } else {
+        token->ident = TOKEN_MINUS;
+        lex_unget(state, next);
+      }
+    } break;
     case '*':
       token->ident = TOKEN_ASTERISK;
       break;

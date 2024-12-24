@@ -346,7 +346,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
     case AST_EXPR_TYPE_REF: {
       // return the reference (which is usually an alloca or GEP result)
-      return emit_expr(codegen, ast->ref.expr);
+      return emit_lvalue(codegen, ast->ref.expr);
     } break;
 
     case AST_EXPR_TYPE_LOAD: {

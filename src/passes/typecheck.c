@@ -962,8 +962,10 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return NULL;
       }
 
+      const char *ident = ast_expr_ident(ast);
+
       struct ast_ty *ty = target_ty;
-      if (ty->ty == AST_TYPE_POINTER) {
+      if (ast->deref.is_ptr) {
         ty = ptr_pointee_type(ty);
       }
 
@@ -971,8 +973,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         char tystr[256];
         type_name_into(ty, tystr, 256);
 
-        fprintf(stderr, "deref %s has type %s, expected a vector or struct type\n",
-                ast->variable.ident.value.identv.ident, tystr);
+        fprintf(stderr, "deref of %s has type %s, expected a vector or struct type\n", ident,
+                tystr);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -982,8 +984,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       if (ty->ty == AST_TYPE_FVEC) {
         int deref = deref_to_index(ast->deref.field.value.identv.ident);
         if (deref < 0) {
-          fprintf(stderr, "fvec deref %s has unknown field %s\n",
-                  ast->variable.ident.value.identv.ident, ast->deref.field.value.identv.ident);
+          fprintf(stderr, "fvec deref %s has unknown field %s\n", ident,
+                  ast->deref.field.value.identv.ident);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
@@ -1005,8 +1007,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         }
 
         if (!field) {
-          fprintf(stderr, "struct deref %s references unknown field %s\n",
-                  ast->variable.ident.value.identv.ident, ast->deref.field.value.identv.ident);
+          fprintf(stderr, "struct deref %s references unknown field %s\n", ident,
+                  ast->deref.field.value.identv.ident);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
@@ -1017,8 +1019,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       } else if (ty->ty == AST_TYPE_MATRIX) {
         int deref = deref_to_index(ast->deref.field.value.identv.ident);
         if (deref < 0) {
-          fprintf(stderr, "matrix deref %s has unknown field %s\n",
-                  ast->variable.ident.value.identv.ident, ast->deref.field.value.identv.ident);
+          fprintf(stderr, "matrix deref %s has unknown field %s\n", ident,
+                  ast->deref.field.value.identv.ident);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
@@ -1032,8 +1034,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       // can't deref past the width of the vector
       if (ast->deref.field_idx >= max_field) {
-        fprintf(stderr, "deref %s has field #%zd, exceeding field count of %zd\n",
-                ast->variable.ident.value.identv.ident, ast->deref.field_idx, max_field);
+        fprintf(stderr, "deref %s has field #%zd, exceeding field count of %zd\n", ident,
+                ast->deref.field_idx, max_field);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -1149,6 +1151,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       const char *ident = ast_expr_ident(ast->assign.lhs);
       if (!ident) {
+        compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "assign lhs not an ident");
         return NULL;  // TODO: this should happen in semantic pass not here
       }
 
@@ -1186,13 +1189,20 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         // all the checks in this block are probably already handled fine by DEREF, but let's make
         // sure
 
-        if (entry->vdecl->ty.ty != AST_TYPE_STRUCT) {
-          fprintf(stderr, "in field assignment, lhs %s has non-struct type\n", ident);
+        struct ast_ty *deref_ty = &entry->vdecl->ty;
+        if (ast->assign.lhs->deref.is_ptr) {
+          deref_ty = ptr_pointee_type(deref_ty);
+        }
+
+        if (deref_ty->ty != AST_TYPE_STRUCT) {
+          char tyname[256];
+          type_name_into(&entry->vdecl->ty, tyname, 256);
+          fprintf(stderr, "in field assignment, lhs %s has non-struct type %s\n", ident, tyname);
           ++typecheck->errors;
           return &typecheck->error_type;
         }
 
-        struct ast_struct_field *field = entry->vdecl->ty.structty.fields;
+        struct ast_struct_field *field = deref_ty->structty.fields;
         while (field) {
           if (strcmp(field->name, ast->assign.lhs->deref.field.value.identv.ident) == 0) {
             field_name = field->name;
@@ -1232,7 +1242,14 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     } break;
 
     case AST_EXPR_TYPE_REF: {
+      compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "typechecking ref");
+
       struct ast_expr *expr = ast->ref.expr;
+
+      struct ast_ty *expr_ty = typecheck_expr(typecheck, expr);
+      if (!expr_ty) {
+        return NULL;
+      }
 
       if (expr->type != AST_EXPR_TYPE_VARIABLE) {
         fprintf(stderr, "ref expression must resolve to an identifier\n");
@@ -1249,8 +1266,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      ast->ref.expr->ty.flags |= TYPE_FLAG_REFERENCE;
-      struct ast_ty resolved = resolve_type(typecheck, &expr->ty);
+      struct ast_ty resolved = resolve_type(typecheck, expr_ty);
       free_ty(&ast->ty, 0);
       ast->ty = ptr_type(resolved);
       return &ast->ty;

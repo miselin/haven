@@ -261,6 +261,12 @@ static int parser_consume_peeked(struct parser *parser, struct token *token) {
  * Parse a variable declaration - for use in function parameter lists
  */
 static struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
+  uint64_t flags = 0;
+  if (parser_peek(parser) == TOKEN_KW_MUT) {
+    parser_consume_peeked(parser, NULL);
+    flags |= DECL_FLAG_MUT;
+  }
+
   struct ast_ty ty = parse_type(parser);
   if (type_is_error(&ty)) {
     return NULL;
@@ -268,6 +274,7 @@ static struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
 
   struct ast_vdecl *vdecl = calloc(1, sizeof(struct ast_vdecl));
   vdecl->ty = ty;
+  vdecl->flags = flags;
 
   struct token token;
   if (parser_consume(parser, &token, TOKEN_IDENTIFIER) < 0) {
@@ -812,6 +819,28 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
       parser_diag(1, parser, NULL, "unexpected lexer token in expression");
     }
 
+    // handle assignment in the middle of an expression
+    if (peek == TOKEN_ASSIGN) {
+      parser_consume_peeked(parser, NULL);
+
+      compiler_log(parser->compiler, LogLevelDebug, "parser",
+                   "parsing RHS of assignment in expression");
+      struct ast_expr *rhs = parse_expression(parser);  // reset precedence on RHS
+      if (!rhs) {
+        free_expr(left);
+        return NULL;
+      }
+
+      compiler_log(parser->compiler, LogLevelDebug, "parser", "generating assignment as new LHS");
+      struct ast_expr *new_left = calloc(1, sizeof(struct ast_expr));
+      new_left->type = AST_EXPR_TYPE_ASSIGN;
+      new_left->assign.lhs = left;
+      new_left->assign.expr = rhs;
+
+      left = new_left;
+      continue;
+    }
+
     int binop = binary_op(peek);
     if (binop < 0) {
       break;
@@ -824,28 +853,18 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
 
     parser_consume_peeked(parser, NULL);
 
+    compiler_log(parser->compiler, LogLevelDebug, "parser", "binop is %d", binop);
+
     struct ast_expr *new_left = calloc(1, sizeof(struct ast_expr));
     new_left->type = AST_EXPR_TYPE_BINARY;
     new_left->binary.op = binop;
     new_left->binary.lhs = left;
+    compiler_log(parser->compiler, LogLevelDebug, "parser",
+                 "parsing RHS of binary expression with min_prec %d", prec + 1);
     new_left->binary.rhs = parse_expression_inner(parser, prec + 1);
-
-    if (binop == AST_BINARY_OP_DEREF) {
-      // convert to a deref
-      struct ast_expr *lhs = left;
-      struct ast_expr *rhs = new_left->binary.rhs;
-
-      if (rhs->type != AST_EXPR_TYPE_VARIABLE) {
-        parser_diag(1, parser, NULL,
-                    "expected variable on right-hand side of dereference (got %d instead)",
-                    rhs->type);
-        return NULL;
-      }
-
-      new_left->type = AST_EXPR_TYPE_DEREF;
-      new_left->deref.target = lhs;
-      new_left->deref.field = rhs->variable.ident;
-      free_expr(rhs);
+    if (!new_left->binary.rhs) {
+      free_expr(new_left);
+      return NULL;
     }
 
     left = new_left;
@@ -1038,6 +1057,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         result->variable.ident = token;
       }
 
+      /*
       next = parser_peek(parser);
       if (next == TOKEN_ASSIGN) {
         parser_consume_peeked(parser, NULL);
@@ -1049,6 +1069,7 @@ static struct ast_expr *parse_factor(struct parser *parser) {
         result->assign.lhs = lhs;
         result->assign.expr = parse_expression(parser);
       }
+      */
     } break;
 
     // sub-expressions
@@ -1242,6 +1263,27 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       return NULL;
   }
 
+  // handle postfix operators on factors - deref, index, etc
+  enum token_id next = parser_peek(parser);
+  if (next == TOKEN_PERIOD || next == TOKEN_DASHGT) {
+    parser_consume_peeked(parser, NULL);
+    compiler_log(parser->compiler, LogLevelDebug, "parser",
+                 "found period in factor, need to deref?");
+
+    struct ast_expr *deref = calloc(1, sizeof(struct ast_expr));
+    deref->type = AST_EXPR_TYPE_DEREF;
+    lexer_locate(parser->lexer, &deref->loc);
+    deref->deref.is_ptr = next == TOKEN_DASHGT;
+    deref->deref.target = result;
+    if (parser_consume(parser, &deref->deref.field, TOKEN_IDENTIFIER) < 0) {
+      free(deref);
+      free(result);
+      return NULL;
+    }
+
+    result = deref;
+  }
+
   return result;
 }
 
@@ -1419,8 +1461,6 @@ static int binary_op(enum token_id token) {
       return AST_BINARY_OP_LOGICAL_OR;
     case TOKEN_AND:
       return AST_BINARY_OP_LOGICAL_AND;
-    case TOKEN_PERIOD:
-      return AST_BINARY_OP_DEREF;
     default:
       return -1;
   }
@@ -1496,8 +1536,6 @@ static int binary_op_prec(int op) {
     case AST_BINARY_OP_DIV:
     case AST_BINARY_OP_MOD:
       return 50;
-    case AST_BINARY_OP_DEREF:
-      return 60;
     default:
       fprintf(stderr, "returning lowest possible precedence for unknown binary op %d \n", op);
   }

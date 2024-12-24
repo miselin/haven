@@ -14,7 +14,7 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMValueRef cond = emit_expr(codegen, ast->if_expr.cond);
   LLVMTypeKind kind = LLVMGetTypeKind(LLVMTypeOf(cond));
-  if (kind == LLVMIntegerTypeKind && 0) {
+  if (kind == LLVMIntegerTypeKind) {
     // is it already bool?
     if (LLVMGetIntTypeWidth(LLVMTypeOf(cond)) != 1) {
       cond = LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond,

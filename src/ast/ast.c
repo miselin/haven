@@ -38,8 +38,6 @@ const char *ast_binary_op_to_str(int op) {
       return ">";
     case AST_BINARY_OP_GTE:
       return ">=";
-    case AST_BINARY_OP_DEREF:
-      return ".";
     default:
       return "<unknown-binary-op>";
   }
@@ -94,8 +92,8 @@ int ast_binary_op_logical(int op) {
 
 const char *ast_expr_ident(struct ast_expr *expr) {
   switch (expr->type) {
-      // case AST_EXPR_TYPE_DEREF:
-      //      return expr->deref.ident.value.identv.ident;
+    case AST_EXPR_TYPE_DEREF:
+      return ast_expr_ident(expr->deref.target);
     case AST_EXPR_TYPE_VARIABLE:
       return expr->variable.ident.value.identv.ident;
     case AST_EXPR_TYPE_ARRAY_INDEX:

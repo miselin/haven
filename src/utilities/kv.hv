@@ -25,7 +25,7 @@ pub impure fn KV *haven_new_kv() {
     heap_kv
 }
 
-pub impure fn void haven_kv_insert(KV *kv, i8 *key, void *value) {
+pub impure fn void haven_kv_insert(mut KV *kv, i8 *key, void *value) {
     if strlen(key) == 0 {
         ret;
     };
@@ -35,63 +35,58 @@ pub impure fn void haven_kv_insert(KV *kv, i8 *key, void *value) {
     strcpy(new_node.key, key);
     store heap_new_node new_node;
 
-    let mut node = kv.head;
+    let mut node = kv->head;
     if node == nil {
-        let new_kv = struct KV { heap_new_node };
-        store kv new_kv;
+        kv->head = heap_new_node;
         ret;
     };
 
-    while node.next != nil {
-        node = node.next;
+    while node->next != nil {
+        node = node->next;
     };
 
-    // this is such awful ergonomics, need to fix this language
-    let node_ = struct KVNode { node.key, node.value, heap_new_node };
-    store node node_;
+    node->next = heap_new_node;
 }
 
 pub impure fn i8* haven_kv_lookup(KV *kv, i8 *key) {
-    let mut node = kv.head;
+    let mut node = kv->head;
     while node != nil {
-        if strcmp(node.key, key) == 0 {
-            ret node.value;
+        if strcmp(node->key, key) == 0 {
+            ret node->value;
         };
 
-        node = node.next;
+        node = node->next;
     };
 
     as i8* 0
 }
 
-pub impure fn void haven_kv_delete(KV *kv, i8 *key) {
-    let mut cur = kv.head;
+pub impure fn void haven_kv_delete(mut KV *kv, i8 *key) {
+    let mut cur = kv->head;
     let mut KVNode *prev = nil;
     while cur != nil {
-        if strcmp(cur.key, key) == 0 {
+        if strcmp(cur->key, key) == 0 {
             if prev == nil {
-                let new_kv = struct KV { cur.next };
-                store kv new_kv;
+                kv->head = cur->next;
             } else {
-                let node_ = struct KVNode { prev.key, prev.value, cur.next };
-                store prev node_;
+                prev->next = cur->next;
             };
 
-            free(cur.key);
+            free(cur->key);
             free(cur);
             break;
         };
 
         prev = cur;
-        cur = cur.next;
+        cur = cur->next;
     };
 }
 
 pub impure fn void haven_kv_destroy(KV *kv) {
-    let mut node = kv.head;
+    let mut node = kv->head;
     while node != nil {
-        let next = node.next;
-        free(node.key);
+        let next = node->next;
+        free(node->key);
         free(node);
         node = next;
     };
@@ -100,18 +95,17 @@ pub impure fn void haven_kv_destroy(KV *kv) {
 }
 
 pub impure fn KVNode* haven_kv_iter(KV *kv) {
-    kv.head
+    kv->head
 }
 
-pub impure fn i8 *haven_kv_next(KVIterator *kviter) {
-    let mut node = kviter.node;
+pub impure fn i8 *haven_kv_next(mut KVIterator *kviter) {
+    let mut node = kviter->node;
     if node == nil {
         as i8* 0
     } else {
-        let new_kviter = struct KVIterator { node.next };
-        store kviter new_kviter;
+        kviter->node = node->next;
 
-        node.value
+        node->value
     }
 }
 

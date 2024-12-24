@@ -7,7 +7,7 @@ type AffineTransform = struct {
 };
 
 fn fvec2 apply(fvec2 v, AffineTransform *xform) {
-    (v * xform.transform) + xform.translate
+    (v * xform->transform) + xform->translate
 }
 
 fn fvec4 build_cdf(fvec4 probabilities) {
