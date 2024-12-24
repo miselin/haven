@@ -37,10 +37,11 @@ TEST(Parser, UnexpectedEOF) {
   EXPECT_STREQ(parser_diag_msg(diag), "unexpected EOF or other error in token stream");
   EXPECT_EQ(parser_diag_severity(diag), Error);
   struct lex_locator *loc = parser_diag_loc(diag);
-  parser_free_diag(diag);
 
   EXPECT_EQ((int32_t)loc->line, 0);
   EXPECT_EQ(loc->column, 5);
+
+  parser_free_diag(diag);
 
   destroy_parser(parser);
   destroy_lexer(state);
@@ -62,10 +63,11 @@ TEST(Parser, TyDeclMissingIdentifier) {
   EXPECT_STREQ(parser_diag_msg(diag), "unexpected token =, wanted <identifier>");
   EXPECT_EQ(parser_diag_severity(diag), Error);
   struct lex_locator *loc = parser_diag_loc(diag);
-  parser_free_diag(diag);
 
   EXPECT_EQ((int32_t)loc->line, 0);
   EXPECT_EQ(loc->column, 5);
+
+  parser_free_diag(diag);
 
   destroy_parser(parser);
   destroy_lexer(state);
@@ -87,10 +89,11 @@ TEST(Parser, TyDeclMissingAssign) {
   EXPECT_STREQ(parser_diag_msg(diag), "unexpected token struct, wanted =");
   EXPECT_EQ(parser_diag_severity(diag), Error);
   struct lex_locator *loc = parser_diag_loc(diag);
-  parser_free_diag(diag);
 
   EXPECT_EQ((int32_t)loc->line, 0);
   EXPECT_EQ(loc->column, 11);
+
+  parser_free_diag(diag);
 
   destroy_parser(parser);
   destroy_lexer(state);
@@ -112,10 +115,11 @@ TEST(Parser, TyDeclMissingSemi) {
   EXPECT_STREQ(parser_diag_msg(diag), "unexpected EOF or other error in token stream");
   EXPECT_EQ(parser_diag_severity(diag), Error);
   struct lex_locator *loc = parser_diag_loc(diag);
-  parser_free_diag(diag);
 
   EXPECT_EQ((int32_t)loc->line, 0);
   EXPECT_EQ(loc->column, 17);
+
+  parser_free_diag(diag);
 
   destroy_parser(parser);
   destroy_lexer(state);
