@@ -270,9 +270,8 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
           snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
       struct ast_struct_field *field = ty->structty.fields;
       while (field) {
-        if (field->ty->ty == AST_TYPE_POINTER &&
-            !strcmp(ptr_pointee_type(field->ty)->name, ty->name)) {
-          // recursive def
+        if (field->ty->ty == AST_TYPE_POINTER) {
+          // don't emit the pointee type, just the name will do
           offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s *%s; ", ty->name,
                              field->name);
         } else {

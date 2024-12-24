@@ -838,8 +838,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         type_name_into(lhs, lhsstr, 256);
         type_name_into(rhs, rhsstr, 256);
 
-        fprintf(stderr, "binary op %s has mismatching lhs type %s, rhs type %s\n",
-                ast_binary_op_to_str(ast->binary.op), lhsstr, rhsstr);
+        typecheck_diag_expr(typecheck, ast,
+                            "binary op %s has mismatching lhs type %s, rhs type %s\n",
+                            ast_binary_op_to_str(ast->binary.op), lhsstr, rhsstr);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -1139,7 +1140,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      ast->ty = resolve_type(typecheck, then_ty);
+      struct ast_ty resolved = resolve_type(typecheck, then_ty);
+      free_ty(&ast->ty, 0);
+      ast->ty = resolved;
       return &ast->ty;
     } break;
 
@@ -1453,7 +1456,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         arm = arm->next;
       }
 
-      ast->ty = resolve_type(typecheck, largest_ty);
+      struct ast_ty resolved = resolve_type(typecheck, largest_ty);
+      free_ty(&ast->ty, 0);
+      ast->ty = resolved;
       return &ast->ty;
     } break;
 

@@ -275,8 +275,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMTypeRef expr_ty = ast_ty_to_llvm_ty(codegen, target_ty);
 
-      // TODO: deref ptrs until we get to a non-pointer underlying type
-
       if (target_ty->ty == AST_TYPE_MATRIX) {
         // matrix -> gep -> load
         LLVMValueRef indicies[2] = {
@@ -300,16 +298,20 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       }
 
       // union -> read from first field, direct pointer access
-      if (target_ty->structty.is_union) {
+      if (target_ty->ty == AST_TYPE_STRUCT && target_ty->structty.is_union) {
         snprintf(name, 512, "deref.union.%s", ast->deref.field.value.identv.ident);
         return LLVMBuildLoad2(codegen->llvm_builder, result_ty, target, name);
       }
 
-      snprintf(name, 512, "deref.struct.%s", ast->deref.field.value.identv.ident);
-
       // struct -> getelementptr
       LLVMValueRef gep = LLVMBuildStructGEP2(codegen->llvm_builder, expr_ty, target,
                                              (unsigned int)ast->deref.field_idx, "deref.gep");
+
+      if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
+        return gep;
+      }
+
+      snprintf(name, 512, "deref.struct.%s", ast->deref.field.value.identv.ident);
       LLVMValueRef load = LLVMBuildLoad2(codegen->llvm_builder, result_ty, gep, name);
       return load;
     }; break;

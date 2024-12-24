@@ -7,6 +7,7 @@ extern struct trie *haven_new_trie(void) __attribute__((weak));
 extern void haven_trie_insert(struct trie *, const char *key, void *value) __attribute__((weak));
 extern void *haven_trie_lookup(struct trie *, const char *key) __attribute__((weak));
 extern void haven_destroy_trie(struct trie *trie) __attribute__((weak));
+extern void haven_dump_trie(struct trie *trie) __attribute__((weak));
 
 struct trie_node {
   size_t id;
@@ -174,7 +175,8 @@ static void dump_trie_node(FILE *stream, struct trie_node *node) {
 }
 
 void dump_trie(struct trie *trie) {
-  if (haven_trie_lookup) {
+  if (haven_dump_trie) {
+    haven_dump_trie(trie);
     return;
   }
 

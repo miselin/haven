@@ -833,6 +833,7 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
 
       compiler_log(parser->compiler, LogLevelDebug, "parser", "generating assignment as new LHS");
       struct ast_expr *new_left = calloc(1, sizeof(struct ast_expr));
+      lexer_locate(parser->lexer, &new_left->loc);
       new_left->type = AST_EXPR_TYPE_ASSIGN;
       new_left->assign.lhs = left;
       new_left->assign.expr = rhs;
@@ -856,6 +857,7 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
     compiler_log(parser->compiler, LogLevelDebug, "parser", "binop is %d", binop);
 
     struct ast_expr *new_left = calloc(1, sizeof(struct ast_expr));
+    lexer_locate(parser->lexer, &new_left->loc);
     new_left->type = AST_EXPR_TYPE_BINARY;
     new_left->binary.op = binop;
     new_left->binary.lhs = left;
