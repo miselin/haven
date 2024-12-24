@@ -1,5 +1,10 @@
 
+
+type Wrapper = struct {
+    i32 inner;
+};
+
 pub fn i32 sut() {
     let i32 x = 5;
-    (sizeof i32) + (sizeof x)
+    (sizeof i32) + (sizeof x) + (sizeof Wrapper)
 }

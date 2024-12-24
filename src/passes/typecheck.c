@@ -1539,12 +1539,29 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     } break;
 
     case AST_EXPR_TYPE_SIZEOF: {
+      int swapped_type = 0;
       if (ast->sizeof_expr.expr) {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->sizeof_expr.expr);
-        if (!expr_ty) {
-          return NULL;
+        if (ast->sizeof_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
+          // is it actually a type?
+          struct alias_entry *entry = kv_lookup(
+              typecheck->aliases, ast->sizeof_expr.expr->variable.ident.value.identv.ident);
+          if (entry) {
+            ast->sizeof_expr.ty = entry->ty;
+            free_expr(ast->sizeof_expr.expr);
+            ast->sizeof_expr.expr = NULL;
+            swapped_type = 1;
+          }
         }
-      } else {
+
+        if (!swapped_type) {
+          struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->sizeof_expr.expr);
+          if (!expr_ty) {
+            return NULL;
+          }
+        }
+      }
+
+      if (!ast->sizeof_expr.expr) {
         ast->sizeof_expr.ty = resolve_type(typecheck, &ast->sizeof_expr.ty);
       }
 
