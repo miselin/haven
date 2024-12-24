@@ -640,23 +640,24 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
               size_t correct_cols = ast->ty.array.element_ty->matrix.cols;
               size_t correct_rows = ast->ty.array.element_ty->matrix.rows;
 
-              size_t rows = ast->ty.array.width;
+              size_t rows = ast->list->num_elements;
+              size_t cols = ast->list->expr->list->num_elements;
               free_ty(ast->ty.array.element_ty, 1);
 
               ast->ty.ty = AST_TYPE_MATRIX;
-              ast->ty.matrix.cols = ast->list->num_elements;
+              ast->ty.matrix.cols = cols;
               ast->ty.matrix.rows = rows;
 
-              if (ast->list->num_elements != correct_cols) {
+              if (cols != correct_cols) {
                 typecheck_diag_expr(typecheck, ast,
-                                    "matrix initializer has %zu columns, expected %zu\n",
-                                    ast->list->num_elements, correct_cols);
+                                    "matrix initializer has %zu columns, expected %zu\n", cols,
+                                    correct_cols);
                 return NULL;
               }
               if (rows != correct_rows) {
                 typecheck_diag_expr(typecheck, ast,
-                                    "matrix initializer has %zu rows, expected %zu\n",
-                                    ast->list->num_elements, correct_rows);
+                                    "matrix initializer has %zu rows, expected %zu\n", rows,
+                                    correct_rows);
                 return NULL;
               }
             }

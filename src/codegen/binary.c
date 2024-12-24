@@ -109,7 +109,7 @@ LLVMValueRef emit_binary_expr(struct codegen *codegen, struct ast_expr_binary *b
   // pointer arithmetic?
   if (ty->ty == AST_TYPE_POINTER) {
     // make sure LHS is the pointer
-    if ((binary->lhs->ty.ty != AST_TYPE_POINTER) == 0) {
+    if ((binary->lhs->ty.ty != AST_TYPE_POINTER)) {
       LLVMValueRef tmp = lhs;
       lhs = rhs;
       rhs = tmp;
