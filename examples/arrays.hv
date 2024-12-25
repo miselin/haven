@@ -6,6 +6,8 @@ pub impure fn i8* strcpy(i8 *dest, i8 *src);
 
 pub impure fn i32 main() {
     let mut s = as i8* malloc(256);
+    defer { if s != nil { free(s); }; };
+
     strcpy(s, "hello, World!");
 
     printf("before: %s\n", s);
@@ -13,8 +15,6 @@ pub impure fn i32 main() {
     s[0] = 'H';
 
     printf("result: %s\n", s);
-
-    free(s);
 
     0
 }

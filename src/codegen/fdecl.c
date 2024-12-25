@@ -170,14 +170,16 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
 
   // run defer expressions, if any
   struct defer_entry *defer = codegen->defer_head;
+  LLVMBuildBr(codegen->llvm_builder, defer ? defer->llvm_block : return_block);
+
   while (defer) {
+    LLVMMoveBasicBlockAfter(defer->llvm_block, LLVMGetInsertBlock(codegen->llvm_builder));
+    LLVMPositionBuilderAtEnd(codegen->llvm_builder, defer->llvm_block_after);
     struct defer_entry *next = defer->next;
-    emit_expr(codegen, defer->expr);
+    LLVMBuildBr(codegen->llvm_builder, next ? next->llvm_block : return_block);
     free(defer);
     defer = next;
   }
-
-  LLVMBuildBr(codegen->llvm_builder, return_block);
 
   // insert return block finally
   LLVMAppendExistingBasicBlock(codegen->current_function, return_block);

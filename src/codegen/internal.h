@@ -27,7 +27,8 @@ struct struct_entry {
 };
 
 struct defer_entry {
-  struct ast_expr *expr;
+  LLVMBasicBlockRef llvm_block;
+  LLVMBasicBlockRef llvm_block_after;
   struct defer_entry *next;
 };
 

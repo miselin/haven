@@ -541,7 +541,17 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLV
 
     case AST_STMT_TYPE_DEFER: {
       struct defer_entry *entry = calloc(1, sizeof(struct defer_entry));
-      entry->expr = ast->expr;
+
+      // defers will be reordered after the function is emitted - but emit now to ensure the
+      // variable references are maintained
+      LLVMBasicBlockRef current = LLVMGetInsertBlock(codegen->llvm_builder);
+      entry->llvm_block =
+          LLVMAppendBasicBlockInContext(codegen->llvm_context, codegen->current_function, "defer");
+      LLVMPositionBuilderAtEnd(codegen->llvm_builder, entry->llvm_block);
+      emit_expr(codegen, ast->expr);
+      entry->llvm_block_after = LLVMGetInsertBlock(codegen->llvm_builder);
+      LLVMPositionBuilderAtEnd(codegen->llvm_builder, current);
+
       entry->next = codegen->defer_head;
       codegen->defer_head = entry;
     } break;

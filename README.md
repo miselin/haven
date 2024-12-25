@@ -77,6 +77,7 @@ pub impure fn i32 main() {
     let mut point = <0.0, 0.0>;
 
     let mut i8* points = calloc(1, 800 * 800);
+    defer { free(points); };
 
     iter 0:100000000 i {
         let choice = cdf_random(cdf);

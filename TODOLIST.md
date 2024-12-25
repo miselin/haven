@@ -12,7 +12,7 @@
 - [x] `let node *p = ...` fails to parse (unexpected token \*)
 - [x] avoid needing to explicitly tag `enum` in pattern matches
 - [x] while/do-while loops
-- [ ] defers need to capture variables in scope
+- [x] defers need to capture variables in scope
 - [ ] match expressions should not require an otherwise arm if they fully exhaust all possible enum options
 - [x] make field assignment work on pointers (maybe just use a different syntax like C?)
 - [x] sizeof
@@ -21,7 +21,8 @@
 - [ ] migrate more of the C code into Haven
 - [ ] full self host
 - [x] `else if`
-- [ ] expressions in fvec init
+- [x] expressions in fvec init
+  - wrap in parens
 - [ ] dvec, dmat, double types
 - [x] emit_lvalue in codegen to stop the ref/not-ref/load/dont-load madness
 - [ ] `<stmt> unless <cond>`
