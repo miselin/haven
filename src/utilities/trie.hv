@@ -181,7 +181,7 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
     node->value = TrieValue::Value(value);
 }
 
-pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
+impure fn TrieNode* node_for(Trie *trie, i8 *key) {
     let mut node = trie->root;
     let mut i32 ikey = 0;
     let mut i32 i = 0;
@@ -209,6 +209,15 @@ pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
     } else if (load (key + ikey)) != 0 || (load (node->key + i)) != 0 {
         as i8* 0
     } else {
+        node
+    }
+}
+
+pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
+    let node = node_for(trie, key);
+    if node == nil {
+        as i8* 0
+    } else {
         match node->value {
             TrieValue::Value(value) => {
                 value
@@ -218,6 +227,13 @@ pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
             }
         }
     }
+}
+
+pub impure fn void haven_trie_remove(mut Trie* trie, i8* key) {
+    let mut node = node_for(trie, key);
+    if node != nil {
+        node->value = TrieValue::NoValue;
+    };
 }
 
 impure fn void destroy_trie_node(TrieNode *node) {

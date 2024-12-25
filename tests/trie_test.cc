@@ -43,6 +43,7 @@ TEST(TrieTest, LookupRemoved) {
   trie_remove(trie, "sha");
 
   EXPECT_EQ(trie_lookup(trie, "share"), (void *)2);
+  EXPECT_EQ(trie_lookup(trie, "sha"), (void *)0);
 
   destroy_trie(trie);
 }

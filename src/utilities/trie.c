@@ -6,6 +6,7 @@
 extern struct trie *haven_new_trie(void) __attribute__((weak));
 extern void haven_trie_insert(struct trie *, const char *key, void *value) __attribute__((weak));
 extern void *haven_trie_lookup(struct trie *, const char *key) __attribute__((weak));
+extern void haven_trie_remove(struct trie *trie, const char *key) __attribute__((weak));
 extern void haven_destroy_trie(struct trie *trie) __attribute__((weak));
 extern void haven_dump_trie(struct trie *trie) __attribute__((weak));
 
@@ -170,6 +171,11 @@ void *trie_lookup(struct trie *trie, const char *key) {
 }
 
 void trie_remove(struct trie *trie, const char *key) {
+  if (haven_trie_remove) {
+    haven_trie_remove(trie, key);
+    return;
+  }
+
   struct trie_node *node = node_for(trie, key);
   if (node) {
     node->has_value = 0;
