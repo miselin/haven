@@ -253,27 +253,6 @@ void dump_expr(struct ast_expr *ast, int indent) {
       fprintf(stderr, "\n");
       break;
 
-    case AST_EXPR_TYPE_LOGICAL:
-      INDENTED(indent, "LogicalExpr %s -> ", ast_logical_op_to_str(ast->logical.op));
-      dump_ty(&ast->ty);
-      fprintf(stderr, "\n");
-
-      dump_expr(ast->logical.lhs, indent + 1);
-      dump_expr(ast->logical.rhs, indent + 1);
-      break;
-
-    case AST_EXPR_TYPE_LIST: {
-      INDENTED(indent, "List -> ");
-      dump_ty(&ast->ty);
-      fprintf(stderr, "\n");
-
-      struct ast_expr_list *node = ast->list;
-      while (node) {
-        dump_expr(node->expr, indent + 1);
-        node = node->next;
-      }
-    } break;
-
     case AST_EXPR_TYPE_DEREF:
       INDENTED(indent, "Deref %s [#%zd] -> ", ast->deref.field.value.identv.ident,
                ast->deref.field_idx);
@@ -364,12 +343,6 @@ void dump_expr(struct ast_expr *ast, int indent) {
       fprintf(stderr, "\n");
 
       dump_expr(ast->unary.expr, indent + 1);
-      break;
-
-    case AST_EXPR_TYPE_BOOLEAN:
-      INDENTED(indent, "Boolean %d\n", ast->boolean.op);
-      dump_expr(ast->boolean.lhs, indent + 1);
-      dump_expr(ast->boolean.rhs, indent + 1);
       break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX:

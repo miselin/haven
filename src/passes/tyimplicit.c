@@ -249,18 +249,6 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       return total + left + right;
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL: {
-      int total = maybe_implicitly_convert(&ast->binary.lhs->ty, &ast->ty) +
-                  maybe_implicitly_convert(&ast->binary.rhs->ty, &ast->ty);
-      int left = typecheck_implicit_expr(ast->binary.lhs);
-      int right = typecheck_implicit_expr(ast->binary.rhs);
-      if (left < 0 || right < 0) {
-        return -1;
-      }
-
-      return total + left + right;
-    } break;
-
     case AST_EXPR_TYPE_BLOCK: {
       int rc = typecheck_implicit_block(&ast->block);
       if (rc < 0) {
@@ -365,15 +353,6 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       }
 
       return maybe_implicitly_convert(&ast->unary.expr->ty, &ast->ty) + rc;
-    } break;
-
-    case AST_EXPR_TYPE_BOOLEAN: {
-      if (typecheck_implicit_expr(ast->boolean.lhs) < 0) {
-        return -1;
-      }
-      if (typecheck_implicit_expr(ast->boolean.rhs) < 0) {
-        return -1;
-      }
     } break;
 
     case AST_EXPR_TYPE_MATCH: {

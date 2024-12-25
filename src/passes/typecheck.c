@@ -861,35 +861,6 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       return &ast->ty;
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL: {
-      struct ast_ty *lhs = typecheck_expr(typecheck, ast->logical.lhs);
-      struct ast_ty *rhs = typecheck_expr(typecheck, ast->logical.rhs);
-
-      if (!lhs || !rhs) {
-        return NULL;
-      }
-
-      // TODO: consider widening/narrowing to make type of lhs == rhs
-
-      if (!same_type(lhs, rhs)) {
-        char lhsstr[256], rhsstr[256];
-        type_name_into(lhs, lhsstr, 256);
-        type_name_into(rhs, rhsstr, 256);
-
-        fprintf(stderr, "logical op %d has mismatching lhs type %s, rhs type %s\n", ast->logical.op,
-                lhsstr, rhsstr);
-        ++typecheck->errors;
-        return &typecheck->error_type;
-      }
-
-      // return type of this operation is actually a 1-bit boolean
-      ast->ty.ty = AST_TYPE_INTEGER;
-      ast->ty.integer.is_signed = 0;
-      ast->ty.integer.width = 1;
-      ast->ty = resolve_type(typecheck, &ast->ty);
-      return &ast->ty;
-    } break;
-
     case AST_EXPR_TYPE_BLOCK: {
       struct ast_ty *ty = typecheck_block(typecheck, &ast->block);
       ast->ty = resolve_type(typecheck, ty);
@@ -1350,21 +1321,6 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
           return &typecheck->error_type;
           ;
       }
-    } break;
-
-    case AST_EXPR_TYPE_BOOLEAN: {
-      struct ast_ty *lhs = typecheck_expr(typecheck, ast->boolean.lhs);
-      struct ast_ty *rhs = typecheck_expr(typecheck, ast->boolean.rhs);
-
-      if (!lhs || !rhs) {
-        return NULL;
-      }
-
-      ast->ty.ty = AST_TYPE_INTEGER;
-      ast->ty.integer.is_signed = 0;
-      ast->ty.integer.width = 1;
-      ast->ty = resolve_type(typecheck, &ast->ty);
-      return &ast->ty;
     } break;
 
     case AST_EXPR_TYPE_MATCH: {

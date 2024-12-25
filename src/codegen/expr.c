@@ -202,9 +202,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       }
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL: {
-    } break;
-
     case AST_EXPR_TYPE_BLOCK: {
       return emit_block(codegen, &ast->block);
     } break;
@@ -358,47 +355,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
               codegen->llvm_builder, expr,
               LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), (unsigned)-1, 0), "comp");
       }
-    } break;
-
-    case AST_EXPR_TYPE_BOOLEAN: {
-      LLVMIntPredicate iop;
-      LLVMRealPredicate fop;
-      switch (ast->boolean.op) {
-        case TOKEN_EQUALS:
-          iop = LLVMIntEQ;
-          fop = LLVMRealOEQ;
-          break;
-        case TOKEN_NE:
-          iop = LLVMIntNE;
-          fop = LLVMRealONE;
-          break;
-        case TOKEN_LT:
-          iop = LLVMIntSLT;
-          fop = LLVMRealOLT;
-          break;
-        case TOKEN_GT:
-          iop = LLVMIntSGT;
-          fop = LLVMRealOGT;
-          break;
-        case TOKEN_LTE:
-          iop = LLVMIntSLE;
-          fop = LLVMRealOLE;
-          break;
-        case TOKEN_GTE:
-          iop = LLVMIntSGE;
-          fop = LLVMRealOGE;
-          break;
-        default:
-          fprintf(stderr, "unhandled boolean op %d\n", ast->boolean.op);
-          return NULL;
-      }
-
-      LLVMValueRef lhs = emit_expr(codegen, ast->boolean.lhs);
-      LLVMValueRef rhs = emit_expr(codegen, ast->boolean.rhs);
-      if (ast->boolean.lhs->ty.ty == AST_TYPE_FLOAT) {
-        return LLVMBuildFCmp(codegen->llvm_builder, fop, lhs, rhs, "cmp");
-      }
-      return LLVMBuildICmp(codegen->llvm_builder, iop, lhs, rhs, "cmp");
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {

@@ -35,8 +35,6 @@
 #define AST_EXPR_TYPE_BLOCK 2
 #define AST_EXPR_TYPE_BINARY 3
 #define AST_EXPR_TYPE_VARIABLE 4
-#define AST_EXPR_TYPE_LOGICAL 5  // should be removed
-#define AST_EXPR_TYPE_LIST 6     // should be removed
 #define AST_EXPR_TYPE_DEREF 7
 #define AST_EXPR_TYPE_CALL 8
 #define AST_EXPR_TYPE_VOID 9
@@ -46,7 +44,6 @@
 #define AST_EXPR_TYPE_ASSIGN 13
 #define AST_EXPR_TYPE_REF 14
 #define AST_EXPR_TYPE_LOAD 15
-#define AST_EXPR_TYPE_BOOLEAN 16  // should be removed
 #define AST_EXPR_TYPE_ARRAY_INDEX 17
 #define AST_EXPR_TYPE_MATCH 18
 #define AST_EXPR_TYPE_STRUCT_INIT 19
@@ -140,13 +137,6 @@ struct ast_expr_binary {
   struct ast_expr *rhs;
 };
 
-// Same as binary, but short-circuits evaluation based on the operator
-struct ast_expr_logical {
-  int op;
-  struct ast_expr *lhs;
-  struct ast_expr *rhs;
-};
-
 struct ast_expr_variable {
   struct token ident;
 };
@@ -207,12 +197,6 @@ struct ast_expr_load {
   struct ast_expr *expr;
 };
 
-struct ast_expr_boolean {
-  int op;
-  struct ast_expr *lhs;
-  struct ast_expr *rhs;
-};
-
 struct ast_expr_array_index {
   struct ast_expr *target;
   struct ast_expr *index;
@@ -268,7 +252,6 @@ struct ast_expr {
     struct ast_block block;
     struct ast_expr_binary binary;
     struct ast_expr_variable variable;
-    struct ast_expr_logical logical;
     struct ast_expr_list *list;
     struct ast_expr_deref deref;
     struct ast_expr_call call;
@@ -278,7 +261,6 @@ struct ast_expr {
     struct ast_expr_assign assign;
     struct ast_expr_ref ref;
     struct ast_expr_load load;
-    struct ast_expr_boolean boolean;
     struct ast_expr_array_index array_index;
     struct ast_expr_match match;
     struct ast_expr_pattern_match pattern_match;

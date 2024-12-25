@@ -205,25 +205,6 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
       fprintf(stream, ")");
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL:
-      code_emit_expr(stream, ast->logical.lhs, indent);
-      fprintf(stream, " %s ", ast_logical_op_to_str(ast->logical.op));
-      code_emit_expr(stream, ast->logical.rhs, indent);
-      break;
-
-    case AST_EXPR_TYPE_LIST: {
-      fprintf(stream, "[");
-      struct ast_expr_list *node = ast->list;
-      while (node) {
-        code_emit_expr(stream, node->expr, indent);
-        if (node->next) {
-          fprintf(stream, ", ");
-        }
-        node = node->next;
-      }
-      fprintf(stream, "]");
-    } break;
-
     case AST_EXPR_TYPE_BLOCK:
       code_emit_block(stream, &ast->block, 0);
       break;

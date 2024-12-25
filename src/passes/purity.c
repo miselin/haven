@@ -197,15 +197,6 @@ static int check_purity_expr(struct ast_expr *ast) {
       }
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL: {
-      if (check_purity_expr(ast->binary.lhs) < 0) {
-        return -1;
-      }
-      if (check_purity_expr(ast->binary.rhs) < 0) {
-        return -1;
-      }
-    } break;
-
     case AST_EXPR_TYPE_BLOCK: {
       return check_purity_block(&ast->block);
     } break;
@@ -278,15 +269,6 @@ static int check_purity_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_UNARY: {
       return check_purity_expr(ast->unary.expr);
-    } break;
-
-    case AST_EXPR_TYPE_BOOLEAN: {
-      if (check_purity_expr(ast->boolean.lhs) < 0) {
-        return -1;
-      }
-      if (check_purity_expr(ast->boolean.rhs) < 0) {
-        return -1;
-      }
     } break;
 
     case AST_EXPR_TYPE_MATCH: {

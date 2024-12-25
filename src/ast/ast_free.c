@@ -130,15 +130,6 @@ void free_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_VARIABLE:
       break;
 
-    case AST_EXPR_TYPE_LOGICAL:
-      free_expr(ast->logical.lhs);
-      free_expr(ast->logical.rhs);
-      break;
-
-    case AST_EXPR_TYPE_LIST: {
-      free_expr_list(ast->list);
-    } break;
-
     case AST_EXPR_TYPE_DEREF:
       free_expr(ast->deref.target);
       break;
@@ -188,11 +179,6 @@ void free_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_LOAD:
       free_expr(ast->load.expr);
-      break;
-
-    case AST_EXPR_TYPE_BOOLEAN:
-      free_expr(ast->boolean.lhs);
-      free_expr(ast->boolean.rhs);
       break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX:

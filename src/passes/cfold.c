@@ -135,13 +135,6 @@ static struct ast_expr *cfold_expr(struct ast_expr *ast) {
       // TODO: if both are constants, fold them
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL: {
-      ast->logical.lhs = cfold_expr(ast->logical.lhs);
-      ast->logical.rhs = cfold_expr(ast->logical.rhs);
-
-      // TODO: if both are constants, fold them
-    } break;
-
     case AST_EXPR_TYPE_BLOCK: {
       cfold_block(&ast->block);
     } break;
@@ -180,11 +173,6 @@ static struct ast_expr *cfold_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_LOAD: {
       ast->load.expr = cfold_expr(ast->load.expr);
-    } break;
-
-    case AST_EXPR_TYPE_BOOLEAN: {
-      ast->boolean.lhs = cfold_expr(ast->boolean.lhs);
-      ast->boolean.rhs = cfold_expr(ast->boolean.rhs);
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {

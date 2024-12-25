@@ -297,15 +297,6 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       }
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL: {
-      if (check_semantic_expr(semantic, ast->binary.lhs) < 0) {
-        return -1;
-      }
-      if (check_semantic_expr(semantic, ast->binary.rhs) < 0) {
-        return -1;
-      }
-    } break;
-
     case AST_EXPR_TYPE_BLOCK: {
       return check_semantic_block(semantic, &ast->block);
     } break;
@@ -374,15 +365,6 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
 
     case AST_EXPR_TYPE_UNARY: {
       return check_semantic_expr(semantic, ast->unary.expr);
-    } break;
-
-    case AST_EXPR_TYPE_BOOLEAN: {
-      if (check_semantic_expr(semantic, ast->boolean.lhs) < 0) {
-        return -1;
-      }
-      if (check_semantic_expr(semantic, ast->boolean.rhs) < 0) {
-        return -1;
-      }
     } break;
 
     case AST_EXPR_TYPE_MATCH: {

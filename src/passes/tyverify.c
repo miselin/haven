@@ -15,8 +15,6 @@
 #include "types.h"
 #include "utility.h"
 
-locale_t x;
-
 int typecheck_verify_ast(struct ast_program *ast);
 static int typecheck_verify_toplevel(struct ast_toplevel *ast);
 static int typecheck_verify_block(struct ast_block *ast);
@@ -234,15 +232,6 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
       }
     } break;
 
-    case AST_EXPR_TYPE_LOGICAL: {
-      if (typecheck_verify_expr(ast->logical.lhs) < 0) {
-        return -1;
-      }
-      if (typecheck_verify_expr(ast->logical.rhs) < 0) {
-        return -1;
-      }
-    } break;
-
     case AST_EXPR_TYPE_BLOCK: {
       return typecheck_verify_block(&ast->block);
     } break;
@@ -311,15 +300,6 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_UNARY: {
       if (typecheck_verify_expr(ast->unary.expr) < 0) {
-        return -1;
-      }
-    } break;
-
-    case AST_EXPR_TYPE_BOOLEAN: {
-      if (typecheck_verify_expr(ast->boolean.lhs) < 0) {
-        return -1;
-      }
-      if (typecheck_verify_expr(ast->boolean.rhs) < 0) {
         return -1;
       }
     } break;
