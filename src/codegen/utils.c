@@ -153,6 +153,8 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
     } break;
     case AST_TYPE_POINTER:
       return LLVMPointerTypeInContext(codegen->llvm_context, 0);
+    case AST_TYPE_BOX:
+      return LLVMPointerTypeInContext(codegen->llvm_context, 0);
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
       return NULL;

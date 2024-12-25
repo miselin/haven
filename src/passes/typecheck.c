@@ -1539,6 +1539,37 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       return &ast->ty;
     } break;
 
+    case AST_EXPR_TYPE_BOX: {
+      struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->box_expr.expr);
+      if (!inner_ty) {
+        return NULL;
+      }
+
+      ast->ty.ty = AST_TYPE_BOX;
+      ast->ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
+      *ast->ty.pointer.pointee = copy_type(inner_ty);
+      ast->ty = resolve_type(typecheck, &ast->ty);
+      return &ast->ty;
+    } break;
+
+    case AST_EXPR_TYPE_UNBOX: {
+      struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->box_expr.expr);
+      if (!inner_ty) {
+        return NULL;
+      }
+
+      if (inner_ty->ty != AST_TYPE_BOX) {
+        typecheck_diag_expr(typecheck, ast, "unbox can only be used with boxed types\n");
+        return &typecheck->error_type;
+      }
+
+      ast->ty.ty = AST_TYPE_POINTER;
+      ast->ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
+      *ast->ty.pointer.pointee = copy_type(inner_ty->pointer.pointee);
+      ast->ty = resolve_type(typecheck, &ast->ty);
+      return &ast->ty;
+    } break;
+
     default:
       typecheck_diag_expr(typecheck, ast, "typecheck: unhandled expression type %d\n", ast->type);
   }

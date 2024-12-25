@@ -50,6 +50,7 @@ enum ast_ty_id {
   AST_TYPE_FUNCTION,  // for function pointers
   AST_TYPE_MATRIX,
   AST_TYPE_POINTER,  // points at another type
+  AST_TYPE_BOX,     // similar to a pointer, but with more logic
 };
 
 struct ast_struct_field {
@@ -241,9 +242,19 @@ int same_type(struct ast_ty *, struct ast_ty *);
 struct ast_ty ptr_type(struct ast_ty);
 
 /**
+ * @brief Wrap the given type in a box type.
+ */
+struct ast_ty box_type(struct ast_ty);
+
+/**
  * @brief Unwrap a pointer type to get the inner type.
  */
 struct ast_ty *ptr_pointee_type(struct ast_ty *);
+
+/**
+ * @brief Unwrap a box type to get the inner type.
+ */
+struct ast_ty *box_pointee_type(struct ast_ty *);
 
 /**
  * @brief Can the type be indexed?

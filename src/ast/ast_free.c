@@ -232,6 +232,11 @@ void free_expr(struct ast_expr *ast) {
       }
       break;
 
+    case AST_EXPR_TYPE_BOX:
+    case AST_EXPR_TYPE_UNBOX:
+      free_expr(ast->box_expr.expr);
+      break;
+
     default:
       fprintf(stderr, "unhandled free for expr type %d\n", ast->type);
   }

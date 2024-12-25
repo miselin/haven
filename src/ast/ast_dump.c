@@ -419,6 +419,15 @@ void dump_expr(struct ast_expr *ast, int indent) {
       }
       break;
 
+    case AST_EXPR_TYPE_BOX:
+    case AST_EXPR_TYPE_UNBOX:
+      INDENTED(indent, "%s -> ", ast->type == AST_EXPR_TYPE_BOX ? "Box" : "Unbox");
+      dump_ty(&ast->ty);
+      fprintf(stderr, "\n");
+
+      dump_expr(ast->box_expr.expr, indent + 1);
+      break;
+
     default:
       INDENTED(indent, "<unknown-expr %d>\n", ast->type);
   }

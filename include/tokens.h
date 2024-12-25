@@ -82,6 +82,8 @@ enum token_id {
   TOKEN_KW_CIMPORT,    // cimport
   TOKEN_KW_UNION,      // union
   TOKEN_KW_SIZEOF,     // sizeof
+  TOKEN_KW_BOX,        // box
+  TOKEN_KW_UNBOX,      // unbox
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

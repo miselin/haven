@@ -1,0 +1,8 @@
+
+pub impure fn i32 main() {
+    let mut boxed = box as i32 5;
+    let inner = unbox boxed;
+    let result = load inner;
+    boxed = nil;
+    result
+}

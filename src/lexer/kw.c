@@ -40,6 +40,8 @@ struct lookup {
     {"cimport", TOKEN_KW_CIMPORT},
     {"union", TOKEN_KW_UNION},
     {"sizeof", TOKEN_KW_SIZEOF},
+    {"box", TOKEN_KW_BOX},
+    {"unbox", TOKEN_KW_UNBOX},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {

@@ -1088,6 +1088,22 @@ static struct ast_expr *parse_factor(struct parser *parser) {
       result->ref.expr = parse_factor(parser);
       break;
 
+    // box a value
+    case TOKEN_KW_BOX:
+      // box <expr>
+      parser_consume_peeked(parser, NULL);
+      result->type = AST_EXPR_TYPE_BOX;
+      result->box_expr.expr = parse_factor(parser);
+      break;
+
+    // unbox a value
+    case TOKEN_KW_UNBOX:
+      // unbox <expr>
+      parser_consume_peeked(parser, NULL);
+      result->type = AST_EXPR_TYPE_UNBOX;
+      result->box_expr.expr = parse_factor(parser);
+      break;
+
       // deref ptr
     case TOKEN_KW_LOAD:
       // load <expr>

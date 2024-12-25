@@ -173,6 +173,10 @@ const char *token_id_to_string(enum token_id token) {
       return "sizeof";
     case TOKEN_DASHGT:
       return "->";
+    case TOKEN_KW_BOX:
+      return "box";
+    case TOKEN_KW_UNBOX:
+      return "unbox";
     case TOKEN_EOF:
       return "<EOF>";
   }

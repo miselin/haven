@@ -123,6 +123,36 @@ i32[2] arr = i32 {
 };
 ```
 
+### Boxed Types
+
+Boxing wraps a value in a heap-allocated structure. The underlying pointer
+can be retrieved with the `unbox` keyword.
+
+```
+fn i32 example() {
+    let val = box 5; // i4^
+    let inner = unbox val; // i4*
+    let result = load inner; // i4
+    val = nil;
+    result
+}
+```
+
+Box types are written much like pointers, but using a caret (`^`) instead
+of an asterisk (`*`):
+
+```
+fn i32 example(i32^ boxed);
+```
+
+#### Garbage Collection vs Reference Counting
+
+Passing `--no-gc` to the compiler will disable runtime garbage collection
+and shift box types to use a reference counting implementation for freeing
+memory when the box is no longer in use.
+
+TODO: write GC + runtime...
+
 ## Declarations
 
 ### Import Declarations

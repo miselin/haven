@@ -217,6 +217,23 @@ struct ast_ty *ptr_pointee_type(struct ast_ty *ty) {
   return ty->pointer.pointee;
 }
 
+struct ast_ty box_type(struct ast_ty pointee) {
+  struct ast_ty ty;
+  memset(&ty, 0, sizeof(ty));
+  ty.ty = AST_TYPE_BOX;
+  ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
+  *ty.pointer.pointee = pointee;
+  return ty;
+}
+
+struct ast_ty *box_pointee_type(struct ast_ty *ty) {
+  if (ty->ty != AST_TYPE_BOX) {
+    return NULL;
+  }
+
+  return ty->pointer.pointee;
+}
+
 const char *type_name(struct ast_ty *ty) {
   static char buf[256];
   type_name_into(ty, buf, 256);
@@ -350,6 +367,11 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       break;
     case AST_TYPE_POINTER:
       offset += snprintf(buf, maxlen, "Pointer <");
+      offset += type_name_into(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
+      break;
+    case AST_TYPE_BOX:
+      offset += snprintf(buf, maxlen, "Box <");
       offset += type_name_into(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;
