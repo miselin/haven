@@ -34,6 +34,19 @@ TEST(TrieTest, InsertOverwrite) {
   destroy_trie(trie);
 }
 
+TEST(TrieTest, LookupRemoved) {
+  struct trie *trie = new_trie();
+  trie_insert(trie, "shared", (void *)1);
+  trie_insert(trie, "share", (void *)2);
+  trie_insert(trie, "sha", (void *)3);
+
+  trie_remove(trie, "sha");
+
+  EXPECT_EQ(trie_lookup(trie, "share"), (void *)2);
+
+  destroy_trie(trie);
+}
+
 TEST(TrieTest, InsertEmpty) {
   struct trie *trie = new_trie();
   trie_insert(trie, "", (void *)1);

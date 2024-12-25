@@ -125,3 +125,30 @@ TEST(Parser, TyDeclMissingSemi) {
   destroy_lexer(state);
   destroy_compiler(compiler);
 }
+
+// Malformed parse that caused a hang in fuzzing
+TEST(Parser, MalformedHang1) {
+  struct compiler *compiler = new_compiler(0, NULL);
+  struct lex_state *state = new_lexer(NULL, "<stdin>", compiler);
+  struct parser *parser = new_parser(state, compiler);
+
+  push_lexer(state, "#}");
+
+  EXPECT_EQ(parser_run(parser, 0), -1);
+
+  struct parser_diag *diag = parser_pop_diag(parser);
+  EXPECT_NE(diag, nullptr);
+
+  EXPECT_STREQ(parser_diag_msg(diag), "unexpected EOF or other error in token stream");
+  EXPECT_EQ(parser_diag_severity(diag), Error);
+  struct lex_locator *loc = parser_diag_loc(diag);
+
+  EXPECT_EQ((int32_t)loc->line, 0);
+  EXPECT_EQ(loc->column, 2);
+
+  parser_free_diag(diag);
+
+  destroy_parser(parser);
+  destroy_lexer(state);
+  destroy_compiler(compiler);
+}

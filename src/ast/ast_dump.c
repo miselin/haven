@@ -122,7 +122,11 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
         dump_expr(ast->iter.range.step, indent + 2);
       }
       INDENTED(indent + 2, "%s -> ", ast->iter.index.ident.value.identv.ident);
-      dump_ty(&ast->iter.index_vdecl->ty);
+      if (ast->iter.index_vdecl) {
+        dump_ty(&ast->iter.index_vdecl->ty);
+      } else {
+        fprintf(stderr, "<invalid-type>");
+      }
       fprintf(stderr, "\n");
 
       dump_block(&ast->iter.block, indent + 3);
@@ -172,6 +176,10 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
 }
 
 void dump_expr(struct ast_expr *ast, int indent) {
+  if (!ast) {
+    return;
+  }
+
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT:
       INDENTED(indent, "Constant ");

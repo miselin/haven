@@ -131,11 +131,7 @@ void trie_insert(struct trie *trie, const char *key, void *value) {
   node->value = value;
 }
 
-void *trie_lookup(struct trie *trie, const char *key) {
-  if (haven_trie_lookup) {
-    return haven_trie_lookup(trie, key);
-  }
-
+static struct trie_node *node_for(struct trie *trie, const char *key) {
   struct trie_node *node = trie->root;
   size_t i = 0;
   while (node && *key) {
@@ -157,7 +153,28 @@ void *trie_lookup(struct trie *trie, const char *key) {
     return NULL;
   }
 
+  return node;
+}
+
+void *trie_lookup(struct trie *trie, const char *key) {
+  if (haven_trie_lookup) {
+    return haven_trie_lookup(trie, key);
+  }
+
+  struct trie_node *node = node_for(trie, key);
+  if (!node) {
+    return node;
+  }
+
   return node->has_value ? node->value : NULL;
+}
+
+void trie_remove(struct trie *trie, const char *key) {
+  struct trie_node *node = node_for(trie, key);
+  if (node) {
+    node->has_value = 0;
+    node->value = NULL;
+  }
 }
 
 static void dump_trie_node(FILE *stream, struct trie_node *node) {

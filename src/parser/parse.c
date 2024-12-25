@@ -543,7 +543,7 @@ static struct ast_toplevel *parser_parse_preproc(struct parser *parser) {
   // eat whatever remains in the preprocessor definition
   while (1) {
     peek = parser_peek_with_nl(parser);
-    if (peek == TOKEN_NEWLINE) {
+    if (peek == TOKEN_NEWLINE || peek == TOKEN_EOF || peek == TOKEN_UNKNOWN) {
       break;
     }
 

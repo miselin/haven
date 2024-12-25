@@ -114,18 +114,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   // fprintf(stderr, "result from parse: %d\n", rc);
 
   if (rc == 0) {
-    struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);
-    rc = cfolder_run(cfolder);
-    destroy_cfolder(cfolder);
-  }
-
-  if (until == PassCFold) {
-    goto out;
-  }
-
-  // fprintf(stderr, "result from cfold: %d\n", rc);
-
-  if (rc == 0) {
     // pre-typecheck semantic pass
     struct semantic *semantic = semantic_new(parser_get_ast(parser), compiler, 0);
     rc = semantic_run(semantic);
@@ -137,6 +125,18 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   }
 
   // fprintf(stderr, "result from first semantic pass: %d\n", rc);
+
+  if (rc == 0) {
+    struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);
+    rc = cfolder_run(cfolder);
+    destroy_cfolder(cfolder);
+  }
+
+  if (until == PassCFold) {
+    goto out;
+  }
+
+  // fprintf(stderr, "result from cfold: %d\n", rc);
 
   if (rc == 0) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser), compiler);

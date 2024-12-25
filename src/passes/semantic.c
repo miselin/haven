@@ -121,6 +121,11 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
     } break;
 
     case AST_STMT_TYPE_ITER: {
+      if (!(ast->iter.range.start && ast->iter.range.end)) {
+        semantic_diag_at(semantic, DiagError, &ast->loc, "iteration range must have start and end");
+        return -1;
+      }
+
       if (check_semantic_expr(semantic, ast->iter.range.start) < 0) {
         return -1;
       }
