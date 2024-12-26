@@ -185,6 +185,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       } else if (ast->ty.ty == AST_TYPE_STRUCT) {
         // don't load structs, they need to be accessed via GEP
         return lookup->ref;
+      } else if (ast->ty.ty == AST_TYPE_ARRAY) {
+        // don't load arrays, they need to be accessed via GEP
+        return lookup->ref;
       }
 
       return LLVMBuildLoad2(codegen->llvm_builder, lookup->variable_type, lookup->ref,
@@ -306,6 +309,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMValueRef lvalue = emit_lvalue(codegen, ast);
       if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
         return lvalue;
+      } else if (ast->ty.ty == AST_TYPE_ARRAY) {
+        // we rarely want to actually load/move the underlying array
+        return lvalue;
       }
       return LLVMBuildLoad2(codegen->llvm_builder, result_ty, lvalue, "deref");
     }; break;
@@ -398,6 +404,13 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
       LLVMValueRef val = emit_lvalue(codegen, ast);
+
+      // certain types need to stay pointers
+      if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
+        return val;
+      } else if (ast->ty.ty == AST_TYPE_STRUCT) {
+        return val;
+      }
 
       return LLVMBuildLoad2(codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, &ast->ty), val,
                             "array.index.load");

@@ -1,0 +1,15 @@
+pub fn i8* malloc(i32 size);
+pub fn i32 printf(str fmt, *);
+
+type Thing = struct {
+    i8[5] name;
+};
+
+pub fn i32 main() {
+    let mut thing = as Thing* malloc(sizeof Thing);
+    thing->name[0] = 'H';
+    thing->name[1] = 'i';
+    thing->name[2] = 0;
+    printf("hi: %s\n", thing->name);
+    0
+}

@@ -17,10 +17,10 @@ type TrieChild = enum {
 
 type TrieNode = struct {
     i32 id;
-    i8* key;
+    i8[256] key;
     TrieValue value;
 
-    TrieChild* children;
+    TrieChild[256] children;
 };
 
 type Trie = struct {
@@ -30,23 +30,21 @@ type Trie = struct {
 
 impure fn i8* char_to_i8ptr(i8 c) {
     let mut ptr = as i8* malloc(2);
-    store (ptr + 0) c;
-    store (ptr + 1) as i8 0;
+    ptr[0] = c;
+    ptr[1] = 0;
     ptr
 }
 
 pub impure fn Trie* haven_new_trie() {
     let mut heap_root_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
     heap_root_node->id = 0;
-    heap_root_node->key = as i8* malloc(256);
-    store (heap_root_node->key + 0) as i8 0;
+    heap_root_node->key[0] = 0;
     heap_root_node->value = TrieValue::NoValue;
-    heap_root_node->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
     iter 0:255 i {
-        store (heap_root_node->children + i) TrieChild::NoChild;
+        heap_root_node->children[i] = TrieChild::NoChild;
     };
 
-    let mut Trie* heap_trie = as Trie* malloc(16);
+    let mut Trie* heap_trie = as Trie* malloc(as u64 sizeof Trie);
     heap_trie->root = heap_root_node;
     heap_trie->next_id = 0;
 
@@ -55,7 +53,7 @@ pub impure fn Trie* haven_new_trie() {
 
 impure fn i32 has_children(TrieNode *node) {
     iter 0:255 i {
-        match load (node->children + i) {
+        match node->children[i] {
             TrieChild::Child(_) => {
                 ret 1;
             }
@@ -73,12 +71,12 @@ impure fn i32 next_id(mut Trie *trie) {
 }
 
 pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
-    if (load key) == 0 {
+    if key[0] == 0 {
         ret;
     };
 
     let mut node = trie->root;
-    let mut root_child = load (node->children + (load key));
+    let mut root_child = node->children[key[0]];
     node = match root_child {
         TrieChild::Child(child) => {
             child
@@ -86,16 +84,14 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
         _ => {
             let mut new_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
             new_node->id = next_id(trie);
-            new_node->key = as i8* malloc(256);
-            store (new_node->key + 0) (load key);
-            store (new_node->key + 1) as i8 0;
+            new_node->key[0] = key[0];
+            new_node->key[1] = 0;
             new_node->value = TrieValue::NoValue;
-            new_node->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
             iter 0:255 i {
-                store (new_node->children + i) TrieChild::NoChild;
+                new_node->children[i] = TrieChild::NoChild;
             };
 
-            store (node->children + (load key)) TrieChild::Child(new_node);
+            node->children[key[0]] = TrieChild::Child(new_node);
 
             new_node
         }
@@ -103,14 +99,14 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
 
     let mut i32 ikey = 0;
     let mut i32 inode = 0;
-    while (load (key + ikey)) > 0 {
-        let mut k = load (key + ikey);
-        let mut nk = load (node->key + inode);
+    while (key[ikey]) > 0 {
+        let mut k = key[ikey];
+        let mut nk = node->key[inode];
         if k == nk {
             ikey = ikey + 1;
             inode = inode + 1;
-            nk = load (node->key + inode);
-            k = load (key + ikey);
+            nk = node->key[inode];
+            k = key[ikey];
         };
 
         if nk > 0 {
@@ -118,22 +114,20 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
             let mut split_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
             split_node->id = next_id(trie);
 
-            split_node->key = as i8* malloc(256);
-            strcpy(split_node->key, node->key + inode);
+            strcpy(split_node->key, (as i8* node->key) + inode);
 
             split_node->value = node->value;
 
-            split_node->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
             iter 0:255 i {
-                store (split_node->children + i) TrieChild::NoChild;
+                split_node->children[i] = TrieChild::NoChild;
             };
 
             // old node gets the prefix
-            store (node->key + inode) as i8 0;
+            node->key[inode] = 0;
             node->value = TrieValue::NoValue;
 
-            let n = load split_node->key;
-            store (node->children + n) TrieChild::Child(split_node);
+            let n = split_node->key[0];
+            node->children[n] = TrieChild::Child(split_node);
         };
 
         if k == 0 {
@@ -143,16 +137,16 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
 
         if !has_children(node) {
             // just append the key
-            while (load (key + ikey)) > 0 {
-                store (node->key + inode) (load (key + ikey));
+            while key[ikey] > 0 {
+                node->key[inode] = key[ikey];
                 ikey = ikey + 1;
                 inode = inode + 1;
             };
-            store (node->key + inode) as i8 0;
+            node->key[inode] = 0;
             break;
         };
 
-        node = match load (node->children + k) {
+        node = match node->children[k] {
             TrieChild::Child(child) => {
                 inode = 0;
                 child
@@ -160,15 +154,13 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
             _ => {
                 let mut new_child = as TrieNode* calloc(1, as u64 sizeof TrieNode);
                 new_child->id = next_id(trie);
-                new_child->key = as i8* malloc(256);
                 strcpy(new_child->key, key + ikey);
                 new_child->value = TrieValue::NoValue;
-                new_child->children = as TrieChild* calloc(256, as u64 sizeof TrieChild);
                 iter 0:255 i {
-                    store (new_child->children + i) TrieChild::NoChild;
+                    new_child->children[i] = TrieChild::NoChild;
                 };
 
-                store (node->children + k) TrieChild::Child(new_child);
+                node->children[k] = TrieChild::Child(new_child);
                 new_child
             }
         };
@@ -185,15 +177,15 @@ impure fn TrieNode* node_for(Trie *trie, i8 *key) {
     let mut node = trie->root;
     let mut i32 ikey = 0;
     let mut i32 i = 0;
-    while (load (key + ikey)) != 0 && node != nil {
-        let k = load (key + ikey);
-        if k == (load (node->key + i)) {
+    while (key[ikey]) != 0 && node != nil {
+        let k = key[ikey];
+        if k == node->key[i] {
             ikey = ikey + 1;
             i = i + 1;
             continue;
         };
 
-        node = match (load (node->children + k)) {
+        node = match node->children[k] {
             TrieChild::Child(child) => {
                 i = 0;
                 child
@@ -206,7 +198,7 @@ impure fn TrieNode* node_for(Trie *trie, i8 *key) {
 
     if node == nil {
         as i8* 0
-    } else if (load (key + ikey)) != 0 || (load (node->key + i)) != 0 {
+    } else if key[ikey] != 0 || node->key[i] != 0 {
         as i8* 0
     } else {
         node
@@ -238,7 +230,7 @@ pub impure fn void haven_trie_remove(mut Trie* trie, i8* key) {
 
 impure fn void destroy_trie_node(TrieNode *node) {
     iter 0:255 i {
-        match load (node->children + i) {
+        match node->children[i] {
             TrieChild::Child(child) => {
                 destroy_trie_node(child);
             }
@@ -246,8 +238,6 @@ impure fn void destroy_trie_node(TrieNode *node) {
         };
     };
 
-    free(node->key);
-    free(node->children);
     free(node);
 }
 
@@ -263,7 +253,7 @@ impure fn void dump_trie_node(FILE* stream, TrieNode *node) {
 
   fprintf(stream, "  %zd [label=\"%s\"];\n", node->id, node->key);
   iter 0:255 i {
-    match load (node->children + i) {
+    match node->children[i] {
       TrieChild::Child(child) => {
         fprintf(stream, "  %zd -> %zd [label=\"%d %c\"];\n", node->id, (as TrieNode* child)->id, i, i);
         dump_trie_node(stream, child);
@@ -280,7 +270,7 @@ pub impure fn void haven_dump_trie(Trie *trie) {
 
     fprintf(stream, "  root [label=\"root\"];\n");
     iter 0:255 i {
-        match load ((trie->root)->children + i) {
+        match (trie->root)->children[i] {
             TrieChild::Child(child) => {
                 fprintf(stream, "  root -> %zd [label=\"%c\"];\n", (as TrieNode* child)->id, i);
                 dump_trie_node(stream, child);

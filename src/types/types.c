@@ -87,6 +87,15 @@ int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
     }
   }
 
+  if (ty1->ty == AST_TYPE_POINTER || ty2->ty == AST_TYPE_POINTER) {
+    struct ast_ty *ptrty = ty1->ty == AST_TYPE_POINTER ? ty1 : ty2;
+    struct ast_ty *otherty = ty1->ty == AST_TYPE_POINTER ? ty2 : ty1;
+
+    if (otherty->ty == AST_TYPE_ARRAY) {
+      return same_type_class(ptr_pointee_type(ptrty), otherty->array.element_ty, flagmask);
+    }
+  }
+
   return same;
 }
 
@@ -97,6 +106,14 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
 
   // pointers can be converted to each other
   if (ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_POINTER) {
+    // TODO: only if underlying types are the same
+    return 1;
+  }
+
+  // arrays can be pointers
+  if ((ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_ARRAY) ||
+      (ty1->ty == AST_TYPE_ARRAY && ty2->ty == AST_TYPE_POINTER)) {
+    // TODO: only if underlying types are the same
     return 1;
   }
 
@@ -138,6 +155,12 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
 int same_type_masked(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
   if (!same_type_class(ty1, ty2, flagmask)) {
     return 0;
+  }
+
+  // same_type_class said this mismatch was fine, but all other checks after this
+  // require the types to truly be the same (or else they'll compare the wrong things)
+  if (ty1->ty != ty2->ty) {
+    return 1;
   }
 
   switch (ty1->ty) {
