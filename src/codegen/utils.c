@@ -1,3 +1,4 @@
+#include <libgen.h>
 #include <llvm-c-18/llvm-c/Target.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
@@ -195,8 +196,10 @@ LLVMTypeRef ast_underlying_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty 
 
 void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {
   if (loc) {
+    struct codegen_compileunit *unit = codegen_get_compileunit(codegen, loc);
+
     LLVMContextRef context = codegen->llvm_context;
-    LLVMMetadataRef scope = codegen->compile_unit;
+    LLVMMetadataRef scope = unit->compile_unit;
     if (codegen->current_function_metadata) {
       if (codegen->current_block) {
         scope = codegen->current_block->scope_metadata;
@@ -483,4 +486,47 @@ void mangle_type(struct ast_ty *ty, char *buf, size_t len) {
       // no.
       break;
   }
+}
+
+struct codegen_compileunit *codegen_get_compileunit(struct codegen *codegen,
+                                                    struct lex_locator *loc) {
+  if (!loc->file[0]) {
+    compiler_log(codegen->compiler, LogLevelError, "codegen", "no file in loc [line=%zd col=%zd]",
+                 loc->line, loc->column);
+    return NULL;
+  }
+
+  struct codegen_compileunit *result = kv_lookup(codegen->compile_units, loc->file);
+  if (result) {
+    return result;
+  }
+
+  result = calloc(1, sizeof(struct codegen_compileunit));
+
+  char *dup1 = NULL, *dup2 = NULL;
+  char *filename = NULL;
+  char *dir = NULL;
+  {
+    dup1 = strdup(loc->file);
+    dir = dirname(dup1);
+  }
+  {
+    dup2 = strdup(loc->file);
+    filename = basename(dup2);
+  }
+
+  result->file_metadata = LLVMDIBuilderCreateFile(codegen->llvm_dibuilder, filename,
+                                                  strlen(filename), dir, strlen(dir));
+  result->compile_unit = LLVMDIBuilderCreateCompileUnit(
+      codegen->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, COMPILER_IDENT, 5,
+      0, "", 0, 0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
+
+  free(dup1);
+  free(dup2);
+
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "created compile unit for %s",
+               loc->file);
+  kv_insert(codegen->compile_units, loc->file, result);
+
+  return result;
 }

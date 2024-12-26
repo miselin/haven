@@ -42,24 +42,9 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
   result->functions = new_kv();
 
   result->structs = new_kv();
+  result->compile_units = new_kv();
 
-  char *dup1 = NULL, *dup2 = NULL;
-  char *filename = NULL;
-  char *dir = NULL;
-  {
-    dup1 = strdup(ast->loc.file);
-    dir = dirname(dup1);
-  }
-  {
-    dup2 = strdup(ast->loc.file);
-    filename = basename(dup2);
-  }
-
-  result->file_metadata =
-      LLVMDIBuilderCreateFile(result->llvm_dibuilder, filename, strlen(filename), dir, strlen(dir));
-  result->compile_unit = LLVMDIBuilderCreateCompileUnit(
-      result->llvm_dibuilder, LLVMDWARFSourceLanguageC, result->file_metadata, COMPILER_IDENT, 5, 0,
-      "", 0, 0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
+  codegen_get_compileunit(result, &ast->loc);
 
   LLVMAddModuleFlag(
       result->llvm_module, LLVMModuleFlagBehaviorOverride, "Dwarf Version", 13,
@@ -68,9 +53,6 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
   LLVMAddModuleFlag(
       result->llvm_module, LLVMModuleFlagBehaviorOverride, "Debug Info Version", 18,
       LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(result->llvm_context), 3, 0)));
-
-  free(dup1);
-  free(dup2);
 
   char *triple = LLVMGetDefaultTargetTriple();
 
@@ -241,6 +223,14 @@ void destroy_codegen(struct codegen *codegen) {
 
   destroy_kv(codegen->functions);
   codegen_internal_leave_scope(codegen, 0);
+
+  iter = kv_iter(codegen->compile_units);
+  while (!kv_end(iter)) {
+    struct codegen_compileunit *entry = kv_next(&iter);
+    free(entry);
+  }
+  destroy_kv(codegen->compile_units);
+
   LLVMDisposeTargetData(codegen->llvm_data_layout);
   LLVMDisposeTargetMachine(codegen->llvm_target_machine);
   LLVMDisposeDIBuilder(codegen->llvm_dibuilder);
@@ -360,6 +350,7 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
 }
 
 static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit toplevel %d", ast->type);
   update_debug_loc(codegen, &ast->loc);
   if (ast->type == AST_DECL_TYPE_FDECL) {
     emit_fdecl(codegen, &ast->fdecl, &ast->loc);
@@ -403,12 +394,14 @@ void codegen_internal_enter_scope(struct codegen *codegen, struct lex_locator *a
     return;
   }
 
+  struct codegen_compileunit *unit = codegen_get_compileunit(codegen, at);
+
   struct codegen_block *parent = codegen->current_block;
   codegen->current_block = calloc(1, sizeof(struct codegen_block));
   codegen->current_block->parent = parent;
   codegen->current_block->scope_metadata = LLVMDIBuilderCreateLexicalBlock(
       codegen->llvm_dibuilder, parent ? parent->scope_metadata : codegen->current_function_metadata,
-      codegen->file_metadata, (unsigned)at->line + 1, (unsigned)at->column + 1);
+      unit->file_metadata, (unsigned)at->line + 1, (unsigned)at->column + 1);
 }
 
 void codegen_internal_leave_scope(struct codegen *codegen, int lexical_block) {

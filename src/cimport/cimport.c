@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "ast.h"
+#include "clang-c/CXFile.h"
 #include "clang-c/CXString.h"
 #include "parse.h"
 #include "tokens.h"
@@ -343,6 +344,14 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
   CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
   CXCursor TU_cursor = clang_getTranslationUnitCursor(TU);
 
+  CXSourceLocation loc = clang_getCursorLocation(cursor);
+
+  CXFile file;
+  unsigned line, column, offset;
+  clang_getFileLocation(loc, &file, &line, &column, &offset);
+
+  CXString loc_name = clang_getFileName(file);
+
   // Check if this is a file-scope declaration
   if (clang_equalCursors(clang_getCursorSemanticParent(cursor), TU_cursor)) {
     // Extract relevant information
@@ -350,6 +359,9 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
     const char *spelling_c = clang_getCString(spelling);
 
     struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
+    strncpy(decl->loc.file, clang_getCString(loc_name), 256);
+    decl->loc.line = line;
+    decl->loc.column = column;
 
     enum CXCursorKind kind = clang_getCursorKind(cursor);
     if (kind == CXCursor_FunctionDecl) {
@@ -382,13 +394,19 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
         }
       }
 
-      decl->type = AST_DECL_TYPE_TYDECL;
-      decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
-      strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
+      // don't emit an alias for `typedef struct <name> { } <name>;`
+      if (strcmp(spelling_c, underlying_name_c) != 0) {
+        decl->type = AST_DECL_TYPE_TYDECL;
+        decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
+        strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
 
-      if (parse_simple_type(underlying, &decl->tydecl.ty) < 0) {
-        decl->tydecl.ty.ty = AST_TYPE_CUSTOM;
-        strncpy(decl->tydecl.ty.name, underlying_name_c, 256);
+        if (parse_simple_type(underlying, &decl->tydecl.ty) < 0) {
+          decl->tydecl.ty.ty = AST_TYPE_CUSTOM;
+          strncpy(decl->tydecl.ty.name, underlying_name_c, 256);
+        }
+      } else {
+        free(decl);
+        decl = NULL;
       }
 
       clang_disposeString(underlying_name);
@@ -422,6 +440,8 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
     fprintf(stderr, "skipping cursor kind %s\n",
             clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(cursor))));
   }
+
+  clang_disposeString(loc_name);
 
   return CXChildVisit_Continue;
 }

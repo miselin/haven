@@ -88,15 +88,18 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
         arm->pattern->pattern_match.inner_vdecl) {
       codegen_internal_enter_scope(codegen, &arm->expr->loc, 1);
 
+      struct ast_ty *binding_ty = &arm->pattern->pattern_match.inner_vdecl->ty;
+
       // we need to unwrap & define the inner value here
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
       entry->vdecl = arm->pattern->pattern_match.inner_vdecl;
-      entry->variable_type =
-          ast_ty_to_llvm_ty(codegen, &arm->pattern->pattern_match.inner_vdecl->ty);
-      entry->ref =
-          type_is_complex(&arm->pattern->pattern_match.inner_vdecl->ty)
-              ? main_expr_buf
-              : LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, main_expr_buf, "inner");
+      entry->variable_type = ast_ty_to_llvm_ty(codegen, binding_ty);
+      if (type_is_complex(binding_ty)) {
+        entry->ref = main_expr_buf;
+      } else {
+        entry->ref =
+            LLVMBuildLoad2(codegen->llvm_builder, entry->variable_type, main_expr_buf, "inner");
+      }
       scope_insert(codegen->scope,
                    arm->pattern->pattern_match.inner_vdecl->ident.value.identv.ident, entry);
     }

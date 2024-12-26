@@ -5,7 +5,6 @@
 #include <stdint.h>
 
 #include "lex.h"
-#include "tokens.h"
 #include "types.h"
 
 #define DECL_FLAG_PUB (1U << 0)

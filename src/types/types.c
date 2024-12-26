@@ -304,6 +304,9 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
     } break;
     case AST_TYPE_CUSTOM:
       offset += snprintf(buf, maxlen, "Ty(%s)", ty->name);
+      if (ty->custom.is_forward_decl) {
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, " (forward)");
+      }
       break;
     case AST_TYPE_STRUCT: {
       offset +=

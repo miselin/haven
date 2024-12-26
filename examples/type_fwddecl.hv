@@ -1,0 +1,13 @@
+
+type Child;
+
+type Node = struct {
+    i32 id;
+    Child left;
+    Child right;
+};
+
+type Child = enum {
+    Child(Node^),
+    NoChild
+};

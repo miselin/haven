@@ -135,14 +135,15 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   }
 
   {
-    LLVMMetadataRef func_md = LLVMDIBuilderCreateSubroutineType(codegen->llvm_dibuilder,
-                                                                codegen->file_metadata, NULL, 0, 0);
+    struct codegen_compileunit *unit = codegen_get_compileunit(codegen, at);
+
+    LLVMMetadataRef func_md =
+        LLVMDIBuilderCreateSubroutineType(codegen->llvm_dibuilder, unit->file_metadata, NULL, 0, 0);
 
     LLVMMetadataRef function_metadata = LLVMDIBuilderCreateFunction(
-        codegen->llvm_dibuilder, codegen->file_metadata, fdecl->ident.value.identv.ident,
-        strlen(fdecl->ident.value.identv.ident), "", 0, codegen->file_metadata,
-        (unsigned)at->line + 1, func_md, (fdecl->flags & DECL_FLAG_PUB) == 0, fdecl->body != NULL,
-        1, 0, 0);
+        codegen->llvm_dibuilder, unit->file_metadata, fdecl->ident.value.identv.ident,
+        strlen(fdecl->ident.value.identv.ident), "", 0, unit->file_metadata, (unsigned)at->line + 1,
+        func_md, (fdecl->flags & DECL_FLAG_PUB) == 0, fdecl->body != NULL, 1, 0, 0);
 
     LLVMSetSubprogram(func, function_metadata);
 

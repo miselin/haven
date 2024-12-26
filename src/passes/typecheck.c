@@ -10,7 +10,6 @@
 #include "compiler.h"
 #include "kv.h"
 #include "scope.h"
-#include "tokens.h"
 #include "types.h"
 #include "utility.h"
 
@@ -175,13 +174,6 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       new_type.enumty.templates = ast->fdecl.retty.enumty.templates;
 
       new_type.specialization_of = strdup(ast->fdecl.retty.name);
-
-      /*
-          new_type.enumty.fields = ast->fdecl.retty.template.outer->enumty.fields;
-          new_type.enumty.no_wrapped_fields =
-         ast->fdecl.retty.template.outer->enumty.no_wrapped_fields; new_type.enumty.num_fields =
-         ast->fdecl.retty.template.outer->enumty.num_fields;
-          */
       ast->fdecl.retty = new_type;
     }
 
@@ -281,22 +273,22 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     free_ty(&ast->vdecl.ty, 0);
     ast->vdecl.ty = new_type;
 
+    struct scope_entry *existing =
+        scope_lookup(typecheck->scope, ast->vdecl.ident.value.identv.ident, 0);
+    if (existing) {
+      fprintf(stderr, "typecheck: multiple definitions of variable %s\n",
+              ast->vdecl.ident.value.identv.ident);
+      ++typecheck->errors;
+      return;
+    }
+
+    struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
+    entry->vdecl = &ast->vdecl;
+
+    // insert before checking the initializer to allow recursive references
+    scope_insert(typecheck->scope, ast->vdecl.ident.value.identv.ident, entry);
+
     if (ast->vdecl.init_expr) {
-      struct scope_entry *existing =
-          scope_lookup(typecheck->scope, ast->vdecl.ident.value.identv.ident, 0);
-      if (existing) {
-        fprintf(stderr, "typecheck: multiple definitions of variable %s\n",
-                ast->vdecl.ident.value.identv.ident);
-        ++typecheck->errors;
-        return;
-      }
-
-      struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->vdecl = &ast->vdecl;
-
-      // insert before checking the initializer to allow recursive references
-      scope_insert(typecheck->scope, ast->vdecl.ident.value.identv.ident, entry);
-
       struct ast_ty *result = typecheck_expr(typecheck, ast->vdecl.init_expr);
       if (!result) {
         return;
@@ -317,11 +309,25 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       }
     }
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    struct alias_entry *entry =
-        NULL;  // kv_lookup(typecheck->aliases, ast->tydecl.ident.value.identv.ident);
+    struct alias_entry *entry = kv_lookup(typecheck->aliases, ast->tydecl.ident.value.identv.ident);
     if (!entry) {
       entry = calloc(1, sizeof(struct alias_entry));
       kv_insert(typecheck->aliases, ast->tydecl.ident.value.identv.ident, entry);
+    } else {
+      fprintf(stderr, "type %s redeclaration\n", ast->tydecl.ident.value.identv.ident);
+
+      if (type_is_tbd(&ast->tydecl.ty)) {
+        // skip - we'll resolve it later
+        return;
+      }
+
+      fprintf(stderr, "concrete type\n");
+    }
+
+    int is_forward_decl = entry->ty.ty == AST_TYPE_CUSTOM && entry->ty.custom.is_forward_decl;
+    struct ast_ty *decl_chain = NULL;
+    if (is_forward_decl) {
+      decl_chain = entry->ty.custom.pending_chain;
     }
 
     entry->ty = ast->tydecl.ty;
@@ -351,6 +357,21 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     }
 
     entry->ty = ast->tydecl.ty;
+
+    if (is_forward_decl) {
+      while (decl_chain) {
+        fprintf(stderr, "fixup decl chain\n");
+        struct alias_entry *chain_entry = kv_lookup(typecheck->aliases, decl_chain->name);
+        if (!chain_entry) {
+          fprintf(stderr, "type %s forward declaration chain broken\n", decl_chain->name);
+          ++typecheck->errors;
+          return;
+        }
+
+        chain_entry->ty = ast->tydecl.ty;
+        decl_chain = decl_chain->next;
+      }
+    }
   }
 }
 
@@ -1147,7 +1168,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
         struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
         if (!entry || !entry->vdecl) {
-          fprintf(stderr, "%s not found or not a variable\n", ident);
+          fprintf(stderr, "in assignment, %s not found or not a variable\n", ident);
           ++typecheck->errors;
           return &typecheck->error_type;
         }
@@ -1257,7 +1278,7 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
       if (!entry || !entry->vdecl) {
-        fprintf(stderr, "%s not found or not a variable\n", ident);
+        fprintf(stderr, "in ref, %s not found or not a variable\n", ident);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -1715,6 +1736,17 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
   struct alias_entry *entry = kv_lookup(typecheck->aliases, ty->name);
   if (!entry) {
     return type_error();
+  }
+
+  if (entry->ty.ty == AST_TYPE_CUSTOM && entry->ty.custom.is_forward_decl) {
+    if (entry->ty.custom.pending_chain) {
+      ty->next = entry->ty.custom.pending_chain;
+      entry->ty.custom.pending_chain = ty;
+    } else {
+      entry->ty.custom.pending_chain = ty;
+    }
+
+    return type_tbd();
   }
 
   if (ty->ty == AST_TYPE_CUSTOM && entry->ty.ty == AST_TYPE_CUSTOM) {

@@ -7,6 +7,7 @@
 #include "ast.h"
 #include "codegen.h"
 #include "compiler.h"
+#include "lex.h"
 
 struct scope_entry {
   struct ast_vdecl *vdecl;
@@ -56,6 +57,11 @@ struct codegen_preamble {
   LLVMTypeRef box_unref_type;
 };
 
+struct codegen_compileunit {
+  LLVMMetadataRef file_metadata;
+  LLVMMetadataRef compile_unit;
+};
+
 struct codegen {
   struct ast_program *ast;
 
@@ -81,6 +87,9 @@ struct codegen {
   // struct type names -> their definition
   struct kv *structs;
 
+  // filenames -> their compile unit metadata
+  struct kv *compile_units;
+
   LLVMValueRef retval;
   LLVMBasicBlockRef return_block;
 
@@ -88,8 +97,6 @@ struct codegen {
   struct defer_entry *defer_head;
 
   struct codegen_block *current_block;
-  LLVMMetadataRef file_metadata;
-  LLVMMetadataRef compile_unit;
 
   LLVMTargetRef llvm_target;
   LLVMTargetMachineRef llvm_target_machine;
@@ -176,6 +183,9 @@ LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty);
 
 void codegen_box_ref(struct codegen *codegen, LLVMValueRef box, int already_deref);
 void codegen_box_unref(struct codegen *codegen, LLVMValueRef box, int already_deref);
+
+struct codegen_compileunit *codegen_get_compileunit(struct codegen *codegen,
+                                                    struct lex_locator *loc);
 
 int initialize_llvm(void);
 void shutdown_llvm(void);

@@ -9,8 +9,10 @@ type Box = struct {
 
 pub impure fn Box* __haven_new_empty_box(i32 box_size) {
     // size includes the refcount
-    let mut result = as Box* malloc(as u64 box_size);
+    let mut result = as Box* calloc(1, as u64 box_size);
     result->refcount = 1;
+
+    fprintf(stderr, "new empty box: %p\n", result);
 
     result
 }
@@ -20,10 +22,15 @@ pub impure fn Box* __haven_new_box(i32* value, i32 box_size, i32 value_size) {
     let p = as i8* result;
     // use the end of the box to find the alignment for the value
     memcpy(p + (box_size - value_size), value, value_size);
+
+    fprintf(stderr, "new box: %p\n", result);
+
     result
 }
 
 pub impure fn void __haven_box_ref(mut Box* target) {
+    fprintf(stderr, "ref: %p\n", target);
+
     if target == nil {
         ret;
     };
@@ -32,12 +39,14 @@ pub impure fn void __haven_box_ref(mut Box* target) {
 }
 
 pub impure fn void __haven_box_unref(mut Box* target) {
+    fprintf(stderr, "unref: %p\n", target);
+
     if target == nil {
         ret;
     };
 
     target->refcount = target->refcount - 1;
     if target->refcount == 0 {
-        free(target);
+        // free(target);
     };
 }

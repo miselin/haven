@@ -289,18 +289,27 @@ static struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
 static struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
   struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
   decl->type = AST_DECL_TYPE_TYDECL;
+  lexer_locate(parser->lexer, &decl->loc);
 
   if (parser_consume(parser, &decl->tydecl.ident, TOKEN_IDENTIFIER) < 0) {
     free(decl);
     return NULL;
   }
-  if (parser_consume(parser, NULL, TOKEN_ASSIGN) < 0) {
-    free(decl);
-    return NULL;
-  }
 
-  decl->tydecl.ty = parse_type(parser);
-  strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
+  if (parser_peek(parser) != TOKEN_SEMI) {
+    if (parser_consume(parser, NULL, TOKEN_ASSIGN) < 0) {
+      free(decl);
+      return NULL;
+    }
+
+    decl->tydecl.ty = parse_type(parser);
+    strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
+  } else {
+    // forward declaration of a type that will be defined soon
+    decl->tydecl.ty.ty = AST_TYPE_CUSTOM;
+    decl->tydecl.ty.custom.is_forward_decl = 1;
+    strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
+  }
 
   if (parser_consume(parser, NULL, TOKEN_SEMI) < 0) {
     free(decl);
@@ -641,6 +650,7 @@ static int parse_block(struct parser *parser, struct ast_block *into) {
     // add a void yielding expression
     struct ast_stmt *stmt = calloc(1, sizeof(struct ast_stmt));
     stmt->type = AST_STMT_TYPE_EXPR;
+    lexer_locate(parser->lexer, &stmt->loc);
     stmt->expr = calloc(1, sizeof(struct ast_expr));
     stmt->expr->type = AST_EXPR_TYPE_VOID;
     if (last) {
@@ -1553,13 +1563,14 @@ static int binary_op(enum token_id token) {
   }
 }
 
-static struct ast_expr *wrap_cast(struct ast_expr *expr, struct ast_ty *ty) {
+static struct ast_expr *wrap_cast(struct parser *parser, struct ast_expr *expr, struct ast_ty *ty) {
   if (!expr) {
     return NULL;
   }
 
   struct ast_expr *result = calloc(1, sizeof(struct ast_expr));
   result->type = AST_EXPR_TYPE_CAST;
+  lexer_locate(parser->lexer, &result->loc);
   result->cast.expr = expr;
   result->cast.ty = *ty;
   return result;
@@ -1575,17 +1586,17 @@ static struct ast_range parse_range(struct parser *parser) {
   ty.integer.is_signed = 1;
   ty.integer.width = 64;
 
-  result.start = wrap_cast(parse_expression(parser), &ty);
+  result.start = wrap_cast(parser, parse_expression(parser), &ty);
   if (parser_consume(parser, NULL, TOKEN_COLON) < 0) {
     // TODO: parse_range needs to be able to return an error
     result.start = NULL;
     return result;
   }
-  result.end = wrap_cast(parse_expression(parser), &ty);
+  result.end = wrap_cast(parser, parse_expression(parser), &ty);
 
   if (parser_peek(parser) == TOKEN_COLON) {
     parser_consume_peeked(parser, NULL);
-    result.step = wrap_cast(parse_expression(parser), &ty);
+    result.step = wrap_cast(parser, parse_expression(parser), &ty);
   } else {
     result.step = NULL;
   }
@@ -1903,6 +1914,9 @@ int parser_merge_program(struct parser *parser, struct ast_program *program) {
 }
 
 static struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType type) {
+  struct lex_locator loc;
+  lexer_locate(parser->lexer, &loc);
+
   struct token token;
   if (parser_consume(parser, &token, TOKEN_STRING) < 0) {
     return NULL;
@@ -1914,6 +1928,7 @@ static struct ast_toplevel *parser_parse_import(struct parser *parser, enum Impo
 
   struct ast_toplevel *result = calloc(1, sizeof(struct ast_toplevel));
   result->type = AST_DECL_TYPE_IMPORT;
+  result->loc = loc;
   return result;
 }
 
@@ -1925,6 +1940,7 @@ static int parser_add_preamble(struct parser *parser) {
   // __va_list_tag type
   // TODO: platform specific
   decl->type = AST_DECL_TYPE_TYDECL;
+  lexer_locate(parser->lexer, &decl->loc);
   decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
   strncpy(decl->tydecl.ident.value.identv.ident, "__va_list_tag", 256);
   decl->tydecl.ty.ty = AST_TYPE_STRUCT;
@@ -1941,6 +1957,7 @@ static int parser_add_preamble(struct parser *parser) {
   decl->next = calloc(1, sizeof(struct ast_toplevel));
   decl = decl->next;
   decl->type = AST_DECL_TYPE_TYDECL;
+  lexer_locate(parser->lexer, &decl->loc);
   decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
   strncpy(decl->tydecl.ident.value.identv.ident, "__builtin_va_list", 256);
   decl->tydecl.ty.ty = AST_TYPE_ARRAY;

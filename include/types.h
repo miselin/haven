@@ -50,7 +50,7 @@ enum ast_ty_id {
   AST_TYPE_FUNCTION,  // for function pointers
   AST_TYPE_MATRIX,
   AST_TYPE_POINTER,  // points at another type
-  AST_TYPE_BOX,     // similar to a pointer, but with more logic
+  AST_TYPE_BOX,      // similar to a pointer, but with more logic
 };
 
 struct ast_struct_field {
@@ -92,6 +92,12 @@ struct ast_ty {
     struct {
       // if 1, the custom type is a template that will be resolved in instantiation
       int is_template;
+
+      // if 1, the custom type is a forward declaration that will be resolved later
+      int is_forward_decl;
+
+      // types that are waiting for this forward declaration to be resolved
+      struct ast_ty *pending_chain;
     } custom;
     struct {
       // both of these are CUSTOM after parsing and real types after type checking
@@ -112,6 +118,9 @@ struct ast_ty {
       struct ast_ty *pointee;
     } pointer;
   };
+
+  // rarely used option for chaining types
+  struct ast_ty *next;
 };
 
 struct ast_enum_field {

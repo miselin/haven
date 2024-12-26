@@ -19,6 +19,7 @@
 #include "types.h"
 
 LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueRef into) {
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit stmt %d", ast->type);
   update_debug_loc(codegen, &ast->loc);
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR: {
