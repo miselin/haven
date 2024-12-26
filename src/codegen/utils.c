@@ -318,7 +318,8 @@ LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty) {
 
   // refcount, boxed value
   LLVMTypeRef fields[] = {LLVMInt32TypeInContext(codegen->llvm_context), wrapped};
-  LLVMStructSetBody(result_ty, fields, 2, 0);
+  LLVMStructSetBody(result_ty, fields, 2,
+                    1);  // TODO: make not packed, it's just easier to debug for now
 
   entry = calloc(1, sizeof(struct struct_entry));
   entry->type = result_ty;

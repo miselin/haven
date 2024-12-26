@@ -7,16 +7,19 @@ type Box = struct {
     i32 refcount;
 };
 
-pub impure fn Box* __haven_new_empty_box(i32 size) {
-    let mut result = as Box* malloc(as u64 ((sizeof Box) + size));
+pub impure fn Box* __haven_new_empty_box(i32 box_size) {
+    // size includes the refcount
+    let mut result = as Box* malloc(as u64 box_size);
     result->refcount = 1;
 
     result
 }
 
-pub impure fn Box* __haven_new_box(i32* value, i32 size) {
-    let result = __haven_new_empty_box(size);
-    memcpy(result + 1, value, size);
+pub impure fn Box* __haven_new_box(i32* value, i32 box_size, i32 value_size) {
+    let result = __haven_new_empty_box(box_size);
+    let p = as i8* result;
+    // use the end of the box to find the alignment for the value
+    memcpy(p + (box_size - value_size), value, value_size);
     result
 }
 

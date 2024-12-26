@@ -168,6 +168,16 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   }
 
   LLVMValueRef block_result = emit_block(codegen, fdecl->body);
+  if (fdecl->retty.ty == AST_TYPE_BOX) {
+    // ref the box we're returning
+    compiler_log(codegen->compiler, LogLevelDebug, "codegen", "box ref due to return");
+    codegen_box_ref(codegen, block_result, 0);
+
+    // load the box out of the return value
+    block_result = LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen),
+                                  block_result, "box.into.retval");
+  }
+
   if (fdecl->retty.ty != AST_TYPE_VOID) {
     // complex_return path sets retval to the return parameter
     /*

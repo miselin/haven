@@ -260,6 +260,22 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         LLVMAddCallSiteAttribute(call, 1, attr);
       }
 
+      if (ast->ty.ty == AST_TYPE_BOX) {
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen",
+                     "moving box return value into a stack variable");
+
+        // no need for another ref, functions ref on return
+        LLVMValueRef stack_box = new_alloca(codegen, codegen_pointer_type(codegen), "box");
+        LLVMBuildStore(codegen->llvm_builder, call, stack_box);
+
+        struct box_entry *box = calloc(1, sizeof(struct box_entry));
+        box->box = stack_box;
+        box->next = codegen->boxes;
+        codegen->boxes = box;
+
+        // call = stack_box;
+      }
+
       if (args) {
         free(args);
       }
@@ -493,29 +509,30 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_BOX: {
-      codegen_box_type(codegen, &ast->ty);
+      LLVMTypeRef box_type = codegen_box_type(codegen, &ast->ty);
 
       LLVMTypeRef out_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
       LLVMValueRef box = into ? into : new_alloca(codegen, out_ty, "box");
 
+      LLVMValueRef box_size =
+          const_i32(codegen, (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout, box_type));
+
       if (ast->box_expr.expr) {
-        LLVMValueRef size = const_i32(
+        LLVMValueRef expr_size = const_i32(
             codegen,
             (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout,
                                        ast_ty_to_llvm_ty(codegen, &ast->box_expr.expr->ty)));
+
         LLVMValueRef value = emit_expr(codegen, ast->box_expr.expr);
         LLVMValueRef tmp = new_alloca(codegen, LLVMTypeOf(value), "box.tmp");
-        LLVMBuildStore(codegen->llvm_builder, value, tmp);
+        emit_store(codegen, &ast->box_expr.expr->ty, value, tmp);
 
-        LLVMValueRef args[] = {tmp, size};
+        LLVMValueRef args[] = {tmp, box_size, expr_size};
         LLVMValueRef result = LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.new_box_type,
-                                             codegen->preamble.new_box, args, 2, "box.new");
+                                             codegen->preamble.new_box, args, 3, "box.new");
         LLVMBuildStore(codegen->llvm_builder, result, box);
       } else {
-        LLVMValueRef size = const_i32(
-            codegen, (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout,
-                                                ast_ty_to_llvm_ty(codegen, ast->box_expr.ty)));
-        LLVMValueRef args[] = {size};
+        LLVMValueRef args[] = {box_size};
         LLVMValueRef result =
             LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.new_empty_box_type,
                            codegen->preamble.new_empty_box, args, 1, "box.new");

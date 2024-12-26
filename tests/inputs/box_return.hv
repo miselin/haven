@@ -1,0 +1,13 @@
+type Thing = struct {
+    i32^ boxed;
+};
+
+pub fn i32^ new_boxed() {
+    box as i32 5
+}
+
+pub fn i32 sut() {
+    let mut t = struct Thing { new_boxed() };
+    let mut b = box t;
+    unbox b->boxed
+}

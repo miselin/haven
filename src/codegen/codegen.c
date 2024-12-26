@@ -525,6 +525,14 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLV
     case AST_STMT_TYPE_RETURN: {
       if (ast->expr) {
         LLVMValueRef ret = emit_expr(codegen, ast->expr);
+
+        if (ast->expr->ty.ty == AST_TYPE_BOX) {
+          // ref the box on the way out
+          compiler_log(codegen->compiler, LogLevelDebug, "codegen",
+                       "box ref due to STMT_TYPE_RETURN");
+          codegen_box_ref(codegen, ret, 0);
+        }
+
         emit_store(codegen, &ast->expr->ty, ret, codegen->retval);
       }
       LLVMBuildBr(codegen->llvm_builder, codegen->return_block);
