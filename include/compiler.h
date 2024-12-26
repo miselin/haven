@@ -38,6 +38,8 @@ enum Pass {
 #define FLAG_DEBUG_IR (1U << 3)
 // Turn on debugging in LLVM
 #define FLAG_DEBUG_LLVM (1U << 4)
+// Don't emit a preamble
+#define FLAG_NO_PREAMBLE (1U << 5)
 
 struct compiler;
 

@@ -1,0 +1,34 @@
+cimport "stdlib.h";
+cimport "stdio.h";
+
+type Box = struct {
+    i32 refcount;
+    i32 value;
+};
+
+pub impure fn Box* __haven_new_box(i32* value, i32 size) {
+    let mut result = as Box* malloc(as u64 sizeof Box);
+    result->refcount = 1;
+    result->value = load value;
+
+    result
+}
+
+pub impure fn void __haven_box_ref(mut Box* target) {
+    if target == nil {
+        ret;
+    };
+
+    target->refcount = target->refcount + 1;
+}
+
+pub impure fn void __haven_box_unref(mut Box* target) {
+    if target == nil {
+        ret;
+    };
+
+    target->refcount = target->refcount - 1;
+    if target->refcount == 0 {
+        free(target);
+    };
+}

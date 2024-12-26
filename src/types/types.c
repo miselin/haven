@@ -569,7 +569,7 @@ struct ast_ty copy_type(struct ast_ty *ty) {
 
     new_type.function.retty = calloc(1, sizeof(struct ast_ty));
     *new_type.function.retty = copy_type(ty->function.retty);
-  } else if (ty->ty == AST_TYPE_POINTER) {
+  } else if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
     new_type.pointer.pointee = calloc(1, sizeof(struct ast_ty));
     *new_type.pointer.pointee = copy_type(ty->pointer.pointee);
   }

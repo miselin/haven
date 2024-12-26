@@ -9,6 +9,7 @@
 
 #include "ast.h"
 #include "codegen.h"
+#include "compiler.h"
 #include "internal.h"
 #include "kv.h"
 #include "types.h"
@@ -155,6 +156,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       return LLVMPointerTypeInContext(codegen->llvm_context, 0);
     case AST_TYPE_BOX:
       return LLVMPointerTypeInContext(codegen->llvm_context, 0);
+      break;
     default:
       fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
       return NULL;
@@ -188,7 +190,9 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
     return;
   }
 
-  if (LLVMIsNull(value) || !type_is_complex(ty)) {
+  int is_null = LLVMIsNull(value);
+
+  if (is_null || !type_is_complex(ty)) {
     LLVMBuildStore(codegen->llvm_builder, value, ptr);
     return;
   }
@@ -293,4 +297,58 @@ LLVMAttributeRef codegen_type_attribute(struct codegen *codegen, const char *att
   }
 
   return LLVMCreateTypeAttribute(codegen->llvm_context, kind, type);
+}
+
+void mangle_type(struct ast_ty *ty, char *buf, size_t len) {
+  *buf = 0;
+
+  // TODO: real mangling, this is just a placeholder
+  strcat(buf, "type.");
+  type_name_into(ty, buf + 5, len - 5);
+}
+
+LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty) {
+  if (ty->ty != AST_TYPE_BOX) {
+    return NULL;
+  }
+
+  char name[1024];
+  mangle_type(ty->pointer.pointee, name, 1024);
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "mangled type %s for boxing", name);
+
+  struct struct_entry *entry = kv_lookup(codegen->structs, name);
+  if (entry) {
+    return entry->type;
+  }
+
+  LLVMTypeRef wrapped = ast_ty_to_llvm_ty(codegen, ty->pointer.pointee);
+  LLVMTypeRef result_ty = LLVMStructCreateNamed(codegen->llvm_context, name);
+
+  // refcount, boxed value
+  LLVMTypeRef fields[] = {LLVMInt32TypeInContext(codegen->llvm_context), wrapped};
+  LLVMStructSetBody(result_ty, fields, 2, 0);
+
+  entry = calloc(1, sizeof(struct struct_entry));
+  entry->type = result_ty;
+  kv_insert(codegen->structs, name, entry);
+
+  return result_ty;
+}
+
+void codegen_box_ref(struct codegen *codegen, LLVMValueRef box, int already_deref) {
+  // boxes are ptrs to ptrs
+  LLVMValueRef inner =
+      already_deref ? box
+                    : LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen), box, "");
+  LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.box_ref_type, codegen->preamble.box_ref,
+                 &inner, 1, "");
+}
+
+void codegen_box_unref(struct codegen *codegen, LLVMValueRef box, int already_deref) {
+  // boxes are ptrs to ptrs
+  LLVMValueRef inner =
+      already_deref ? box
+                    : LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen), box, "");
+  LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.box_unref_type,
+                 codegen->preamble.box_unref, &inner, 1, "");
 }

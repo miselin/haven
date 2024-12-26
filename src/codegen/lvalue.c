@@ -10,16 +10,20 @@
 #include "codegen.h"
 #include "compiler.h"
 #include "internal.h"
-#include "kv.h"
 #include "scope.h"
 #include "types.h"
-#include "utility.h"
 
 LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
   switch (ast->type) {
     case AST_EXPR_TYPE_VARIABLE: {
       struct scope_entry *lookup =
           scope_lookup(codegen->scope, ast->variable.ident.value.identv.ident, 1);
+
+      if (ast->ty.ty == AST_TYPE_BOX) {
+        // return the actual box pointer - boxes are a pointer to a pointer
+        // return LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen), lookup->ref,
+        // "box.ptr");
+      }
 
       return lookup->ref;
     } break;

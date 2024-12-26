@@ -393,8 +393,14 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
       }
     } break;
 
+    case AST_EXPR_TYPE_BOX:
+    case AST_EXPR_TYPE_UNBOX:
+      return typecheck_verify_expr(ast->box_expr.expr);
+      break;
+
     default:
       fprintf(stderr, "tyverify: unhandled expression type %d\n", ast->type);
+      return -1;
   }
 
   return 0;

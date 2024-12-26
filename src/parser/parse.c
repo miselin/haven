@@ -1416,9 +1416,16 @@ static struct ast_ty parse_type(struct parser *parser) {
                 token_id_to_string(peek));
   }
 
+  // <ty>* == raw pointer
   while (parser_peek(parser) == TOKEN_ASTERISK) {
     parser_consume_peeked(parser, NULL);
     result = ptr_type(result);
+  }
+
+  // <ty>^ == boxed
+  while (parser_peek(parser) == TOKEN_BITXOR) {
+    parser_consume_peeked(parser, NULL);
+    result = box_type(result);
   }
 
   if (parser_peek(parser) == TOKEN_LBRACKET) {

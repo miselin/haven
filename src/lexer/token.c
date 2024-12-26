@@ -242,13 +242,10 @@ int lexer_token(struct lex_state *state, struct token *token) {
     case '#':
       token->ident = TOKEN_POUND;
       break;
-    case '_':
-      token->ident = TOKEN_UNDER;
-      break;
     default: {
-      if (!isalpha(c)) {
+      if (!isalpha(c) && c != '_') {
         token->ident = TOKEN_UNKNOWN;
-        lex_error(state, "first character of identifier is not a letter");
+        lex_error(state, "first character of identifier is not a letter or underscore");
         return -1;
       }
 

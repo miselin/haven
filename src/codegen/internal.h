@@ -32,9 +32,24 @@ struct defer_entry {
   struct defer_entry *next;
 };
 
+// tracks boxes that were created in the current function for automatic deref
+struct box_entry {
+  LLVMValueRef box;
+  struct box_entry *next;
+};
+
 struct codegen_block {
   LLVMMetadataRef scope_metadata;
   struct codegen_block *parent;
+};
+
+struct codegen_preamble {
+  LLVMValueRef new_box;
+  LLVMTypeRef new_box_type;
+  LLVMValueRef box_ref;
+  LLVMTypeRef box_ref_type;
+  LLVMValueRef box_unref;
+  LLVMTypeRef box_unref_type;
 };
 
 struct codegen {
@@ -77,6 +92,10 @@ struct codegen {
   LLVMTargetDataRef llvm_data_layout;
 
   struct compiler *compiler;
+
+  struct codegen_preamble preamble;
+
+  struct box_entry *boxes;
 };
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
@@ -137,8 +156,17 @@ LLVMAttributeRef codegen_enum_attribute(struct codegen *codegen, const char *att
 LLVMAttributeRef codegen_type_attribute(struct codegen *codegen, const char *attr_name,
                                         LLVMTypeRef type);
 
+// Get the struct type for a box type
+LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty);
+
+void codegen_box_ref(struct codegen *codegen, LLVMValueRef box, int already_deref);
+void codegen_box_unref(struct codegen *codegen, LLVMValueRef box, int already_deref);
+
 int initialize_llvm(void);
 void shutdown_llvm(void);
+
+// Uniquely identify the given type in a string format that can be used as a name
+void mangle_type(struct ast_ty *ty, char *buf, size_t len);
 
 void configure_llvm(struct compiler *compiler);
 

@@ -33,6 +33,7 @@ static void usage(void) {
   fprintf(stderr, "  --emit-bitcode emit binary IR instead of an object file\n");
   fprintf(stderr, "  --verbose      enable internal compiler logging\n");
   fprintf(stderr, "  -I <path>      add a path to the import search path\n");
+  fprintf(stderr, "  --no-preamble  do not emit the default preamble\n");
 }
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]) {
@@ -58,6 +59,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"only-parse", no_argument, 0, OnlyParse},
                                   {"debug-ir", no_argument, 0, DebugIR},
                                   {"debug-llvm", no_argument, 0, DebugLLVM},
+                                  {"no-preamble", no_argument, 0, NoPreamble},
                                   {0, 0, 0, 0}};
 
   int opt;
@@ -121,6 +123,9 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         break;
       case DebugLLVM:
         into->flags[0] |= FLAG_DEBUG_LLVM;
+        break;
+      case NoPreamble:
+        into->flags[0] |= FLAG_NO_PREAMBLE;
         break;
       default:
         usage();

@@ -121,6 +121,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
 
   LLVMContextRef context = codegen->llvm_context;
   LLVMBasicBlockRef defers = LLVMCreateBasicBlockInContext(context, "defers");
+  LLVMBasicBlockRef box_derefs = LLVMCreateBasicBlockInContext(context, "box.derefs");
   LLVMBasicBlockRef return_block = LLVMCreateBasicBlockInContext(context, "return");
   codegen->return_block = defers;
 
@@ -140,15 +141,30 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   codegen->locals = new_kv();
 
   codegen->defer_head = NULL;
+  codegen->boxes = NULL;
 
   codegen_internal_enter_scope(codegen, at, 0);
 
   for (size_t i = 0; i < fdecl->num_params; i++) {
+    const char *param_ident = fdecl->params[i]->ident.value.identv.ident;
     struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
     param_entry->vdecl = fdecl->params[i];
     param_entry->variable_type = param_types[i + complex_return];
     param_entry->ref = LLVMGetParam(func, (unsigned int)(i + complex_return));
-    scope_insert(codegen->scope, fdecl->params[i]->ident.value.identv.ident, param_entry);
+    scope_insert(codegen->scope, param_ident, param_entry);
+
+    if (fdecl->params[i]->ty.ty == AST_TYPE_BOX) {
+      compiler_log(codegen->compiler, LogLevelDebug, "codegen", "param %s is a box", param_ident);
+      // need to store this param on the stack
+      LLVMValueRef param = new_alloca(codegen, codegen_pointer_type(codegen), param_ident);
+      LLVMBuildStore(codegen->llvm_builder, param_entry->ref, param);
+      param_entry->ref = param;
+
+      struct box_entry *box = calloc(1, sizeof(struct box_entry));
+      box->box = param;
+      box->next = codegen->boxes;
+      codegen->boxes = box;
+    }
   }
 
   LLVMValueRef block_result = emit_block(codegen, fdecl->body);
@@ -168,18 +184,35 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   LLVMAppendExistingBasicBlock(codegen->current_function, defers);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, defers);
 
+  LLVMBasicBlockRef next_block = box_derefs;
+
   // run defer expressions, if any
   struct defer_entry *defer = codegen->defer_head;
-  LLVMBuildBr(codegen->llvm_builder, defer ? defer->llvm_block : return_block);
+  LLVMBuildBr(codegen->llvm_builder, defer ? defer->llvm_block : next_block);
 
   while (defer) {
     LLVMMoveBasicBlockAfter(defer->llvm_block, LLVMGetInsertBlock(codegen->llvm_builder));
     LLVMPositionBuilderAtEnd(codegen->llvm_builder, defer->llvm_block_after);
     struct defer_entry *next = defer->next;
-    LLVMBuildBr(codegen->llvm_builder, next ? next->llvm_block : return_block);
+    LLVMBuildBr(codegen->llvm_builder, next ? next->llvm_block : next_block);
     free(defer);
     defer = next;
   }
+
+  LLVMAppendExistingBasicBlock(codegen->current_function, box_derefs);
+  LLVMPositionBuilderAtEnd(codegen->llvm_builder, box_derefs);
+
+  // run box derefs, if any
+  struct box_entry *box = codegen->boxes;
+  while (box) {
+    codegen_box_unref(codegen, box->box, 0);
+
+    struct box_entry *next = box->next;
+    free(box);
+    box = next;
+  }
+
+  LLVMBuildBr(codegen->llvm_builder, return_block);
 
   // insert return block finally
   LLVMAppendExistingBasicBlock(codegen->current_function, return_block);
@@ -200,4 +233,5 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   codegen->retval = NULL;
   codegen->return_block = NULL;
   codegen->current_function_metadata = NULL;
+  codegen->boxes = NULL;
 }

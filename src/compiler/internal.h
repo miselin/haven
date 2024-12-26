@@ -18,6 +18,7 @@ enum Options {
   OnlyParse,
   DebugIR,
   DebugLLVM,
+  NoPreamble,
 };
 
 enum Color {

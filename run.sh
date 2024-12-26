@@ -15,6 +15,6 @@ ASAN="-fsanitize=address"
 
 ${COMPILER} --${OPT} --verbose --debug-ast --debug-ir --emit-ir -I /usr/include ${FILENAME} "$@" 2> >(tee log.log >&2) 1>&2
 clang-18 -S -${OPT} -g3 -ggdb -gdwarf-2 -o ${FILENAME%.*}.s ${FILENAME%.*}.ll -lm
-clang-18 -${OPT} -g3 -ggdb ${ASAN} -o ${FILENAME%.*} ${FILENAME%.*}.ll -lm
+clang-18 -L build/lib -${OPT} -g3 -ggdb ${ASAN} -o ${FILENAME%.*} ${FILENAME%.*}.ll -lm -lruntime
 
 time ${FILENAME%.*}

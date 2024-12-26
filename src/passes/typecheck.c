@@ -778,7 +778,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         ++typecheck->errors;
         return &typecheck->error_type;
       }
-      ast->ty = resolve_type(typecheck, &entry->vdecl->ty);
+      struct ast_ty resolved = resolve_type(typecheck, &entry->vdecl->ty);
+      free_ty(&ast->ty, 0);
+      ast->ty = resolved;
       return &ast->ty;
     } break;
 
@@ -1548,7 +1550,6 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       ast->ty.ty = AST_TYPE_BOX;
       ast->ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
       *ast->ty.pointer.pointee = copy_type(inner_ty);
-      ast->ty = resolve_type(typecheck, &ast->ty);
       return &ast->ty;
     } break;
 
@@ -1563,10 +1564,8 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         return &typecheck->error_type;
       }
 
-      ast->ty.ty = AST_TYPE_POINTER;
-      ast->ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
-      *ast->ty.pointer.pointee = copy_type(inner_ty->pointer.pointee);
-      ast->ty = resolve_type(typecheck, &ast->ty);
+      // returns the underlying type of the box
+      ast->ty = resolve_type(typecheck, inner_ty->pointer.pointee);
       return &ast->ty;
     } break;
 
@@ -1604,7 +1603,7 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
     return *ty;
   }
 
-  if (ty->ty == AST_TYPE_POINTER) {
+  if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
     struct ast_ty new_ty = copy_type(ty);
     struct ast_ty resolved = resolve_type(typecheck, ty->pointer.pointee);
     free_ty(new_ty.pointer.pointee, 0);
