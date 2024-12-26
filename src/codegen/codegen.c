@@ -55,7 +55,6 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
     filename = basename(dup2);
   }
 
-  // TODO: split file into dir + file
   result->file_metadata =
       LLVMDIBuilderCreateFile(result->llvm_dibuilder, filename, strlen(filename), dir, strlen(dir));
   result->compile_unit = LLVMDIBuilderCreateCompileUnit(
@@ -63,12 +62,12 @@ struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) 
       "", 0, 0, "", 0, LLVMDWARFEmissionFull, 0, 0, 0, "", 0, "", 0);
 
   LLVMAddModuleFlag(
-      result->llvm_module, LLVMModuleFlagBehaviorOverride, "Debug Info Version", 18,
-      LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(result->llvm_context), 3, 0)));
-
-  LLVMAddModuleFlag(
       result->llvm_module, LLVMModuleFlagBehaviorOverride, "Dwarf Version", 13,
       LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(result->llvm_context), 2, 0)));
+
+  LLVMAddModuleFlag(
+      result->llvm_module, LLVMModuleFlagBehaviorOverride, "Debug Info Version", 18,
+      LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(result->llvm_context), 3, 0)));
 
   free(dup1);
   free(dup2);

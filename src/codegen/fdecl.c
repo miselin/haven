@@ -134,14 +134,21 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     return;
   }
 
-  LLVMMetadataRef function_metadata = LLVMDIBuilderCreateFunction(
-      codegen->llvm_dibuilder, codegen->compile_unit, fdecl->ident.value.identv.ident,
-      strlen(fdecl->ident.value.identv.ident), "", 0, codegen->file_metadata,
-      (unsigned)at->line + 1, NULL, (fdecl->flags & DECL_FLAG_PUB) == 0, fdecl->body != NULL, 1, 0,
-      0);
+  {
+    LLVMMetadataRef func_md = LLVMDIBuilderCreateSubroutineType(codegen->llvm_dibuilder,
+                                                                codegen->file_metadata, NULL, 0, 0);
 
-  codegen->current_function_metadata = function_metadata;
-  update_debug_loc(codegen, at);
+    LLVMMetadataRef function_metadata = LLVMDIBuilderCreateFunction(
+        codegen->llvm_dibuilder, codegen->file_metadata, fdecl->ident.value.identv.ident,
+        strlen(fdecl->ident.value.identv.ident), "", 0, codegen->file_metadata,
+        (unsigned)at->line + 1, func_md, (fdecl->flags & DECL_FLAG_PUB) == 0, fdecl->body != NULL,
+        1, 0, 0);
+
+    LLVMSetSubprogram(func, function_metadata);
+
+    codegen->current_function_metadata = function_metadata;
+    update_debug_loc(codegen, at);
+  }
 
   LLVMContextRef context = codegen->llvm_context;
   LLVMBasicBlockRef defers = LLVMCreateBasicBlockInContext(context, "defers");
