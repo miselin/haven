@@ -103,6 +103,7 @@ struct codegen {
 };
 
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
+LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueRef into);
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast);
 LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast);
 LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMValueRef into);
