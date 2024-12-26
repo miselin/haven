@@ -263,6 +263,10 @@ void free_fdecl(struct ast_fdecl *ast, int heap) {
     free(ast->params);
   }
 
+  if (ast->intrinsic_tys) {
+    free(ast->intrinsic_tys);
+  }
+
   free_ty(&ast->retty, 0);
   if (heap) {
     free(ast);

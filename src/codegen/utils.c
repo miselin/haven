@@ -220,6 +220,41 @@ int extract_constant_int(struct ast_expr *expr, int64_t *into) {
   return 0;
 }
 
+LLVMValueRef build_intrinsic2(struct codegen *codegen, const char *intrinsic_name,
+                              LLVMTypeRef *out_ftype, LLVMTypeRef *types, size_t num_types) {
+  unsigned int intrinsic_id = LLVMLookupIntrinsicID(intrinsic_name, strlen(intrinsic_name));
+  if (!intrinsic_id) {
+    return NULL;
+  }
+  LLVMValueRef intrinsic_decl =
+      LLVMGetIntrinsicDeclaration(codegen->llvm_module, intrinsic_id, types, num_types);
+  LLVMTypeRef intrinsic_func = LLVMGlobalGetValueType(intrinsic_decl);
+
+  *out_ftype = intrinsic_func;
+  return intrinsic_decl;
+}
+
+LLVMValueRef build_intrinsic(struct codegen *codegen, const char *intrinsic_name,
+                             LLVMTypeRef *out_ftype, size_t num_types, ...) {
+  va_list ap;
+  va_start(ap, num_types);
+  LLVMTypeRef *types = malloc(sizeof(LLVMTypeRef) * num_types);
+  for (size_t i = 0; i < num_types; i++) {
+    types[i] = va_arg(ap, LLVMTypeRef);
+  }
+  va_end(ap);
+
+  unsigned int intrinsic_id = LLVMLookupIntrinsicID(intrinsic_name, strlen(intrinsic_name));
+  LLVMValueRef intrinsic_decl =
+      LLVMGetIntrinsicDeclaration(codegen->llvm_module, intrinsic_id, types, num_types);
+  LLVMTypeRef intrinsic_func = LLVMGlobalGetValueType(intrinsic_decl);
+
+  free(types);
+
+  *out_ftype = intrinsic_func;
+  return intrinsic_decl;
+}
+
 LLVMValueRef call_intrinsic(struct codegen *codegen, const char *intrinsic_name,
                             const char *inst_name, size_t num_types, size_t num_args, ...) {
   va_list ap;

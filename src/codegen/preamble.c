@@ -1,6 +1,8 @@
+#include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Core.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "codegen.h"
 #include "compiler.h"

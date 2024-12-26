@@ -70,6 +70,15 @@ static void dump_fdecl(struct ast_fdecl *ast, int indent) {
   if (ast->body) {
     dump_block(ast->body, indent + 1);
   }
+
+  if (ast->is_intrinsic) {
+    INDENTED(indent + 1, "Intrinsic %s\n", ast->intrinsic);
+    for (size_t i = 0; i < ast->num_intrinsic_tys; i++) {
+      INDENTED(indent + 2, "Intrinsic Overload %zu -> ", i);
+      dump_ty(&ast->intrinsic_tys[i]);
+      fprintf(stderr, "\n");
+    }
+  }
 }
 
 static void dump_vdecl(struct ast_vdecl *ast, int indent) {

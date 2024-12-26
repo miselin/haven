@@ -1,0 +1,8 @@
+pub fn i32 printf(str fmt, *);
+
+pub fn float fabs(float x) intrinsic "llvm.fabs" float;
+
+pub fn i32 main() {
+    printf("intrinsic example: %f\n", fabs(-5.0));
+    0
+}

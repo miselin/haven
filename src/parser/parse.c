@@ -467,6 +467,45 @@ static struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
         return NULL;
       }
     } else {
+      if (peek == TOKEN_KW_INTRINSIC) {
+        parser_consume_peeked(parser, NULL);
+        if (parser_consume(parser, &token, TOKEN_STRING) < 0) {
+          free(decl);
+          return NULL;
+        }
+        strncpy(fdecl->intrinsic, token.value.strv.s, 256);
+        fdecl->is_intrinsic = 1;
+
+        peek = parser_peek(parser);
+        while (peek != TOKEN_SEMI) {
+          // parse intrinsic types for overloaded intrinsics
+          struct ast_ty intrinsic_ty = parse_type(parser);
+          if (type_is_error(&intrinsic_ty) || type_is_tbd(&intrinsic_ty)) {
+            parser_diag(1, parser, NULL,
+                        "expected concrete, resolved type in intrinsic declaration");
+            free(decl);
+            return NULL;
+          }
+
+          if (!fdecl->intrinsic_tys) {
+            fdecl->intrinsic_tys = calloc(1, sizeof(struct ast_ty));
+            fdecl->intrinsic_tys[0] = intrinsic_ty;
+          } else {
+            size_t new_size = fdecl->num_intrinsic_tys + 1;
+            fdecl->intrinsic_tys = realloc(fdecl->intrinsic_tys, new_size * sizeof(struct ast_ty));
+            fdecl->intrinsic_tys[new_size - 1] = intrinsic_ty;
+          }
+
+          fdecl->num_intrinsic_tys++;
+
+          if (parser_peek(parser) == TOKEN_COMMA) {
+            parser_consume_peeked(parser, NULL);
+          } else {
+            break;
+          }
+        }
+      }
+
       if (parser_consume(parser, &token, TOKEN_SEMI) < 0) {
         free(decl);
         return NULL;

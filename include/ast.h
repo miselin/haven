@@ -104,6 +104,11 @@ struct ast_fdecl {
   struct ast_block *body;
   struct ast_vdecl **params;
   size_t num_params;
+
+  int is_intrinsic;
+  char intrinsic[256];
+  struct ast_ty *intrinsic_tys;
+  size_t num_intrinsic_tys;
 };
 
 struct ast_tydecl {

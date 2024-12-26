@@ -1,3 +1,5 @@
+pub fn float __builtin_sqrtf(float x) intrinsic "llvm.sqrt" float;
+
 fn fvec3 vadd(fvec3 a, fvec3 b) {
     a + b
 }
@@ -19,6 +21,6 @@ fn fvec3 vcross(fvec3 a, fvec3 b) {
 }
 
 impure fn fvec3 vnorm(fvec3 v) {
-    let denom = 1.0 / sqrtf(vdot(v, v));
+    let denom = 1.0 / __builtin_sqrtf(vdot(v, v));
     v * denom
 }

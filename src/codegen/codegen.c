@@ -237,6 +237,10 @@ void destroy_codegen(struct codegen *codegen) {
     if (entry->fdecl) {
       free(entry->param_types);
     }
+
+    if (entry->is_intrinsic) {
+      free(entry->fdecl);
+    }
   }
 
   destroy_kv(codegen->functions);

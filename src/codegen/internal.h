@@ -20,6 +20,8 @@ struct scope_entry {
 
   // some scope entries point to a block instead of a variable (e.g. loop labels)
   LLVMBasicBlockRef block;
+
+  int is_intrinsic;
 };
 
 struct struct_entry {
@@ -143,6 +145,10 @@ int extract_constant_int(struct ast_expr *expr, int64_t *into);
 
 LLVMValueRef call_intrinsic(struct codegen *codegen, const char *intrinsic_name,
                             const char *inst_name, size_t num_types, size_t num_args, ...);
+LLVMValueRef build_intrinsic(struct codegen *codegen, const char *intrinsic_name,
+                             LLVMTypeRef *out_ftype, size_t num_types, ...);
+LLVMValueRef build_intrinsic2(struct codegen *codegen, const char *intrinsic_name,
+                              LLVMTypeRef *out_ftype, LLVMTypeRef *types, size_t num_types);
 
 LLVMValueRef const_i32(struct codegen *codegen, int32_t val);
 

@@ -55,44 +55,46 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     }
     LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params,
                                              fdecl->flags & DECL_FLAG_VARARG);
-    func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, func_type);
-    if (fdecl->flags & DECL_FLAG_PUB) {
-      LLVMSetLinkage(func, LLVMExternalLinkage);
-    } else {
-      LLVMSetLinkage(func, LLVMInternalLinkage);
+    if (!fdecl->is_intrinsic) {
+      func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, func_type);
+      if (fdecl->flags & DECL_FLAG_PUB) {
+        LLVMSetLinkage(func, LLVMExternalLinkage);
+      } else {
+        LLVMSetLinkage(func, LLVMInternalLinkage);
+      }
+
+      if (complex_return) {
+        LLVMAddAttributeAtIndex(func, 1, codegen_type_attribute(codegen, "sret", orig_ret_ty));
+      }
+
+      // TODO: asan/msan/* flag
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                              codegen_enum_attribute(codegen, "sanitize_address", 0));
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                              codegen_enum_attribute(codegen, "nounwind", 0));
+      // TODO: frame pointer flag
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                              codegen_string_attribute(codegen, "frame-pointer", "all"));
+
+      char *cpu_name = LLVMGetHostCPUName();
+      LLVMAddTargetDependentFunctionAttr(func, "target-cpu", cpu_name);
+      LLVMDisposeMessage(cpu_name);
+
+      LLVMAddTargetDependentFunctionAttr(func, "tune-cpu", "generic");
+      char *features = LLVMGetHostCPUFeatures();
+      LLVMAddTargetDependentFunctionAttr(func, "target-features", features);
+      LLVMDisposeMessage(features);
+
+      LLVMAttributeRef mem_attr = NULL;
+      if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {
+        // argmem: readwrite (allow struct returns to be pure)
+        mem_attr = codegen_enum_attribute(codegen, "memory", 3);
+      } else {
+        // allow all types of access
+        mem_attr = codegen_enum_attribute(codegen, "memory", ~0U);
+      }
+      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, mem_attr);
     }
-
-    if (complex_return) {
-      LLVMAddAttributeAtIndex(func, 1, codegen_type_attribute(codegen, "sret", orig_ret_ty));
-    }
-
-    // TODO: asan/msan/* flag
-    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
-                            codegen_enum_attribute(codegen, "sanitize_address", 0));
-    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
-                            codegen_enum_attribute(codegen, "nounwind", 0));
-    // TODO: frame pointer flag
-    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
-                            codegen_string_attribute(codegen, "frame-pointer", "all"));
-
-    char *cpu_name = LLVMGetHostCPUName();
-    LLVMAddTargetDependentFunctionAttr(func, "target-cpu", cpu_name);
-    LLVMDisposeMessage(cpu_name);
-
-    LLVMAddTargetDependentFunctionAttr(func, "tune-cpu", "generic");
-    char *features = LLVMGetHostCPUFeatures();
-    LLVMAddTargetDependentFunctionAttr(func, "target-features", features);
-    LLVMDisposeMessage(features);
-
-    LLVMAttributeRef mem_attr = NULL;
-    if ((fdecl->flags & DECL_FLAG_IMPURE) == 0) {
-      // argmem: readwrite (allow struct returns to be pure)
-      mem_attr = codegen_enum_attribute(codegen, "memory", 3);
-    } else {
-      // allow all types of access
-      mem_attr = codegen_enum_attribute(codegen, "memory", ~0U);
-    }
-    LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex, mem_attr);
 
     entry = calloc(1, sizeof(struct scope_entry));
     entry->fdecl = fdecl;
@@ -103,6 +105,28 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   } else {
     func = entry->ref;
     param_types = entry->param_types;
+  }
+
+  if (fdecl->is_intrinsic) {
+    LLVMTypeRef *intrinsic_types =
+        fdecl->num_intrinsic_tys ? malloc(sizeof(LLVMTypeRef) * fdecl->num_intrinsic_tys) : NULL;
+    for (size_t i = 0; i < fdecl->num_intrinsic_tys; i++) {
+      intrinsic_types[i] = ast_ty_to_llvm_ty(codegen, &fdecl->intrinsic_tys[i]);
+    }
+    LLVMTypeRef intrinsic_ftype = NULL;
+    entry->ref = build_intrinsic2(codegen, fdecl->intrinsic, &intrinsic_ftype, intrinsic_types,
+                                  fdecl->num_intrinsic_tys);
+    if (!entry->ref) {
+      fprintf(stderr, "failed to build intrinsic %s\n", fdecl->intrinsic);
+      return;
+    }
+    entry->function_type = intrinsic_ftype;
+
+    if (intrinsic_types) {
+      free(intrinsic_types);
+    }
+
+    return;
   }
 
   // generate definition if we have one

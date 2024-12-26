@@ -42,6 +42,7 @@ struct lookup {
     {"sizeof", TOKEN_KW_SIZEOF},
     {"box", TOKEN_KW_BOX},
     {"unbox", TOKEN_KW_UNBOX},
+    {"intrinsic", TOKEN_KW_INTRINSIC},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {
