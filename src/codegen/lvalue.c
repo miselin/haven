@@ -19,23 +19,28 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
       struct scope_entry *lookup =
           scope_lookup(codegen->scope, ast->variable.ident.value.identv.ident, 1);
 
-      if (ast->ty.ty == AST_TYPE_BOX) {
-        // return the actual box pointer - boxes are a pointer to a pointer
-        // return LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen), lookup->ref,
-        // "box.ptr");
-      }
-
       return lookup->ref;
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
+      compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emitting a deref lvalue");
+
       char name[512];
 
       LLVMValueRef target = emit_expr(codegen, ast->deref.target);
 
       struct ast_ty *target_ty = &ast->deref.target->ty;
+      struct ast_ty *orig_ty = target_ty;
       if (target_ty->ty == AST_TYPE_POINTER) {
         target_ty = ptr_pointee_type(target_ty);
+      } else if (target_ty->ty == AST_TYPE_BOX) {
+        target_ty = box_pointee_type(target_ty);
+      }
+
+      if (orig_ty->ty == AST_TYPE_BOX) {
+        // needs to be the equivalent of an unbox without the subsequent load
+        LLVMTypeRef box_type = codegen_box_type(codegen, orig_ty);
+        target = LLVMBuildStructGEP2(codegen->llvm_builder, box_type, target, 1, "box.value");
       }
 
       LLVMTypeRef expr_ty = ast_ty_to_llvm_ty(codegen, target_ty);
@@ -66,6 +71,8 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
       if (target_ty->ty == AST_TYPE_STRUCT && target_ty->structty.is_union) {
         return target;
       }
+
+      compiler_log(codegen->compiler, LogLevelDebug, "codegen", "struct GEP2");
 
       // struct -> GEP the field
       snprintf(name, 512, "deref.gep.%s", ast->deref.field.value.identv.ident);

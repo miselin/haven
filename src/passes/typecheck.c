@@ -818,6 +818,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
       } else if (target_expr->ty.ty == AST_TYPE_POINTER) {
         // type of expression is the type pointed to by the pointer
         ast->ty = resolve_type(typecheck, ptr_pointee_type(&target_expr->ty));
+      } else if (target_expr->ty.ty == AST_TYPE_BOX) {
+        // type of expression is the type pointed to by the box
+        ast->ty = resolve_type(typecheck, box_pointee_type(&target_expr->ty));
       } else {
         typecheck_diag_expr(typecheck, ast->array_index.target,
                             "indexable type has an unimplemented type resolve\n");
@@ -943,7 +946,15 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
       struct ast_ty *ty = target_ty;
       if (ast->deref.is_ptr) {
-        ty = ptr_pointee_type(ty);
+        if (ty->ty == AST_TYPE_POINTER) {
+          ty = ptr_pointee_type(ty);
+        } else if (ty->ty == AST_TYPE_BOX) {
+          ty = box_pointee_type(ty);
+        } else {
+          fprintf(stderr, "deref of %s has non-pointer type\n", ident);
+          ++typecheck->errors;
+          return &typecheck->error_type;
+        }
       }
 
       if (ty->ty != AST_TYPE_FVEC && ty->ty != AST_TYPE_STRUCT && ty->ty != AST_TYPE_MATRIX) {
@@ -1173,7 +1184,12 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
 
         struct ast_ty *deref_ty = &ast->assign.lhs->deref.target->ty;
         if (ast->assign.lhs->deref.is_ptr) {
-          deref_ty = ptr_pointee_type(deref_ty);
+          if (deref_ty->ty == AST_TYPE_POINTER) {
+            deref_ty = ptr_pointee_type(deref_ty);
+          } else if (deref_ty->ty == AST_TYPE_BOX) {
+            deref_ty = box_pointee_type(deref_ty);
+          }
+
           if (!deref_ty) {
             fprintf(stderr, "dereference of non-pointer type\n");
             ++typecheck->errors;
@@ -1542,9 +1558,31 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     } break;
 
     case AST_EXPR_TYPE_BOX: {
-      struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->box_expr.expr);
-      if (!inner_ty) {
-        return NULL;
+      struct ast_ty *inner_ty = NULL;
+
+      int swapped_type = 0;
+      if (ast->box_expr.expr) {
+        if (ast->box_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
+          // is it actually a type?
+          struct alias_entry *entry =
+              kv_lookup(typecheck->aliases, ast->box_expr.expr->variable.ident.value.identv.ident);
+          if (entry) {
+            inner_ty = &entry->ty;
+            free_expr(ast->box_expr.expr);
+            ast->box_expr.expr = NULL;
+            swapped_type = 1;
+
+            ast->box_expr.ty = calloc(1, sizeof(struct ast_ty));
+            *ast->box_expr.ty = copy_type(inner_ty);
+          }
+        }
+
+        if (!swapped_type) {
+          inner_ty = typecheck_expr(typecheck, ast->box_expr.expr);
+          if (!inner_ty) {
+            return NULL;
+          }
+        }
       }
 
       ast->ty.ty = AST_TYPE_BOX;

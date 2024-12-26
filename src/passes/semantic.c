@@ -455,7 +455,9 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      return check_semantic_expr(semantic, ast->box_expr.expr);
+      if (ast->box_expr.expr) {
+        return check_semantic_expr(semantic, ast->box_expr.expr);
+      }
       break;
 
     default:

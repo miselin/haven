@@ -1,16 +1,22 @@
 cimport "stdlib.h";
 cimport "stdio.h";
 
+pub impure fn i8* memcpy(i8* dest, i8* src, i32 size);
+
 type Box = struct {
     i32 refcount;
-    i32 value;
 };
 
-pub impure fn Box* __haven_new_box(i32* value, i32 size) {
-    let mut result = as Box* malloc(as u64 sizeof Box);
+pub impure fn Box* __haven_new_empty_box(i32 size) {
+    let mut result = as Box* malloc(as u64 ((sizeof Box) + size));
     result->refcount = 1;
-    result->value = load value;
 
+    result
+}
+
+pub impure fn Box* __haven_new_box(i32* value, i32 size) {
+    let result = __haven_new_empty_box(size);
+    memcpy(result + 1, value, size);
     result
 }
 

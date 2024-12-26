@@ -46,6 +46,8 @@ struct codegen_block {
 struct codegen_preamble {
   LLVMValueRef new_box;
   LLVMTypeRef new_box_type;
+  LLVMValueRef new_empty_box;
+  LLVMTypeRef new_empty_box_type;
   LLVMValueRef box_ref;
   LLVMTypeRef box_ref_type;
   LLVMValueRef box_unref;

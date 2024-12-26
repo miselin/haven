@@ -187,19 +187,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         return lookup->ref;
       }
 
-      LLVMValueRef var = LLVMBuildLoad2(codegen->llvm_builder, lookup->variable_type, lookup->ref,
-                                        ast->variable.ident.value.identv.ident);
-
-      if (ast->ty.ty == AST_TYPE_BOX) {
-        // need to ref the box in flight
-        codegen_box_ref(codegen, var, 1);
-
-        // now load the actual value
-        // var = LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen), var,
-        //                      ast->variable.ident.value.identv.ident);
-      }
-
-      return var;
+      return LLVMBuildLoad2(codegen->llvm_builder, lookup->variable_type, lookup->ref,
+                            ast->variable.ident.value.identv.ident);
     } break;
 
     case AST_EXPR_TYPE_BINARY: {
@@ -239,6 +228,12 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
             args[num_args + is_complex] = LLVMBuildFPExt(
                 codegen->llvm_builder, args[num_args + is_complex], LLVMDoubleType(), "fpext");
           }
+          if (node->expr->ty.ty == AST_TYPE_BOX) {
+            // need to ref the box as it's being passed to a function
+            compiler_log(codegen->compiler, LogLevelDebug, "codegen",
+                         "box ref due to EXPR_TYPE_CALL");
+            codegen_box_ref(codegen, args[num_args + is_complex], 1);
+          }
           ++num_args;
           node = node->next;
         }
@@ -277,11 +272,13 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       struct ast_ty *target_ty = &ast->deref.target->ty;
       if (target_ty->ty == AST_TYPE_POINTER) {
         target_ty = ptr_pointee_type(target_ty);
+      } else if (target_ty->ty == AST_TYPE_BOX) {
+        target_ty = box_pointee_type(target_ty);
       }
 
       // vector -> extractelement
-      LLVMValueRef target = emit_expr(codegen, ast->deref.target);
       if (target_ty->ty == AST_TYPE_FVEC) {
+        LLVMValueRef target = emit_expr(codegen, ast->deref.target);
         snprintf(name, 512, "deref.vec.%zd", ast->deref.field_idx);
 
         LLVMValueRef index = LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context),
@@ -322,13 +319,20 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       }
 
       if (ast->assign.lhs->ty.ty == AST_TYPE_BOX) {
-        // LLVMValueRef inner =
-        //     LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen), lhs,
-        //     "box.inner");
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen",
+                     "box unref due to EXPR_TYPE_ASSIGN [lhs]");
         codegen_box_unref(codegen, lhs, 0);
       }
 
       LLVMValueRef expr = emit_expr(codegen, ast->assign.expr);
+
+      if (ast->assign.expr->ty.ty == AST_TYPE_BOX) {
+        // need to ref the box in flight
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen",
+                     "box ref due to EXPR_TYPE_ASSIGN [rhs]");
+        codegen_box_ref(codegen, expr, 1);
+      }
+
       emit_store(codegen, &ast->ty, expr, lhs);
 
       return lhs;
@@ -493,17 +497,30 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMTypeRef out_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
       LLVMValueRef box = into ? into : new_alloca(codegen, out_ty, "box");
-      LLVMValueRef value = emit_expr(codegen, ast->box_expr.expr);
-      LLVMValueRef tmp = new_alloca(codegen, LLVMTypeOf(value), "box.tmp");
-      LLVMBuildStore(codegen->llvm_builder, value, tmp);
-      LLVMValueRef size = const_i32(
-          codegen, (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout,
-                                              ast_ty_to_llvm_ty(codegen, &ast->box_expr.expr->ty)));
 
-      LLVMValueRef args[] = {tmp, size};
-      LLVMValueRef result = LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.new_box_type,
-                                           codegen->preamble.new_box, args, 2, "box.new");
-      LLVMBuildStore(codegen->llvm_builder, result, box);
+      if (ast->box_expr.expr) {
+        LLVMValueRef size = const_i32(
+            codegen,
+            (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout,
+                                       ast_ty_to_llvm_ty(codegen, &ast->box_expr.expr->ty)));
+        LLVMValueRef value = emit_expr(codegen, ast->box_expr.expr);
+        LLVMValueRef tmp = new_alloca(codegen, LLVMTypeOf(value), "box.tmp");
+        LLVMBuildStore(codegen->llvm_builder, value, tmp);
+
+        LLVMValueRef args[] = {tmp, size};
+        LLVMValueRef result = LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.new_box_type,
+                                             codegen->preamble.new_box, args, 2, "box.new");
+        LLVMBuildStore(codegen->llvm_builder, result, box);
+      } else {
+        LLVMValueRef size = const_i32(
+            codegen, (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout,
+                                                ast_ty_to_llvm_ty(codegen, ast->box_expr.ty)));
+        LLVMValueRef args[] = {size};
+        LLVMValueRef result =
+            LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.new_empty_box_type,
+                           codegen->preamble.new_empty_box, args, 1, "box.new");
+        LLVMBuildStore(codegen->llvm_builder, result, box);
+      }
 
       struct box_entry *entry = calloc(1, sizeof(struct box_entry));
       entry->box = box;
@@ -518,9 +535,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMTypeRef box_type = codegen_box_type(codegen, &ast->box_expr.expr->ty);
 
       LLVMValueRef box = emit_expr(codegen, ast->box_expr.expr);
-
-      // unref the ref'd box (unboxing should not increase the refcount)
-      codegen_box_unref(codegen, box, 1);
 
       // get the inner value
       LLVMValueRef ptr = LLVMBuildStructGEP2(codegen->llvm_builder, box_type, box, 1, "box.value");

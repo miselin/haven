@@ -312,6 +312,13 @@ static int check_purity_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_SIZEOF:
       break;
 
+    case AST_EXPR_TYPE_BOX:
+    case AST_EXPR_TYPE_UNBOX:
+      if (ast->box_expr.expr) {
+        return check_purity_expr(ast->box_expr.expr);
+      }
+      break;
+
     default:
       fprintf(stderr, "purity: unhandled expression type %d\n", ast->type);
   }

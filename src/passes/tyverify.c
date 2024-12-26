@@ -395,7 +395,15 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      return typecheck_verify_expr(ast->box_expr.expr);
+      if (ast->box_expr.expr) {
+        return typecheck_verify_expr(ast->box_expr.expr);
+      }
+      if (ast->box_expr.ty) {
+        if (is_bad_type(ast->box_expr.ty)) {
+          fprintf(stderr, "tyverify: box/unbox expression has unresolved type\n");
+          return -1;
+        }
+      }
       break;
 
     default:

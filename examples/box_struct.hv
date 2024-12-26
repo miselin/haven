@@ -1,0 +1,9 @@
+type Thing = struct {
+    i32 x;
+};
+
+pub impure fn i32 main() {
+    let mut boxed = box Thing;
+    boxed->x = 5;
+    boxed->x
+}

@@ -19,6 +19,10 @@ void emit_preamble(struct codegen *codegen) {
   LLVMTypeRef ptrtype = LLVMPointerTypeInContext(codegen->llvm_context, 0);
   LLVMTypeRef i32type = LLVMInt32TypeInContext(codegen->llvm_context);
 
+  // void *__haven_new_empty_box(int size);
+  codegen->preamble.new_empty_box = emit_preamble_fdecl(
+      codegen, "__haven_new_empty_box", ptrtype, &codegen->preamble.new_empty_box_type, 1, i32type);
+
   // void *__haven_new_box(void *value, int size);
   codegen->preamble.new_box = emit_preamble_fdecl(
       codegen, "__haven_new_box", ptrtype, &codegen->preamble.new_box_type, 2, ptrtype, i32type);

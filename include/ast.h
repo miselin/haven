@@ -246,6 +246,7 @@ struct ast_expr_sizeof {
 };
 
 struct ast_expr_box {
+  struct ast_ty *ty;
   struct ast_expr *expr;
 };
 

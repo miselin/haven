@@ -234,7 +234,12 @@ void free_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      free_expr(ast->box_expr.expr);
+      if (ast->box_expr.ty) {
+        free_ty(ast->box_expr.ty, 1);
+      }
+      if (ast->box_expr.expr) {
+        free_expr(ast->box_expr.expr);
+      }
       break;
 
     default:

@@ -444,7 +444,9 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      return typecheck_implicit_expr(ast->box_expr.expr);
+      if (ast->box_expr.expr) {
+        return typecheck_implicit_expr(ast->box_expr.expr);
+      }
       break;
 
     default:

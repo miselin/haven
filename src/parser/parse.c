@@ -1090,10 +1090,30 @@ static struct ast_expr *parse_factor(struct parser *parser) {
 
     // box a value
     case TOKEN_KW_BOX:
-      // box <expr>
+      // box <expr|type>
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_BOX;
-      result->box_expr.expr = parse_factor(parser);
+
+      parser->mute_diags = 1;
+      parser_mark(parser);
+      result->box_expr.ty = NULL;
+      result->box_expr.expr = parse_expression(parser);
+      if (!result->box_expr.expr) {
+        parser_rewind(parser);
+        parser->mute_diags = 0;
+        struct ast_ty ty = parse_type(parser);
+        if (type_is_error(&ty)) {
+          parser_diag(1, parser, &parser->peek, "expected expression or type after sizeof");
+          free(result);
+          return NULL;
+        }
+
+        result->box_expr.ty = calloc(1, sizeof(struct ast_ty));
+        *result->box_expr.ty = ty;
+      } else {
+        parser_commit(parser);
+      }
+      parser->mute_diags = 0;
       break;
 
     // unbox a value
