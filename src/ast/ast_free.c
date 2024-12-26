@@ -204,9 +204,11 @@ void free_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_NIL:
-      // always references an existing type that will be freed elsewhere
-      free(ast);
-      return;
+      // if not resolved to another type, just free the expression
+      if (ast->ty.ty == AST_TYPE_NIL) {
+        free(ast);
+        return;
+      }
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH:

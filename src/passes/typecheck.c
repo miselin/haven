@@ -672,21 +672,9 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
     case AST_EXPR_TYPE_STRUCT_INIT: {
       struct ast_ty resolved = resolve_type(typecheck, ast->ty.array.element_ty);
 
-      // TODO: check each field initializer against the struct type
       struct ast_struct_field *field = resolved.structty.fields;
       struct ast_expr_list *node = ast->list;
       while (node) {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr);
-        if (!expr_ty) {
-          return NULL;
-        }
-
-        if (type_is_nil(expr_ty)) {
-          // swap expr type for the real underlying type for checking + codegen
-          // the expr is a nil expression, so this is safe to do.
-          *expr_ty = *field->ty;
-        }
-
         // TODO: fuzzer found field to be null here, the AST doesn't make sense to cause that
         // either way though, we should check that both node & field are non-null
         if (!field) {
@@ -698,6 +686,11 @@ static struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct a
         if (!field->ty) {
           fprintf(stderr, "struct initializer field %s inexplicably has no type\n", field->name);
           ++typecheck->errors;
+        }
+
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr);
+        if (!expr_ty) {
+          return NULL;
         }
 
         maybe_implicitly_convert(expr_ty, field->ty);
@@ -1785,7 +1778,8 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
 
   if (from->ty == AST_TYPE_NIL) {
     // nil can be coerced to any type
-    *from = *to;
+    free_ty(from, 0);
+    *from = copy_type(to);
     return 1;
   }
 

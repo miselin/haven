@@ -408,7 +408,7 @@ static LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLV
 
     case AST_STMT_TYPE_LET: {
       const char *ident = ast->let.ident.value.identv.ident;
-      LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, &ast->let.ty);
+      LLVMTypeRef var_type = ast_underlying_ty_to_llvm_ty(codegen, &ast->let.ty);
       LLVMValueRef var = new_alloca(codegen, var_type, ident);
       LLVMValueRef init = emit_expr_into(codegen, ast->let.init_expr, var);
       if (init != var) {

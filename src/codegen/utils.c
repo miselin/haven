@@ -127,12 +127,21 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       inner = LLVMVoidTypeInContext(codegen->llvm_context);
       break;
     case AST_TYPE_ENUM: {
+      if (ty->enumty.no_wrapped_fields) {
+        inner = LLVMInt32TypeInContext(codegen->llvm_context);
+      } else {
+        inner = LLVMPointerTypeInContext(codegen->llvm_context, 0);
+      }
+
+      // TODO: need to use this type in some contexts
+      /*
       struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
       if (!entry) {
         fprintf(stderr, "enum %s not found in codegen\n", ty->name);
         return NULL;
       }
       inner = entry->type;
+      */
     } break;
     case AST_TYPE_CUSTOM:
       fprintf(stderr, "custom type %s not resolved before codegen\n", ty->name);
@@ -163,6 +172,25 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
   }
 
   return inner;
+}
+
+LLVMTypeRef ast_underlying_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
+  LLVMTypeRef inner = NULL;
+  switch (ty->ty) {
+    case AST_TYPE_ENUM: {
+      struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
+      if (!entry) {
+        fprintf(stderr, "enum %s not found in codegen\n", ty->name);
+        return NULL;
+      }
+      inner = entry->type;
+    } break;
+    default:
+      // fall through to the normal type resolver
+      break;
+  }
+
+  return inner ? inner : ast_ty_to_llvm_ty(codegen, ty);
 }
 
 void update_debug_loc(struct codegen *codegen, struct lex_locator *loc) {

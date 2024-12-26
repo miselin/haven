@@ -434,7 +434,7 @@ int can_cast(struct ast_ty *ty1, struct ast_ty *ty2) {
 }
 
 size_t type_size(struct ast_ty *ty) {
-  if (ty->ty == AST_TYPE_POINTER) {
+  if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
     // TODO: 64-bit assumption
     return 8;
   }

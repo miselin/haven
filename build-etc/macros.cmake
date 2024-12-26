@@ -6,11 +6,12 @@ macro(add_bootstrap_haven_library name source)
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         COMMAND haven_bootstrap ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
-        DEPENDS haven_bootstrap ${ARGN}
+        DEPENDS haven_bootstrap runtime ${ARGN}
         COMMENT "Building ${name} from ${source} [bootstrap]"
     )
 
     add_library(${name} STATIC ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
+    target_link_libraries(${name} runtime)
     # set link language to C
     set_target_properties(${name} PROPERTIES LINKER_LANGUAGE C)
 endmacro()
@@ -27,6 +28,7 @@ macro(add_haven_library name source)
     )
 
     add_library(${name} STATIC ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
+    target_link_libraries(${name} runtime)
     # set link language to C
     set_target_properties(${name} PROPERTIES LINKER_LANGUAGE C)
 endmacro()
@@ -36,9 +38,9 @@ macro(add_haven_runtime_library name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven --no-preamble ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap --no-preamble ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
-        DEPENDS haven ${ARGN}
+        DEPENDS haven_bootstrap ${ARGN}
         COMMENT "Building ${name} from ${source}"
     )
 

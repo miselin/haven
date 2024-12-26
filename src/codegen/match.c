@@ -23,16 +23,14 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
 
   LLVMValueRef main_expr = emit_expr(codegen, match->expr);
 
-  LLVMTypeRef main_expr_ty = ast_ty_to_llvm_ty(codegen, &match->expr->ty);
-
   // inner storage of an enum type, for pattern matches
   LLVMValueRef main_expr_buf = NULL;
 
   if (match->expr->ty.ty == AST_TYPE_ENUM && !match->expr->ty.enumty.no_wrapped_fields) {
+    LLVMTypeRef enum_ty = ast_underlying_ty_to_llvm_ty(codegen, &match->expr->ty);
     LLVMValueRef tag_ptr =
-        LLVMBuildStructGEP2(codegen->llvm_builder, main_expr_ty, main_expr, 0, "tagptr");
-    main_expr_buf =
-        LLVMBuildStructGEP2(codegen->llvm_builder, main_expr_ty, main_expr, 1, "bufptr");
+        LLVMBuildStructGEP2(codegen->llvm_builder, enum_ty, main_expr, 0, "tagptr");
+    main_expr_buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_ty, main_expr, 1, "bufptr");
 
     // match the embedded tag instead of the object
     main_expr = LLVMBuildLoad2(codegen->llvm_builder, LLVMInt32TypeInContext(codegen->llvm_context),

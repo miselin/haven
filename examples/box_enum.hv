@@ -1,0 +1,25 @@
+pub fn i32 printf(str fmt, *);
+
+type Wrapped = enum {
+    Wrapped(i32^),
+    NoValue
+};
+
+pub fn void print(Wrapped value) {
+    match value {
+        Wrapped::Wrapped(inner) => {
+            printf("wrapped: %d\n", unbox inner);
+        }
+        _ => {
+            printf("no value\n");
+        }
+    };
+}
+
+pub fn i32 main() {
+    let inner = box as i32 5;
+    let wrapped = Wrapped::Wrapped(inner);
+    print(wrapped);
+
+    0
+}
