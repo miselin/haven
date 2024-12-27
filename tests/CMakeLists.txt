@@ -16,19 +16,19 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 endif ()
 
 add_executable(trie_test trie_test.cc)
-target_link_libraries(trie_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
+target_link_libraries(trie_test haven_compiler_options_no_warnings compiler_bootstrap GTest::gtest_main)
 gtest_discover_tests(trie_test)
 
 add_executable(trie_haven_test trie_test.cc)
-target_link_libraries(trie_haven_test haven_compiler_options_no_warnings compiler -Wl,--whole-archive utilities_haven -Wl,--no-whole-archive GTest::gtest_main)
+target_link_libraries(trie_haven_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(trie_haven_test)
 
 add_executable(kv_test kv_test.cc)
-target_link_libraries(kv_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
+target_link_libraries(kv_test haven_compiler_options_no_warnings compiler_bootstrap GTest::gtest_main)
 gtest_discover_tests(kv_test)
 
 add_executable(kv_haven_test kv_test.cc)
-target_link_libraries(kv_haven_test haven_compiler_options_no_warnings compiler -Wl,--whole-archive utilities_haven -Wl,--no-whole-archive GTest::gtest_main)
+target_link_libraries(kv_haven_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(kv_haven_test)
 
 add_executable(kw_test kw_test.cc)

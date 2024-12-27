@@ -4,13 +4,6 @@
 
 #include "utility.h"
 
-extern struct trie *haven_new_trie(void) WEAK;
-extern void haven_trie_insert(struct trie *, const char *key, void *value) WEAK;
-extern void *haven_trie_lookup(struct trie *, const char *key) WEAK;
-extern void haven_trie_remove(struct trie *trie, const char *key) WEAK;
-extern void haven_destroy_trie(struct trie *trie) WEAK;
-extern void haven_dump_trie(struct trie *trie) WEAK;
-
 struct trie_node {
   size_t id;
   char key[256];
@@ -27,10 +20,6 @@ struct trie {
 };
 
 struct trie *new_trie(void) {
-  if (haven_new_trie) {
-    return haven_new_trie();
-  }
-
   struct trie *trie = calloc(1, sizeof(struct trie));
   trie->root = calloc(1, sizeof(struct trie_node));
   return trie;
@@ -51,11 +40,6 @@ static int has_children(struct trie_node *node) {
 }
 
 void trie_insert(struct trie *trie, const char *key, void *value) {
-  if (haven_trie_insert) {
-    haven_trie_insert(trie, key, value);
-    return;
-  }
-
   if (!*key) {
     // no-op
     return;
@@ -159,10 +143,6 @@ static struct trie_node *node_for(struct trie *trie, const char *key) {
 }
 
 void *trie_lookup(struct trie *trie, const char *key) {
-  if (haven_trie_lookup) {
-    return haven_trie_lookup(trie, key);
-  }
-
   struct trie_node *node = node_for(trie, key);
   if (!node) {
     return node;
@@ -172,11 +152,6 @@ void *trie_lookup(struct trie *trie, const char *key) {
 }
 
 void trie_remove(struct trie *trie, const char *key) {
-  if (haven_trie_remove) {
-    haven_trie_remove(trie, key);
-    return;
-  }
-
   struct trie_node *node = node_for(trie, key);
   if (node) {
     node->has_value = 0;
@@ -199,11 +174,6 @@ static void dump_trie_node(FILE *stream, struct trie_node *node) {
 }
 
 void dump_trie(struct trie *trie) {
-  if (haven_dump_trie) {
-    haven_dump_trie(trie);
-    return;
-  }
-
   FILE *stream = fopen("trie.dot", "w");
 
   fprintf(stream, "digraph trie {\n");
@@ -233,11 +203,6 @@ static void destroy_trie_node(struct trie_node *node) {
 }
 
 void destroy_trie(struct trie *trie) {
-  if (haven_destroy_trie) {
-    haven_destroy_trie(trie);
-    return;
-  }
-
   destroy_trie_node(trie->root);
   free(trie);
 }

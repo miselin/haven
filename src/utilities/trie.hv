@@ -35,7 +35,7 @@ impure fn i8* char_to_i8ptr(i8 c) {
     ptr
 }
 
-pub impure fn Trie* haven_new_trie() {
+pub impure fn Trie* new_trie() {
     let mut root_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
     root_node->id = 0;
     root_node->key[0] = 0;
@@ -67,7 +67,7 @@ impure fn i32 next_id(mut Trie *trie) {
     id
 }
 
-pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
+pub impure fn void trie_insert(mut Trie *trie, i8 *key, i8 *value) {
     if key[0] == 0 {
         ret;
     };
@@ -189,7 +189,7 @@ impure fn LookupResult node_for(Trie *trie, i8 *key) {
     }
 }
 
-pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
+pub impure fn i8* trie_lookup(Trie *trie, i8 *key) {
     let node = node_for(trie, key);
     match node {
         LookupResult::Found(node) => {
@@ -208,7 +208,7 @@ pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
     }
 }
 
-pub impure fn void haven_trie_remove(mut Trie* trie, i8* key) {
+pub impure fn void trie_remove(mut Trie* trie, i8* key) {
     let mut node = node_for(trie, key);
     match node {
         LookupResult::Found(node) => {
@@ -230,7 +230,7 @@ impure fn void destroy_trie_node(mut TrieNode *node) {
     free(node);
 }
 
-pub impure fn void haven_destroy_trie(Trie *trie) {
+pub impure fn void destroy_trie(Trie *trie) {
     destroy_trie_node(trie->root);
     free(trie);
 }
@@ -249,7 +249,7 @@ impure fn void dump_trie_node(FILE* stream, TrieNode *node) {
   };
 }
 
-pub impure fn void haven_dump_trie(Trie *trie) {
+pub impure fn void dump_trie(Trie *trie) {
     let stream = fopen("trie.dot", "w");
     fprintf(stream, "digraph Trie {\n");
     fprintf(stream, "  node [shape=circle];\n");
