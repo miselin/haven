@@ -13,8 +13,8 @@
 
 static uint64_t next = 0;
 
-struct ast_ty parse_cursor_type(CXCursor cursor);
-struct ast_ty parse_type(CXType type);
+static struct ast_ty parse_cursor_type(CXCursor cursor);
+static struct ast_ty parse_type(CXType type);
 
 static void analyze_function_type(CXType type, struct ast_fdecl *fdecl);
 
@@ -23,8 +23,8 @@ static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty);
 static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor parent,
                                                       CXClientData client_data);
 
-enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCursor parent,
-                                             CXClientData client_data) {
+static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCursor parent,
+                                                    CXClientData client_data) {
   UNUSED(parent);
   struct ast_ty *ty = (struct ast_ty *)client_data;
 
@@ -111,8 +111,8 @@ static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty) {
   }
 }
 
-enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCursor parent,
-                                           CXClientData client_data) {
+static enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCursor parent,
+                                                  CXClientData client_data) {
   UNUSED(parent);
   struct ast_ty *ty = (struct ast_ty *)client_data;
 
@@ -150,7 +150,7 @@ static void collect_enum_fields(CXCursor cursor, struct ast_ty *ty) {
   clang_visitChildren(cursor, enum_field_visitor, ty);
 }
 
-int parse_simple_type(CXType type, struct ast_ty *into) {
+static int parse_simple_type(CXType type, struct ast_ty *into) {
   int rc = 0;
 
   // TODO: are there cases where we don't want to do this indirection?
@@ -249,7 +249,7 @@ int parse_simple_type(CXType type, struct ast_ty *into) {
   return rc;
 }
 
-struct ast_ty parse_type(CXType type) {
+static struct ast_ty parse_type(CXType type) {
   struct ast_ty result;
   memset(&result, 0, sizeof(struct ast_ty));
 
@@ -331,7 +331,7 @@ struct ast_ty parse_type(CXType type) {
   return result;
 }
 
-struct ast_ty parse_cursor_type(CXCursor cursor) {
+static struct ast_ty parse_cursor_type(CXCursor cursor) {
   CXType type = clang_getCursorType(cursor);
   return parse_type(type);
 }

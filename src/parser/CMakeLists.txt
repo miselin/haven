@@ -1,2 +1,2 @@
-add_library(parser OBJECT parse.c)
+add_library(parser OBJECT parse.c block.c enum.c expression.c pattern.c preamble.c range.c statement.c struct.c tables.c toplevel.c types.c util.c)
 target_link_libraries(parser PRIVATE haven_compiler_options)
