@@ -1,7 +1,9 @@
 #include "kv.h"
 
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
+
+#include "utility.h"
 
 struct kv_node {
   char *key;
@@ -13,15 +15,15 @@ struct kv {
   struct kv_node *head;
 };
 
-extern struct kv *haven_new_kv(void) __attribute__((weak));
-extern void haven_kv_insert(struct kv *, const char *key, void *value) __attribute__((weak));
-extern void *haven_kv_lookup(struct kv *, const char *key) __attribute__((weak));
-extern void *haven_kv_delete(struct kv *, const char *key) __attribute__((weak));
-extern void haven_destroy_kv(struct kv *trie) __attribute__((weak));
+extern struct kv *haven_new_kv(void) WEAK;
+extern void haven_kv_insert(struct kv *, const char *key, void *value) WEAK;
+extern void *haven_kv_lookup(struct kv *, const char *key) WEAK;
+extern void *haven_kv_delete(struct kv *, const char *key) WEAK;
+extern void haven_destroy_kv(struct kv *trie) WEAK;
 
-extern void *haven_kv_iter(struct kv *kv) __attribute__((weak));
-extern void *haven_kv_next(void **iter) __attribute__((weak));
-extern int haven_kv_end(void *iter) __attribute__((weak));
+extern void *haven_kv_iter(struct kv *kv) WEAK;
+extern void *haven_kv_next(void **iter) WEAK;
+extern int haven_kv_end(void *iter) WEAK;
 
 struct kv *new_kv(void) {
   if (haven_new_kv) {

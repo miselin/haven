@@ -1,14 +1,15 @@
-#include <llvm-c-18/llvm-c/Types.h>
-#include <malloc.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-extern struct trie *haven_new_trie(void) __attribute__((weak));
-extern void haven_trie_insert(struct trie *, const char *key, void *value) __attribute__((weak));
-extern void *haven_trie_lookup(struct trie *, const char *key) __attribute__((weak));
-extern void haven_trie_remove(struct trie *trie, const char *key) __attribute__((weak));
-extern void haven_destroy_trie(struct trie *trie) __attribute__((weak));
-extern void haven_dump_trie(struct trie *trie) __attribute__((weak));
+#include "utility.h"
+
+extern struct trie *haven_new_trie(void) WEAK;
+extern void haven_trie_insert(struct trie *, const char *key, void *value) WEAK;
+extern void *haven_trie_lookup(struct trie *, const char *key) WEAK;
+extern void haven_trie_remove(struct trie *trie, const char *key) WEAK;
+extern void haven_destroy_trie(struct trie *trie) WEAK;
+extern void haven_dump_trie(struct trie *trie) WEAK;
 
 struct trie_node {
   size_t id;

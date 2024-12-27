@@ -1,4 +1,5 @@
 
+#include <inttypes.h>
 #include <libgen.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
@@ -8,7 +9,7 @@
 #include <llvm-c/TargetMachine.h>
 #include <llvm-c/Transforms/PassBuilder.h>
 #include <llvm-c/Types.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ast.h"
@@ -117,7 +118,8 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
         // range is constant, we can annotate an unroll count
         int64_t iters = ((iend - istart) / iter_step) + 1;
 
-        compiler_log(codegen->compiler, LogLevelDebug, "codegen", "loop has %ld iterations", iters);
+        compiler_log(codegen->compiler, LogLevelDebug, "codegen", "loop has %" PRIi64 " iterations",
+                     iters);
 
         LLVMMetadataRef count_md = LLVMValueAsMetadata(
             LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context), (uint64_t)iters, 1));

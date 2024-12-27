@@ -1,9 +1,9 @@
-#include <llvm-c-18/llvm-c/DebugInfo.h>
-#include <llvm-c-18/llvm-c/TargetMachine.h>
-#include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
-#include <malloc.h>
+#include <llvm-c/DebugInfo.h>
+#include <llvm-c/TargetMachine.h>
+#include <llvm-c/Types.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ast.h"
@@ -17,8 +17,13 @@
 #include "utility.h"
 
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at) {
-  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit fdecl %s",
-               fdecl->ident.value.identv.ident);
+  char mangled[1024];
+  codegen_mangle(codegen, fdecl, mangled, 1024);
+
+  const char *ident = fdecl->ident.value.identv.ident;
+
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit fdecl %s (as %s)", ident,
+               mangled);
 
   if (fdecl->retty.specialization_of) {
     // we need to create the return type as a new global
@@ -43,7 +48,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     ret_ty = LLVMVoidTypeInContext(codegen->llvm_context);
   }
 
-  struct scope_entry *entry = scope_lookup(codegen->scope, fdecl->ident.value.identv.ident, 0);
+  struct scope_entry *entry = scope_lookup(codegen->scope, ident, 0);
   if (!entry) {
     // emit declaration
     param_types = malloc(sizeof(LLVMTypeRef) * num_params);
@@ -57,7 +62,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params,
                                              fdecl->flags & DECL_FLAG_VARARG);
     if (!fdecl->is_intrinsic) {
-      func = LLVMAddFunction(codegen->llvm_module, fdecl->ident.value.identv.ident, func_type);
+      func = LLVMAddFunction(codegen->llvm_module, mangled, func_type);
       if (fdecl->flags & DECL_FLAG_PUB) {
         LLVMSetLinkage(func, LLVMExternalLinkage);
       } else {
@@ -102,7 +107,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     entry->function_type = func_type;
     entry->param_types = param_types;
     entry->ref = func;
-    scope_insert(codegen->scope, fdecl->ident.value.identv.ident, entry);
+    scope_insert(codegen->scope, ident, entry);
   } else {
     func = entry->ref;
     param_types = entry->param_types;
@@ -142,9 +147,9 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
         LLVMDIBuilderCreateSubroutineType(codegen->llvm_dibuilder, unit->file_metadata, NULL, 0, 0);
 
     LLVMMetadataRef function_metadata = LLVMDIBuilderCreateFunction(
-        codegen->llvm_dibuilder, unit->file_metadata, fdecl->ident.value.identv.ident,
-        strlen(fdecl->ident.value.identv.ident), "", 0, unit->file_metadata, (unsigned)at->line + 1,
-        func_md, (fdecl->flags & DECL_FLAG_PUB) == 0, fdecl->body != NULL, 1, 0, 0);
+        codegen->llvm_dibuilder, unit->file_metadata, mangled, strlen(mangled), "", 0,
+        unit->file_metadata, (unsigned)at->line + 1, func_md, (fdecl->flags & DECL_FLAG_PUB) == 0,
+        fdecl->body != NULL, 1, 0, 0);
 
     LLVMSetSubprogram(func, function_metadata);
 

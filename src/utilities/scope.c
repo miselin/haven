@@ -1,7 +1,7 @@
 #include "scope.h"
 
-#include <malloc.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "kv.h"
 

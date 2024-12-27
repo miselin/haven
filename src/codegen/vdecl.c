@@ -1,7 +1,7 @@
-#include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
-#include <malloc.h>
+#include <llvm-c/Types.h>
+#include <stdlib.h>
 
 #include "ast.h"
 #include "codegen.h"

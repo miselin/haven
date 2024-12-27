@@ -1,4 +1,5 @@
 
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -24,7 +25,7 @@ void print_token(struct token *token) {
   fprintf(stderr, "token %d", token->ident);
   switch (token->ident) {
     case TOKEN_INTEGER:
-      fprintf(stderr, " '%lu' [sign=%d]", token->value.intv.val, token->value.intv.sign);
+      fprintf(stderr, " '%" PRIu64 "' [sign=%d]", token->value.intv.val, token->value.intv.sign);
       break;
     case TOKEN_IDENTIFIER:
       fprintf(stderr, " '%s'", token->value.identv.ident);

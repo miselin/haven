@@ -187,6 +187,8 @@ void codegen_box_unref(struct codegen *codegen, LLVMValueRef box, int already_de
 struct codegen_compileunit *codegen_get_compileunit(struct codegen *codegen,
                                                     struct lex_locator *loc);
 
+void codegen_mangle(struct codegen *codegen, struct ast_fdecl *fdecl, char *buf, size_t len);
+
 int initialize_llvm(void);
 void shutdown_llvm(void);
 

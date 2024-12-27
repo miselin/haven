@@ -10,7 +10,7 @@
 #include <llvm-c/TargetMachine.h>
 #include <llvm-c/Transforms/PassBuilder.h>
 #include <llvm-c/Types.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ast.h"

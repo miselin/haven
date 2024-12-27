@@ -1,9 +1,9 @@
-#include <llvm-c-18/llvm-c/Target.h>
-#include <llvm-c-18/llvm-c/Types.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
-#include <malloc.h>
+#include <llvm-c/Target.h>
+#include <llvm-c/Types.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ast.h"

@@ -1,5 +1,6 @@
 /** Routines to emit an AST back as source code. */
 
+#include <inttypes.h>
 #include <stdio.h>
 
 #include "ast.h"
@@ -169,7 +170,7 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
     case AST_EXPR_TYPE_CONSTANT: {
       switch (ast->constant.constant.ident) {
         case TOKEN_INTEGER:
-          fprintf(stream, "%ld", ast->constant.constant.value.intv.val);
+          fprintf(stream, "%" PRIi64, ast->constant.constant.value.intv.val);
           break;
 
         case TOKEN_FLOAT:

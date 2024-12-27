@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <stdlib.h>
 
 #include "ast.h"
 #include "types.h"

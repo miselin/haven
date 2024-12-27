@@ -1,9 +1,9 @@
 #include "types.h"
 
+#include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "typecheck.h"
 
 struct ast_ty type_tbd(void) {
   struct ast_ty ty;
@@ -402,8 +402,8 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "> { ");
       struct ast_enum_field *field = ty->enumty.fields;
       while (field) {
-        offset +=
-            snprintf(buf + offset, maxlen - (size_t)offset, "%s = %ld", field->name, field->value);
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s = %" PRIu64, field->name,
+                           field->value);
         if (field->has_inner) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, " (");
           offset += type_name_into_ctx(&field->inner, buf + offset, maxlen - (size_t)offset, ctx);
@@ -456,7 +456,7 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
     offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
   }
   if (ty->flags & ~TYPE_FLAG_CONSTANT) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %lx)", ty->flags);
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %" PRIx64 ")", ty->flags);
   }
 
   buf[offset] = '\0';
@@ -748,7 +748,7 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
     offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
   }
   if (ty->flags & ~TYPE_FLAG_CONSTANT) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %lx)", ty->flags);
+    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %" PRIx64 ")", ty->flags);
   }
 
   buf[offset] = '\0';

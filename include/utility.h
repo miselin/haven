@@ -10,4 +10,10 @@
 // the input parameter is not used
 #define UNUSED(x) (void)x
 
+#ifdef __APPLE__
+#define WEAK __attribute__((weak_import))
+#else
+#define WEAK __attribute__((weak))
+#endif
+
 #endif

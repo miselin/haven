@@ -1,5 +1,4 @@
 #include <ctype.h>
-#include <malloc.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

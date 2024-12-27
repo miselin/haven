@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdio.h>
 
 #include "ast.h"
@@ -197,7 +198,7 @@ void dump_expr(struct ast_expr *ast, int indent) {
 
       switch (ast->ty.ty) {
         case AST_TYPE_INTEGER:
-          INDENTED(indent + 1, "Integer %ld", ast->constant.constant.value.intv.val);
+          INDENTED(indent + 1, "Integer %" PRIi64, ast->constant.constant.value.intv.val);
           break;
 
         case AST_TYPE_FLOAT:

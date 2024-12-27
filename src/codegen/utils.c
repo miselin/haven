@@ -1,8 +1,9 @@
 #include <libgen.h>
-#include <llvm-c-18/llvm-c/Target.h>
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
+#include <llvm-c/Target.h>
+#include <llvm-c/TargetMachine.h>
 #include <llvm-c/Types.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -529,4 +530,19 @@ struct codegen_compileunit *codegen_get_compileunit(struct codegen *codegen,
   kv_insert(codegen->compile_units, loc->file, result);
 
   return result;
+}
+
+void codegen_mangle(struct codegen *codegen, struct ast_fdecl *fdecl, char *buf, size_t len) {
+  char *triple = LLVMGetTargetMachineTriple(codegen->llvm_target_machine);
+
+  // TODO: put this in a C++ module and use llvm::Triple::getOS()
+  if (strstr(triple, "-darwin-")) {
+    // need to prefix with an underscore
+    *buf++ = '_';
+    --len;
+  }
+
+  strncpy(buf, fdecl->ident.value.identv.ident, len);
+
+  LLVMDisposeMessage(triple);
 }
