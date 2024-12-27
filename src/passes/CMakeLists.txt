@@ -1,21 +1,20 @@
 
-add_library(pass_cfold STATIC cfold.c)
+add_library(pass_cfold OBJECT cfold.c)
 target_link_libraries(pass_cfold PRIVATE haven_compiler_options)
 
-add_library(pass_typecheck STATIC typecheck.c)
+add_library(pass_typecheck OBJECT typecheck.c)
 target_link_libraries(pass_typecheck PRIVATE haven_compiler_options)
 
-add_library(pass_tyverify STATIC tyverify.c)
+add_library(pass_tyverify OBJECT tyverify.c)
 target_link_libraries(pass_tyverify PRIVATE haven_compiler_options)
 
-add_library(pass_tyimplicit STATIC tyimplicit.c)
+add_library(pass_tyimplicit OBJECT tyimplicit.c)
 target_link_libraries(pass_tyimplicit PRIVATE haven_compiler_options)
 
-add_library(pass_purity STATIC purity.c)
+add_library(pass_purity OBJECT purity.c)
 target_link_libraries(pass_purity PRIVATE haven_compiler_options)
 
-add_library(pass_semantic STATIC semantic.c)
+add_library(pass_semantic OBJECT semantic.c)
 target_link_libraries(pass_semantic PRIVATE haven_compiler_options)
 
-add_library(passes INTERFACE)
-target_link_libraries(passes INTERFACE pass_cfold pass_typecheck pass_tyverify pass_tyimplicit pass_purity pass_semantic)
+add_library(passes STATIC $<TARGET_OBJECTS:pass_cfold> $<TARGET_OBJECTS:pass_typecheck> $<TARGET_OBJECTS:pass_tyverify> $<TARGET_OBJECTS:pass_tyimplicit> $<TARGET_OBJECTS:pass_purity> $<TARGET_OBJECTS:pass_semantic>)
