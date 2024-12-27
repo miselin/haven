@@ -132,7 +132,7 @@ int codegen_run(struct codegen *codegen) {
   }
   LLVMDisposeMessage(error);
 
-  if (rc == 0 && 0) {
+  if (rc == 0) {
     // verification completed, run unconditional optimizations that tidy up the IR ready for further
     // optimizations and emission
 
