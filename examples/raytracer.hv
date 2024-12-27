@@ -1,6 +1,6 @@
 cimport "stdio.h";
 cimport "stdlib.h";
-import "vec.hv";
+import "vec";
 
 pub fn float __builtin_ipow(float x, i32 power) intrinsic "llvm.powi" float, i32;
 pub fn float __builtin_ceilf(float x) intrinsic "llvm.ceil" float;

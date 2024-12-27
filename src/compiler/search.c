@@ -31,7 +31,7 @@ int find_file_path(struct compiler *compiler, const char *filename, const char *
     strcat(path, filename);
 
     struct stat st;
-    if (stat(path, &st) == 0 && S_ISREG(st.st_mode)) {
+    if (stat(path, &st) == 0) {
       *discovered_path = path;
       return 0;
     }

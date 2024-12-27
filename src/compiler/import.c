@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "compiler.h"
 #include "internal.h"
@@ -20,7 +21,16 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
     return -1;
   }
 
+  struct stat st;
+  stat(fullpath, &st);
+
   if (type == ImportTypeC) {
+    if (!S_ISREG(st.st_mode)) {
+      compiler_diag(compiler, DiagError, "not a regular file: %s\n", fullpath);
+      free((void *)fullpath);
+      return -1;
+    }
+
     if (cimport(compiler->parser, fullpath) < 0) {
       compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
       free((void *)fullpath);
@@ -29,6 +39,25 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
 
     free((void *)fullpath);
     return 0;
+  }
+
+  if (S_ISDIR(st.st_mode)) {
+    // need there to be an index.hv when importing a directory
+    fullpath = realloc((void *)fullpath, strlen(fullpath) + 1 + 9 + 1);
+    strcat((char *)fullpath, "/index.hv");
+
+    if (stat(fullpath, &st) < 0) {
+      compiler_diag(compiler, DiagError, "failed to find index.hv in import directory %s\n", name);
+      free((void *)fullpath);
+      return -1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+      compiler_diag(compiler, DiagError, "index.hv is not a regular file in import directory %s\n",
+                    name);
+      free((void *)fullpath);
+      return -1;
+    }
   }
 
   FILE *in = fopen(fullpath, "r");
