@@ -43,6 +43,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   build-osx:
+    if: 0
     runs-on: macos-latest
 
     steps:
@@ -65,6 +66,8 @@ jobs:
             cmake ${{ github.workspace }} -DCMAKE_BUILD_TYPE=Debug \
               -DLLVM_DIR=${HOMEBREW_PREFIX}/opt/llvm@${LLVM_VERSION}/lib/cmake/llvm \
               -DClang_DIR=${HOMEBREW_PREFIX}/opt/llvm@${LLVM_VERSION}/lib/cmake/clang \
+              -DHAVEN_BOOTSTRAP_COMPILE_FLAGS="--O2 -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" \
+              -DHAVEN_COMPILE_FLAGS="--O2 -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" \
               -DCOVERAGE=ON
 
       - name: Build

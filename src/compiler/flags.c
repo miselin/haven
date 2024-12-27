@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
 #include <stdio.h>
@@ -74,7 +75,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       case 'I': {
         char *fullpath = realpath(optarg, NULL);
         if (!fullpath) {
-          perror("realpath");
+          fprintf(stderr, "failed to resolve include path %s: %s\n", optarg, strerror(errno));
           return -1;
         }
 
@@ -142,7 +143,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
     // add the directory of the input file to the search path
     char *input_file_abs = realpath(argv[i], NULL);
     if (!input_file_abs) {
-      perror("realpath");
+      fprintf(stderr, "failed to resolve input path %s: %s\n", argv[i], strerror(errno));
       return -1;
     }
 
