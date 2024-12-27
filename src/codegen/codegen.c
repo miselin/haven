@@ -132,7 +132,7 @@ int codegen_run(struct codegen *codegen) {
   }
   LLVMDisposeMessage(error);
 
-  if (rc == 0) {
+  if (rc == 0 && 0) {
     // verification completed, run unconditional optimizations that tidy up the IR ready for further
     // optimizations and emission
 
@@ -272,7 +272,7 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
     element_types = malloc(sizeof(LLVMTypeRef) * ty->structty.num_fields);
     struct ast_struct_field *field = ty->structty.fields;
     for (size_t i = 0; i < ty->structty.num_fields; i++) {
-      element_types[i] = ast_ty_to_llvm_ty(codegen, field->ty);
+      element_types[i] = ast_underlying_ty_to_llvm_ty(codegen, field->ty);
       field = field->next;
     }
   }
@@ -327,8 +327,8 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
     }
 
     fields = malloc(sizeof(LLVMTypeRef) * num_fields);
-    fields[0] = LLVMInt32TypeInContext(codegen->llvm_context);      // tag
-    fields[1] = ast_ty_to_llvm_ty(codegen, &largest_field->inner);  // largest type
+    fields[0] = LLVMInt32TypeInContext(codegen->llvm_context);                 // tag
+    fields[1] = ast_underlying_ty_to_llvm_ty(codegen, &largest_field->inner);  // largest type
     if (bytes_remaining) {
       fields[2] = LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context),
                                 (unsigned int)bytes_remaining);

@@ -1839,7 +1839,7 @@ static struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
     } else if (parser_peek(parser) == TOKEN_IDENTIFIER) {
       result->pattern_match.inner_vdecl = calloc(1, sizeof(struct ast_vdecl));
       result->pattern_match.inner_vdecl->ty = type_tbd();  // filled in by typecheck
-      result->pattern_match.inner_vdecl->flags = DECL_FLAG_TEMPORARY;
+      result->pattern_match.inner_vdecl->flags = DECL_FLAG_TEMPORARY | DECL_FLAG_MUT;
       parser_consume_peeked(parser, &result->pattern_match.inner_vdecl->ident);
     } else {
       goto fail;

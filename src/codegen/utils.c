@@ -229,7 +229,7 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
   }
 
   // use LLVM's size, not ours, as we may have padding
-  LLVMTypeRef llvm_ty = ast_ty_to_llvm_ty(codegen, ty);
+  LLVMTypeRef llvm_ty = ast_underlying_ty_to_llvm_ty(codegen, ty);
   uint64_t ty_size = LLVMABISizeOfType(codegen->llvm_data_layout, llvm_ty);
 
   call_intrinsic(codegen, "llvm.memcpy", "", 3, 4, codegen_pointer_type(codegen),

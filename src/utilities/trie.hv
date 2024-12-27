@@ -10,24 +10,22 @@ type TrieValue = enum {
     NoValue
 };
 
-type TrieChild;
-
 type TrieNode = struct {
     i32 id;
     i8[256] key;
     TrieValue value;
 
-    TrieChild[256] children;
-};
-
-type TrieChild = enum {
-    Child(TrieNode^),
-    NoChild
+    TrieNode*[256] children;
 };
 
 type Trie = struct {
-    TrieNode ^root;
+    TrieNode *root;
     i32 next_id;
+};
+
+type LookupResult = enum {
+    Found(TrieNode*),
+    NotFound
 };
 
 impure fn i8* char_to_i8ptr(i8 c) {
@@ -38,12 +36,12 @@ impure fn i8* char_to_i8ptr(i8 c) {
 }
 
 pub impure fn Trie* haven_new_trie() {
-    let mut root_node = box TrieNode;
+    let mut root_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
     root_node->id = 0;
     root_node->key[0] = 0;
     root_node->value = TrieValue::NoValue;
     iter 0:255 i {
-        root_node->children[i] = TrieChild::NoChild;
+        root_node->children[i] = nil
     };
 
     let mut Trie* heap_trie = as Trie* malloc(as u64 sizeof Trie);
@@ -53,13 +51,10 @@ pub impure fn Trie* haven_new_trie() {
     heap_trie
 }
 
-impure fn i32 has_children(TrieNode ^node) {
+impure fn i32 has_children(TrieNode *node) {
     iter 0:255 i {
-        match node->children[i] {
-            TrieChild::Child(_) => {
-                ret 1;
-            }
-            _ => {}
+        if node->children[i] != nil {
+            ret 1;
         };
     };
 
@@ -79,26 +74,23 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
 
     let mut node = trie->root;
     let mut root_child = node->children[key[0]];
-    node = match root_child {
-        TrieChild::Child(child) => {
-            printf("trie_insert -> root child\n");
-            child
-        }
-        _ => {
-            printf("trie_insert -> no root child\n");
-            let mut new_node = box TrieNode;
-            new_node->id = next_id(trie);
-            new_node->key[0] = key[0];
-            new_node->key[1] = 0;
-            new_node->value = TrieValue::NoValue;
-            iter 0:255 i {
-                new_node->children[i] = TrieChild::NoChild;
-            };
+    node = if root_child == nil {
+        fprintf(stderr, "trie_insert -> no root child for '%c'\n", key[0]);
+        let mut new_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
+        new_node->id = next_id(trie);
+        new_node->key[0] = key[0];
+        new_node->key[1] = 0;
+        new_node->value = TrieValue::NoValue;
+        iter 0:255 i {
+            new_node->children[i] = nil;
+        };
 
-            node->children[key[0]] = TrieChild::Child(new_node);
+        node->children[key[0]] = new_node;
 
-            new_node
-        }
+        new_node
+    } else {
+        fprintf(stderr, "trie_insert -> root child\n");
+        root_child
     };
 
     let mut i32 ikey = 0;
@@ -116,7 +108,7 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
 
         if nk > 0 {
             // split the node
-            let mut split_node = box TrieNode;
+            let mut split_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
             split_node->id = next_id(trie);
 
             strcpy(split_node->key, (as i8* node->key) + inode);
@@ -124,7 +116,7 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
             split_node->value = node->value;
 
             iter 0:255 i {
-                split_node->children[i] = TrieChild::NoChild;
+                split_node->children[i] = nil;
             };
 
             // old node gets the prefix
@@ -132,7 +124,7 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
             node->value = TrieValue::NoValue;
 
             let n = split_node->key[0];
-            node->children[n] = TrieChild::Child(split_node);
+            node->children[n] = split_node;
         };
 
         if k == 0 {
@@ -151,25 +143,22 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
             break;
         };
 
-        node = match node->children[k] {
-            TrieChild::Child(child) => {
-                fprintf(stderr, "trie_insert -> traverse child\n");
-                inode = 0;
-                child
-            }
-            _ => {
-                fprintf(stderr, "trie_insert -> no child was here\n");
-                let mut new_child = box TrieNode;
-                new_child->id = next_id(trie);
-                strcpy(new_child->key, key + ikey);
-                new_child->value = TrieValue::NoValue;
-                iter 0:255 i {
-                    new_child->children[i] = TrieChild::NoChild;
-                };
+        node = if node->children[k] == nil {
+            fprintf(stderr, "trie_insert -> no child was here\n");
+            let mut new_child = as TrieNode* calloc(1, as u64 sizeof TrieNode);
+            new_child->id = next_id(trie);
+            strcpy(new_child->key, key + ikey);
+            new_child->value = TrieValue::NoValue;
+            iter 0:255 i {
+                new_child->children[i] = nil;
+            };
 
-                node->children[k] = TrieChild::Child(new_child);
-                new_child
-            }
+            node->children[k] = new_child;
+            new_child
+        } else {
+            fprintf(stderr, "trie_insert -> traverse child\n");
+            inode = 0;
+            node->children[k]
         };
 
         if inode > 0 {
@@ -178,18 +167,19 @@ pub impure fn void haven_trie_insert(mut Trie *trie, i8 *key, i8 *value) {
         };
     };
 
-    fprintf(stderr, "assign value\n");
+    fprintf(stderr, "assign value to %p\n", node);
     node->value = TrieValue::Value(value);
 
     fprintf(stderr, "done\n");
 }
 
-impure fn TrieChild node_for(Trie *trie, i8 *key) {
+impure fn LookupResult node_for(Trie *trie, i8 *key) {
     let mut node = trie->root;
     let mut i32 ikey = 0;
     let mut i32 i = 0;
     fprintf(stderr, "node_for starting\n");
     while (key[ikey]) != 0 && node != nil {
+        fprintf(stderr, "cmp %s [%d] %s [%d]\n", key, ikey, node->key, i);
         let k = key[ikey];
         if k == node->key[i] {
             ikey = ikey + 1;
@@ -197,35 +187,32 @@ impure fn TrieChild node_for(Trie *trie, i8 *key) {
             continue;
         };
 
-        node = match node->children[k] {
-            TrieChild::Child(child) => {
-                i = 0;
-                child
-            }
-            _ => {
-                nil
-            }
-        };
+        node = node->children[k];
+        i = 0;
     };
 
-    fprintf(stderr, "node_for preparing result\n");
+    fprintf(stderr, "node_for preparing result %p\n", node);
 
     if node == nil {
-        TrieChild::NoChild
+        fprintf(stderr, "node_for returning nil\n");
+        LookupResult::NotFound
     } else if key[ikey] != 0 || node->key[i] != 0 {
-        TrieChild::NoChild
+        fprintf(stderr, "node_for returning not found (keys still non-null)\n");
+        LookupResult::NotFound
     } else {
-        TrieChild::Child(node)
+        fprintf(stderr, "node_for returning found %p\n", node);
+        LookupResult::Found(node)
     }
 }
 
 pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
     let node = node_for(trie, key);
     match node {
-        TrieChild::Child(child) => {
-            let c = as TrieNode^ child;
-            match c->value {
+        LookupResult::Found(node) => {
+            fprintf(stderr, "got node: %p\n", node);
+            match node->value {
                 TrieValue::Value(value) => {
+                    fprintf(stderr, "lookup unwrapped a value %p\n", value);
                     value
                 }
                 _ => {
@@ -242,25 +229,25 @@ pub impure fn i8* haven_trie_lookup(Trie *trie, i8 *key) {
 pub impure fn void haven_trie_remove(mut Trie* trie, i8* key) {
     let mut node = node_for(trie, key);
     match node {
-        TrieChild::Child(child) => {
-            let mut c = as TrieNode^ child;
-            c->value = TrieValue::NoValue;
+        LookupResult::Found(node) => {
+            node->value = TrieValue::NoValue;
         }
-        _ => {}
-    };
+        _ => {
+            ret;
+        }
+    }
 }
 
-impure fn void destroy_trie_node(mut TrieNode ^node) {
+impure fn void destroy_trie_node(mut TrieNode *node) {
+    fprintf(stderr, "destroy_trie_node %p\n", node);
     iter 0:255 i {
-        match node->children[i] {
-            TrieChild::Child(child) => {
-                destroy_trie_node(child);
-            }
-            _ => {}
+        if node->children[i] != nil {
+            fprintf(stderr, "-> %d -> %p\n", i, node->children[i]);
+            destroy_trie_node(node->children[i]);
         };
-
-        node->children[i] = nil;
     };
+
+    free(node);
 }
 
 pub impure fn void haven_destroy_trie(Trie *trie) {
@@ -268,19 +255,16 @@ pub impure fn void haven_destroy_trie(Trie *trie) {
     free(trie);
 }
 
-impure fn void dump_trie_node(FILE* stream, TrieNode ^node) {
+impure fn void dump_trie_node(FILE* stream, TrieNode *node) {
     if node == nil {
         ret;
     };
 
   fprintf(stream, "  %zd [label=\"%s\"];\n", node->id, node->key);
   iter 0:255 i {
-    match node->children[i] {
-      TrieChild::Child(child) => {
-        fprintf(stream, "  %zd -> %zd [label=\"%d %c\"];\n", node->id, (as TrieNode^ child)->id, i, i);
-        dump_trie_node(stream, child);
-      }
-      _ => {}
+    if node->children[i] != nil {
+        fprintf(stream, "  %zd -> %zd [label=\"%d %c\"];\n", node->id, node->children[i]->id, i, i);
+        dump_trie_node(stream, node->children[i]);
     };
   };
 }
@@ -290,14 +274,13 @@ pub impure fn void haven_dump_trie(Trie *trie) {
     fprintf(stream, "digraph Trie {\n");
     fprintf(stream, "  node [shape=circle];\n");
 
+    let root = trie->root;
+
     fprintf(stream, "  root [label=\"root\"];\n");
     iter 0:255 i {
-        match (trie->root)->children[i] {
-            TrieChild::Child(child) => {
-                fprintf(stream, "  root -> %zd [label=\"%c\"];\n", (as TrieNode^ child)->id, i);
-                dump_trie_node(stream, child);
-            }
-            _ => {}
+        if root->children[i] != nil {
+            fprintf(stream, "  root -> %zd [label=\"%c\"];\n", root->children[i]->id, i);
+            dump_trie_node(stream, root->children[i]);
         };
     };
 

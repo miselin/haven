@@ -26,7 +26,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   }
 
   LLVMValueRef func = NULL;
-  LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, &fdecl->retty);
+  LLVMTypeRef ret_ty = ast_underlying_ty_to_llvm_ty(codegen, &fdecl->retty);
   LLVMTypeRef orig_ret_ty = ret_ty;
   LLVMTypeRef *param_types = NULL;
 
@@ -51,7 +51,8 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       param_types[0] = LLVMPointerTypeInContext(codegen->llvm_context, 0);
     }
     for (size_t i = 0; i < fdecl->num_params; i++) {
-      param_types[i + complex_return] = ast_ty_to_llvm_ty(codegen, &fdecl->params[i]->ty);
+      param_types[i + complex_return] =
+          ast_underlying_ty_to_llvm_ty(codegen, &fdecl->params[i]->ty);
     }
     LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params,
                                              fdecl->flags & DECL_FLAG_VARARG);

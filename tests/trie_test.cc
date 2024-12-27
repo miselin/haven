@@ -2,6 +2,12 @@
 
 #include <gtest/gtest.h>
 
+TEST(TrieTest, DestroyEmpty) {
+  struct trie *trie = new_trie();
+
+  destroy_trie(trie);
+}
+
 TEST(TrieTest, InsertLookup) {
   struct trie *trie = new_trie();
 
@@ -10,6 +16,8 @@ TEST(TrieTest, InsertLookup) {
 
   EXPECT_EQ(trie_lookup(trie, "hello"), (void *)1);
   EXPECT_EQ(trie_lookup(trie, "world"), (void *)2);
+
+  dump_trie(trie);
 
   destroy_trie(trie);
 }

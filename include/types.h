@@ -95,9 +95,6 @@ struct ast_ty {
 
       // if 1, the custom type is a forward declaration that will be resolved later
       int is_forward_decl;
-
-      // types that are waiting for this forward declaration to be resolved
-      struct ast_ty *pending_chain;
     } custom;
     struct {
       // both of these are CUSTOM after parsing and real types after type checking
@@ -118,9 +115,6 @@ struct ast_ty {
       struct ast_ty *pointee;
     } pointer;
   };
-
-  // rarely used option for chaining types
-  struct ast_ty *next;
 };
 
 struct ast_enum_field {

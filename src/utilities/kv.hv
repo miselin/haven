@@ -51,7 +51,7 @@ pub impure fn void haven_kv_insert(mut KV *kv, i8 *key, void *value) {
 pub impure fn i8* haven_kv_lookup(KV *kv, i8 *key) {
     let mut node = kv->head;
     while node != nil {
-        if strcmp(node->key, key) == 0 {
+        if strcmp(key, node->key) == 0 {
             ret node->value;
         };
 
@@ -65,7 +65,7 @@ pub impure fn void haven_kv_delete(mut KV *kv, i8 *key) {
     let mut cur = kv->head;
     let mut KVNode *prev = nil;
     while cur != nil {
-        if strcmp(cur->key, key) == 0 {
+        if strcmp(key, cur->key) == 0 {
             if prev == nil {
                 kv->head = cur->next;
             } else {

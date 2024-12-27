@@ -47,6 +47,6 @@ pub impure fn void __haven_box_unref(mut Box* target) {
 
     target->refcount = target->refcount - 1;
     if target->refcount == 0 {
-        // free(target);
+        free(target);
     };
 }

@@ -41,8 +41,9 @@ struct typecheck {
 int typecheck_verify_ast(struct ast_program *ast);
 int typecheck_implicit_ast(struct ast_program *ast);
 
-static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast);
-static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast);
+static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast, int only_tydecls);
+static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast,
+                               int only_tydecls);
 static struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *ast);
 static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast);
 static struct ast_ty *typecheck_expr(struct typecheck *typecheck, struct ast_expr *ast)
@@ -101,7 +102,9 @@ struct typecheck *new_typecheck(struct ast_program *ast, struct compiler *compil
 }
 
 int typecheck_run(struct typecheck *typecheck) {
-  typecheck_ast(typecheck, typecheck->ast);
+  // do the first pass with just type declarations so we can fully resolve forward-declared types
+  typecheck_ast(typecheck, typecheck->ast, 1);
+  typecheck_ast(typecheck, typecheck->ast, 0);
   if (typecheck->errors) {
     return typecheck->errors;
   }
@@ -133,15 +136,67 @@ void destroy_typecheck(struct typecheck *typecheck) {
   free(typecheck);
 }
 
-static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast) {
+static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast, int only_tydecls) {
   struct ast_toplevel *decl = ast->decls;
   while (decl) {
-    typecheck_toplevel(typecheck, decl);
+    typecheck_toplevel(typecheck, decl, only_tydecls);
     decl = decl->next;
   }
 }
 
-static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast) {
+static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast,
+                               int only_tydecls) {
+  if (ast->type == AST_DECL_TYPE_TYDECL) {
+    struct alias_entry *entry = kv_lookup(typecheck->aliases, ast->tydecl.ident.value.identv.ident);
+    if (!entry) {
+      entry = calloc(1, sizeof(struct alias_entry));
+      kv_insert(typecheck->aliases, ast->tydecl.ident.value.identv.ident, entry);
+
+      entry->ty = ast->tydecl.ty;
+    } else {
+      if (type_is_tbd(&ast->tydecl.ty) || type_is_error(&ast->tydecl.ty)) {
+        // skip - we'll resolve it later, don't overwrite an existing type with an error
+        return;
+      }
+
+      if (ast->tydecl.ty.ty == AST_TYPE_CUSTOM && ast->tydecl.ty.custom.is_forward_decl) {
+        // replace forward declaration with the defined type
+        ast->tydecl.ty = copy_type(&entry->ty);
+        return;
+      }
+    }
+
+    if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
+      typecheck_struct_decl(typecheck, &ast->tydecl.ty);
+    } else if (ast->tydecl.ty.ty == AST_TYPE_ENUM) {
+      typecheck_enum_decl(typecheck, &ast->tydecl.ty);
+    } else if (ast->tydecl.ty.ty == AST_TYPE_ARRAY) {
+      struct ast_ty resolved = resolve_type(typecheck, ast->tydecl.ty.array.element_ty);
+      free_ty(ast->tydecl.ty.array.element_ty, 0);
+      *ast->tydecl.ty.array.element_ty = resolved;
+    } else if (ast->tydecl.ty.ty == AST_TYPE_FUNCTION) {
+      struct ast_ty resolved = resolve_type(typecheck, ast->tydecl.ty.function.retty);
+      free_ty(ast->tydecl.ty.function.retty, 0);
+      *ast->tydecl.ty.function.retty = resolved;
+
+      for (size_t i = 0; i < ast->tydecl.ty.function.num_args; i++) {
+        struct ast_ty arg_resolved = resolve_type(typecheck, ast->tydecl.ty.function.args[i]);
+        free_ty(ast->tydecl.ty.function.args[i], 0);
+        *ast->tydecl.ty.function.args[i] = arg_resolved;
+      }
+    } else {
+      struct ast_ty resolved = resolve_type(typecheck, &ast->tydecl.ty);
+      free_ty(&ast->tydecl.ty, 0);
+      ast->tydecl.ty = resolved;
+    }
+
+    entry->ty = ast->tydecl.ty;
+  }
+
+  if (only_tydecls) {
+    return;
+  }
+
   if (ast->type == AST_DECL_TYPE_FDECL) {
     struct ast_ty resolved = resolve_type(typecheck, &ast->fdecl.retty);
     free_ty(&ast->fdecl.retty, 0);
@@ -306,70 +361,6 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
                             ast->vdecl.ident.value.identv.ident, resultstr, tystr);
         ++typecheck->errors;
         return;
-      }
-    }
-  } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    struct alias_entry *entry = kv_lookup(typecheck->aliases, ast->tydecl.ident.value.identv.ident);
-    if (!entry) {
-      entry = calloc(1, sizeof(struct alias_entry));
-      kv_insert(typecheck->aliases, ast->tydecl.ident.value.identv.ident, entry);
-    } else {
-      fprintf(stderr, "type %s redeclaration\n", ast->tydecl.ident.value.identv.ident);
-
-      if (type_is_tbd(&ast->tydecl.ty)) {
-        // skip - we'll resolve it later
-        return;
-      }
-
-      fprintf(stderr, "concrete type\n");
-    }
-
-    int is_forward_decl = entry->ty.ty == AST_TYPE_CUSTOM && entry->ty.custom.is_forward_decl;
-    struct ast_ty *decl_chain = NULL;
-    if (is_forward_decl) {
-      decl_chain = entry->ty.custom.pending_chain;
-    }
-
-    entry->ty = ast->tydecl.ty;
-
-    if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
-      typecheck_struct_decl(typecheck, &ast->tydecl.ty);
-    } else if (ast->tydecl.ty.ty == AST_TYPE_ENUM) {
-      typecheck_enum_decl(typecheck, &ast->tydecl.ty);
-    } else if (ast->tydecl.ty.ty == AST_TYPE_ARRAY) {
-      struct ast_ty resolved = resolve_type(typecheck, ast->tydecl.ty.array.element_ty);
-      free_ty(ast->tydecl.ty.array.element_ty, 0);
-      *ast->tydecl.ty.array.element_ty = resolved;
-    } else if (ast->tydecl.ty.ty == AST_TYPE_FUNCTION) {
-      struct ast_ty resolved = resolve_type(typecheck, ast->tydecl.ty.function.retty);
-      free_ty(ast->tydecl.ty.function.retty, 0);
-      *ast->tydecl.ty.function.retty = resolved;
-
-      for (size_t i = 0; i < ast->tydecl.ty.function.num_args; i++) {
-        struct ast_ty arg_resolved = resolve_type(typecheck, ast->tydecl.ty.function.args[i]);
-        free_ty(ast->tydecl.ty.function.args[i], 0);
-        *ast->tydecl.ty.function.args[i] = arg_resolved;
-      }
-    } else {
-      struct ast_ty resolved = resolve_type(typecheck, &ast->tydecl.ty);
-      free_ty(&ast->tydecl.ty, 0);
-      ast->tydecl.ty = resolved;
-    }
-
-    entry->ty = ast->tydecl.ty;
-
-    if (is_forward_decl) {
-      while (decl_chain) {
-        fprintf(stderr, "fixup decl chain\n");
-        struct alias_entry *chain_entry = kv_lookup(typecheck->aliases, decl_chain->name);
-        if (!chain_entry) {
-          fprintf(stderr, "type %s forward declaration chain broken\n", decl_chain->name);
-          ++typecheck->errors;
-          return;
-        }
-
-        chain_entry->ty = ast->tydecl.ty;
-        decl_chain = decl_chain->next;
       }
     }
   }
@@ -1739,14 +1730,7 @@ static struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty
   }
 
   if (entry->ty.ty == AST_TYPE_CUSTOM && entry->ty.custom.is_forward_decl) {
-    if (entry->ty.custom.pending_chain) {
-      ty->next = entry->ty.custom.pending_chain;
-      entry->ty.custom.pending_chain = ty;
-    } else {
-      entry->ty.custom.pending_chain = ty;
-    }
-
-    return type_tbd();
+    return *ty;
   }
 
   if (ty->ty == AST_TYPE_CUSTOM && entry->ty.ty == AST_TYPE_CUSTOM) {

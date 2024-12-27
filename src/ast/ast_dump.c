@@ -52,7 +52,7 @@ static void dump_toplevel(struct ast_toplevel *ast) {
 }
 
 static void dump_fdecl(struct ast_fdecl *ast, int indent) {
-  INDENTED(indent, "FunctionDecl %s [", ast->ident.value.identv.ident);
+  INDENTED(indent, "\nFunctionDecl %s [", ast->ident.value.identv.ident);
   dump_decl_flags(ast->flags);
   fprintf(stderr, "] -> ");
   dump_ty(&ast->retty);

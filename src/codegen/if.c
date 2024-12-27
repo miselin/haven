@@ -26,10 +26,6 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
   LLVMContextRef context = codegen->llvm_context;
 
   LLVMTypeRef expr_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
-  if (ast->ty.ty == AST_TYPE_ENUM && !ast->ty.enumty.no_wrapped_fields) {
-    // actually a pointer
-    expr_ty = LLVMPointerTypeInContext(codegen->llvm_context, 0);
-  }
 
   LLVMBasicBlockRef then_block = LLVMCreateBasicBlockInContext(context, "if.then");
   LLVMBasicBlockRef end_block = LLVMCreateBasicBlockInContext(context, "if.end");

@@ -44,7 +44,7 @@ int type_is_constant(struct ast_ty *ty) {
 
 int type_is_complex(struct ast_ty *ty) {
   // pointers are not complex even if their targets are
-  if (ty->ty == AST_TYPE_POINTER) {
+  if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
     return 0;
   }
 
@@ -263,7 +263,20 @@ const char *type_name(struct ast_ty *ty) {
   return buf;
 }
 
+struct type_name_context {
+  struct ast_ty *ty;
+  struct type_name_context *next;
+};
+
+static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
+                              struct type_name_context *ctx);
+
 int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
+  return type_name_into_ctx(ty, buf, maxlen, NULL);
+}
+
+static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
+                              struct type_name_context *ctx) {
   if (!ty) {
     return snprintf(buf, maxlen, "<null-type-ptr>");
   }
@@ -273,72 +286,99 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
     case AST_TYPE_ERROR:
       offset += snprintf(buf, maxlen, "error");
       return offset;
+
     case AST_TYPE_TBD:
       offset += snprintf(buf, maxlen, "tbd");
       return offset;
+
     case AST_TYPE_INTEGER:
-      if (ty->integer.is_signed) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "i");
-      } else {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "u");
-      }
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%zd", ty->integer.width);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%c%zd",
+                         ty->integer.is_signed ? 'i' : 'u', ty->integer.width);
       break;
+
     case AST_TYPE_STRING:
       offset += snprintf(buf, maxlen, "str");
       break;
+
     case AST_TYPE_FLOAT:
       offset += snprintf(buf, maxlen, "float");
       break;
+
     case AST_TYPE_FVEC:
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->fvec.width);
       break;
+
     case AST_TYPE_VOID:
       offset += snprintf(buf, maxlen, "void");
       break;
+
     case AST_TYPE_ARRAY: {
       char element_ty[256];
-      type_name_into(ty->array.element_ty, element_ty, 256);
+      type_name_into_ctx(ty->array.element_ty, element_ty, 256, ctx);
       offset +=
           snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty, ty->array.width);
     } break;
+
     case AST_TYPE_CUSTOM:
       offset += snprintf(buf, maxlen, "Ty(%s)", ty->name);
       if (ty->custom.is_forward_decl) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, " (forward)");
       }
       break;
+
     case AST_TYPE_STRUCT: {
-      offset +=
-          snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
-      struct ast_struct_field *field = ty->structty.fields;
-      while (field) {
-        if (field->ty->ty == AST_TYPE_POINTER) {
-          // don't emit the pointee type, just the name will do
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s *%s; ", ty->name,
-                             field->name);
-        } else {
-          char field_ty[256] = {0};
-          type_name_into(field->ty, field_ty, 256);
-          offset +=
-              snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_ty, field->name);
+      // did we already see this struct earlier in the chain?
+      struct type_name_context *seen = ctx;
+      while (seen) {
+        if (!strcmp(ty->name, seen->ty->name)) {
+          break;
         }
-        field = field->next;
+        seen = seen->next;
       }
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+
+      if (seen) {
+        offset +=
+            snprintf(buf, maxlen, "%s %s", ty->structty.is_union ? "union" : "struct", ty->name);
+      } else {
+        struct type_name_context *new_ctx = malloc(sizeof(struct type_name_context));
+        new_ctx->ty = ty;
+        new_ctx->next = ctx;
+
+        offset +=
+            snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
+        struct ast_struct_field *field = ty->structty.fields;
+        while (field) {
+          if (field->ty->ty == AST_TYPE_POINTER || field->ty->ty == AST_TYPE_BOX) {
+            // don't emit the pointee type, just the name will do
+            offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ", ty->name,
+                               field->ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
+          } else {
+            char field_ty[256] = {0};
+            type_name_into_ctx(field->ty, field_ty, 256, new_ctx);
+            offset +=
+                snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_ty, field->name);
+          }
+          field = field->next;
+        }
+        offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+
+        free(new_ctx);
+      }
     } break;
+
     case AST_TYPE_NIL:
       offset += snprintf(buf, maxlen, "nil");
       break;
+
     case AST_TYPE_TEMPLATE:
       offset += snprintf(buf, maxlen, "template ");
-      offset += type_name_into(ty->tmpl.outer, buf + offset, maxlen - (size_t)offset);
+      offset += type_name_into_ctx(ty->tmpl.outer, buf + offset, maxlen - (size_t)offset, ctx);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "<");
       struct ast_template_ty *inner = ty->tmpl.inners;
       while (inner) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %d -> ", inner->name,
                            inner->is_resolved);
-        offset += type_name_into(&inner->resolved, buf + offset, maxlen - (size_t)offset);
+        offset += type_name_into_ctx(&inner->resolved, buf + offset, maxlen - (size_t)offset, ctx);
         if (inner->next) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
         }
@@ -346,6 +386,7 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       }
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;
+
     case AST_TYPE_ENUM:
       offset += snprintf(buf, maxlen, "enum %s <", ty->name);
       struct ast_template_ty *template = ty->enumty.templates;
@@ -365,7 +406,7 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
             snprintf(buf + offset, maxlen - (size_t)offset, "%s = %ld", field->name, field->value);
         if (field->has_inner) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, " (");
-          offset += type_name_into(&field->inner, buf + offset, maxlen - (size_t)offset);
+          offset += type_name_into_ctx(&field->inner, buf + offset, maxlen - (size_t)offset, ctx);
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
         }
         if (field->next) {
@@ -375,32 +416,37 @@ int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
       }
 
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
-
       break;
+
     case AST_TYPE_FUNCTION:
       offset += snprintf(buf, maxlen, "fn (");
       for (size_t i = 0; i < ty->function.num_args; i++) {
-        offset += type_name_into(ty->function.args[i], buf + offset, maxlen - (size_t)offset);
+        offset +=
+            type_name_into_ctx(ty->function.args[i], buf + offset, maxlen - (size_t)offset, ctx);
         if (i + 1 < ty->function.num_args) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
         }
       }
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ") -> ");
-      offset += type_name_into(ty->function.retty, buf + offset, maxlen - (size_t)offset);
+      offset += type_name_into_ctx(ty->function.retty, buf + offset, maxlen - (size_t)offset, ctx);
       break;
+
     case AST_TYPE_MATRIX:
       offset += snprintf(buf, maxlen, "matrix %zdx%zd", ty->matrix.cols, ty->matrix.rows);
       break;
+
     case AST_TYPE_POINTER:
       offset += snprintf(buf, maxlen, "Pointer <");
-      offset += type_name_into(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset);
+      offset += type_name_into_ctx(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset, ctx);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;
+
     case AST_TYPE_BOX:
       offset += snprintf(buf, maxlen, "Box <");
-      offset += type_name_into(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset);
+      offset += type_name_into_ctx(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset, ctx);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;
+
     default:
       offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
       return offset;
