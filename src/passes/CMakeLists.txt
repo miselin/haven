@@ -2,8 +2,7 @@
 add_library(pass_cfold OBJECT cfold.c)
 target_link_libraries(pass_cfold PRIVATE haven_compiler_options)
 
-add_library(pass_typecheck OBJECT typecheck.c)
-target_link_libraries(pass_typecheck PRIVATE haven_compiler_options)
+add_subdirectory(typecheck)
 
 add_library(pass_tyverify OBJECT tyverify.c)
 target_link_libraries(pass_tyverify PRIVATE haven_compiler_options)
