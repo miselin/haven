@@ -128,7 +128,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  compiler_log(compiler, LogLevelDebug, "driver", "result from parse: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from parse: %d", rc);
 
   if (rc == 0) {
     // pre-typecheck semantic pass
@@ -141,7 +141,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  compiler_log(compiler, LogLevelDebug, "driver", "result from first semantic pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from first semantic pass: %d", rc);
 
   if (rc == 0) {
     struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);
@@ -153,7 +153,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  compiler_log(compiler, LogLevelDebug, "driver", "result from cfold: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from cfold: %d", rc);
 
   if (rc == 0) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser), compiler);
@@ -165,7 +165,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  compiler_log(compiler, LogLevelDebug, "driver", "result from typecheck pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from typecheck pass: %d", rc);
 
   if (rc == 0) {
     struct purity *purity = purity_new(parser_get_ast(parser), compiler);
@@ -177,7 +177,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  compiler_log(compiler, LogLevelDebug, "driver", "result from purity pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from purity pass: %d", rc);
 
   if (rc == 0) {
     // post-typecheck semantic pass
@@ -190,7 +190,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  compiler_log(compiler, LogLevelDebug, "driver", "result from second semantic pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from second semantic pass: %d", rc);
 
   if (rc && (compiler->flags[0] & FLAG_DISPLAY_AST)) {
     fprintf(stderr, "== Partial AST after failure ==\n");

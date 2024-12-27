@@ -111,6 +111,45 @@ static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty) {
   }
 }
 
+enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCursor parent,
+                                           CXClientData client_data) {
+  UNUSED(parent);
+  struct ast_ty *ty = (struct ast_ty *)client_data;
+
+  if (clang_getCursorKind(field_cursor) != CXCursor_EnumConstantDecl) {
+    return CXChildVisit_Continue;
+  }
+
+  struct ast_enum_field *last = ty->enumty.fields;
+  while (last && last->next) {
+    last = last->next;
+  }
+
+  struct ast_enum_field *field = calloc(1, sizeof(struct ast_enum_field));
+  field->value = clang_getEnumConstantDeclUnsignedValue(field_cursor);
+
+  CXString spelling = clang_getCursorSpelling(field_cursor);
+  const char *spelling_c = clang_getCString(spelling);
+
+  strncpy(field->name, *spelling_c ? spelling_c : "<unknown-spelling>", 256);
+
+  if (!last) {
+    ty->enumty.fields = field;
+  } else {
+    last->next = field;
+  }
+
+  ty->enumty.num_fields++;
+
+  clang_disposeString(spelling);
+
+  return CXChildVisit_Continue;
+}
+
+static void collect_enum_fields(CXCursor cursor, struct ast_ty *ty) {
+  clang_visitChildren(cursor, enum_field_visitor, ty);
+}
+
 int parse_simple_type(CXType type, struct ast_ty *into) {
   int rc = 0;
 
@@ -248,10 +287,6 @@ struct ast_ty parse_type(CXType type) {
       result = ptr_type(result);
       break;
 
-    case CXType_Enum:
-      result.ty = AST_TYPE_ERROR;
-      break;
-
     case CXType_Elaborated:
       // "struct S" as a reference not a definition
       result.ty = AST_TYPE_CUSTOM;
@@ -261,6 +296,12 @@ struct ast_ty parse_type(CXType type) {
     case CXType_Record:
       result.ty = AST_TYPE_STRUCT;
       // caller must call collect_struct_fields on the decl's cursor
+      break;
+
+    case CXType_Enum:
+      result.ty = AST_TYPE_ENUM;
+      result.enumty.no_wrapped_fields = 1;
+      // caller must call collect_enum_fields on the decl's cursor
       break;
 
     case CXType_Typedef:
@@ -417,6 +458,12 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
       strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
       decl->tydecl.ty = parse_cursor_type(cursor);
       collect_struct_fields(cursor, &decl->tydecl.ty);
+    } else if (kind == CXCursor_EnumDecl) {
+      decl->type = AST_DECL_TYPE_TYDECL;
+      decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
+      strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
+      decl->tydecl.ty = parse_cursor_type(cursor);
+      collect_enum_fields(cursor, &decl->tydecl.ty);
     } else {
       free(decl);
       decl = NULL;
