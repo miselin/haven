@@ -73,9 +73,10 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
         LLVMAddAttributeAtIndex(func, 1, codegen_type_attribute(codegen, "sret", orig_ret_ty));
       }
 
-      // TODO: asan/msan/* flag
-      LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
-                              codegen_enum_attribute(codegen, "sanitize_address", 0));
+      if (compiler_get_flags(codegen->compiler) & FLAG_ASAN) {
+        LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                                codegen_enum_attribute(codegen, "sanitize_address", 0));
+      }
       LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
                               codegen_enum_attribute(codegen, "nounwind", 0));
       // TODO: frame pointer flag

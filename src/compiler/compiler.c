@@ -2,6 +2,7 @@
 #include "compiler.h"
 
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "cfold.h"
 #include "codegen.h"
@@ -13,10 +14,12 @@
 #include "typecheck.h"
 #include "utility.h"
 
+static int compiler_requires_linking(enum OutputFormat format);
+
 struct compiler *new_compiler(int argc, const char *argv[]) {
   struct compiler *result = calloc(1, sizeof(struct compiler));
   result->opt_level = OptNone;
-  result->output_format = OutputObject;
+  result->output_format = OutputLinkedBinary;
   result->relocations_type = RelocsPIC;
   if (parse_flags(result, argc, (char *const *)argv) != 0) {
     free(result);
@@ -50,6 +53,14 @@ const char *compiler_get_output_file(struct compiler *compiler) {
 }
 
 void destroy_compiler(struct compiler *compiler) {
+  struct linker_option *lo = compiler->linker_options;
+  while (lo) {
+    struct linker_option *next = lo->next;
+    free((void *)lo->option);
+    free(lo);
+    lo = next;
+  }
+  free((void *)compiler->ld);
   struct search_dir *dir = compiler->search_dirs;
   while (dir) {
     struct search_dir *next = dir->next;
@@ -84,9 +95,15 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     }
   }
 
+  const char *output_file = compiler->output_file;
+  if (compiler_requires_linking(compiler->output_format)) {
+    // emit to a temporary
+    output_file = "tmp.haven.o";
+  }
+
   FILE *out = stdout;
   if (compiler->output_file) {
-    out = fopen(compiler->output_file, "w");
+    out = fopen(output_file, "w");
     if (!out) {
       perror("fopen");
       return 1;
@@ -111,7 +128,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  // fprintf(stderr, "result from parse: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from parse: %d\n", rc);
 
   if (rc == 0) {
     // pre-typecheck semantic pass
@@ -124,7 +141,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  // fprintf(stderr, "result from first semantic pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from first semantic pass: %d\n", rc);
 
   if (rc == 0) {
     struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);
@@ -136,7 +153,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  // fprintf(stderr, "result from cfold: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from cfold: %d\n", rc);
 
   if (rc == 0) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser), compiler);
@@ -148,7 +165,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  // fprintf(stderr, "result from typecheck pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from typecheck pass: %d\n", rc);
 
   if (rc == 0) {
     struct purity *purity = purity_new(parser_get_ast(parser), compiler);
@@ -160,7 +177,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  // fprintf(stderr, "result from purity pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from purity pass: %d\n", rc);
 
   if (rc == 0) {
     // post-typecheck semantic pass
@@ -173,7 +190,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  // fprintf(stderr, "result from second semantic pass: %d\n", rc);
+  compiler_log(compiler, LogLevelDebug, "driver", "result from second semantic pass: %d\n", rc);
 
   if (rc && (compiler->flags[0] & FLAG_DISPLAY_AST)) {
     fprintf(stderr, "== Partial AST after failure ==\n");
@@ -204,6 +221,8 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
           rc = codegen_emit_bitcode(codegen, out);
           break;
         case OutputObject:
+        case OutputLinkedBinary:
+        case OutputLinkedLibrary:
           rc = codegen_emit_obj(codegen, out);
           break;
       }
@@ -216,7 +235,16 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     destroy_codegen(codegen);
   }
 
+  if (rc == 0 && compiler_requires_linking(compiler->output_format)) {
+    // run the linker
+    rc = compiler_link(compiler, output_file);
+  }
+
 out:
+  if (compiler_requires_linking(compiler->output_format)) {
+    unlink(output_file);
+  }
+
   return rc;
 }
 
@@ -230,6 +258,10 @@ const char *outext(struct compiler *compiler) {
       return "bc";
     case OutputObject:
       return "o";
+    case OutputLinkedBinary:
+      return "";
+    case OutputLinkedLibrary:
+      return "so";
   }
 
   return "o";
@@ -237,4 +269,8 @@ const char *outext(struct compiler *compiler) {
 
 struct ast_program *compiler_get_ast(struct compiler *compiler) {
   return parser_get_ast(compiler->parser);
+}
+
+static int compiler_requires_linking(enum OutputFormat format) {
+  return format == OutputLinkedBinary || format == OutputLinkedLibrary;
 }

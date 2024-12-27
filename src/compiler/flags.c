@@ -21,6 +21,7 @@ static const char *copy_to_heap(const char *str) {
 
 static void usage(void) {
   fprintf(stderr, "usage: %s [options] [file]\n", COMPILER_IDENT);
+  fprintf(stderr, "  -c             generate an object file, do not link\n");
   fprintf(stderr, "  -o <file>      output file\n");
   fprintf(stderr, "  -S             output assembly\n");
   fprintf(stderr, "  -O0            no optimizations\n");
@@ -35,6 +36,11 @@ static void usage(void) {
   fprintf(stderr, "  --verbose      enable internal compiler logging\n");
   fprintf(stderr, "  -I <path>      add a path to the import search path\n");
   fprintf(stderr, "  --no-preamble  do not emit the default preamble\n");
+  fprintf(stderr,
+          "  --Xl <flag>    pass <flag> to the linker; use commas to merge multiple words\n");
+  fprintf(stderr, "  --ld <pathh>   use <path> as the linker\n");
+  fprintf(stderr, "  --no-color     disable color in diagnostics\n");
+  fprintf(stderr, "  --asan         enable the Address Sanitizer\n");
 }
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]) {
@@ -46,6 +52,8 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
   if (!isatty(2)) {
     into->flags[0] |= FLAG_NO_COLOR;
   }
+
+  struct linker_option *prev_lo = NULL;
 
   int index = 0;
   struct option long_options[] = {{"O0", no_argument, 0, O0},
@@ -61,11 +69,17 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"debug-ir", no_argument, 0, DebugIR},
                                   {"debug-llvm", no_argument, 0, DebugLLVM},
                                   {"no-preamble", no_argument, 0, NoPreamble},
+                                  {"Xl", required_argument, 0, LinkerOption},
+                                  {"ld", required_argument, 0, Linker},
+                                  {"asan", no_argument, 0, AddressSanitizer},
                                   {0, 0, 0, 0}};
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "o:SI:", long_options, &index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "co:SI:", long_options, &index)) != -1) {
     switch (opt) {
+      case 'c':
+        into->output_format = OutputObject;
+        break;
       case 'S':
         into->output_format = OutputASM;
         break;
@@ -128,6 +142,31 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       case NoPreamble:
         into->flags[0] |= FLAG_NO_PREAMBLE;
         break;
+      case AddressSanitizer:
+        into->flags[0] |= FLAG_ASAN;
+        break;
+      case LinkerOption: {
+        char *flag = strdup(optarg);
+        char *saveptr;
+        char *token = strtok_r(flag, ",", &saveptr);
+        while (token) {
+          struct linker_option *lo = (struct linker_option *)malloc(sizeof(struct linker_option));
+          lo->option = copy_to_heap(token);
+          lo->next = NULL;
+          if (prev_lo) {
+            prev_lo->next = lo;
+          } else {
+            into->linker_options = lo;
+          }
+          prev_lo = lo;
+
+          token = strtok_r(NULL, ",", &saveptr);
+        }
+        free(flag);
+      } break;
+      case Linker: {
+        into->ld = copy_to_heap(optarg);
+      } break;
       default:
         usage();
         return -1;
@@ -168,12 +207,17 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
     into->output_file = (const char *)malloc(strlen(into->input_file) + 1 + strlen(ext) + 1);
     strcpy((char *)into->output_file, into->input_file);
     char *dot = strrchr((char *)into->output_file, '.');
-    if (!dot) {
-      strcat((char *)into->output_file, ".");
-    } else {
-      *(dot + 1) = '\0';
+    if (*ext) {
+      if (!dot) {
+        strcat((char *)into->output_file, ".");
+      } else {
+        *(dot + 1) = '\0';
+      }
+
+      strcat((char *)into->output_file, ext);
+    } else if (dot) {
+      *dot = '\0';
     }
-    strcat((char *)into->output_file, outext(into));
   }
 
   if (into->flags[0] & FLAG_VERBOSE) {

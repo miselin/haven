@@ -8,7 +8,14 @@
 
 enum OptLevel { OptNone, OptLight, OptNormal, OptAggressive };
 
-enum OutputFormat { OutputIR, OutputASM, OutputBitcode, OutputObject };
+enum OutputFormat {
+  OutputIR,
+  OutputASM,
+  OutputBitcode,
+  OutputObject,
+  OutputLinkedBinary,
+  OutputLinkedLibrary
+};
 
 enum RelocationsType { RelocsPIC, RelocsStatic };
 
@@ -40,6 +47,8 @@ enum Pass {
 #define FLAG_DEBUG_LLVM (1U << 4)
 // Don't emit a preamble
 #define FLAG_NO_PREAMBLE (1U << 5)
+// Enable the Address Sanitizer
+#define FLAG_ASAN (1U << 6)
 
 struct compiler;
 

@@ -9,13 +9,11 @@ shift
 COMPILER="./build/bin/haven"
 # COMPILER="./build/bin/haven_bootstrap"
 
-OPT="O0"
-ASAN="-fsanitize=address"
+OPT="O2"
+ASAN="--asan"
 #ASAN=""
 
-${COMPILER} --${OPT} --verbose --debug-ast --debug-ir --emit-ir -I /usr/include ${FILENAME} "$@" 2> >(tee log.log >&2) 1>&2
-clang-18 -S -${OPT} -g -o ${FILENAME%.*}.s ${FILENAME%.*}.ll -lm
-clang-18 -L build/lib -${OPT} -g ${ASAN} -o ${FILENAME%.*} ${FILENAME%.*}.ll -lm -lruntime
+${COMPILER} --${OPT} ${ASAN} --verbose --debug-ast --debug-ir -I /usr/include ${FILENAME} "$@" 2> >(tee log.log >&2) 1>&2
 
 set +e
 

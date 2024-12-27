@@ -19,6 +19,10 @@ enum Options {
   DebugIR,
   DebugLLVM,
   NoPreamble,
+  LinkerOption,
+  Linker,
+  OnlyCompile,
+  AddressSanitizer
 };
 
 enum Color {
@@ -46,6 +50,11 @@ struct search_dir {
   struct search_dir *next;
 };
 
+struct linker_option {
+  const char *option;
+  struct linker_option *next;
+};
+
 struct compiler {
   const char *input_file;
   const char *output_file;
@@ -62,6 +71,9 @@ struct compiler {
   enum Pass default_until;
 
   struct search_dir *search_dirs;
+  struct linker_option *linker_options;
+
+  const char *ld;
 };
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]);
@@ -74,5 +86,7 @@ FILE *find_file(struct compiler *compiler, const char *filename);
 int find_file_path(struct compiler *compiler, const char *filename, const char **discovered_path);
 
 void add_search_dir(struct compiler *compiler, const char *path);
+
+int compiler_link(struct compiler *compiler, const char *object_file);
 
 #endif

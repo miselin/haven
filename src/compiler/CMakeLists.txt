@@ -1,6 +1,6 @@
 llvm_map_components_to_libnames(llvm_libs -18)
 
-add_library(compiler_c OBJECT compiler.c import.c flags.c search.c diag.c)
+add_library(compiler_c OBJECT compiler.c import.c flags.c search.c diag.c link.c)
 target_link_libraries(compiler_c PRIVATE haven_compiler_options)
 
 set (COMPILER_BASE_DEPS
