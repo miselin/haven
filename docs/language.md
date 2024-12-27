@@ -125,6 +125,10 @@ i32[2] arr = i32 {
 
 ### Boxed Types
 
+> [!CAUTION]
+> Boxed types are very much under construction. Their definition may yet change, and they tend to
+> have rough edges that lead to bugs at runtime in their current form.
+
 Boxing wraps a value in a heap-allocated structure. The underlying pointer
 can be retrieved with the `unbox` keyword.
 
@@ -144,14 +148,6 @@ of an asterisk (`*`):
 ```
 fn i32 example(i32^ boxed);
 ```
-
-#### Garbage Collection vs Reference Counting
-
-Passing `--no-gc` to the compiler will disable runtime garbage collection
-and shift box types to use a reference counting implementation for freeing
-memory when the box is no longer in use.
-
-TODO: write GC + runtime...
 
 ## Declarations
 
@@ -274,11 +270,41 @@ let i32 typed = 7;
 
 ### iter
 
-TODO
+The `iter` statement iterates over a range.
+
+```
+iter 0:10 i {
+    printf("%d\n", i);
+};
+```
+
+Ranges are inclusive; the above range will visit values `0` and `10` during iteration.
+
+A constant step can be provided:
+
+```
+iter 10:0:-1 i {};
+```
+
+### while
+
+The `while` statement loops as long as a condition is true-ish:
+
+```
+while 1 {
+    // ...
+};
+```
 
 ### store
 
-TODO
+The `store` instruction stores a value into the memory pointed to by a pointer:
+
+```
+store ptr 5;
+```
+
+The equivalent syntax in C would be `*ptr = 5`.
 
 ### ret
 
