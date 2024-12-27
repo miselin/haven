@@ -11,9 +11,6 @@ find_library(MALLOC NAMES jemalloc tcmalloc)
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 find_package(Doxygen)
-find_package(GTest REQUIRED)
-find_package(benchmark REQUIRED)
-find_package(glm REQUIRED)
 
 include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
@@ -65,5 +62,8 @@ add_subdirectory(bench)
 if (DOXYGEN_FOUND)
     doxygen_add_docs(doxygen src include)
 endif ()
+
+# Import third-party dependencies last, so they don't interfere with our settings
+add_subdirectory(third_party)
 
 include(CTest)
