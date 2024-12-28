@@ -44,20 +44,28 @@ LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *n
   return var;
 }
 
-LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *from,
-                  struct ast_ty *to) {
+LLVMValueRef emit_cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *from,
+                       struct ast_ty *to) {
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast!");
+
   if (same_type(from, to)) {
     return value;
   }
+
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast A");
 
   if (from->ty == AST_TYPE_POINTER && to->ty == AST_TYPE_POINTER) {
     // pointer to pointer cast, no IR cast needed
     return value;
   }
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast B");
 
   LLVMTypeRef dest_ty = ast_ty_to_llvm_ty(codegen, to);
 
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast C");
+
   if (!same_type_class(from, to, TYPE_FLAG_MASK_ALL ^ TYPE_FLAG_CONSTANT)) {
+    compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast C.1");
     if (from->ty == AST_TYPE_INTEGER) {
       return LLVMBuildSIToFP(codegen->llvm_builder, value, dest_ty, "fpconv");
     } else {
@@ -65,7 +73,10 @@ LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *fr
     }
   }
 
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast D");
+
   if (narrower_type(from, to)) {
+    compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast D.1");
     if (from->ty == AST_TYPE_INTEGER && from->integer.is_signed) {
       return LLVMBuildSExtOrBitCast(codegen->llvm_builder, value, dest_ty, "widening");
     }
@@ -120,7 +131,8 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
     case AST_TYPE_STRUCT: {
       struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
       if (!entry) {
-        fprintf(stderr, "struct %s not found in codegen\n", ty->name);
+        compiler_log(codegen->compiler, LogLevelError, "codegen", "struct %s not found in codegen",
+                     ty->name);
         return NULL;
       }
       inner = entry->type;
@@ -134,19 +146,10 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       } else {
         inner = LLVMPointerTypeInContext(codegen->llvm_context, 0);
       }
-
-      // TODO: need to use this type in some contexts
-      /*
-      struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
-      if (!entry) {
-        fprintf(stderr, "enum %s not found in codegen\n", ty->name);
-        return NULL;
-      }
-      inner = entry->type;
-      */
     } break;
     case AST_TYPE_CUSTOM:
-      fprintf(stderr, "custom type %s not resolved before codegen\n", ty->name);
+      compiler_log(codegen->compiler, LogLevelError, "codegen",
+                   "custom type %s not resolved before codegen", ty->name);
       return NULL;
     case AST_TYPE_FUNCTION: {
       LLVMTypeRef retty = ast_ty_to_llvm_ty(codegen, ty->function.retty);
@@ -169,7 +172,8 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       return LLVMPointerTypeInContext(codegen->llvm_context, 0);
       break;
     default:
-      fprintf(stderr, "unhandled type %d in conversion to LLVM TypeRef\n", ty->ty);
+      compiler_log(codegen->compiler, LogLevelError, "codegen",
+                   "unhandled type %d in conversion to LLVM TypeRef", ty->ty);
       return NULL;
   }
 

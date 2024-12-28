@@ -46,31 +46,99 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     return type_repository_tbd(typecheck->type_repo);
   }
 
-#if 0
-  if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
-    struct ast_ty *old_pointee = ty->pointer.pointee;
-    ty->pointer.pointee = resolve_parsed_type(typecheck, ty->pointer.pointee);
-    fprintf(stderr, "resolve_parsed_type pointee for %p = %p -> %p\n", (void *)ty,
-            (void *)old_pointee, (void *)ty->pointer.pointee);
-    free(old_pointee);
-  } else if (ty->ty == AST_TYPE_ARRAY) {
-    // parser allocs the element type, gotta tidy up
-    struct ast_ty *resolved = resolve_type(typecheck, ty->array.element_ty);
-    free_ty(typecheck->compiler, ty->array.element_ty, 1);
-    ty->array.element_ty = resolved;
+  struct ast_ty *resolved_ty = calloc(1, sizeof(struct ast_ty));
+  *resolved_ty = *ty;
+
+  // resolve inner parsed types to actual types
+  switch (ty->ty) {
+    case AST_TYPE_ERROR:
+    case AST_TYPE_TBD:
+    case AST_TYPE_INTEGER:
+    case AST_TYPE_STRING:
+    case AST_TYPE_FLOAT:
+    case AST_TYPE_FVEC:
+    case AST_TYPE_VOID:
+    case AST_TYPE_CUSTOM:
+    case AST_TYPE_NIL:
+    case AST_TYPE_MATRIX:
+      // no complex data to copy
+      break;
+
+    case AST_TYPE_ARRAY:
+      resolved_ty->array.element_ty = resolve_parsed_type(typecheck, ty->array.element_ty);
+      break;
+
+    case AST_TYPE_STRUCT: {
+      resolved_ty->structty.fields = NULL;
+      struct ast_struct_field *field = ty->structty.fields;
+      struct ast_struct_field *last = NULL;
+      while (field) {
+        struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
+        *new_field = *field;
+        new_field->ty = resolve_parsed_type(typecheck, &field->parsed_ty);
+        field = field->next;
+
+        if (last == NULL) {
+          resolved_ty->structty.fields = new_field;
+        } else {
+          last->next = new_field;
+        }
+
+        last = new_field;
+      }
+    } break;
+
+    case AST_TYPE_ENUM: {
+      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *last = NULL;
+      while (field) {
+        struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
+        *new_field = *field;
+        if (field->has_inner) {
+          new_field->inner = resolve_parsed_type(typecheck, &field->parser_inner);
+        }
+        field = field->next;
+
+        if (last == NULL) {
+          resolved_ty->enumty.fields = new_field;
+        } else {
+          last->next = new_field;
+        }
+
+        last = new_field;
+      }
+
+      // TODO: templates
+    } break;
+
+    case AST_TYPE_TEMPLATE: {
+      // TODO
+    } break;
+
+    case AST_TYPE_FUNCTION: {
+      resolved_ty->function.args = calloc(ty->function.num_args, sizeof(struct ast_ty *));
+      for (size_t i = 0; i < ty->function.num_args; i++) {
+        resolved_ty->function.args[i] = resolve_parsed_type(typecheck, ty->function.args[i]);
+      }
+
+      resolved_ty->function.retty = resolve_parsed_type(typecheck, ty->function.retty);
+    } break;
+
+    case AST_TYPE_POINTER:
+    case AST_TYPE_BOX:
+      resolved_ty->pointer.pointee = resolve_parsed_type(typecheck, ty->pointer.pointee);
+      break;
   }
-#endif
 
   // already exists?
-  struct ast_ty *target = type_repository_lookup_ty(typecheck->type_repo, ty);
-  if (target) {
-    return target;
+  struct ast_ty *target = type_repository_lookup_ty(typecheck->type_repo, resolved_ty);
+  if (!target) {
+    // register the new type with resolved inner fields, which copies the type
+    target = type_repository_register(typecheck->type_repo, resolved_ty);
   }
 
-  // register the new type with resolved inner fields, which copies the type
-  // then, clean up the parser type - we're no longer going to use it
-  target = type_repository_register(typecheck->type_repo, ty);
-  // free_ty(typecheck->compiler, ty, 0);
+  // done with the resolved type now
+  free_ty(typecheck->compiler, resolved_ty, 1);
   return target;
 
 #if 0

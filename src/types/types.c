@@ -349,17 +349,19 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
             snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
         struct ast_struct_field *field = ty->structty.fields;
         while (field) {
-          struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
-
-          if (field_ty->ty == AST_TYPE_POINTER || field_ty->ty == AST_TYPE_BOX) {
-            // don't emit the pointee type, just the name will do
-            offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ", ty->name,
-                               field_ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
-          } else {
-            char field_tyname[256] = {0};
-            type_name_into_ctx(field_ty, field_tyname, 256, new_ctx);
-            offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname,
-                               field->name);
+          // TODO: maybe still want to emit the parsed type?
+          if (field->ty) {
+            if (field->ty->ty == AST_TYPE_POINTER || field->ty->ty == AST_TYPE_BOX) {
+              // don't emit the pointee type, just the name will do
+              offset +=
+                  snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ", ty->name,
+                           field->ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
+            } else {
+              char field_tyname[256] = {0};
+              type_name_into_ctx(field->ty, field_tyname, 256, new_ctx);
+              offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname,
+                                 field->name);
+            }
           }
           field = field->next;
         }
@@ -381,7 +383,9 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       while (inner) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %d -> ", inner->name,
                            inner->is_resolved);
-        offset += type_name_into_ctx(inner->resolved, buf + offset, maxlen - (size_t)offset, ctx);
+        if (inner->resolved) {
+          offset += type_name_into_ctx(inner->resolved, buf + offset, maxlen - (size_t)offset, ctx);
+        }
         if (inner->next) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
         }
@@ -407,7 +411,7 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       while (field) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s = %" PRIu64, field->name,
                            field->value);
-        if (field->has_inner) {
+        if (field->has_inner && field->inner) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, " (");
           offset += type_name_into_ctx(field->inner, buf + offset, maxlen - (size_t)offset, ctx);
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
@@ -439,7 +443,7 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       break;
 
     case AST_TYPE_POINTER:
-      offset += snprintf(buf, maxlen, "Pointer %p <", (void *)ty);
+      offset += snprintf(buf, maxlen, "Pointer <");
       offset += type_name_into_ctx(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset, ctx);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;

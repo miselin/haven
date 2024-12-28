@@ -104,15 +104,16 @@ int compiler_log(struct compiler *compiler, enum LogLevel level, const char *sub
       break;
   }
 
-  va_list ap;
-  va_start(ap, fmt);
-
   color(compiler, level_color, Bold);
   int n = fprintf(stderr, "%s: %8s: ", prefix, subsys);
+
+  va_list ap;
+  va_start(ap, fmt);
   n += vfprintf(stderr, fmt, ap);
+  va_end(ap);
+
   n += fprintf(stderr, "\n");
   color(compiler, Reset, None);
-  va_end(ap);
 
   return n;
 }

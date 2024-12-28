@@ -172,6 +172,8 @@ struct ast_ty *type_repository_lookup_ty(struct type_repository *repo, struct as
   type_name_into(ty, name, 1024);
 
   struct type_repository_entry *entry = kv_lookup(repo->types, name);
+  compiler_log(repo->compiler, LogLevelError, "typerepo", "lookup_ty looking up %s, got %p", name,
+               (void *)entry);
   return entry ? entry->ty : NULL;
 }
 

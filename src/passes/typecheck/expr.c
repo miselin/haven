@@ -85,11 +85,16 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
               size_t rows = ast->list->num_elements;
               size_t cols = ast->list->expr->list->num_elements;
-              free_ty(typecheck->compiler, ast->ty->array.element_ty, 1);
 
-              ast->ty->ty = AST_TYPE_MATRIX;
-              ast->ty->matrix.cols = cols;
-              ast->ty->matrix.rows = rows;
+              struct ast_ty new_ty;
+              new_ty.ty = AST_TYPE_MATRIX;
+              new_ty.matrix.cols = cols;
+              new_ty.matrix.rows = rows;
+
+              ast->ty = type_repository_lookup_ty(typecheck->type_repo, &new_ty);
+              if (!ast->ty) {
+                ast->ty = type_repository_register(typecheck->type_repo, &new_ty);
+              }
 
               if (cols != correct_cols) {
                 typecheck_diag_expr(typecheck, ast,
@@ -135,9 +140,11 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           ++typecheck->errors;
         }
 
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr);
-        if (!expr_ty) {
-          return NULL;
+        {
+          struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr);
+          if (!expr_ty) {
+            return NULL;
+          }
         }
 
         maybe_implicitly_convert(&node->expr->ty, &field->ty);

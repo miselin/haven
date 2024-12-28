@@ -170,6 +170,8 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
       spelling_c += 5;
     } else if (!strncmp(spelling_c, "struct ", 7)) {
       spelling_c += 7;
+    } else if (!strncmp(spelling_c, "union ", 6)) {
+      spelling_c += 6;
     } else {
       break;
     }
@@ -270,6 +272,8 @@ static struct ast_ty *parse_type(CXType type) {
       spelling_c += 5;
     } else if (!strncmp(spelling_c, "struct ", 7)) {
       spelling_c += 7;
+    } else if (!strncmp(spelling_c, "union ", 6)) {
+      spelling_c += 6;
     } else {
       break;
     }
@@ -437,6 +441,8 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
       while (1) {
         if (!strncmp(underlying_name_c, "struct ", 7)) {
           underlying_name_c += 7;
+        } else if (!strncmp(underlying_name_c, "union ", 6)) {
+          underlying_name_c += 6;
         } else {
           break;
         }
@@ -458,7 +464,7 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
       }
 
       clang_disposeString(underlying_name);
-    } else if (kind == CXCursor_StructDecl) {
+    } else if (kind == CXCursor_StructDecl || kind == CXCursor_UnionDecl) {
       // make it.
       decl->type = AST_DECL_TYPE_TYDECL;
       decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
@@ -467,6 +473,8 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
       decl->tydecl.parsed_ty = *cursor_ty;
       free(cursor_ty);
       collect_struct_fields(cursor, &decl->tydecl.parsed_ty);
+
+      decl->tydecl.parsed_ty.structty.is_union = kind == CXCursor_UnionDecl;
     } else if (kind == CXCursor_EnumDecl) {
       decl->type = AST_DECL_TYPE_TYDECL;
       decl->tydecl.ident.ident = TOKEN_IDENTIFIER;

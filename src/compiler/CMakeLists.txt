@@ -8,7 +8,7 @@ set (COMPILER_BASE_DEPS
     $<TARGET_OBJECTS:ast>
     $<TARGET_OBJECTS:lexer>
     $<TARGET_OBJECTS:parser>
-    # $<TARGET_OBJECTS:ir>
+    $<TARGET_OBJECTS:ir>
     $<TARGET_OBJECTS:cimport_c>
     $<TARGET_OBJECTS:types>
     $<TARGET_OBJECTS:tokens>

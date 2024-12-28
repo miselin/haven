@@ -20,8 +20,10 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
                                int only_tydecls);
 static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast);
 
+#if 0
 static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl);
 static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl);
+#endif
 
 struct typecheck *new_typecheck(struct ast_program *ast, struct compiler *compiler) {
   struct typecheck *result = calloc(1, sizeof(struct typecheck));
@@ -96,52 +98,71 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
         return;
       }
 
-      if (!type_repository_register_alias(
-              typecheck->type_repo, ast->tydecl.ident.value.identv.ident, &ast->tydecl.parsed_ty)) {
-        ++typecheck->errors;
+      // already registered?
+      struct ast_ty *registered =
+          type_repository_lookup(typecheck->type_repo, ast->tydecl.ident.value.identv.ident);
+      if (!registered) {
+        if (!type_repository_register_alias(typecheck->type_repo,
+                                            ast->tydecl.ident.value.identv.ident, target_ty)) {
+          compiler_log(typecheck->compiler, LogLevelError, "typecheck",
+                       "failed to register alias %s -> %s", ast->tydecl.ident.value.identv.ident,
+                       ast->tydecl.parsed_ty.name);
+          ++typecheck->errors;
+        }
+
+        registered = target_ty;
       }
 
-      ast->tydecl.resolved = target_ty;
+      ast->tydecl.resolved = registered;
       return;
     }
 
-    struct ast_ty *resolve_type = calloc(1, sizeof(struct ast_ty));
-    *resolve_type = ast->tydecl.parsed_ty;
+    struct ast_ty *target_type;
+
+    strncpy(ast->tydecl.parsed_ty.name, ast->tydecl.ident.value.identv.ident, 256);
 
     // need to fully resolve the type so it can be matched in the type repository
     // TODO...
 
-    // not custom, defining a new type
-    if (ast->tydecl.parsed_ty.ty == AST_TYPE_STRUCT) {
-      typecheck_struct_decl(typecheck, resolve_type);
-    } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_ENUM) {
-      typecheck_enum_decl(typecheck, resolve_type);
-    } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_ARRAY) {
-      resolve_type->array.element_ty =
-          resolve_parsed_type(typecheck, ast->tydecl.parsed_ty.array.element_ty);
-    } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_FUNCTION) {
-      resolve_type->function.retty = resolve_parsed_type(typecheck, resolve_type->function.retty);
+    /*
+      // not custom, defining a new type
+      if (ast->tydecl.parsed_ty.ty == AST_TYPE_STRUCT) {
+        typecheck_struct_decl(typecheck, resolve_type);
+      } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_ENUM) {
+        typecheck_enum_decl(typecheck, resolve_type);
+      } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_ARRAY) {
+        resolve_type->array.element_ty =
+            resolve_parsed_type(typecheck, ast->tydecl.parsed_ty.array.element_ty);
+      } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_FUNCTION) {
+        resolve_type->function.retty = resolve_parsed_type(typecheck, resolve_type->function.retty);
 
-      for (size_t i = 0; i < ast->tydecl.parsed_ty.function.num_args; i++) {
-        resolve_type->function.args[i] =
-            resolve_parsed_type(typecheck, resolve_type->function.args[i]);
-      }
-    } else {
-      resolve_type = resolve_parsed_type(typecheck, resolve_type);
-    }
-
-    strncpy(ast->tydecl.parsed_ty.name, ast->tydecl.ident.value.identv.ident, 256);
+        for (size_t i = 0; i < ast->tydecl.parsed_ty.function.num_args; i++) {
+          resolve_type->function.args[i] =
+              resolve_parsed_type(typecheck, resolve_type->function.args[i]);
+        }
+      } else */
+    { target_type = resolve_parsed_type(typecheck, &ast->tydecl.parsed_ty); }
 
     compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "registering tydecl %s -> %s",
-                 ast->tydecl.ident.value.identv.ident, ast->tydecl.parsed_ty.name);
+                 ast->tydecl.ident.value.identv.ident, target_type->name);
 
-    struct ast_ty *registered = type_repository_register(typecheck->type_repo, resolve_type);
-    if (registered) {
+    struct ast_ty *existing =
+        type_repository_lookup(typecheck->type_repo, ast->tydecl.ident.value.identv.ident);
+    if (existing) {
+      // alias already exists
+      // TODO: potentially update it to be a new type?
+      target_type = existing;
+    } else {
+      // struct ast_ty *registered = type_repository_lookup_ty(typecheck->type_repo, target_type);
+
+      // struct ast_ty *registered = type_repository_register(typecheck->type_repo, resolve_type);
+      // if (registered) {
       type_repository_register_alias(typecheck->type_repo, ast->tydecl.ident.value.identv.ident,
-                                     registered);
+                                     target_type);
+      //}
     }
 
-    ast->tydecl.resolved = registered;
+    ast->tydecl.resolved = target_type;
   }
 
   if (only_tydecls) {
@@ -242,19 +263,20 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
         scope_insert(typecheck->scope, ast->fdecl.params[i]->ident.value.identv.ident, param_entry);
       }
 
-      struct ast_ty *result = typecheck_block(typecheck, ast->fdecl.body);
+      {
+        struct ast_ty *result = typecheck_block(typecheck, ast->fdecl.body);
+        if (!result) {
+          return;
+        }
+      }
 
       typecheck->scope = exit_scope(typecheck->scope);
 
-      if (!result) {
-        return;
-      }
-
       maybe_implicitly_convert(&ast->fdecl.body->ty, &ast->fdecl.retty);
 
-      if (!same_type(result, ast->fdecl.retty)) {
+      if (!same_type(ast->fdecl.body->ty, ast->fdecl.retty)) {
         char resultstr[256], tystr[256];
-        type_name_into(result, resultstr, 256);
+        type_name_into(ast->fdecl.body->ty, resultstr, 256);
         type_name_into(ast->fdecl.retty, tystr, 256);
 
         fprintf(stderr, "function %s returns %s, expected %s\n",
@@ -311,6 +333,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
   }
 }
 
+#if 0
 static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl) {
   // TODO: causes infinite recursive loop on recursive struct definitions
 
@@ -332,6 +355,7 @@ static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl
     field = field->next;
   }
 }
+#endif
 
 struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *ast) {
   typecheck->scope = enter_scope(typecheck->scope);
@@ -355,7 +379,7 @@ struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *as
 
   typecheck->scope = exit_scope(typecheck->scope);
 
-  ast->ty = resolve_type(typecheck, last_ty);
+  ast->ty = last_ty;
   return ast->ty;
 }
 
@@ -377,15 +401,25 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
 
       // insert before checking the initializer to allow recursive references
       scope_insert(typecheck->scope, ast->let.ident.value.identv.ident, entry);
+      {
+        struct ast_ty *init_ty = typecheck_expr(typecheck, ast->let.init_expr);
+        if (!init_ty) {
+          return NULL;
+        }
 
-      struct ast_ty *init_ty = typecheck_expr(typecheck, ast->let.init_expr);
-      if (!init_ty) {
-        return NULL;
-      }
+        if (type_is_tbd(ast->let.ty)) {
+          if (init_ty->flags & TYPE_FLAG_CONSTANT) {
+            struct ast_ty new_ty = *init_ty;
+            new_ty.flags &= ~TYPE_FLAG_CONSTANT;
+            init_ty = type_repository_lookup_ty(typecheck->type_repo, &new_ty);
+            if (!init_ty) {
+              init_ty = type_repository_register(typecheck->type_repo, &new_ty);
+            }
+          }
 
-      if (type_is_tbd(ast->let.ty)) {
-        // inferred type
-        ast->let.ty = init_ty;
+          // inferred type
+          ast->let.ty = init_ty;
+        }
       }
 
       maybe_implicitly_convert(&ast->let.init_expr->ty, &ast->let.ty);

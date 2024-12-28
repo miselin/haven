@@ -26,8 +26,8 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
   // inner storage of an enum type, for pattern matches
   LLVMValueRef main_expr_buf = NULL;
 
-  if (match->expr->ty.ty == AST_TYPE_ENUM && !match->expr->ty.enumty.no_wrapped_fields) {
-    LLVMTypeRef enum_ty = ast_underlying_ty_to_llvm_ty(codegen, &match->expr->ty);
+  if (match->expr->ty->ty == AST_TYPE_ENUM && !match->expr->ty->enumty.no_wrapped_fields) {
+    LLVMTypeRef enum_ty = ast_underlying_ty_to_llvm_ty(codegen, match->expr->ty);
     LLVMValueRef tag_ptr =
         LLVMBuildStructGEP2(codegen->llvm_builder, enum_ty, main_expr, 0, "tagptr");
     main_expr_buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_ty, main_expr, 1, "bufptr");
@@ -88,7 +88,7 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
         arm->pattern->pattern_match.inner_vdecl) {
       codegen_internal_enter_scope(codegen, &arm->expr->loc, 1);
 
-      struct ast_ty *binding_ty = &arm->pattern->pattern_match.inner_vdecl->ty;
+      struct ast_ty *binding_ty = arm->pattern->pattern_match.inner_vdecl->ty;
 
       // we need to unwrap & define the inner value here
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));

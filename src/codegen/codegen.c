@@ -304,7 +304,7 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
   struct ast_enum_field *field = ty->enumty.fields;
   while (field) {
     if (field->has_inner) {
-      size_t sz = type_size(&field->inner);
+      size_t sz = type_size(field->inner);
       if (sz > total_size) {
         total_size = sz;
 
@@ -319,7 +319,7 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
 
   if (largest_field) {
     // largest type + i8 array for the remaining bytes
-    size_t bytes_remaining = total_size - type_size(&largest_field->inner);
+    size_t bytes_remaining = total_size - type_size(largest_field->inner);
     if (bytes_remaining) {
       num_fields = 3;
     } else {
@@ -327,8 +327,8 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
     }
 
     fields = malloc(sizeof(LLVMTypeRef) * num_fields);
-    fields[0] = LLVMInt32TypeInContext(codegen->llvm_context);                 // tag
-    fields[1] = ast_underlying_ty_to_llvm_ty(codegen, &largest_field->inner);  // largest type
+    fields[0] = LLVMInt32TypeInContext(codegen->llvm_context);                // tag
+    fields[1] = ast_underlying_ty_to_llvm_ty(codegen, largest_field->inner);  // largest type
     if (bytes_remaining) {
       fields[2] = LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context),
                                 (unsigned int)bytes_remaining);
@@ -357,11 +357,11 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
     emit_vdecl(codegen, &ast->vdecl);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
+    if (ast->tydecl.resolved->ty == AST_TYPE_STRUCT) {
       // generate the struct type
-      emit_struct_type(codegen, &ast->tydecl.ty);
-    } else if (ast->tydecl.ty.ty == AST_TYPE_ENUM) {
-      emit_enum_type(codegen, &ast->tydecl.ty);
+      emit_struct_type(codegen, ast->tydecl.resolved);
+    } else if (ast->tydecl.resolved->ty == AST_TYPE_ENUM) {
+      emit_enum_type(codegen, ast->tydecl.resolved);
     } else {
       // just make the type alias
       // fprintf(stderr, "unhandled top level type declaration type %d\n", ast->tydecl.ty.ty);

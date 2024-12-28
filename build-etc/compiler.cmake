@@ -49,9 +49,8 @@ if (UNIX AND NOT IOS AND NOT ANDROID)
     if (DEBUG_BUILD)
         # Useful things in a debug build that may be slow in a release build...
         add_definitions(-DDEBUG -D_DEBUG)
-        if (NOT (ASAN OR TSAN OR UBSAN))
-            target_compile_definitions(cmake_base_compiler_options INTERFACE -D_FORTIFY_SOURCE=2)
-        endif ()
+        target_compile_definitions(cmake_base_compiler_options INTERFACE -D_FORTIFY_SOURCE=2)
+        target_compile_options(cmake_base_compiler_options INTERFACE -fstack-protector)
     endif ()
 
     # ensure we still do some basic cleanup even without optimization
@@ -107,6 +106,7 @@ if (UNIX AND NOT IOS AND NOT ANDROID)
                                    $<$<C_COMPILER_ID:GNU>:-Wduplicated-branches>
                                    $<$<C_COMPILER_ID:GNU>:-Wlogical-op>
                                    $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-Wuseless-cast>
+                                   -Wstack-protector
                         )
 endif ()
 

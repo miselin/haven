@@ -169,7 +169,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from typecheck pass: %d", rc);
 
-#if 0
   if (rc == 0) {
     struct purity *purity = purity_new(parser_get_ast(parser), compiler);
     rc = purity_run(purity);
@@ -194,7 +193,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   }
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from second semantic pass: %d", rc);
-#endif
 
   if (rc && (compiler->flags[0] & FLAG_DISPLAY_AST)) {
     fprintf(stderr, "== Partial AST after failure ==\n");
@@ -207,7 +205,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
       dump_ast(parser_get_ast(parser));
     }
 
-#if 0
     struct codegen *codegen = new_codegen(parser_get_ast(parser), compiler);
     rc = codegen_run(codegen);
     if (rc == 0) {
@@ -232,13 +229,12 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
           break;
       }
     }
-#endif
 
     if (out != stdout) {
       fclose(out);
     }
 
-    // destroy_codegen(codegen);
+    destroy_codegen(codegen);
   }
 
   if (rc == 0 && compiler_requires_linking(compiler->output_format)) {

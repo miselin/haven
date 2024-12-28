@@ -118,8 +118,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_locator *at);
 void emit_vdecl(struct codegen *codegen, struct ast_vdecl *vdecl);
 
-LLVMValueRef cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *from,
-                  struct ast_ty *to);
+LLVMValueRef emit_cast(struct codegen *codegen, LLVMValueRef value, struct ast_ty *from,
+                       struct ast_ty *to);
 
 LLVMValueRef new_alloca(struct codegen *codegen, LLVMTypeRef type, const char *name);
 

@@ -29,7 +29,7 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
 
       LLVMValueRef target = emit_expr(codegen, ast->deref.target);
 
-      struct ast_ty *target_ty = &ast->deref.target->ty;
+      struct ast_ty *target_ty = ast->deref.target->ty;
       struct ast_ty *orig_ty = target_ty;
       if (target_ty->ty == AST_TYPE_POINTER) {
         target_ty = ptr_pointee_type(target_ty);
@@ -50,7 +50,7 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
         LLVMValueRef indicies[2] = {
             LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
             LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context),
-                         ast->deref.field_idx * ast->ty.matrix.rows, 0),
+                         ast->deref.field_idx * ast->ty->matrix.rows, 0),
         };
 
         return LLVMBuildGEP2(codegen->llvm_builder, expr_ty, target, indicies, 2,
@@ -81,10 +81,10 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
     }; break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
-      struct ast_ty *lhs_ty = &ast->array_index.target->ty;
+      struct ast_ty *lhs_ty = ast->array_index.target->ty;
       LLVMValueRef index = emit_expr(codegen, ast->array_index.index);
 
-      LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, &ast->ty);
+      LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, ast->ty);
 
       if (lhs_ty->ty == AST_TYPE_POINTER) {
         LLVMValueRef lhs = emit_expr(codegen, ast->array_index.target);
@@ -108,7 +108,7 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_CAST: {
       LLVMValueRef expr = emit_lvalue(codegen, ast->cast.expr);
-      LLVMValueRef result = cast(codegen, expr, &ast->cast.expr->ty, &ast->ty);
+      LLVMValueRef result = emit_cast(codegen, expr, ast->cast.expr->ty, ast->ty);
       return result;
     } break;
 
