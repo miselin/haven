@@ -3,6 +3,7 @@
 
 #include "ast.h"
 #include "kv.h"
+#include "types.h"
 
 struct scope_entry {
   struct ast_vdecl *vdecl;
@@ -10,7 +11,7 @@ struct scope_entry {
 };
 
 struct alias_entry {
-  struct ast_ty ty;
+  struct ast_ty *ty;
 };
 
 struct typecheck {
@@ -27,6 +28,8 @@ struct typecheck {
   struct ast_ty tbd_type;
 
   struct compiler *compiler;
+
+  struct type_repository *type_repo;
 };
 
 #ifdef __cplusplus
@@ -39,14 +42,19 @@ struct ast_ty *typecheck_expr(struct typecheck *typecheck, struct ast_expr *ast)
 struct ast_ty *typecheck_expr_with_tbds(struct typecheck *typecheck, struct ast_expr *ast);
 struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr *ast);
 
-struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty);
+// Resolve the given type as needed. Assumes that the type is from the type repository.
+struct ast_ty *resolve_type(struct typecheck *typecheck, struct ast_ty *ty);
+
+// Resolve the given type as needed. Assumes that the type is from the parser and may need to be
+// copied or otherwise modified to be resolved.
+struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *ty);
 
 void resolve_template_type(struct typecheck *typecheck, struct ast_template_ty *templates,
                            struct ast_ty *ty);
 
 // If allowed, makes from and to the same type using implicit conversion rules
 // Does nothing if implicit conversion is disallowed or irrelevant.
-int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to);
+int maybe_implicitly_convert(struct ast_ty **from, struct ast_ty **to);
 
 int deref_to_index(const char *deref);
 

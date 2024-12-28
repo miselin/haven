@@ -15,6 +15,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+struct compiler;
+
 // Use AST_TYPE_POINTER instead.
 // #define TYPE_FLAG_PTR (1U << 0)
 
@@ -32,6 +34,8 @@
 // All flags that typically matter for type comparison.
 // indireect/constant are excluded as they are typically specific to an expression, not a type.
 #define TYPE_FLAG_MASK_ALL ((~0U) ^ (TYPE_FLAG_INDIRECT | TYPE_FLAG_CONSTANT | TYPE_FLAG_REFERENCE))
+
+struct type_repository;
 
 enum ast_ty_id {
   AST_TYPE_ERROR = 0,
@@ -51,12 +55,6 @@ enum ast_ty_id {
   AST_TYPE_MATRIX,
   AST_TYPE_POINTER,  // points at another type
   AST_TYPE_BOX,      // similar to a pointer, but with more logic
-};
-
-struct ast_struct_field {
-  char name[256];
-  struct ast_ty *ty;
-  struct ast_struct_field *next;
 };
 
 struct ast_ty {
@@ -117,18 +115,27 @@ struct ast_ty {
   };
 };
 
+struct ast_struct_field {
+  char name[256];
+  struct ast_ty *ty;
+  struct ast_ty parsed_ty;
+  struct ast_struct_field *next;
+};
+
 struct ast_enum_field {
   char name[256];
   uint64_t value;
   int has_inner;
-  struct ast_ty inner;  // optional
+  struct ast_ty *inner;  // optional
+  struct ast_ty parser_inner;
   struct ast_enum_field *next;
 };
 
 struct ast_template_ty {
   char name[256];
   int is_resolved;
-  struct ast_ty resolved;  // only set if is_resolved == 1, when a type is actually specified
+  struct ast_ty *resolved;  // only set if is_resolved == 1, when a type is actually specified
+  struct ast_ty parsed_ty;
   struct ast_template_ty *next;
 };
 
@@ -229,7 +236,7 @@ size_t type_size(struct ast_ty *);
 /**
  * @brief Correctly copy a type, including any dynamic memory allocations.
  */
-struct ast_ty copy_type(struct ast_ty *);
+// struct ast_ty *copy_type(struct ast_ty *);
 
 /**
  * @brief Deeply compare two type objects, including all sub-objects.
@@ -263,5 +270,34 @@ struct ast_ty *box_pointee_type(struct ast_ty *);
  * @brief Can the type be indexed?
  */
 int type_is_indexable(struct ast_ty *);
+
+struct type_repository *new_type_repository(struct compiler *compiler);
+
+// Registers the given type in the type repository.
+struct ast_ty *type_repository_register(struct type_repository *, struct ast_ty *);
+
+// Registers an alias in the type repository.
+struct ast_ty *type_repository_register_alias(struct type_repository *, const char *,
+                                              struct ast_ty *);
+
+// Looks up a type by name in the type repository.
+struct ast_ty *type_repository_lookup(struct type_repository *, const char *);
+
+// Looks up a type by type data in the type repository.
+// This should be used for basic types (integers, floats) with more attributes than just a name.
+struct ast_ty *type_repository_lookup_ty(struct type_repository *, struct ast_ty *);
+
+struct ast_ty *type_repository_tbd(struct type_repository *);
+struct ast_ty *type_repository_void(struct type_repository *);
+struct ast_ty *type_repository_error(struct type_repository *);
+
+// Returns 1 if the type is a shared type that's part of the repository, not allocated.
+int type_repository_is_shared_type(struct type_repository *, struct ast_ty *);
+
+// Remove the type for the given name from the repository.
+void type_repostory_remove(struct type_repository *, const char *);
+
+// Destroy the type repository and all its held types.
+void destroy_type_repository(struct type_repository *);
 
 #endif

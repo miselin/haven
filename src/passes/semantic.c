@@ -251,7 +251,7 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
 static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) {
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
-      switch (ast->ty.ty) {
+      switch (ast->parsed_ty.ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY:
         case AST_TYPE_MATRIX: {

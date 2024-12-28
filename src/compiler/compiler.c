@@ -12,7 +12,7 @@
 #include "purity.h"
 #include "semantic.h"
 #include "typecheck.h"
-#include "utility.h"
+#include "types.h"
 
 static int compiler_requires_linking(enum OutputFormat format);
 
@@ -25,6 +25,7 @@ struct compiler *new_compiler(int argc, const char *argv[]) {
     free(result);
     return NULL;
   }
+  result->type_repository = new_type_repository(result);
   return result;
 }
 
@@ -76,6 +77,7 @@ void destroy_compiler(struct compiler *compiler) {
   if (compiler->lexer) {
     destroy_lexer(compiler->lexer);
   }
+  destroy_type_repository(compiler->type_repository);
   free(compiler);
 }
 
@@ -130,6 +132,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from parse: %d", rc);
 
+#if 0
   if (rc == 0) {
     // pre-typecheck semantic pass
     struct semantic *semantic = semantic_new(parser_get_ast(parser), compiler, 0);
@@ -152,6 +155,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   if (until == PassCFold) {
     goto out;
   }
+#endif
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from cfold: %d", rc);
 
@@ -167,6 +171,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from typecheck pass: %d", rc);
 
+#if 0
   if (rc == 0) {
     struct purity *purity = purity_new(parser_get_ast(parser), compiler);
     rc = purity_run(purity);
@@ -191,6 +196,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   }
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from second semantic pass: %d", rc);
+#endif
 
   if (rc && (compiler->flags[0] & FLAG_DISPLAY_AST)) {
     fprintf(stderr, "== Partial AST after failure ==\n");
@@ -203,6 +209,7 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
       dump_ast(parser_get_ast(parser));
     }
 
+#if 0
     struct codegen *codegen = new_codegen(parser_get_ast(parser), compiler);
     rc = codegen_run(codegen);
     if (rc == 0) {
@@ -227,12 +234,13 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
           break;
       }
     }
+#endif
 
     if (out != stdout) {
       fclose(out);
     }
 
-    destroy_codegen(codegen);
+    // destroy_codegen(codegen);
   }
 
   if (rc == 0 && compiler_requires_linking(compiler->output_format)) {
@@ -269,6 +277,10 @@ const char *outext(struct compiler *compiler) {
 
 struct ast_program *compiler_get_ast(struct compiler *compiler) {
   return parser_get_ast(compiler->parser);
+}
+
+struct type_repository *compiler_get_type_repository(struct compiler *compiler) {
+  return compiler->type_repository;
 }
 
 static int compiler_requires_linking(enum OutputFormat format) {

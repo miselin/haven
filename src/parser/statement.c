@@ -51,7 +51,7 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
         return NULL;
       }
       result->let.init_expr = parse_expression(parser);
-      result->let.ty = ty;
+      result->let.parser_ty = ty;
       if (!result->let.init_expr) {
         free(result);
         return NULL;

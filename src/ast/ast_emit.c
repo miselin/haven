@@ -130,7 +130,7 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
   if (ast->flags & DECL_FLAG_IMPURE) {
     fprintf(stream, "impure ");
   }
-  code_emit_ty(stream, &ast->retty);
+  code_emit_ty(stream, &ast->parsed_retty);
   fprintf(stream, " fn %s(", ast->ident.value.identv.ident);
   for (size_t i = 0; i < ast->num_params; i++) {
     if (i > 0) {
@@ -150,8 +150,8 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
 
 static int code_emit_vdecl(FILE *stream, struct ast_vdecl *ast, int indent) {
   print_indent(stream, indent);
-  if (!type_is_tbd(&ast->ty)) {
-    code_emit_ty(stream, &ast->ty);
+  if (!type_is_tbd(ast->ty)) {
+    code_emit_ty(stream, ast->ty);
     fprintf(stream, " ");
   }
   fprintf(stream, "%s", ast->ident.value.identv.ident);
@@ -160,7 +160,7 @@ static int code_emit_vdecl(FILE *stream, struct ast_vdecl *ast, int indent) {
 
 static int code_emit_tydecl(FILE *stream, struct ast_tydecl *ast, int indent) {
   INDENTED(stream, indent, "type %s = ", ast->ident.value.identv.ident);
-  code_emit_ty(stream, &ast->ty);
+  code_emit_ty(stream, &ast->parsed_ty);
   fprintf(stream, "\n");
   return 0;
 }

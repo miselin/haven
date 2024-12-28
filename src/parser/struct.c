@@ -27,8 +27,7 @@ int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into, int is_
     }
 
     struct ast_struct_field *field = calloc(1, sizeof(struct ast_struct_field));
-    field->ty = calloc(1, sizeof(struct ast_ty));
-    *field->ty = field_ty;
+    field->parsed_ty = field_ty;
     strncpy(field->name, token.value.identv.ident, 256);
 
     if (!last) {

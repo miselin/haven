@@ -59,7 +59,7 @@ struct ast_ty parse_type(struct parser *parser) {
       parser_consume_peeked(parser, NULL);
       while (parser_peek(parser) != TOKEN_GT) {
         struct ast_template_ty *inner_ty = calloc(1, sizeof(struct ast_template_ty));
-        inner_ty->resolved = parse_type(parser);
+        inner_ty->parsed_ty = parse_type(parser);
         inner_ty->is_resolved = 1;
 
         if (inner_prev == NULL) {

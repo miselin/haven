@@ -348,15 +348,17 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
             snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
         struct ast_struct_field *field = ty->structty.fields;
         while (field) {
-          if (field->ty->ty == AST_TYPE_POINTER || field->ty->ty == AST_TYPE_BOX) {
+          struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
+
+          if (field_ty->ty == AST_TYPE_POINTER || field_ty->ty == AST_TYPE_BOX) {
             // don't emit the pointee type, just the name will do
             offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ", ty->name,
-                               field->ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
+                               field_ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
           } else {
-            char field_ty[256] = {0};
-            type_name_into_ctx(field->ty, field_ty, 256, new_ctx);
-            offset +=
-                snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_ty, field->name);
+            char field_tyname[256] = {0};
+            type_name_into_ctx(field_ty, field_tyname, 256, new_ctx);
+            offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname,
+                               field->name);
           }
           field = field->next;
         }
@@ -378,7 +380,7 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       while (inner) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %d -> ", inner->name,
                            inner->is_resolved);
-        offset += type_name_into_ctx(&inner->resolved, buf + offset, maxlen - (size_t)offset, ctx);
+        offset += type_name_into_ctx(inner->resolved, buf + offset, maxlen - (size_t)offset, ctx);
         if (inner->next) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
         }
@@ -406,7 +408,7 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
                            field->value);
         if (field->has_inner) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, " (");
-          offset += type_name_into_ctx(&field->inner, buf + offset, maxlen - (size_t)offset, ctx);
+          offset += type_name_into_ctx(field->inner, buf + offset, maxlen - (size_t)offset, ctx);
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
         }
         if (field->next) {
@@ -521,7 +523,7 @@ size_t type_size(struct ast_ty *ty) {
       size_t largest_inner = 0;
       while (field) {
         if (field->has_inner) {
-          size_t tysz = type_size(&field->inner);
+          size_t tysz = 0;  // TODO type_size(&field->inner);
           if (tysz > largest_inner) {
             largest_inner = tysz;
           }
@@ -547,29 +549,28 @@ size_t type_size(struct ast_ty *ty) {
   }
 }
 
-struct ast_ty copy_type(struct ast_ty *ty) {
-  struct ast_ty new_type = *ty;
+struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
+  struct ast_ty *new_type = calloc(1, sizeof(struct ast_ty));
+  *new_type = *ty;
 
   if (ty->specialization_of) {
-    new_type.specialization_of = strdup(ty->specialization_of);
+    new_type->specialization_of = strdup(ty->specialization_of);
   }
 
   if (ty->ty == AST_TYPE_ARRAY) {
-    new_type.array.element_ty = calloc(1, sizeof(struct ast_ty));
-    *new_type.array.element_ty = copy_type(ty->array.element_ty);
+    new_type->array.element_ty = type_repository_lookup_ty(repo, ty->array.element_ty);
   } else if (ty->ty == AST_TYPE_STRUCT) {
-    new_type.structty.fields = NULL;
+    new_type->structty.fields = NULL;
     struct ast_struct_field *field = ty->structty.fields;
     struct ast_struct_field *last = NULL;
     while (field) {
       struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
       *new_field = *field;
-      new_field->ty = calloc(1, sizeof(struct ast_ty));
-      *new_field->ty = copy_type(field->ty);
+      // new_field->ty = copy_type(field->ty ? field->ty : &field->parsed_ty);
       field = field->next;
 
       if (last == NULL) {
-        new_type.structty.fields = new_field;
+        new_type->structty.fields = new_field;
       } else {
         last->next = new_field;
       }
@@ -583,12 +584,12 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
       *new_field = *field;
       if (field->has_inner) {
-        new_field->inner = copy_type(&field->inner);
+        // new_field->inner = copy_type(field->inner);
       }
       field = field->next;
 
       if (last == NULL) {
-        new_type.enumty.fields = new_field;
+        new_type->enumty.fields = new_field;
       } else {
         last->next = new_field;
       }
@@ -602,12 +603,12 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       struct ast_template_ty *new_template = calloc(1, sizeof(struct ast_template_ty));
       *new_template = *template;
       if (template->is_resolved) {
-        new_template->resolved = copy_type(&template->resolved);
+        new_template->resolved = type_repository_lookup_ty(repo, template->resolved);
       }
       template = template->next;
 
       if (last_template == NULL) {
-        new_type.enumty.templates = new_template;
+        new_type->enumty.templates = new_template;
       } else {
         last_template->next = new_template;
       }
@@ -615,8 +616,7 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       last_template = new_template;
     }
   } else if (ty->ty == AST_TYPE_TEMPLATE) {
-    new_type.tmpl.outer = calloc(1, sizeof(struct ast_ty));
-    *new_type.tmpl.outer = copy_type(ty->tmpl.outer);
+    new_type->tmpl.outer = type_repository_lookup_ty(repo, ty->tmpl.outer);
 
     struct ast_template_ty *inner = ty->tmpl.inners;
     struct ast_template_ty *last_inner = NULL;
@@ -624,12 +624,12 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       struct ast_template_ty *new_inner = calloc(1, sizeof(struct ast_template_ty));
       *new_inner = *inner;
       if (inner->is_resolved) {
-        new_inner->resolved = copy_type(&inner->resolved);
+        new_inner->resolved = type_repository_lookup_ty(repo, inner->resolved);
       }
       inner = inner->next;
 
       if (last_inner == NULL) {
-        new_type.tmpl.inners = new_inner;
+        new_type->tmpl.inners = new_inner;
       } else {
         last_inner->next = new_inner;
       }
@@ -637,16 +637,14 @@ struct ast_ty copy_type(struct ast_ty *ty) {
       last_inner = new_inner;
     }
   } else if (ty->ty == AST_TYPE_FUNCTION) {
-    new_type.function.args = calloc(ty->function.num_args, sizeof(struct ast_ty));
+    new_type->function.args = calloc(ty->function.num_args, sizeof(struct ast_ty *));
     for (size_t i = 0; i < ty->function.num_args; i++) {
-      *new_type.function.args[i] = copy_type(ty->function.args[i]);
+      new_type->function.args[i] = type_repository_lookup_ty(repo, ty->function.args[i]);
     }
 
-    new_type.function.retty = calloc(1, sizeof(struct ast_ty));
-    *new_type.function.retty = copy_type(ty->function.retty);
+    new_type->function.retty = type_repository_lookup_ty(repo, ty->function.retty);
   } else if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
-    new_type.pointer.pointee = calloc(1, sizeof(struct ast_ty));
-    *new_type.pointer.pointee = copy_type(ty->pointer.pointee);
+    new_type->pointer.pointee = type_repository_lookup_ty(repo, ty->pointer.pointee);
   }
 
   return new_type;
@@ -726,7 +724,7 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "  %s", field->name);
         if (field->has_inner) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, "(");
-          offset += type_name_into(&field->inner, buf + offset, maxlen - (size_t)offset);
+          offset += type_name_into(field->inner, buf + offset, maxlen - (size_t)offset);
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
         }
         if (field->next) {

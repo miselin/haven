@@ -59,7 +59,7 @@ struct ast_program *parser_get_ast(struct parser *parser) {
 }
 
 void destroy_parser(struct parser *parser) {
-  free_ast(&parser->ast);
+  free_ast(parser->compiler, &parser->ast);
   destroy_tokenstream(parser->stream);
   free(parser);
 }

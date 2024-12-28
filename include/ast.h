@@ -87,7 +87,8 @@ struct ast_program {
 
 struct ast_vdecl {
   struct token ident;
-  struct ast_ty ty;
+  struct ast_ty *ty;
+  struct ast_ty parser_ty;
 
   uint64_t flags;
 
@@ -96,7 +97,8 @@ struct ast_vdecl {
 
 struct ast_fdecl {
   struct token ident;
-  struct ast_ty retty;
+  struct ast_ty *retty;
+  struct ast_ty parsed_retty;
 
   uint64_t flags;
 
@@ -107,12 +109,14 @@ struct ast_fdecl {
   int is_intrinsic;
   char intrinsic[256];
   struct ast_ty *intrinsic_tys;
+  struct ast_ty *parsed_intrinsic_tys;
   size_t num_intrinsic_tys;
 };
 
 struct ast_tydecl {
   struct token ident;
-  struct ast_ty ty;
+  struct ast_ty parsed_ty;
+  struct ast_ty *resolved;
 };
 
 struct ast_toplevel {
@@ -129,12 +133,13 @@ struct ast_toplevel {
 
 struct ast_expr_constant {
   struct token constant;
+  enum ast_ty_id type;
 };
 
 struct ast_block {
   struct ast_stmt *stmt;
   struct lex_locator loc;
-  struct ast_ty ty;
+  struct ast_ty *ty;
 };
 
 struct ast_expr_binary {
@@ -167,7 +172,7 @@ struct ast_expr_call {
 };
 
 struct ast_expr_cast {
-  struct ast_ty ty;
+  struct ast_ty parsed_ty;
   struct ast_expr *expr;
 };
 
@@ -239,24 +244,28 @@ struct ast_expr_enum_init {
 };
 
 struct ast_expr_union_init {
-  struct ast_ty ty;
+  struct ast_ty parsed_ty;
   struct token field;
   struct ast_expr *inner;
 };
 
 struct ast_expr_sizeof {
-  struct ast_ty ty;
+  struct ast_ty parsed_ty;
   struct ast_expr *expr;
 };
 
 struct ast_expr_box {
-  struct ast_ty *ty;
+  struct ast_ty *parsed_ty;
   struct ast_expr *expr;
 };
 
 struct ast_expr {
   int type;
-  struct ast_ty ty;
+  // The actual resolved type of the expression. Requires typecheck pass to be run.
+  struct ast_ty *ty;
+  // The parser will put whatever information it knows about the expression's type here.
+  // The typecheck pass will use this to fill the actual type.
+  struct ast_ty parsed_ty;
   struct lex_locator loc;
   union {
     struct ast_expr_constant constant;
@@ -322,21 +331,21 @@ struct ast_stmt {
   struct ast_stmt *next;
 };
 
-void free_ast(struct ast_program *ast);
+void free_ast(struct compiler *compiler, struct ast_program *ast);
 void dump_ast(struct ast_program *ast);
 void dump_expr(struct ast_expr *ast, int indent);
 
 int emit_ast_as_code(struct ast_program *ast, FILE *stream);
 
-void free_toplevel(struct ast_toplevel *ast);
-void free_block(struct ast_block *ast, int heap);
-void free_stmt(struct ast_stmt *ast);
-void free_expr(struct ast_expr *ast);
-void free_fdecl(struct ast_fdecl *ast, int heap);
-void free_vdecl(struct ast_vdecl *ast, int heap);
-void free_tydecl(struct ast_tydecl *ast, int heap);
-void free_ty(struct ast_ty *ty, int heap);
-void free_expr_list(struct ast_expr_list *list);
+void free_toplevel(struct compiler *compiler, struct ast_toplevel *ast);
+void free_block(struct compiler *compiler, struct ast_block *ast, int heap);
+void free_stmt(struct compiler *compiler, struct ast_stmt *ast);
+void free_expr(struct compiler *compiler, struct ast_expr *ast);
+void free_fdecl(struct compiler *compiler, struct ast_fdecl *ast, int heap);
+void free_vdecl(struct compiler *compiler, struct ast_vdecl *ast, int heap);
+void free_tydecl(struct compiler *compiler, struct ast_tydecl *ast, int heap);
+void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap);
+void free_expr_list(struct compiler *compiler, struct ast_expr_list *list);
 
 const char *ast_binary_op_to_str(int op);
 const char *ast_unary_op_to_str(int op);

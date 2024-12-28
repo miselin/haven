@@ -4,6 +4,8 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+#include "types.h"
+
 #define COMPILER_IDENT "haven"
 
 enum OptLevel { OptNone, OptLight, OptNormal, OptAggressive };
@@ -73,6 +75,7 @@ int compiler_run(struct compiler *compiler, enum Pass until);
 int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name);
 
 struct ast_program *compiler_get_ast(struct compiler *compiler);
+struct type_repository *compiler_get_type_repository(struct compiler *compiler);
 
 void destroy_compiler(struct compiler *compiler);
 

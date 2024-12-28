@@ -69,7 +69,7 @@ int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into) {
 
       // enum field with inner type
       field->has_inner = 1;
-      field->inner = parse_type(parser);
+      field->parser_inner = parse_type(parser);
 
       if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
         return -1;

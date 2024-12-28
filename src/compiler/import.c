@@ -31,11 +31,13 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
       return -1;
     }
 
+#if 0
     if (cimport(compiler->parser, fullpath) < 0) {
       compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
       free((void *)fullpath);
       return -1;
     }
+#endif
 
     free((void *)fullpath);
     return 0;

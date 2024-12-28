@@ -20,7 +20,7 @@ struct ast_vdecl *parse_parse_vdecl(struct parser *parser) {
   }
 
   struct ast_vdecl *vdecl = calloc(1, sizeof(struct ast_vdecl));
-  vdecl->ty = ty;
+  vdecl->parser_ty = ty;
   vdecl->flags = flags;
 
   struct token token;
@@ -49,13 +49,13 @@ struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
       return NULL;
     }
 
-    decl->tydecl.ty = parse_type(parser);
-    strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
+    decl->tydecl.parsed_ty = parse_type(parser);
+    // strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
   } else {
     // forward declaration of a type that will be defined soon
-    decl->tydecl.ty.ty = AST_TYPE_CUSTOM;
-    decl->tydecl.ty.custom.is_forward_decl = 1;
-    strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
+    decl->tydecl.parsed_ty.ty = AST_TYPE_CUSTOM;
+    decl->tydecl.parsed_ty.custom.is_forward_decl = 1;
+    strncpy(decl->tydecl.parsed_ty.name, decl->tydecl.ident.value.identv.ident, 256);
   }
 
   if (parser_consume(parser, NULL, TOKEN_SEMI) < 0) {
@@ -143,9 +143,9 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
 
   struct ast_ty ty = parse_type(parser);
   if (decl->type == AST_DECL_TYPE_FDECL) {
-    fdecl->retty = ty;
+    fdecl->parsed_retty = ty;
   } else {
-    vdecl->ty = ty;
+    vdecl->parser_ty = ty;
   }
 
   // mut?

@@ -35,7 +35,7 @@ struct ast_expr *parser_parse_pattern_match(struct parser *parser) {
       result->pattern_match.bindings_ignored = 1;
     } else if (parser_peek(parser) == TOKEN_IDENTIFIER) {
       result->pattern_match.inner_vdecl = calloc(1, sizeof(struct ast_vdecl));
-      result->pattern_match.inner_vdecl->ty = type_tbd();  // filled in by typecheck
+      result->pattern_match.inner_vdecl->parser_ty = type_tbd();  // filled in by typecheck
       result->pattern_match.inner_vdecl->flags = DECL_FLAG_TEMPORARY | DECL_FLAG_MUT;
       parser_consume_peeked(parser, &result->pattern_match.inner_vdecl->ident);
     } else {

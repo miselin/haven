@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ast.h"
@@ -8,19 +9,62 @@
 #include "types.h"
 #include "utility.h"
 
-struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
-  if (ty == &typecheck->void_type) {
-    return *ty;
+struct ast_ty *resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
+  if (ty->ty == AST_TYPE_VOID) {
+    return type_repository_void(typecheck->type_repo);
+  } else if (ty->ty == AST_TYPE_ERROR) {
+    return type_repository_error(typecheck->type_repo);
+  } else if (ty->ty == AST_TYPE_TBD) {
+    return type_repository_tbd(typecheck->type_repo);
   }
 
   if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
-    struct ast_ty new_ty = copy_type(ty);
-    struct ast_ty resolved = resolve_type(typecheck, ty->pointer.pointee);
-    free_ty(new_ty.pointer.pointee, 0);
-    *new_ty.pointer.pointee = resolved;
-    return new_ty;
+    ty->pointer.pointee = resolve_type(typecheck, ty->pointer.pointee);
+  } else if (ty->ty == AST_TYPE_ARRAY) {
+    ty->array.element_ty = resolve_type(typecheck, ty->array.element_ty);
   }
 
+  struct ast_ty *target = type_repository_lookup_ty(typecheck->type_repo, ty);
+  if (target) {
+    return target;
+  }
+
+  // TODO: template types? other fancy types?
+  return type_repository_register(typecheck->type_repo, ty);
+
+  char type_name[1024];
+  type_name_into(ty, type_name, 1024);
+
+  // TODO: need to actually resolve / register the type
+  compiler_log(typecheck->compiler, LogLevelError, "typecheck",
+               "resolve_type not yet implemented beyond lookups in this new world (for %s)",
+               type_name);
+
+  return NULL;
+}
+
+struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *ty) {
+  if (ty->ty == AST_TYPE_VOID) {
+    return type_repository_void(typecheck->type_repo);
+  } else if (ty->ty == AST_TYPE_ERROR) {
+    return type_repository_error(typecheck->type_repo);
+  } else if (ty->ty == AST_TYPE_TBD) {
+    return type_repository_tbd(typecheck->type_repo);
+  }
+
+  // already exists?
+  struct ast_ty *target = type_repository_lookup_ty(typecheck->type_repo, ty);
+  if (target) {
+    return target;
+  }
+
+  // register the new type with resolved inner fields, which copies the type
+  // then, clean up the parser type - we're no longer going to use it
+  target = type_repository_register(typecheck->type_repo, ty);
+  free_ty(typecheck->compiler, ty, 0);
+  return target;
+
+#if 0
   if (ty->ty == AST_TYPE_ARRAY) {
     struct ast_ty new_ty = copy_type(ty);
     struct ast_ty resolved = resolve_type(typecheck, ty->array.element_ty);
@@ -118,6 +162,7 @@ struct ast_ty resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
   resolved_type.flags |= TYPE_FLAG_INDIRECT;
 
   return resolved_type;
+#endif
 }
 
 void resolve_template_type(struct typecheck *typecheck, struct ast_template_ty *templates,
@@ -133,8 +178,9 @@ void resolve_template_type(struct typecheck *typecheck, struct ast_template_ty *
   while (template) {
     if (!strcmp(template->name, ty->name)) {
       if (template->is_resolved) {
-        free_ty(ty, 0);
-        *ty = copy_type(&template->resolved);
+        free_ty(typecheck->compiler, ty, 0);
+        // TODO
+        // *ty = copy_type(&template->resolved);
       } else {
         ty->custom.is_template = 1;
       }

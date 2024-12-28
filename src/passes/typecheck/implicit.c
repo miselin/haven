@@ -5,16 +5,18 @@
 #include "internal.h"
 #include "types.h"
 
-int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
+int maybe_implicitly_convert(struct ast_ty **into_from, struct ast_ty **into_to) {
+  struct ast_ty *from = *into_from;
+  struct ast_ty *to = *into_to;
+
   if (type_is_tbd(to)) {
-    *to = *from;
+    *into_to = *into_from;
     return 1;
   }
 
   if (from->ty == AST_TYPE_NIL) {
     // nil can be coerced to any type
-    free_ty(from, 0);
-    *from = copy_type(to);
+    *into_from = *into_to;
     return 1;
   }
 
@@ -31,16 +33,14 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
     if (from->flags & TYPE_FLAG_CONSTANT && to->flags & TYPE_FLAG_CONSTANT) {
       int conversion = from->integer.width != to->integer.width;
 
-      // swap from/to so the result is the highest width
-      if (from->integer.width > to->integer.width) {
-        to->integer.width = from->integer.width;
-      } else {
-        from->integer.width = to->integer.width;
-      }
-
       // TODO: there be some additional checks around signed/unsigned conversion
       // e.g. make sure the conversion doesn't change the sign
-      from->integer.is_signed = to->integer.is_signed;
+      // swap from/to so the result is the highest width
+      if (from->integer.width > to->integer.width) {
+        *into_to = *into_from;
+      } else {
+        *into_from = *into_to;
+      }
 
       return conversion;
     }
@@ -51,8 +51,7 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
     }
 
     // convert the source width to the destinaiton width
-    from->integer.width = to->integer.width;
-    from->integer.is_signed = to->integer.is_signed;
+    *into_from = *into_to;
     return 1;
   } else if (from->ty == AST_TYPE_ENUM && to->ty == AST_TYPE_ENUM) {
     if (!(from->enumty.templates)) {
@@ -65,6 +64,8 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
       return 0;
     }
 
+    // TODO: this is broken by the type repository work; need a way to resolve the field
+#if 0
     int coerced = 0;
 
     // ensure the most specific type is used (e.g. resolved type)
@@ -72,10 +73,11 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
     struct ast_enum_field *to_field = to->enumty.fields;
     while (from_field && to_field) {
       if (from_field->has_inner && to_field->has_inner) {
-        if (from_field->inner.ty == AST_TYPE_CUSTOM && to_field->inner.ty != AST_TYPE_CUSTOM) {
+        if (from_field->inner->ty == AST_TYPE_CUSTOM && to_field->inner->ty != AST_TYPE_CUSTOM) {
           // bring across the resolved type
-          free_ty(&from_field->inner, 0);
-          from_field->inner = copy_type(&to_field->inner);
+          // TODO
+          // free_ty(&from_field->inner, 0);
+          // from_field->inner = copy_type(&to_field->inner);
           coerced = 1;
         }
       }
@@ -93,6 +95,7 @@ int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to) {
     }
 
     return coerced;
+#endif
   }
 
   return 0;

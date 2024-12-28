@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "compiler.h"
+#include "types.h"
 
 enum Options {
   O0 = 1,
@@ -72,6 +73,8 @@ struct compiler {
 
   struct search_dir *search_dirs;
   struct linker_option *linker_options;
+
+  struct type_repository *type_repository;
 
   const char *ld;
 };

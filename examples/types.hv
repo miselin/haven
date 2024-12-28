@@ -1,0 +1,20 @@
+
+type x = i32;
+type x = i32;
+
+type foo = struct {
+    i32 a;
+    i32 b;
+    float c;
+    x d;
+};
+
+type bar = enum {
+    A,
+    B,
+    C,
+    D
+};
+
+type whee = bar;
+
