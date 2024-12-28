@@ -21,14 +21,8 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast);
 static int typecheck_implicit_block(struct ast_block *ast);
 static int typecheck_implicit_stmt(struct ast_stmt *ast);
 static int typecheck_implicit_expr(struct ast_expr *ast);
-static int typecheck_implicit_struct_decl(struct ast_ty *decl);
 
-int maybe_implicitly_convert(struct ast_ty *from, struct ast_ty *to);
-
-static int is_bad_type(struct ast_ty *ty) {
-  // custom types should have been resolved by now
-  return type_is_error(ty) || type_is_tbd(ty) || ty->ty == AST_TYPE_CUSTOM;
-}
+int maybe_implicitly_convert(struct ast_ty **from, struct ast_ty **to);
 
 int typecheck_implicit_ast(struct ast_program *ast) {
   struct ast_toplevel *decl = ast->decls;
@@ -65,27 +59,9 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
       }
       total += rc;
     }
-  } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
-      return typecheck_implicit_struct_decl(&ast->tydecl.ty);
-    }
   }
 
   return total;
-}
-
-static int typecheck_implicit_struct_decl(struct ast_ty *decl) {
-  struct ast_struct_field *field = decl->structty.fields;
-  while (field) {
-    if (is_bad_type(field->ty)) {
-      fprintf(stderr, "struct %s field %s has unresolved type\n", decl->name, field->name);
-      return -1;
-    }
-
-    field = field->next;
-  }
-
-  return 0;
 }
 
 static int typecheck_implicit_block(struct ast_block *ast) {
@@ -186,9 +162,11 @@ static int typecheck_implicit_stmt(struct ast_stmt *ast) {
 }
 
 static int typecheck_implicit_expr(struct ast_expr *ast) {
+  fprintf(stderr, "typecheck implicit expr @ %s:%zd:%zd\n", ast->loc.file, ast->loc.line,
+          ast->loc.column);
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
-      switch (ast->ty.ty) {
+      switch (ast->ty->ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY: {
           struct ast_expr_list *node = ast->list;
@@ -324,12 +302,14 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
         }
       }
 
-      rc = typecheck_implicit_block(&ast->if_expr.else_block);
-      if (rc < 0) {
-        return -1;
-      }
+      if (ast->if_expr.has_else) {
+        rc = typecheck_implicit_block(&ast->if_expr.else_block);
+        if (rc < 0) {
+          return -1;
+        }
 
-      total += maybe_implicitly_convert(&ast->if_expr.else_block.ty, &ast->ty);
+        total += maybe_implicitly_convert(&ast->if_expr.else_block.ty, &ast->ty);
+      }
 
       return total + rc;
     } break;
@@ -412,7 +392,7 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
 
         total = rc;
 
-        struct ast_enum_field *field = ast->ty.enumty.fields;
+        struct ast_enum_field *field = ast->ty->enumty.fields;
         while (field) {
           if (!strcmp(ast->enum_init.enum_val_name.value.identv.ident, field->name)) {
             break;
@@ -427,8 +407,8 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
 
         // if after conversion the result type is a specialization, make sure the enum is set
         // accordingly
-        if (ast->ty.specialization_of) {
-          strncpy(ast->enum_init.enum_ty_name.value.identv.ident, ast->ty.name, 256);
+        if (ast->ty->specialization_of) {
+          strncpy(ast->enum_init.enum_ty_name.value.identv.ident, ast->ty->name, 256);
         }
 
         return total;

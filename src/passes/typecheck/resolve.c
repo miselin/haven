@@ -18,12 +18,6 @@ struct ast_ty *resolve_type(struct typecheck *typecheck, struct ast_ty *ty) {
     return type_repository_tbd(typecheck->type_repo);
   }
 
-  if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
-    ty->pointer.pointee = resolve_type(typecheck, ty->pointer.pointee);
-  } else if (ty->ty == AST_TYPE_ARRAY) {
-    ty->array.element_ty = resolve_type(typecheck, ty->array.element_ty);
-  }
-
   struct ast_ty *target = type_repository_lookup_ty(typecheck->type_repo, ty);
   if (target) {
     return target;
@@ -52,6 +46,21 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     return type_repository_tbd(typecheck->type_repo);
   }
 
+#if 0
+  if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
+    struct ast_ty *old_pointee = ty->pointer.pointee;
+    ty->pointer.pointee = resolve_parsed_type(typecheck, ty->pointer.pointee);
+    fprintf(stderr, "resolve_parsed_type pointee for %p = %p -> %p\n", (void *)ty,
+            (void *)old_pointee, (void *)ty->pointer.pointee);
+    free(old_pointee);
+  } else if (ty->ty == AST_TYPE_ARRAY) {
+    // parser allocs the element type, gotta tidy up
+    struct ast_ty *resolved = resolve_type(typecheck, ty->array.element_ty);
+    free_ty(typecheck->compiler, ty->array.element_ty, 1);
+    ty->array.element_ty = resolved;
+  }
+#endif
+
   // already exists?
   struct ast_ty *target = type_repository_lookup_ty(typecheck->type_repo, ty);
   if (target) {
@@ -61,7 +70,7 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
   // register the new type with resolved inner fields, which copies the type
   // then, clean up the parser type - we're no longer going to use it
   target = type_repository_register(typecheck->type_repo, ty);
-  free_ty(typecheck->compiler, ty, 0);
+  // free_ty(typecheck->compiler, ty, 0);
   return target;
 
 #if 0

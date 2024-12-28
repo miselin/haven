@@ -50,7 +50,7 @@ int maybe_implicitly_convert(struct ast_ty **into_from, struct ast_ty **into_to)
       return 0;
     }
 
-    // convert the source width to the destinaiton width
+    // convert the source width to the destination width
     *into_from = *into_to;
     return 1;
   } else if (from->ty == AST_TYPE_ENUM && to->ty == AST_TYPE_ENUM) {

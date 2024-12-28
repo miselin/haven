@@ -143,7 +143,7 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
       }
       INDENTED(indent + 2, "%s -> ", ast->iter.index.ident.value.identv.ident);
       if (ast->iter.index_vdecl) {
-        dump_ty(&ast->iter.index_vdecl->parser_ty);
+        dump_ty(ast->iter.index_vdecl->ty);
       } else {
         fprintf(stderr, "<invalid-type>");
       }
@@ -251,8 +251,17 @@ void dump_expr(struct ast_expr *ast, int indent) {
     } break;
 
     case AST_EXPR_TYPE_STRUCT_INIT:
-      INDENTED(indent, "StructInit\n");
-      dump_array(ast, indent + 1);
+      INDENTED(indent, "StructInit -> ");
+      dump_expr_ty(ast);
+      fprintf(stderr, "\n");
+
+      if (ast->list) {
+        struct ast_expr_list *node = ast->list;
+        while (node) {
+          dump_expr(node->expr, indent + 1);
+          node = node->next;
+        }
+      }
       break;
 
     case AST_EXPR_TYPE_BLOCK:

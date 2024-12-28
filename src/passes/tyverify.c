@@ -41,14 +41,14 @@ int typecheck_verify_ast(struct ast_program *ast) {
 
 static int typecheck_verify_toplevel(struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (is_bad_type(&ast->fdecl.retty)) {
+    if (is_bad_type(ast->fdecl.retty)) {
       fprintf(stderr, "function %s has unresolved return type\n",
               ast->fdecl.ident.value.identv.ident);
       return -1;
     }
 
     for (size_t i = 0; i < ast->fdecl.num_params; i++) {
-      struct ast_ty *param_ty = &ast->fdecl.params[i]->ty;
+      struct ast_ty *param_ty = ast->fdecl.params[i]->ty;
       if (is_bad_type(param_ty)) {
         fprintf(stderr, "function %s has unresolved parameter type for parameter %zd\n",
                 ast->fdecl.ident.value.identv.ident, i + 1);
@@ -62,7 +62,7 @@ static int typecheck_verify_toplevel(struct ast_toplevel *ast) {
       }
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    if (is_bad_type(&ast->vdecl.ty)) {
+    if (is_bad_type(ast->vdecl.ty)) {
       fprintf(stderr, "variable %s has unresolved type\n", ast->vdecl.ident.value.identv.ident);
       return -1;
     }
@@ -73,8 +73,8 @@ static int typecheck_verify_toplevel(struct ast_toplevel *ast) {
       }
     }
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    if (ast->tydecl.ty.ty == AST_TYPE_STRUCT) {
-      return typecheck_verify_struct_decl(&ast->tydecl.ty);
+    if (ast->tydecl.resolved->ty == AST_TYPE_STRUCT) {
+      return typecheck_verify_struct_decl(ast->tydecl.resolved);
     }
   }
 
@@ -113,7 +113,7 @@ static int typecheck_verify_stmt(struct ast_stmt *ast) {
       return typecheck_verify_expr(ast->expr);
 
     case AST_STMT_TYPE_LET: {
-      if (is_bad_type(&ast->let.ty)) {
+      if (is_bad_type(ast->let.ty)) {
         fprintf(stderr, "let %s has unresolved type\n", ast->let.ident.value.identv.ident);
         return -1;
       }
@@ -176,14 +176,14 @@ static int typecheck_verify_stmt(struct ast_stmt *ast) {
 }
 
 static int typecheck_verify_expr(struct ast_expr *ast) {
-  if (is_bad_type(&ast->ty)) {
+  if (is_bad_type(ast->ty)) {
     fprintf(stderr, "tyverify: expression node with type %d has unresolved type\n", ast->type);
     return -1;
   }
 
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
-      switch (ast->ty.ty) {
+      switch (ast->ty->ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY: {
           struct ast_expr_list *node = ast->list;
@@ -332,7 +332,7 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_PATTERN_MATCH:
       if (ast->pattern_match.inner_vdecl) {
-        if (is_bad_type(&ast->pattern_match.inner_vdecl->ty)) {
+        if (is_bad_type(ast->pattern_match.inner_vdecl->ty)) {
           fprintf(stderr, "pattern match inner vdecl has unresolved type\n");
           return -1;
         }
@@ -346,7 +346,7 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
         }
 
         // final sanity check of all field types
-        struct ast_enum_field *field = ast->ty.enumty.fields;
+        struct ast_enum_field *field = ast->ty->enumty.fields;
         while (field) {
           if (!strcmp(ast->enum_init.enum_val_name.value.identv.ident, field->name)) {
             break;
@@ -367,10 +367,10 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
           return -1;
         }
 
-        if (!same_type(&field->inner, &ast->enum_init.inner->ty)) {
+        if (!same_type(field->inner, ast->enum_init.inner->ty)) {
           char innerstr[256], fieldstr[256];
-          type_name_into(&ast->enum_init.inner->ty, innerstr, 256);
-          type_name_into(&field->inner, fieldstr, 256);
+          type_name_into(ast->enum_init.inner->ty, innerstr, 256);
+          type_name_into(field->inner, fieldstr, 256);
           fprintf(stderr,
                   "tyverify: enum field %s inner type does not match: wanted %s but got %s\n",
                   field->name, fieldstr, innerstr);
@@ -385,7 +385,7 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
           return -1;
         }
       } else {
-        if (is_bad_type(&ast->sizeof_expr.ty)) {
+        if (is_bad_type(ast->ty)) {
           fprintf(stderr, "tyverify: sizeof expression has unresolved type\n");
           return -1;
         }
@@ -397,8 +397,8 @@ static int typecheck_verify_expr(struct ast_expr *ast) {
       if (ast->box_expr.expr) {
         return typecheck_verify_expr(ast->box_expr.expr);
       }
-      if (ast->box_expr.ty) {
-        if (is_bad_type(ast->box_expr.ty)) {
+      if (ast->ty) {
+        if (is_bad_type(ast->ty)) {
           fprintf(stderr, "tyverify: box/unbox expression has unresolved type\n");
           return -1;
         }

@@ -5,6 +5,10 @@
 #include "types.h"
 #include "utility.h"
 
+// Free a parser-generated type. These can have annoying heap pointers that aren't in the type
+// repository and need to be freed.
+static void free_parser_ty(struct compiler *compiler, struct ast_ty *ty);
+
 void free_ast(struct compiler *compiler, struct ast_program *ast) {
   struct ast_toplevel *decl = ast->decls;
   while (decl) {
@@ -142,7 +146,7 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_CAST:
-      free_ty(compiler, &ast->cast.parsed_ty, 0);
+      free_parser_ty(compiler, &ast->cast.parsed_ty);
       free_expr(compiler, ast->cast.expr);
       break;
 
@@ -217,7 +221,7 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_UNION_INIT:
-      free_ty(compiler, &ast->union_init.parsed_ty, 0);
+      free_parser_ty(compiler, &ast->union_init.parsed_ty);
       free_expr(compiler, ast->union_init.inner);
       break;
 
@@ -225,13 +229,13 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       if (ast->sizeof_expr.expr) {
         free_expr(compiler, ast->sizeof_expr.expr);
       } else {
-        free_ty(compiler, &ast->sizeof_expr.parsed_ty, 0);
+        free_parser_ty(compiler, &ast->sizeof_expr.parsed_ty);
       }
       break;
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      free_ty(compiler, ast->box_expr.parsed_ty, 1);
+      free_parser_ty(compiler, ast->box_expr.parsed_ty);
       if (ast->box_expr.expr) {
         free_expr(compiler, ast->box_expr.expr);
       }
@@ -241,7 +245,7 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       fprintf(stderr, "unhandled free for expr type %d\n", ast->type);
   }
 
-  free_ty(compiler, &ast->parsed_ty, 0);
+  free_parser_ty(compiler, &ast->parsed_ty);
   free(ast);
 }
 
@@ -262,7 +266,7 @@ void free_fdecl(struct compiler *compiler, struct ast_fdecl *ast, int heap) {
     free(ast->intrinsic_tys);
   }
 
-  free_ty(compiler, &ast->parsed_retty, 0);
+  free_parser_ty(compiler, &ast->parsed_retty);
   if (heap) {
     free(ast);
   }
@@ -273,34 +277,36 @@ void free_vdecl(struct compiler *compiler, struct ast_vdecl *ast, int heap) {
     free_expr(compiler, ast->init_expr);
   }
 
-  free_ty(compiler, &ast->parser_ty, 0);
+  free_parser_ty(compiler, &ast->parser_ty);
   if (heap) {
     free(ast);
   }
 }
 
 void free_tydecl(struct compiler *compiler, struct ast_tydecl *ast, int heap) {
-  free_ty(compiler, &ast->parsed_ty, 0);
+  free_parser_ty(compiler, &ast->parsed_ty);
   if (heap) {
     free(ast);
   }
 }
 
 void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap) {
+  /**
+   * With the type repository, the only thing we need to free here is carriers of types.
+   * Resolved types are shared, and should not be freed. When the type repository is
+   * destroyed, the types themselves will all be freed.
+   *
+   * For example, an array of types needs to be freed, but the types can be left alone.
+   */
   if (ty->specialization_of) {
     free(ty->specialization_of);
     ty->specialization_of = NULL;
-  }
-
-  if (ty->ty == AST_TYPE_ARRAY) {
-    ty->array.element_ty = NULL;
   }
 
   if (ty->ty == AST_TYPE_STRUCT) {
     struct ast_struct_field *field = ty->structty.fields;
     while (field) {
       struct ast_struct_field *next = field->next;
-      free_ty(compiler, &field->parsed_ty, 0);
       free(field);
       field = next;
     }
@@ -312,9 +318,6 @@ void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap) {
     struct ast_enum_field *field = ty->enumty.fields;
     while (field) {
       struct ast_enum_field *next = field->next;
-      if (field->has_inner) {
-        free_ty(compiler, &field->parser_inner, 0);
-      }
       free(field);
       field = next;
     }
@@ -339,21 +342,13 @@ void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap) {
     }
 
     ty->tmpl.inners = NULL;
-
-    free_ty(compiler, ty->tmpl.outer, 1);
   }
 
   if (ty->ty == AST_TYPE_FUNCTION) {
-    free_ty(compiler, ty->function.retty, 1);
-    for (size_t i = 0; i < ty->function.num_args; i++) {
-      free_ty(compiler, ty->function.args[i], 1);
-    }
-
     free(ty->function.args);
   }
 
   if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
-    free_ty(compiler, ty->pointer.pointee, 1);
     ty->pointer.pointee = NULL;
   }
 
@@ -361,6 +356,96 @@ void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap) {
     if (heap) {
       free(ty);
     }
+  }
+}
+
+void free_parser_ty(struct compiler *compiler, struct ast_ty *ty) {
+  if (ty->specialization_of) {
+    free(ty->specialization_of);
+    ty->specialization_of = NULL;
+  }
+
+  switch (ty->ty) {
+    case AST_TYPE_ERROR:
+    case AST_TYPE_TBD:
+    case AST_TYPE_VOID:
+    case AST_TYPE_INTEGER:
+    case AST_TYPE_STRING:
+    case AST_TYPE_FLOAT:
+    case AST_TYPE_FVEC:
+    case AST_TYPE_MATRIX:
+    case AST_TYPE_CUSTOM:
+    case AST_TYPE_NIL:
+      // no complex data to free
+      break;
+
+    case AST_TYPE_ENUM: {
+      struct ast_enum_field *field = ty->enumty.fields;
+      while (field) {
+        struct ast_enum_field *next = field->next;
+        free_parser_ty(compiler, &field->parser_inner);
+        free(field);
+        field = next;
+      }
+
+      struct ast_template_ty *template = ty->enumty.templates;
+      while (template) {
+        struct ast_template_ty *next = template->next;
+        free(template);
+        template = next;
+      }
+
+      ty->enumty.fields = NULL;
+      ty->enumty.templates = NULL;
+    } break;
+
+    case AST_TYPE_STRUCT: {
+      struct ast_struct_field *field = ty->structty.fields;
+      while (field) {
+        struct ast_struct_field *next = field->next;
+        free_parser_ty(compiler, &field->parsed_ty);
+        free(field);
+        field = next;
+      }
+    } break;
+
+    case AST_TYPE_ARRAY:
+      if (ty->array.element_ty) {
+        free_parser_ty(compiler, ty->array.element_ty);
+        free(ty->array.element_ty);
+      }
+      ty->array.element_ty = NULL;
+      break;
+
+    case AST_TYPE_TEMPLATE: {
+      struct ast_template_ty *inner = ty->tmpl.inners;
+      while (inner) {
+        struct ast_template_ty *next = inner->next;
+        free_parser_ty(compiler, &inner->parsed_ty);
+        free(inner);
+        inner = next;
+      }
+
+      ty->tmpl.inners = NULL;
+    } break;
+
+    case AST_TYPE_FUNCTION: {
+      free_parser_ty(compiler, ty->function.retty);
+      free(ty->function.retty);
+
+      for (size_t i = 0; i < ty->function.num_args; i++) {
+        free_parser_ty(compiler, ty->function.args[i]);
+        free(ty->function.args[i]);
+      }
+      free(ty->function.args);
+    } break;
+
+    case AST_TYPE_POINTER:
+    case AST_TYPE_BOX:
+      free_parser_ty(compiler, ty->pointer.pointee);
+      free(ty->pointer.pointee);
+      ty->pointer.pointee = NULL;
+      break;
   }
 }
 

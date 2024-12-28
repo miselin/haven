@@ -108,7 +108,7 @@ int compiler_log(struct compiler *compiler, enum LogLevel level, const char *sub
   va_start(ap, fmt);
 
   color(compiler, level_color, Bold);
-  int n = fprintf(stderr, "%s: %s: ", prefix, subsys);
+  int n = fprintf(stderr, "%s: %8s: ", prefix, subsys);
   n += vfprintf(stderr, fmt, ap);
   n += fprintf(stderr, "\n");
   color(compiler, Reset, None);

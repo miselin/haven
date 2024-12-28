@@ -132,7 +132,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from parse: %d", rc);
 
-#if 0
   if (rc == 0) {
     // pre-typecheck semantic pass
     struct semantic *semantic = semantic_new(parser_get_ast(parser), compiler, 0);
@@ -155,7 +154,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   if (until == PassCFold) {
     goto out;
   }
-#endif
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from cfold: %d", rc);
 

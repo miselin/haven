@@ -415,7 +415,7 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
         return 0;
       }
 
-      struct ast_enum_field *field = ast->ty.enumty.fields;
+      struct ast_enum_field *field = ast->ty->enumty.fields;
       while (field) {
         if (!strcmp(field->name, ast->pattern_match.name.value.identv.ident)) {
           break;
@@ -468,17 +468,17 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
 }
 
 static int check_semantic_tydecl(struct semantic *semantic, struct ast_tydecl *ast) {
-  switch (ast->ty.ty) {
+  switch (ast->parsed_ty.ty) {
     case AST_TYPE_ENUM:
-      if (!ast->ty.enumty.fields) {
+      if (!ast->parsed_ty.enumty.fields) {
         semantic_diag_at(semantic, DiagError, NULL, "enum type %s must have at least one field",
-                         ast->ty.name);
+                         ast->parsed_ty.name);
         return -1;
       }
 
-      if (ast->ty.enumty.num_fields >= INT32_MAX) {
+      if (ast->parsed_ty.enumty.num_fields >= INT32_MAX) {
         semantic_diag_at(semantic, DiagError, NULL, "enum type %s has too many fields",
-                         ast->ty.name);
+                         ast->parsed_ty.name);
         return -1;
       }
       break;

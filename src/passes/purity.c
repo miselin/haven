@@ -143,7 +143,7 @@ static int check_purity_stmt(struct ast_stmt *ast) {
 static int check_purity_expr(struct ast_expr *ast) {
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
-      switch (ast->ty.ty) {
+      switch (ast->parsed_ty.ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY: {
           struct ast_expr_list *node = ast->list;

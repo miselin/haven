@@ -234,6 +234,7 @@ struct ast_ty ptr_type(struct ast_ty pointee) {
 
 struct ast_ty *ptr_pointee_type(struct ast_ty *ty) {
   if (ty->ty != AST_TYPE_POINTER) {
+    fprintf(stderr, "yo not a pointer %p\n", (void *)ty);
     return NULL;
   }
 
@@ -438,7 +439,7 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       break;
 
     case AST_TYPE_POINTER:
-      offset += snprintf(buf, maxlen, "Pointer <");
+      offset += snprintf(buf, maxlen, "Pointer %p <", (void *)ty);
       offset += type_name_into_ctx(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset, ctx);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;
@@ -557,94 +558,121 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
     new_type->specialization_of = strdup(ty->specialization_of);
   }
 
-  if (ty->ty == AST_TYPE_ARRAY) {
-    new_type->array.element_ty = type_repository_lookup_ty(repo, ty->array.element_ty);
-  } else if (ty->ty == AST_TYPE_STRUCT) {
-    new_type->structty.fields = NULL;
-    struct ast_struct_field *field = ty->structty.fields;
-    struct ast_struct_field *last = NULL;
-    while (field) {
-      struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
-      *new_field = *field;
-      // new_field->ty = copy_type(field->ty ? field->ty : &field->parsed_ty);
-      field = field->next;
+  switch (ty->ty) {
+    case AST_TYPE_ERROR:
+    case AST_TYPE_TBD:
+    case AST_TYPE_INTEGER:
+    case AST_TYPE_STRING:
+    case AST_TYPE_FLOAT:
+    case AST_TYPE_FVEC:
+    case AST_TYPE_VOID:
+    case AST_TYPE_CUSTOM:
+    case AST_TYPE_NIL:
+    case AST_TYPE_MATRIX:
+      // no complex data to copy
+      break;
 
-      if (last == NULL) {
-        new_type->structty.fields = new_field;
-      } else {
-        last->next = new_field;
+    case AST_TYPE_ARRAY:
+      new_type->array.element_ty = type_repository_lookup_ty(repo, ty->array.element_ty);
+      break;
+
+    case AST_TYPE_STRUCT: {
+      new_type->structty.fields = NULL;
+      struct ast_struct_field *field = ty->structty.fields;
+      struct ast_struct_field *last = NULL;
+      while (field) {
+        struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
+        *new_field = *field;
+        new_field->ty = type_repository_lookup_ty(repo, field->ty ? field->ty : &field->parsed_ty);
+        field = field->next;
+
+        if (last == NULL) {
+          new_type->structty.fields = new_field;
+        } else {
+          last->next = new_field;
+        }
+
+        last = new_field;
+      }
+    } break;
+
+    case AST_TYPE_ENUM: {
+      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *last = NULL;
+      while (field) {
+        struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
+        *new_field = *field;
+        if (field->has_inner) {
+          new_field->inner =
+              type_repository_lookup_ty(repo, field->inner ? field->inner : &field->parser_inner);
+        }
+        field = field->next;
+
+        if (last == NULL) {
+          new_type->enumty.fields = new_field;
+        } else {
+          last->next = new_field;
+        }
+
+        last = new_field;
       }
 
-      last = new_field;
-    }
-  } else if (ty->ty == AST_TYPE_ENUM) {
-    struct ast_enum_field *field = ty->enumty.fields;
-    struct ast_enum_field *last = NULL;
-    while (field) {
-      struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
-      *new_field = *field;
-      if (field->has_inner) {
-        // new_field->inner = copy_type(field->inner);
+      struct ast_template_ty *template = ty->enumty.templates;
+      struct ast_template_ty *last_template = NULL;
+      while (template) {
+        struct ast_template_ty *new_template = calloc(1, sizeof(struct ast_template_ty));
+        *new_template = *template;
+        if (template->is_resolved) {
+          new_template->resolved = type_repository_lookup_ty(repo, template->resolved);
+        }
+        template = template->next;
+
+        if (last_template == NULL) {
+          new_type->enumty.templates = new_template;
+        } else {
+          last_template->next = new_template;
+        }
+
+        last_template = new_template;
       }
-      field = field->next;
+    } break;
 
-      if (last == NULL) {
-        new_type->enumty.fields = new_field;
-      } else {
-        last->next = new_field;
+    case AST_TYPE_TEMPLATE: {
+      new_type->tmpl.outer = type_repository_lookup_ty(repo, ty->tmpl.outer);
+
+      struct ast_template_ty *inner = ty->tmpl.inners;
+      struct ast_template_ty *last_inner = NULL;
+      while (inner) {
+        struct ast_template_ty *new_inner = calloc(1, sizeof(struct ast_template_ty));
+        *new_inner = *inner;
+        if (inner->is_resolved) {
+          new_inner->resolved = type_repository_lookup_ty(repo, inner->resolved);
+        }
+        inner = inner->next;
+
+        if (last_inner == NULL) {
+          new_type->tmpl.inners = new_inner;
+        } else {
+          last_inner->next = new_inner;
+        }
+
+        last_inner = new_inner;
       }
+    } break;
 
-      last = new_field;
-    }
-
-    struct ast_template_ty *template = ty->enumty.templates;
-    struct ast_template_ty *last_template = NULL;
-    while (template) {
-      struct ast_template_ty *new_template = calloc(1, sizeof(struct ast_template_ty));
-      *new_template = *template;
-      if (template->is_resolved) {
-        new_template->resolved = type_repository_lookup_ty(repo, template->resolved);
-      }
-      template = template->next;
-
-      if (last_template == NULL) {
-        new_type->enumty.templates = new_template;
-      } else {
-        last_template->next = new_template;
-      }
-
-      last_template = new_template;
-    }
-  } else if (ty->ty == AST_TYPE_TEMPLATE) {
-    new_type->tmpl.outer = type_repository_lookup_ty(repo, ty->tmpl.outer);
-
-    struct ast_template_ty *inner = ty->tmpl.inners;
-    struct ast_template_ty *last_inner = NULL;
-    while (inner) {
-      struct ast_template_ty *new_inner = calloc(1, sizeof(struct ast_template_ty));
-      *new_inner = *inner;
-      if (inner->is_resolved) {
-        new_inner->resolved = type_repository_lookup_ty(repo, inner->resolved);
-      }
-      inner = inner->next;
-
-      if (last_inner == NULL) {
-        new_type->tmpl.inners = new_inner;
-      } else {
-        last_inner->next = new_inner;
+    case AST_TYPE_FUNCTION: {
+      new_type->function.args = calloc(ty->function.num_args, sizeof(struct ast_ty *));
+      for (size_t i = 0; i < ty->function.num_args; i++) {
+        new_type->function.args[i] = type_repository_lookup_ty(repo, ty->function.args[i]);
       }
 
-      last_inner = new_inner;
-    }
-  } else if (ty->ty == AST_TYPE_FUNCTION) {
-    new_type->function.args = calloc(ty->function.num_args, sizeof(struct ast_ty *));
-    for (size_t i = 0; i < ty->function.num_args; i++) {
-      new_type->function.args[i] = type_repository_lookup_ty(repo, ty->function.args[i]);
-    }
+      new_type->function.retty = type_repository_lookup_ty(repo, ty->function.retty);
+    } break;
 
-    new_type->function.retty = type_repository_lookup_ty(repo, ty->function.retty);
-  } else if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
-    new_type->pointer.pointee = type_repository_lookup_ty(repo, ty->pointer.pointee);
+    case AST_TYPE_POINTER:
+    case AST_TYPE_BOX: {
+      new_type->pointer.pointee = type_repository_lookup_ty(repo, ty->pointer.pointee);
+    } break;
   }
 
   return new_type;

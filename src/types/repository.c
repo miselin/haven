@@ -8,9 +8,11 @@
 
 struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty);
 
+static size_t integer_index(size_t width, size_t is_constant);
+
 struct type_repository {
-  struct ast_ty signed_integer_types[4];    // i8, i16, i32, i64
-  struct ast_ty unsigned_integer_types[4];  // u8, u16, u32, u64
+  struct ast_ty signed_integer_types[10];    // i1, i8, i16, i32, i64
+  struct ast_ty unsigned_integer_types[10];  // u1, u8, u16, u32, u64
   struct ast_ty float_type;
 
   struct ast_ty tbd_type;
@@ -32,11 +34,30 @@ struct type_repository *new_type_repository(struct compiler *compiler) {
   repo->compiler = compiler;
   repo->types = new_kv();
 
+  // i1 / u1
+  repo->signed_integer_types[0] =
+      (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 1, .width = 1}};
+  repo->unsigned_integer_types[0] =
+      (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 0, .width = 1}};
+  repo->signed_integer_types[5] = (struct ast_ty){
+      .ty = AST_TYPE_INTEGER, .integer = {.is_signed = 1, .width = 1}, .flags = TYPE_FLAG_CONSTANT};
+  repo->unsigned_integer_types[5] = (struct ast_ty){
+      .ty = AST_TYPE_INTEGER, .integer = {.is_signed = 0, .width = 1}, .flags = TYPE_FLAG_CONSTANT};
+
+  // 8, 16, 32, 64 bit signed/unsigned
   for (size_t i = 0; i < 4; ++i) {
-    repo->signed_integer_types[i] =
+    repo->signed_integer_types[i + 1] =
         (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 1, .width = 8U << i}};
-    repo->unsigned_integer_types[i] =
+    repo->signed_integer_types[i + 1 + 5] =
+        (struct ast_ty){.ty = AST_TYPE_INTEGER,
+                        .integer = {.is_signed = 1, .width = 8U << i},
+                        .flags = TYPE_FLAG_CONSTANT};
+    repo->unsigned_integer_types[i + 1] =
         (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 0, .width = 8U << i}};
+    repo->unsigned_integer_types[i + 1 + 5] =
+        (struct ast_ty){.ty = AST_TYPE_INTEGER,
+                        .integer = {.is_signed = 0, .width = 8U << i},
+                        .flags = TYPE_FLAG_CONSTANT};
   }
 
   repo->tbd_type = type_tbd();
@@ -50,23 +71,22 @@ struct type_repository *new_type_repository(struct compiler *compiler) {
 
 struct ast_ty *type_repository_register(struct type_repository *repo, struct ast_ty *ty) {
   if (type_is_error(ty) || type_is_tbd(ty)) {
-    compiler_log(repo->compiler, LogLevelError, "type_repository", "type %s is an error type",
-                 ty->name);
+    compiler_log(repo->compiler, LogLevelError, "typerepo", "type %s is an error type", ty->name);
     return NULL;
   }
 
   if (ty->ty == AST_TYPE_CUSTOM) {
-    compiler_log(repo->compiler, LogLevelError, "type_repository",
+    compiler_log(repo->compiler, LogLevelError, "typerepo",
                  "type %s is a custom type, needs to be resolved first", ty->name);
     return NULL;
   }
 
   char name[1024];
   if (ty->ty == AST_TYPE_INTEGER) {
-    // not an error to re-register these
-    if (ty->integer.width == 8 || ty->integer.width == 16 || ty->integer.width == 32 ||
-        ty->integer.width == 64) {
-      return &repo->signed_integer_types[(ty->integer.width / 8) - 1];
+    size_t index = integer_index(ty->integer.width, ty->flags & TYPE_FLAG_CONSTANT);
+    if (index < 10) {
+      return ty->integer.is_signed ? &repo->signed_integer_types[index]
+                                   : &repo->unsigned_integer_types[index];
     }
   } else if (ty->ty == AST_TYPE_FLOAT) {
     return &repo->float_type;
@@ -78,8 +98,7 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
 
   // do we need to add it?
   if (kv_lookup(repo->types, name)) {
-    compiler_log(repo->compiler, LogLevelError, "type_repository", "type %s already registered",
-                 name);
+    compiler_log(repo->compiler, LogLevelError, "typerepo", "type %s already registered", name);
     return NULL;
   }
 
@@ -87,7 +106,7 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
   entry->ty = copy_type(repo, ty);
   entry->is_alias = 0;
 
-  compiler_log(repo->compiler, LogLevelDebug, "type_repository", "registering type %s", name);
+  compiler_log(repo->compiler, LogLevelDebug, "typerepo", "registering type %s", name);
   kv_insert(repo->types, name, entry);
 
   return entry->ty;
@@ -96,21 +115,20 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
 struct ast_ty *type_repository_register_alias(struct type_repository *repo, const char *name,
                                               struct ast_ty *ty) {
   if (type_is_error(ty) || type_is_tbd(ty)) {
-    compiler_log(repo->compiler, LogLevelError, "type_repository",
+    compiler_log(repo->compiler, LogLevelError, "typerepo",
                  "type %s is an error type, won't register alias %s", ty->name, name);
   }
 
   struct type_repository_entry *entry = kv_lookup(repo->types, name);
   if (entry) {
-    compiler_log(repo->compiler, LogLevelError, "type_repository", "alias %s already registered",
-                 name);
+    compiler_log(repo->compiler, LogLevelError, "typerepo", "alias %s already registered", name);
     return NULL;
   }
 
   struct ast_ty *target = type_repository_lookup_ty(repo, ty);
   if (!target) {
-    compiler_log(repo->compiler, LogLevelError, "type_repository",
-                 "alias %s references unknown type %s", name, ty->name);
+    compiler_log(repo->compiler, LogLevelError, "typerepo", "alias %s references unknown type %s",
+                 name, ty->name);
     return NULL;
   }
 
@@ -118,7 +136,7 @@ struct ast_ty *type_repository_register_alias(struct type_repository *repo, cons
   entry->ty = target;
   entry->is_alias = 1;
 
-  compiler_log(repo->compiler, LogLevelDebug, "type_repository", "registering alias %s", name);
+  compiler_log(repo->compiler, LogLevelDebug, "typerepo", "registering alias %s", name);
   kv_insert(repo->types, name, entry);
 
   return target;
@@ -135,16 +153,19 @@ struct ast_ty *type_repository_lookup_ty(struct type_repository *repo, struct as
   }
 
   if (ty->ty == AST_TYPE_INTEGER) {
-    for (size_t i = 0; i < 4; ++i) {
-      if (repo->signed_integer_types[i].integer.width == ty->integer.width) {
-        return &repo->signed_integer_types[i];
-      }
-      if (repo->unsigned_integer_types[i].integer.width == ty->integer.width) {
-        return &repo->unsigned_integer_types[i];
-      }
+    size_t index = integer_index(ty->integer.width, ty->flags & TYPE_FLAG_CONSTANT);
+    if (index < 10) {
+      return ty->integer.is_signed ? &repo->signed_integer_types[index]
+                                   : &repo->unsigned_integer_types[index];
     }
   } else if (ty->ty == AST_TYPE_FLOAT) {
     return &repo->float_type;
+  } else if (ty->ty == AST_TYPE_VOID) {
+    return &repo->void_type;
+  } else if (ty->ty == AST_TYPE_ERROR) {
+    return &repo->error_type;
+  } else if (ty->ty == AST_TYPE_TBD) {
+    return &repo->tbd_type;
   }
 
   char name[1024];
@@ -172,7 +193,7 @@ int type_repository_is_shared_type(struct type_repository *repo, struct ast_ty *
   }
 
   if (ty->ty == AST_TYPE_INTEGER) {
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < 10; ++i) {
       if (ty == &repo->signed_integer_types[i] || ty == &repo->unsigned_integer_types[i]) {
         return 1;
       }
@@ -184,14 +205,20 @@ int type_repository_is_shared_type(struct type_repository *repo, struct ast_ty *
   return 0;
 }
 
+static void type_repository_free(struct type_repository *repo,
+                                 struct type_repository_entry *entry) {
+  if (!entry->is_alias) {
+    free_ty(repo->compiler, entry->ty, 1);
+  }
+
+  free(entry);
+}
+
 void type_repostory_remove(struct type_repository *repo, const char *name) {
   struct type_repository_entry *entry = kv_lookup(repo->types, name);
   if (entry) {
     kv_delete(repo->types, name);
-    if (!entry->is_alias) {
-      free_ty(repo->compiler, entry->ty, 1);
-    }
-    free(entry);
+    type_repository_free(repo, entry);
   }
 }
 
@@ -199,11 +226,27 @@ void destroy_type_repository(struct type_repository *repo) {
   void *iter = kv_iter(repo->types);
   while (iter) {
     struct type_repository_entry *entry = kv_next(&iter);
-    if (!entry->is_alias) {
-      free_ty(repo->compiler, entry->ty, 1);
-    }
-    free(entry);
+    type_repository_free(repo, entry);
   }
   destroy_kv(repo->types);
   free(repo);
+}
+
+static size_t integer_index(size_t width, size_t is_constant) {
+  size_t base = is_constant ? 5 : 0;
+
+  switch (width) {
+    case 1:
+      return 0 + base;
+    case 8:
+      return 1 + base;
+    case 16:
+      return 2 + base;
+    case 32:
+      return 3 + base;
+    case 64:
+      return 4 + base;
+    default:
+      return ~0U;
+  }
 }

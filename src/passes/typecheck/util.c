@@ -27,6 +27,7 @@ int binary_mismatch_ok(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
 
   return 0;
 }
+
 int check_matrix_binary_op(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
   if (lhs->ty != AST_TYPE_MATRIX && rhs->ty != AST_TYPE_MATRIX) {
     return 0;
