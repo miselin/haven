@@ -1,25 +1,20 @@
-#include <ctype.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "ast.h"
-#include "kv.h"
-#include "scope.h"
-#include "typecheck.h"
 #include "types.h"
-#include "utility.h"
 
 struct purity {
   struct ast_program *ast;
   struct compiler *compiler;
+  struct ast_fdecl *current_function;
+  int errors;
 };
 
 int check_purity_ast(struct ast_program *ast);
-static int check_purity_toplevel(struct ast_toplevel *ast);
-static int check_purity_block(struct ast_block *ast);
-static int check_purity_stmt(struct ast_stmt *ast);
-static int check_purity_expr(struct ast_expr *ast);
+static int check_purity_expr(struct purity *purity, struct ast_expr *ast);
+
+static enum VisitorResult purity_visitor(struct ast_visitor_node *node, void *user_data);
 
 struct purity *purity_new(struct ast_program *ast, struct compiler *compiler) {
   struct purity *purity = calloc(1, sizeof(struct purity));
@@ -29,157 +24,38 @@ struct purity *purity_new(struct ast_program *ast, struct compiler *compiler) {
 }
 
 int purity_run(struct purity *purity) {
-  return check_purity_ast(purity->ast);
+  ast_visit(purity->compiler, purity->ast, purity_visitor, purity);
+  return purity->errors;
 }
 
 void purity_destroy(struct purity *purity) {
   free(purity);
 }
 
-int check_purity_ast(struct ast_program *ast) {
-  struct ast_toplevel *decl = ast->decls;
-  int total = 0;
-  while (decl) {
-    int rc = check_purity_toplevel(decl);
-    if (rc < 0) {
-      return rc;
+static enum VisitorResult purity_visitor(struct ast_visitor_node *node, void *user_data) {
+  struct purity *purity = user_data;
+
+  if (node->toplevel) {
+    if (node->toplevel->type == AST_DECL_TYPE_FDECL) {
+      purity->current_function = &node->toplevel->fdecl;
     }
-    total += rc;
-    decl = decl->next;
-  }
-
-  return total;
-}
-
-static int check_purity_toplevel(struct ast_toplevel *ast) {
-  if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (ast->fdecl.flags & DECL_FLAG_IMPURE) {
-      return 0;
-    }
-
-    if (ast->fdecl.body) {
-      if (check_purity_block(ast->fdecl.body) < 0) {
-        fprintf(stderr,
-                "function %s is impure - it reads or writes memory, or calls an impure function\n",
-                ast->fdecl.ident.value.identv.ident);
-        return -1;
-      }
+  } else if (node->expr) {
+    // no need to process expressions in explicitly marked impure functions
+    if (purity->current_function && (purity->current_function->flags & DECL_FLAG_IMPURE) == 0) {
+      check_purity_expr(purity, node->expr);
     }
   }
 
-  return 0;
+  return purity->errors ? VisitorStop : VisitorContinue;
 }
 
-static int check_purity_block(struct ast_block *ast) {
-  struct ast_stmt *stmt = ast->stmt;
-  while (stmt) {
-    if (check_purity_stmt(stmt) < 0) {
-      return -1;
-    }
-    stmt = stmt->next;
-  }
-
-  return 0;
-}
-
-static int check_purity_stmt(struct ast_stmt *ast) {
+static int check_purity_expr(struct purity *purity, struct ast_expr *ast) {
   switch (ast->type) {
-    case AST_STMT_TYPE_EXPR:
-      return check_purity_expr(ast->expr);
-
-    case AST_STMT_TYPE_LET: {
-      return check_purity_expr(ast->let.init_expr);
-    } break;
-
-    case AST_STMT_TYPE_ITER: {
-      if (check_purity_expr(ast->iter.range.start) < 0) {
-        return -1;
-      }
-
-      if (check_purity_expr(ast->iter.range.end) < 0) {
-        return -1;
-      }
-
-      if (ast->iter.range.step) {
-        if (check_purity_expr(ast->iter.range.step) < 0) {
-          return -1;
-        }
-      }
-
-      return check_purity_block(&ast->iter.block);
-    } break;
-
-    case AST_STMT_TYPE_STORE: {
-      return -1;
-    } break;
-
-    case AST_STMT_TYPE_RETURN: {
-      return check_purity_expr(ast->expr);
-    } break;
-
-    case AST_STMT_TYPE_DEFER: {
-      return check_purity_expr(ast->expr);
-    } break;
-
-    case AST_STMT_TYPE_WHILE: {
-      if (check_purity_expr(ast->while_stmt.cond) < 0) {
-        return -1;
-      }
-
-      return check_purity_block(&ast->while_stmt.block);
-    } break;
-
-    case AST_STMT_TYPE_BREAK:
-    case AST_STMT_TYPE_CONTINUE:
+    case AST_EXPR_TYPE_CONSTANT:
       break;
 
-    default:
-      fprintf(stderr, "purity: unhandled statement type %d\n", ast->type);
-  }
-
-  return 0;
-}
-
-static int check_purity_expr(struct ast_expr *ast) {
-  switch (ast->type) {
-    case AST_EXPR_TYPE_CONSTANT: {
-      switch (ast->parsed_ty.ty) {
-        case AST_TYPE_FVEC:
-        case AST_TYPE_ARRAY: {
-          struct ast_expr_list *node = ast->list;
-          int total = 0;
-          while (node) {
-            int rc = check_purity_expr(node->expr);
-            if (rc < 0) {
-              return -1;
-            }
-            total += rc;
-            node = node->next;
-          }
-
-          return total;
-        } break;
-        default:
-          break;
-      }
-    } break;
-
-    case AST_EXPR_TYPE_STRUCT_INIT: {
-      struct ast_expr_list *node = ast->list;
-      int total = 0;
-      while (node) {
-        int rc = check_purity_expr(node->expr);
-        if (rc < 0) {
-          return -1;
-        }
-
-        total += rc;
-
-        node = node->next;
-      }
-
-      return total;
-    } break;
+    case AST_EXPR_TYPE_STRUCT_INIT:
+      break;
 
     case AST_EXPR_TYPE_VARIABLE:
       break;
@@ -187,125 +63,59 @@ static int check_purity_expr(struct ast_expr *ast) {
     case AST_EXPR_TYPE_ARRAY_INDEX:
       break;
 
-    case AST_EXPR_TYPE_BINARY: {
-      if (check_purity_expr(ast->binary.lhs) < 0) {
-        return -1;
-      }
-      if (check_purity_expr(ast->binary.rhs) < 0) {
-        return -1;
-      }
-    } break;
+    case AST_EXPR_TYPE_BINARY:
+      break;
 
-    case AST_EXPR_TYPE_BLOCK: {
-      return check_purity_block(&ast->block);
-    } break;
+    case AST_EXPR_TYPE_BLOCK:
+      break;
 
     case AST_EXPR_TYPE_CALL: {
       if (ast->call.fdecl->flags & DECL_FLAG_IMPURE) {
-        // cannot call impure functions from pure functions
-        return -1;
-      }
-
-      struct ast_expr_list *args = ast->call.args;
-      while (args) {
-        if (check_purity_expr(args->expr) < 0) {
-          return -1;
-        }
-
-        args = args->next;
+        purity->errors++;
       }
     } break;
 
     case AST_EXPR_TYPE_DEREF:
+      if (ast->deref.is_ptr) {
+        purity->errors++;
+      }
       break;
 
     case AST_EXPR_TYPE_VOID:
       break;
 
-    case AST_EXPR_TYPE_CAST: {
-      return check_purity_expr(ast->cast.expr);
-    } break;
+    case AST_EXPR_TYPE_CAST:
+      break;
 
-    case AST_EXPR_TYPE_IF: {
-      if (check_purity_expr(ast->if_expr.cond) < 0) {
-        return -1;
-      }
+    case AST_EXPR_TYPE_IF:
+      break;
 
-      if (check_purity_block(&ast->if_expr.then_block) < 0) {
-        return -1;
-      }
-
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
-        while (elseif) {
-          if (check_purity_expr(elseif->cond) < 0) {
-            return -1;
-          }
-
-          if (check_purity_block(&elseif->block) < 0) {
-            return -1;
-          }
-
-          elseif = elseif->next;
-        }
-      }
-
-      if (check_purity_block(&ast->if_expr.else_block) < 0) {
-        return -1;
-      }
-    } break;
-
-    case AST_EXPR_TYPE_ASSIGN: {
-      return check_purity_expr(ast->assign.expr);
-    } break;
+    case AST_EXPR_TYPE_ASSIGN:
+      break;
 
     case AST_EXPR_TYPE_REF:
       break;
 
-    case AST_EXPR_TYPE_LOAD: {
-      return -1;
-    } break;
+    case AST_EXPR_TYPE_LOAD:
+      purity->errors++;
+      break;
 
-    case AST_EXPR_TYPE_UNARY: {
-      return check_purity_expr(ast->unary.expr);
-    } break;
+    case AST_EXPR_TYPE_UNARY:
+      break;
 
-    case AST_EXPR_TYPE_MATCH: {
-      if (check_purity_expr(ast->match.expr) < 0) {
-        return -1;
-      }
-
-      // first pass: check that all arms have the same pattern type, and check their expressions
-      struct ast_expr_match_arm *arm = ast->match.arms;
-      while (arm) {
-        if (check_purity_expr(arm->pattern) < 0) {
-          return -1;
-        }
-
-        if (check_purity_expr(arm->expr) < 0) {
-          return -1;
-        }
-
-        arm = arm->next;
-      }
-
-      if (check_purity_expr(ast->match.otherwise->expr) < 0) {
-        return -1;
-      }
-    } break;
+    case AST_EXPR_TYPE_MATCH:
+      break;
 
     case AST_EXPR_TYPE_NIL:
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      return ast->enum_init.inner ? check_purity_expr(ast->enum_init.inner) : 0;
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH:
       break;
 
     case AST_EXPR_TYPE_UNION_INIT:
-      return check_purity_expr(ast->union_init.inner);
       break;
 
     case AST_EXPR_TYPE_SIZEOF:
@@ -313,13 +123,11 @@ static int check_purity_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      if (ast->box_expr.expr) {
-        return check_purity_expr(ast->box_expr.expr);
-      }
       break;
 
     default:
-      fprintf(stderr, "purity: unhandled expression type %d\n", ast->type);
+      compiler_log(purity->compiler, LogLevelError, "purity", "unhandled expression type %d",
+                   ast->type);
   }
 
   return 0;
