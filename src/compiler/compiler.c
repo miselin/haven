@@ -156,9 +156,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     goto out;
   }
 
-  fprintf(stderr, "== AST after desugar ==\n");
-  dump_ast(parser_get_ast(parser));
-
   compiler_log(compiler, LogLevelDebug, "driver", "result from desugar: %d", rc);
 
   if (rc == 0) {

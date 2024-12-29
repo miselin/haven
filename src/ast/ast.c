@@ -1,5 +1,23 @@
 #include "ast.h"
 
+void ast_remove(struct compiler *compiler, struct ast_program *ast, struct ast_toplevel *node) {
+  struct ast_toplevel *prev = NULL;
+  struct ast_toplevel *decl = ast->decls;
+  while (decl) {
+    if (decl == node) {
+      if (prev) {
+        prev->next = decl->next;
+      } else {
+        ast->decls = decl->next;
+      }
+      free_toplevel(compiler, decl);
+      return;
+    }
+    prev = decl;
+    decl = decl->next;
+  }
+}
+
 const char *ast_binary_op_to_str(int op) {
   switch (op) {
     case AST_BINARY_OP_ADD:

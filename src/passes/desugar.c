@@ -31,13 +31,14 @@ struct desugar {
 };
 
 int desugar_ast(struct desugar *desugar, struct ast_program *ast);
+
+static enum VisitorResult desugar_visitor(struct ast_visitor_node *node, void *user_data);
+
 // returns 1 if the decl should be removed
 static int desugar_toplevel(struct desugar *desugar, struct ast_toplevel *ast);
 static int desugar_tydecl(struct desugar *desugar, struct ast_toplevel *ast);
 static int desugar_fdecl(struct desugar *desugar, struct ast_fdecl *ast);
 
-static int desugar_block(struct desugar *desugar, struct ast_block *ast);
-static int desugar_stmt(struct desugar *desugar, struct ast_stmt *ast);
 static int desugar_expr(struct desugar *desugar, struct ast_expr *ast);
 
 // Process a type, desugaring templates if necessary. If templates are desugared, the type
@@ -56,7 +57,8 @@ struct desugar *desugar_new(struct ast_program *ast, struct compiler *compiler) 
 }
 
 int desugar_run(struct desugar *desugar) {
-  return desugar_ast(desugar, desugar->ast);
+  ast_visit(desugar->compiler, desugar->ast, desugar_visitor, desugar);
+  return 0;
 }
 
 void desugar_destroy(struct desugar *desugar) {
@@ -70,7 +72,7 @@ void desugar_destroy(struct desugar *desugar) {
   iter = kv_iter(desugar->enums);
   while (!kv_end(iter)) {
     struct desugar_enum *desugar_enum = kv_next(&iter);
-    free_toplevel(desugar->compiler, desugar_enum->toplevel);
+    ast_remove(desugar->compiler, desugar->ast, desugar_enum->toplevel);
     free(desugar_enum);
   }
   destroy_kv(desugar->enums);
@@ -78,27 +80,16 @@ void desugar_destroy(struct desugar *desugar) {
   free(desugar);
 }
 
-int desugar_ast(struct desugar *desugar, struct ast_program *ast) {
-  struct ast_toplevel *decl = ast->decls;
-  struct ast_toplevel *prev = NULL;
-  while (decl) {
-    int rc = desugar_toplevel(desugar, decl);
-    if (rc < 0) {
-      return -1;
-    } else if (rc > 0) {
-      if (prev) {
-        prev->next = decl->next;
-      } else {
-        ast->decls = decl->next;
-      }
-    } else {
-      prev = decl;
-    }
-
-    decl = decl->next;
+enum VisitorResult desugar_visitor(struct ast_visitor_node *node, void *user_data) {
+  if (node->toplevel) {
+    struct desugar *desugar = user_data;
+    desugar_toplevel(desugar, node->toplevel);
+  } else if (node->expr) {
+    struct desugar *desugar = user_data;
+    desugar_expr(desugar, node->expr);
   }
 
-  return 0;
+  return VisitorContinue;
 }
 
 static int desugar_toplevel(struct desugar *desugar, struct ast_toplevel *ast) {
@@ -129,7 +120,7 @@ static int desugar_tydecl(struct desugar *desugar, struct ast_toplevel *ast) {
       desugar_enum->decl = &tydecl->parsed_ty;
       kv_insert(desugar->enums, tydecl->ident.value.identv.ident, desugar_enum);
 
-      return 1;
+      return 0;
     } break;
 
     default:
@@ -155,16 +146,7 @@ static struct ast_template_ty *template_for_name(struct ast_template_ty *decl_tm
 }
 
 static int desugar_fdecl(struct desugar *desugar, struct ast_fdecl *ast) {
-  int rc = maybe_desugar_type(desugar, &ast->parsed_retty);
-  if (rc < 0) {
-    return -1;
-  }
-
-  if (ast->body) {
-    return desugar_block(desugar, ast->body);
-  }
-
-  return 0;
+  return maybe_desugar_type(desugar, &ast->parsed_retty);
 }
 
 static int maybe_desugar_type(struct desugar *desugar, struct ast_ty *ty) {
@@ -274,77 +256,45 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
   return 0;
 }
 
-static int desugar_block(struct desugar *desugar, struct ast_block *ast) {
-  struct ast_stmt *stmt = ast->stmt;
-  while (stmt) {
-    int rc = desugar_stmt(desugar, stmt);
-    if (rc < 0) {
-      return -1;
-    }
-
-    stmt = stmt->next;
-  }
-
-  return 0;
-}
-
-static int desugar_stmt(struct desugar *desugar, struct ast_stmt *ast) {
-  switch (ast->type) {
-    case AST_STMT_TYPE_EXPR:
-      return desugar_expr(desugar, ast->expr);
-    default:
-      // TODO
-      break;
-  }
-
-  return 0;
-}
-
 static int desugar_expr(struct desugar *desugar, struct ast_expr *ast) {
-  switch (ast->type) {
-    case AST_EXPR_TYPE_ENUM_INIT: {
-      if (ast->enum_init.tmpls) {
-        // desugar the enum
+  if (ast->type == AST_EXPR_TYPE_ENUM_INIT) {
+    if (ast->enum_init.tmpls) {
+      // desugar the enum
 
-        struct desugar_enum *entry =
-            kv_lookup(desugar->enums, ast->enum_init.enum_ty_name.value.identv.ident);
-        if (!entry) {
-          compiler_log(desugar->compiler, LogLevelError, "desugar", "unknown enum %s in template",
-                       ast->enum_init.enum_ty_name.value.identv.ident);
-          return -1;
-        }
-
-        struct ast_ty outer;
-        memset(&outer, 0, sizeof(struct ast_ty));
-        outer.ty = AST_TYPE_CUSTOM;
-        strncpy(outer.name, ast->enum_init.enum_ty_name.value.identv.ident, 256);
-
-        struct ast_ty tmpl;
-        memset(&tmpl, 0, sizeof(struct ast_ty));
-        tmpl.ty = AST_TYPE_TEMPLATE;
-        tmpl.tmpl.outer = &outer;
-        tmpl.tmpl.inners = ast->enum_init.tmpls;
-
-        desugar_enum(desugar, &tmpl);
-
-        char mangled[256];
-        mangle_type(&tmpl, mangled, 256, "specialized.");
-
-        strncpy(ast->enum_init.enum_ty_name.value.identv.ident, mangled, 256);
-
-        struct ast_template_ty *tmpl_ty = ast->enum_init.tmpls;
-        while (tmpl_ty) {
-          struct ast_template_ty *next = tmpl_ty->next;
-          free(tmpl_ty);
-          tmpl_ty = next;
-        }
-        ast->enum_init.tmpls = NULL;
+      struct desugar_enum *entry =
+          kv_lookup(desugar->enums, ast->enum_init.enum_ty_name.value.identv.ident);
+      if (!entry) {
+        compiler_log(desugar->compiler, LogLevelError, "desugar", "unknown enum %s in template",
+                     ast->enum_init.enum_ty_name.value.identv.ident);
+        return -1;
       }
-    } break;
 
-    default:
-      // TODO
-      break;
+      struct ast_ty outer;
+      memset(&outer, 0, sizeof(struct ast_ty));
+      outer.ty = AST_TYPE_CUSTOM;
+      strncpy(outer.name, ast->enum_init.enum_ty_name.value.identv.ident, 256);
+
+      struct ast_ty tmpl;
+      memset(&tmpl, 0, sizeof(struct ast_ty));
+      tmpl.ty = AST_TYPE_TEMPLATE;
+      tmpl.tmpl.outer = &outer;
+      tmpl.tmpl.inners = ast->enum_init.tmpls;
+
+      desugar_enum(desugar, &tmpl);
+
+      char mangled[256];
+      mangle_type(&tmpl, mangled, 256, "specialized.");
+
+      strncpy(ast->enum_init.enum_ty_name.value.identv.ident, mangled, 256);
+
+      struct ast_template_ty *tmpl_ty = ast->enum_init.tmpls;
+      while (tmpl_ty) {
+        struct ast_template_ty *next = tmpl_ty->next;
+        free(tmpl_ty);
+        tmpl_ty = next;
+      }
+      ast->enum_init.tmpls = NULL;
+    }
   }
 
   return 0;

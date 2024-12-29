@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "compiler/internal.h"
 #include "lex.h"
 #include "types.h"
 
@@ -333,6 +334,14 @@ struct ast_stmt {
   struct ast_stmt *next;
 };
 
+struct ast_visitor_node {
+  struct ast_toplevel *toplevel;
+  struct ast_block *block;
+  struct ast_stmt *stmt;
+  struct ast_expr *expr;
+  size_t depth;
+};
+
 void free_ast(struct compiler *compiler, struct ast_program *ast);
 void dump_ast(struct ast_program *ast);
 void dump_expr(struct ast_expr *ast, int indent);
@@ -349,6 +358,9 @@ void free_tydecl(struct compiler *compiler, struct ast_tydecl *ast, int heap);
 void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap);
 void free_expr_list(struct compiler *compiler, struct ast_expr_list *list);
 
+// Remove the given top-level node from the AST.
+void ast_remove(struct compiler *compiler, struct ast_program *ast, struct ast_toplevel *node);
+
 // Free a parser-generated type. These can have annoying heap pointers that aren't in the type
 // repository and need to be freed.
 void free_parser_ty(struct compiler *compiler, struct ast_ty *ty);
@@ -361,5 +373,19 @@ int ast_binary_op_conditional(int op);
 int ast_binary_op_logical(int op);
 
 const char *ast_expr_ident(struct ast_expr *expr);
+
+enum VisitorResult {
+  // Continue in the normal AST visit order
+  VisitorContinue,
+  // Don't process any children of this node, continue to the next sibling
+  VisitorSkipChildren,
+  // Stop visiting nodes altogether
+  VisitorStop,
+};
+
+typedef enum VisitorResult (*ast_visitor_fn)(struct ast_visitor_node *node, void *user_data);
+
+void ast_visit(struct compiler *compiler, struct ast_program *ast, ast_visitor_fn visit,
+               void *user_data);
 
 #endif

@@ -13,6 +13,8 @@ Math capabilities aside, it is also intended to support systems programming use 
 - Pattern matching with sum types.
 - Default-const variables, and default-pure functions.
 
+And, all else aside, I really just wanted to build a language that's optimized for me and the kind of things I want to write.
+
 ## Fractal Example
 
 This example shows some of the Haven syntax and its native vector and matrix support.
