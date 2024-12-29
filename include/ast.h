@@ -349,6 +349,10 @@ void free_tydecl(struct compiler *compiler, struct ast_tydecl *ast, int heap);
 void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap);
 void free_expr_list(struct compiler *compiler, struct ast_expr_list *list);
 
+// Free a parser-generated type. These can have annoying heap pointers that aren't in the type
+// repository and need to be freed.
+void free_parser_ty(struct compiler *compiler, struct ast_ty *ty);
+
 const char *ast_binary_op_to_str(int op);
 const char *ast_unary_op_to_str(int op);
 const char *ast_logical_op_to_str(int op);

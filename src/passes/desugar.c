@@ -19,6 +19,7 @@
 struct desugar_enum {
   struct ast_ty *decl;
   struct ast_tydecl *tydecl;
+  struct ast_toplevel *toplevel;
 };
 
 struct desugar {
@@ -32,7 +33,7 @@ struct desugar {
 int desugar_ast(struct desugar *desugar, struct ast_program *ast);
 // returns 1 if the decl should be removed
 static int desugar_toplevel(struct desugar *desugar, struct ast_toplevel *ast);
-static int desugar_tydecl(struct desugar *desugar, struct ast_tydecl *ast);
+static int desugar_tydecl(struct desugar *desugar, struct ast_toplevel *ast);
 static int desugar_fdecl(struct desugar *desugar, struct ast_fdecl *ast);
 
 static int desugar_block(struct desugar *desugar, struct ast_block *ast);
@@ -69,7 +70,7 @@ void desugar_destroy(struct desugar *desugar) {
   iter = kv_iter(desugar->enums);
   while (!kv_end(iter)) {
     struct desugar_enum *desugar_enum = kv_next(&iter);
-    free_tydecl(desugar->compiler, desugar_enum->tydecl, 0);
+    free_toplevel(desugar->compiler, desugar_enum->toplevel);
     free(desugar_enum);
   }
   destroy_kv(desugar->enums);
@@ -104,27 +105,29 @@ static int desugar_toplevel(struct desugar *desugar, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
     return desugar_fdecl(desugar, &ast->fdecl);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    return desugar_tydecl(desugar, &ast->tydecl);
+    return desugar_tydecl(desugar, ast);
   }
 
   return 0;
 }
 
-static int desugar_tydecl(struct desugar *desugar, struct ast_tydecl *ast) {
-  switch (ast->parsed_ty.ty) {
+static int desugar_tydecl(struct desugar *desugar, struct ast_toplevel *ast) {
+  struct ast_tydecl *tydecl = &ast->tydecl;
+
+  switch (tydecl->parsed_ty.ty) {
     case AST_TYPE_ENUM: {
-      // yeee
-      if (!ast->parsed_ty.enumty.templates) {
+      if (!tydecl->parsed_ty.enumty.templates) {
         return 0;
       }
 
       compiler_log(desugar->compiler, LogLevelDebug, "desugar", "desugaring enum %s",
-                   ast->ident.value.identv.ident);
+                   tydecl->ident.value.identv.ident);
 
       struct desugar_enum *desugar_enum = calloc(1, sizeof(struct desugar_enum));
-      desugar_enum->tydecl = ast;
-      desugar_enum->decl = &ast->parsed_ty;
-      kv_insert(desugar->enums, ast->ident.value.identv.ident, desugar_enum);
+      desugar_enum->toplevel = ast;
+      desugar_enum->tydecl = tydecl;
+      desugar_enum->decl = &tydecl->parsed_ty;
+      kv_insert(desugar->enums, tydecl->ident.value.identv.ident, desugar_enum);
 
       return 1;
     } break;
@@ -179,6 +182,8 @@ static int maybe_desugar_type(struct desugar *desugar, struct ast_ty *ty) {
 
   char mangled[256];
   mangle_type(ty, mangled, 256, "specialized.");
+
+  free_parser_ty(desugar->compiler, ty);
 
   memset(ty, 0, sizeof(struct ast_ty));
   ty->ty = AST_TYPE_CUSTOM;
@@ -325,6 +330,12 @@ static int desugar_expr(struct desugar *desugar, struct ast_expr *ast) {
 
         strncpy(ast->enum_init.enum_ty_name.value.identv.ident, mangled, 256);
 
+        struct ast_template_ty *tmpl_ty = ast->enum_init.tmpls;
+        while (tmpl_ty) {
+          struct ast_template_ty *next = tmpl_ty->next;
+          free(tmpl_ty);
+          tmpl_ty = next;
+        }
         ast->enum_init.tmpls = NULL;
       }
     } break;

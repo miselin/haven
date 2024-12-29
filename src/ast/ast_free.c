@@ -5,10 +5,6 @@
 #include "types.h"
 #include "utility.h"
 
-// Free a parser-generated type. These can have annoying heap pointers that aren't in the type
-// repository and need to be freed.
-static void free_parser_ty(struct compiler *compiler, struct ast_ty *ty);
-
 void free_ast(struct compiler *compiler, struct ast_program *ast) {
   struct ast_toplevel *decl = ast->decls;
   while (decl) {
@@ -426,7 +422,11 @@ void free_parser_ty(struct compiler *compiler, struct ast_ty *ty) {
         inner = next;
       }
 
+      free_parser_ty(compiler, ty->tmpl.outer);
+      free(ty->tmpl.outer);
+
       ty->tmpl.inners = NULL;
+      ty->tmpl.outer = NULL;
     } break;
 
     case AST_TYPE_FUNCTION: {

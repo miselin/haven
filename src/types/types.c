@@ -234,7 +234,6 @@ struct ast_ty ptr_type(struct ast_ty pointee) {
 
 struct ast_ty *ptr_pointee_type(struct ast_ty *ty) {
   if (ty->ty != AST_TYPE_POINTER) {
-    fprintf(stderr, "yo not a pointer %p\n", (void *)ty);
     return NULL;
   }
 
@@ -359,10 +358,6 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
             offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ",
                                pointee ? pointee->name : "<null-pointee>",
                                field_ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
-
-            if (!pointee) {
-              fprintf(stderr, "null pointee in ty %p\n", (void *)field_ty);
-            }
           } else {
             char field_tyname[256] = {0};
             type_name_into_ctx(field_ty, field_tyname, 256, new_ctx);
@@ -617,8 +612,6 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
         if (field->has_inner) {
           new_field->inner =
               type_repository_lookup_ty(repo, field->inner ? field->inner : &field->parser_inner);
-          fprintf(stderr, "copy_type enum inner %p -> %p\n", (void *)field->inner,
-                  (void *)new_field->inner);
         }
         field = field->next;
 
