@@ -4,6 +4,7 @@
 #include "internal.h"
 #include "lex.h"
 #include "parse.h"
+#include "tokens.h"
 #include "types.h"
 
 static struct ast_expr *parse_expression_inner(struct parser *parser, int min_prec);
@@ -271,6 +272,39 @@ struct ast_expr *parse_factor(struct parser *parser) {
         parser_consume_peeked(parser, NULL);
         result->type = AST_EXPR_TYPE_ENUM_INIT;
         result->enum_init.enum_ty_name = token;
+
+        if (parser_peek(parser) == TOKEN_LT) {
+          parser_consume_peeked(parser, NULL);
+
+          struct ast_template_ty *last = NULL;
+          while (parser_peek(parser) != TOKEN_GT) {
+            struct ast_template_ty *tmpl = calloc(1, sizeof(struct ast_template_ty));
+            tmpl->parsed_ty = parse_type(parser);
+            if (tmpl->parsed_ty.ty == AST_TYPE_ERROR) {
+              free(tmpl);
+              free(result);
+              return NULL;
+            }
+
+            if (!result->enum_init.tmpls) {
+              result->enum_init.tmpls = tmpl;
+            } else {
+              last->next = tmpl;
+            }
+
+            last = tmpl;
+          }
+
+          if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+            free(result);
+            return NULL;
+          }
+
+          if (parser_consume(parser, NULL, TOKEN_COLONCOLON) < 0) {
+            free(result);
+            return NULL;
+          }
+        }
 
         if (parser_consume(parser, &result->enum_init.enum_val_name, TOKEN_IDENTIFIER) < 0) {
           free(result);

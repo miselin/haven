@@ -35,6 +35,10 @@ static int desugar_toplevel(struct desugar *desugar, struct ast_toplevel *ast);
 static int desugar_tydecl(struct desugar *desugar, struct ast_tydecl *ast);
 static int desugar_fdecl(struct desugar *desugar, struct ast_fdecl *ast);
 
+static int desugar_block(struct desugar *desugar, struct ast_block *ast);
+static int desugar_stmt(struct desugar *desugar, struct ast_stmt *ast);
+static int desugar_expr(struct desugar *desugar, struct ast_expr *ast);
+
 // Process a type, desugaring templates if necessary. If templates are desugared, the type
 // will become an AST_TYPE_CUSTOM with the mangled name of the specialized type.
 static int maybe_desugar_type(struct desugar *desugar, struct ast_ty *ty);
@@ -148,7 +152,16 @@ static struct ast_template_ty *template_for_name(struct ast_template_ty *decl_tm
 }
 
 static int desugar_fdecl(struct desugar *desugar, struct ast_fdecl *ast) {
-  return maybe_desugar_type(desugar, &ast->parsed_retty);
+  int rc = maybe_desugar_type(desugar, &ast->parsed_retty);
+  if (rc < 0) {
+    return -1;
+  }
+
+  if (ast->body) {
+    return desugar_block(desugar, ast->body);
+  }
+
+  return 0;
 }
 
 static int maybe_desugar_type(struct desugar *desugar, struct ast_ty *ty) {
@@ -213,6 +226,7 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
   strncpy(new_tydecl->ident.value.identv.ident, mangled, 256);
   new_tydecl->parsed_ty = *desugar_enum->decl;
   new_tydecl->parsed_ty.enumty.templates = NULL;
+  strncpy(new_tydecl->parsed_ty.name, mangled, 256);
 
   struct ast_enum_field *field = desugar_enum->decl->enumty.fields;
   struct ast_enum_field *last = NULL;
@@ -242,6 +256,7 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
   }
 
   // Step 2: Insert this new enum type declaration into the AST.
+  memcpy(&new_toplevel->loc, &desugar->ast->decls->loc, sizeof(struct lex_locator));
   new_toplevel->next = desugar->ast->decls;
   desugar->ast->decls = new_toplevel;
 
@@ -250,6 +265,74 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
   spec->tydecl = new_tydecl;
   spec->decl = &new_tydecl->parsed_ty;
   kv_insert(desugar->specialized, mangled, spec);
+
+  return 0;
+}
+
+static int desugar_block(struct desugar *desugar, struct ast_block *ast) {
+  struct ast_stmt *stmt = ast->stmt;
+  while (stmt) {
+    int rc = desugar_stmt(desugar, stmt);
+    if (rc < 0) {
+      return -1;
+    }
+
+    stmt = stmt->next;
+  }
+
+  return 0;
+}
+
+static int desugar_stmt(struct desugar *desugar, struct ast_stmt *ast) {
+  switch (ast->type) {
+    case AST_STMT_TYPE_EXPR:
+      return desugar_expr(desugar, ast->expr);
+    default:
+      // TODO
+      break;
+  }
+
+  return 0;
+}
+
+static int desugar_expr(struct desugar *desugar, struct ast_expr *ast) {
+  switch (ast->type) {
+    case AST_EXPR_TYPE_ENUM_INIT: {
+      if (ast->enum_init.tmpls) {
+        // desugar the enum
+
+        struct desugar_enum *entry =
+            kv_lookup(desugar->enums, ast->enum_init.enum_ty_name.value.identv.ident);
+        if (!entry) {
+          compiler_log(desugar->compiler, LogLevelError, "desugar", "unknown enum %s in template",
+                       ast->enum_init.enum_ty_name.value.identv.ident);
+          return -1;
+        }
+
+        struct ast_ty outer;
+        outer.ty = AST_TYPE_CUSTOM;
+        strncpy(outer.name, ast->enum_init.enum_ty_name.value.identv.ident, 256);
+
+        struct ast_ty tmpl;
+        tmpl.ty = AST_TYPE_TEMPLATE;
+        tmpl.tmpl.outer = &outer;
+        tmpl.tmpl.inners = ast->enum_init.tmpls;
+
+        desugar_enum(desugar, &tmpl);
+
+        char mangled[256];
+        mangle_type(&tmpl, mangled, 256, "specialized.");
+
+        strncpy(ast->enum_init.enum_ty_name.value.identv.ident, mangled, 256);
+
+        ast->enum_init.tmpls = NULL;
+      }
+    } break;
+
+    default:
+      // TODO
+      break;
+  }
 
   return 0;
 }

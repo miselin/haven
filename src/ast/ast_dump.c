@@ -422,6 +422,16 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
+      if (ast->enum_init.tmpls) {
+        struct ast_template_ty *tmpl = ast->enum_init.tmpls;
+        while (tmpl) {
+          INDENTED(indent + 1, "Template ");
+          dump_ty(tmpl->resolved);
+          fprintf(stderr, "\n");
+          tmpl = tmpl->next;
+        }
+      }
+
       if (ast->enum_init.inner) {
         dump_expr(ast->enum_init.inner, indent + 1);
       }

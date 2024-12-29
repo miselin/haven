@@ -241,6 +241,7 @@ struct ast_expr_enum_init {
   struct token enum_ty_name;
   struct token enum_val_name;
   struct ast_expr *inner;
+  struct ast_template_ty *tmpls;
 };
 
 struct ast_expr_union_init {
