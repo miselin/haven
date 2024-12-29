@@ -1,5 +1,6 @@
 #include "kv.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -59,7 +60,7 @@ void kv_insert(struct kv *kv, const char *key, void *value) {
 void *kv_lookup(struct kv *kv, const char *key) {
   struct kv_node *cur = kv->head;
   while (cur) {
-    if (!strcmp(cur->key, key)) {
+    if (!strcmp(key, cur->key)) {
       return cur->value;
     }
     cur = cur->next;
@@ -72,7 +73,7 @@ void kv_delete(struct kv *kv, const char *key) {
   struct kv_node *cur = kv->head;
   struct kv_node *prev = NULL;
   while (cur) {
-    if (!strcmp(cur->key, key)) {
+    if (!strcmp(key, cur->key)) {
       if (prev) {
         prev->next = cur->next;
       } else {

@@ -4,6 +4,7 @@
 #include "internal.h"
 #include "lex.h"
 #include "parse.h"
+#include "types.h"
 
 static struct ast_expr *parse_expression_inner(struct parser *parser, int min_prec);
 
@@ -336,7 +337,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
       parser->mute_diags = 1;
       parser_mark(parser);
-      result->box_expr.parsed_ty = NULL;
+      result->box_expr.parsed_ty.ty = AST_TYPE_TBD;
       result->box_expr.expr = parse_expression(parser);
       if (!result->box_expr.expr) {
         parser_rewind(parser);
@@ -348,8 +349,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
           return NULL;
         }
 
-        result->box_expr.parsed_ty = calloc(1, sizeof(struct ast_ty));
-        *result->box_expr.parsed_ty = ty;
+        result->box_expr.parsed_ty = ty;
       } else {
         parser_commit(parser);
       }

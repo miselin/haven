@@ -192,9 +192,6 @@ void codegen_mangle(struct codegen *codegen, struct ast_fdecl *fdecl, char *buf,
 int initialize_llvm(void);
 void shutdown_llvm(void);
 
-// Uniquely identify the given type in a string format that can be used as a name
-void mangle_type(struct ast_ty *ty, char *buf, size_t len);
-
 void configure_llvm(struct compiler *compiler);
 
 #endif

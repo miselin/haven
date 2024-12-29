@@ -45,6 +45,10 @@ int typecheck_run(struct typecheck *typecheck) {
   if (typecheck->errors) {
     return typecheck->errors;
   }
+
+  compiler_log(typecheck->compiler, LogLevelError, "typecheck",
+               "primary typecheck pass complete, moving on to implicit conversions");
+
   int rc = 0;
   while (1) {
     rc = typecheck_implicit_ast(typecheck->ast);
@@ -56,6 +60,10 @@ int typecheck_run(struct typecheck *typecheck) {
       break;
     }
   }
+
+  compiler_log(typecheck->compiler, LogLevelError, "typecheck",
+               "implicit conversion pass complete, moving on to verification");
+
   if (typecheck_verify_ast(typecheck->ast) < 0) {
     return 1;
   }
@@ -88,7 +96,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
   if (ast->type == AST_DECL_TYPE_TYDECL) {
     if (ast->tydecl.parsed_ty.ty == AST_TYPE_CUSTOM) {
-      // custom - trying to make an alias
+      // trying to make an alias to another existing type
       struct ast_ty *target_ty =
           type_repository_lookup(typecheck->type_repo, ast->tydecl.parsed_ty.name);
       if (!target_ty) {
@@ -117,51 +125,45 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       return;
     }
 
-    struct ast_ty *target_type;
+    const char *alias_name = ast->tydecl.ident.value.identv.ident;
 
-    strncpy(ast->tydecl.parsed_ty.name, ast->tydecl.ident.value.identv.ident, 256);
+    // not custom - defining a real type
 
-    // need to fully resolve the type so it can be matched in the type repository
-    // TODO...
+    strncpy(ast->tydecl.parsed_ty.name, alias_name, 256);
 
-    /*
-      // not custom, defining a new type
-      if (ast->tydecl.parsed_ty.ty == AST_TYPE_STRUCT) {
-        typecheck_struct_decl(typecheck, resolve_type);
-      } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_ENUM) {
-        typecheck_enum_decl(typecheck, resolve_type);
-      } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_ARRAY) {
-        resolve_type->array.element_ty =
-            resolve_parsed_type(typecheck, ast->tydecl.parsed_ty.array.element_ty);
-      } else if (ast->tydecl.parsed_ty.ty == AST_TYPE_FUNCTION) {
-        resolve_type->function.retty = resolve_parsed_type(typecheck, resolve_type->function.retty);
-
-        for (size_t i = 0; i < ast->tydecl.parsed_ty.function.num_args; i++) {
-          resolve_type->function.args[i] =
-              resolve_parsed_type(typecheck, resolve_type->function.args[i]);
-        }
-      } else */
-    { target_type = resolve_parsed_type(typecheck, &ast->tydecl.parsed_ty); }
-
-    compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "registering tydecl %s -> %s",
-                 ast->tydecl.ident.value.identv.ident, target_type->name);
-
-    struct ast_ty *existing =
-        type_repository_lookup(typecheck->type_repo, ast->tydecl.ident.value.identv.ident);
+    // already resolved? don't do additional work
+    struct ast_ty *existing = type_repository_lookup(typecheck->type_repo, alias_name);
     if (existing) {
-      // alias already exists
       // TODO: potentially update it to be a new type?
-      target_type = existing;
-    } else {
-      // struct ast_ty *registered = type_repository_lookup_ty(typecheck->type_repo, target_type);
-
-      // struct ast_ty *registered = type_repository_register(typecheck->type_repo, resolve_type);
-      // if (registered) {
-      type_repository_register_alias(typecheck->type_repo, ast->tydecl.ident.value.identv.ident,
-                                     target_type);
-      //}
+      ast->tydecl.resolved = existing;
+      return;
     }
 
+    // set initial lookup for this name to allow for recursive types in structs and unions
+    // struct ast_ty *tbd = type_repository_tbd(typecheck->type_repo);
+    struct ast_ty custom;
+    custom.ty = AST_TYPE_CUSTOM;
+    strncpy(custom.name, alias_name, 256);
+    compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
+                 "registering alias %s -> custom %s", alias_name, custom.name);
+    type_repository_register_alias(typecheck->type_repo, alias_name, &custom);
+    compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
+                 "moving on with type alias creation");
+
+    struct ast_ty *target_type = resolve_parsed_type(typecheck, &ast->tydecl.parsed_ty);
+
+    compiler_log(typecheck->compiler, LogLevelTrace, "typecheck", "registering tydecl %s -> %s",
+                 alias_name, target_type->name);
+
+    type_repository_overwrite_alias(typecheck->type_repo, alias_name, target_type);
+
+    compiler_log(typecheck->compiler, LogLevelTrace, "typecheck", "patching tydecl %s -> %s",
+                 alias_name, target_type->name);
+
+    patch_type_tbds(typecheck, target_type, &ast->tydecl.parsed_ty);
+
+    compiler_log(typecheck->compiler, LogLevelTrace, "typecheck", "resolved tydecl %s -> %s",
+                 alias_name, target_type->name);
     ast->tydecl.resolved = target_type;
   }
 

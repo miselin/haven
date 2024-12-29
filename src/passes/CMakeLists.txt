@@ -16,6 +16,9 @@ target_link_libraries(pass_purity PRIVATE haven_compiler_options)
 add_library(pass_semantic OBJECT semantic.c)
 target_link_libraries(pass_semantic PRIVATE haven_compiler_options)
 
+add_library(pass_desugar OBJECT desugar.c)
+target_link_libraries(pass_desugar PRIVATE haven_compiler_options)
+
 add_library(passes OBJECT
     $<TARGET_OBJECTS:pass_cfold>
     $<TARGET_OBJECTS:pass_typecheck>
@@ -23,4 +26,5 @@ add_library(passes OBJECT
     $<TARGET_OBJECTS:pass_tyimplicit>
     $<TARGET_OBJECTS:pass_purity>
     $<TARGET_OBJECTS:pass_semantic>
+    $<TARGET_OBJECTS:pass_desugar>
 )

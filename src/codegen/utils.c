@@ -376,7 +376,7 @@ LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty) {
   }
 
   char name[1024];
-  mangle_type(ty->pointer.pointee, name, 1024);
+  mangle_type(ty->pointer.pointee, name, 1024, "boxed.");
   compiler_log(codegen->compiler, LogLevelDebug, "codegen", "mangled type %s for boxing", name);
 
   struct struct_entry *entry = kv_lookup(codegen->structs, name);
@@ -415,82 +415,6 @@ void codegen_box_unref(struct codegen *codegen, LLVMValueRef box, int already_de
                     : LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen), box, "");
   LLVMBuildCall2(codegen->llvm_builder, codegen->preamble.box_unref_type,
                  codegen->preamble.box_unref, &inner, 1, "");
-}
-
-void mangle_type(struct ast_ty *ty, char *buf, size_t len) {
-  *buf = 0;
-
-  strcat(buf, "boxed.");
-
-  buf += 6;
-  len -= 6;
-
-  switch (ty->ty) {
-    case AST_TYPE_INTEGER:
-      snprintf(buf, len, "i%zd", ty->integer.width);
-      break;
-
-    case AST_TYPE_STRING:
-      strcat(buf, "s");
-      break;
-
-    case AST_TYPE_FLOAT:
-      strcat(buf, "F32");
-      break;
-
-    case AST_TYPE_FVEC:
-      snprintf(buf, len, "F32V%zd", ty->fvec.width);
-      break;
-
-    case AST_TYPE_VOID:
-      strcat(buf, "V");
-      break;
-
-    case AST_TYPE_ARRAY:
-      snprintf(buf, len, "A%zd", ty->array.width);
-      break;
-
-    case AST_TYPE_MATRIX:
-      snprintf(buf, len, "M%zdx%zd", ty->matrix.rows, ty->matrix.cols);
-      break;
-
-    case AST_TYPE_STRUCT:
-      snprintf(buf, len, "S%s", ty->name);
-      break;
-
-    case AST_TYPE_ENUM:
-      snprintf(buf, len, "E%s", ty->name);
-      break;
-
-    case AST_TYPE_CUSTOM:
-      snprintf(buf, len, "C%s", ty->name);
-      break;
-
-    case AST_TYPE_NIL:
-      strcat(buf, "N");
-      break;
-
-    case AST_TYPE_FUNCTION:
-      strcat(buf, "Fn");
-      break;
-
-    case AST_TYPE_POINTER:
-      strcat(buf, "P");
-      break;
-
-    case AST_TYPE_BOX:
-      strcat(buf, "B");
-      break;
-
-    case AST_TYPE_TEMPLATE:
-      strcat(buf, "T");
-      break;
-
-    case AST_TYPE_ERROR:
-    case AST_TYPE_TBD:
-      // no.
-      break;
-  }
 }
 
 struct codegen_compileunit *codegen_get_compileunit(struct codegen *codegen,

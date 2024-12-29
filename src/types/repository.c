@@ -18,6 +18,7 @@ struct type_repository {
   struct ast_ty tbd_type;
   struct ast_ty error_type;
   struct ast_ty void_type;
+  struct ast_ty nil_type;
 
   struct kv *types;
 
@@ -63,6 +64,7 @@ struct type_repository *new_type_repository(struct compiler *compiler) {
   repo->tbd_type = type_tbd();
   repo->error_type = type_error();
   repo->void_type = type_void();
+  repo->nil_type.ty = AST_TYPE_NIL;
 
   repo->float_type = (struct ast_ty){.ty = AST_TYPE_FLOAT};
 
@@ -70,14 +72,15 @@ struct type_repository *new_type_repository(struct compiler *compiler) {
 }
 
 struct ast_ty *type_repository_register(struct type_repository *repo, struct ast_ty *ty) {
-  if (type_is_error(ty) || type_is_tbd(ty)) {
+  if (type_is_error(ty)) {
     compiler_log(repo->compiler, LogLevelError, "typerepo", "type %s is an error type", ty->name);
     return NULL;
   }
 
-  if (ty->ty == AST_TYPE_CUSTOM) {
+  if (ty->ty == AST_TYPE_CUSTOM && !ty->custom.is_template) {
     compiler_log(repo->compiler, LogLevelError, "typerepo",
-                 "type %s is a custom type, needs to be resolved first", ty->name);
+                 "type %s is a custom type [%d], needs to be resolved first", ty->name,
+                 ty->custom.is_template);
     return NULL;
   }
 
@@ -92,6 +95,12 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
     return &repo->float_type;
   } else if (ty->ty == AST_TYPE_VOID) {
     return &repo->void_type;
+  } else if (ty->ty == AST_TYPE_ERROR) {
+    return &repo->error_type;
+  } else if (ty->ty == AST_TYPE_TBD) {
+    return &repo->tbd_type;
+  } else if (ty->ty == AST_TYPE_NIL) {
+    return &repo->nil_type;
   }
 
   type_name_into(ty, name, 1024);
@@ -106,7 +115,11 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
   entry->ty = copy_type(repo, ty);
   entry->is_alias = 0;
 
-  compiler_log(repo->compiler, LogLevelDebug, "typerepo", "registering type %s", name);
+  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "registering type %s", name);
+
+  type_name_into(entry->ty, name, 1024);
+  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "... which after type copying became %s",
+               name);
   kv_insert(repo->types, name, entry);
 
   return entry->ty;
@@ -114,7 +127,7 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
 
 struct ast_ty *type_repository_register_alias(struct type_repository *repo, const char *name,
                                               struct ast_ty *ty) {
-  if (type_is_error(ty) || type_is_tbd(ty)) {
+  if (type_is_error(ty)) {
     compiler_log(repo->compiler, LogLevelError, "typerepo",
                  "type %s is an error type, won't register alias %s", ty->name, name);
   }
@@ -123,6 +136,41 @@ struct ast_ty *type_repository_register_alias(struct type_repository *repo, cons
   if (entry) {
     compiler_log(repo->compiler, LogLevelError, "typerepo", "alias %s already registered", name);
     return NULL;
+  }
+
+  /*
+  struct ast_ty *target = type_repository_lookup_ty(repo, ty);
+  if (!target) {
+    compiler_log(repo->compiler, LogLevelError, "typerepo", "alias %s references unknown type %s",
+                 name, ty->name);
+    return NULL;
+  }
+  */
+
+  entry = calloc(1, sizeof(struct type_repository_entry));
+  entry->ty = ty;
+  entry->is_alias = 1;
+
+  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "registering alias %s -> %p", name,
+               (void *)ty);
+  kv_insert(repo->types, name, entry);
+
+  return ty;
+}
+
+struct ast_ty *type_repository_overwrite_alias(struct type_repository *repo, const char *name,
+                                               struct ast_ty *ty) {
+  if (type_is_error(ty)) {
+    compiler_log(repo->compiler, LogLevelError, "typerepo",
+                 "type %s is an error type, won't register alias %s", ty->name, name);
+  }
+
+  struct type_repository_entry *entry = kv_lookup(repo->types, name);
+  if (entry) {
+    compiler_log(repo->compiler, LogLevelTrace, "typerepo", "overwriting alias %s -> %p", name,
+                 (void *)ty);
+    entry->ty = ty;
+    return entry->ty;
   }
 
   struct ast_ty *target = type_repository_lookup_ty(repo, ty);
@@ -136,7 +184,8 @@ struct ast_ty *type_repository_register_alias(struct type_repository *repo, cons
   entry->ty = target;
   entry->is_alias = 1;
 
-  compiler_log(repo->compiler, LogLevelDebug, "typerepo", "registering alias %s", name);
+  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "registering alias %s -> %p", name,
+               (void *)ty);
   kv_insert(repo->types, name, entry);
 
   return target;
@@ -149,6 +198,7 @@ struct ast_ty *type_repository_lookup(struct type_repository *repo, const char *
 
 struct ast_ty *type_repository_lookup_ty(struct type_repository *repo, struct ast_ty *ty) {
   if (ty->ty == AST_TYPE_CUSTOM) {
+    compiler_log(repo->compiler, LogLevelTrace, "typerepo", "lookup_ty custom type %s", ty->name);
     return type_repository_lookup(repo, ty->name);
   }
 
@@ -166,13 +216,15 @@ struct ast_ty *type_repository_lookup_ty(struct type_repository *repo, struct as
     return &repo->error_type;
   } else if (ty->ty == AST_TYPE_TBD) {
     return &repo->tbd_type;
+  } else if (ty->ty == AST_TYPE_NIL) {
+    return &repo->nil_type;
   }
 
   char name[1024];
   type_name_into(ty, name, 1024);
 
   struct type_repository_entry *entry = kv_lookup(repo->types, name);
-  compiler_log(repo->compiler, LogLevelError, "typerepo", "lookup_ty looking up %s, got %p", name,
+  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "lookup_ty looking up %s, got %p", name,
                (void *)entry);
   return entry ? entry->ty : NULL;
 }

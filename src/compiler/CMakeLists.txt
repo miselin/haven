@@ -19,6 +19,7 @@ set (COMPILER_BASE_DEPS
     $<TARGET_OBJECTS:pass_tyimplicit>
     $<TARGET_OBJECTS:pass_purity>
     $<TARGET_OBJECTS:pass_semantic>
+    $<TARGET_OBJECTS:pass_desugar>
 )
 
 set (COMPILER_BOOTSTRAP_DEPS
@@ -38,5 +39,5 @@ target_link_libraries(compiler_bootstrap PUBLIC ${LLVM_LIBS})
 target_link_libraries(compiler_bootstrap PRIVATE haven_compiler_options)
 
 add_library(compiler STATIC ${COMPILER_DEPS})
-target_link_libraries(compiler PUBLIC ${LLVM_LIBS})
+target_link_libraries(compiler PUBLIC ${LLVM_LIBS} utilities_haven)
 target_link_libraries(compiler PRIVATE haven_compiler_options)

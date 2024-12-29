@@ -23,7 +23,8 @@ enum Options {
   LinkerOption,
   Linker,
   OnlyCompile,
-  AddressSanitizer
+  AddressSanitizer,
+  TraceLogs,
 };
 
 enum Color {

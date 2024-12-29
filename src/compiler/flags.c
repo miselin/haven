@@ -34,6 +34,7 @@ static void usage(void) {
   fprintf(stderr, "  --emit-ir      emit textual IR instead of an object file\n");
   fprintf(stderr, "  --emit-bitcode emit binary IR instead of an object file\n");
   fprintf(stderr, "  --verbose      enable internal compiler logging\n");
+  fprintf(stderr, "  --trace        enable even more verbose internal compiler logging\n");
   fprintf(stderr, "  -I <path>      add a path to the import search path\n");
   fprintf(stderr, "  --no-preamble  do not emit the default preamble\n");
   fprintf(stderr,
@@ -50,7 +51,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
   }
 
   if (!isatty(2)) {
-    into->flags[0] |= FLAG_NO_COLOR;
+    // into->flags[0] |= FLAG_NO_COLOR;
   }
 
   struct linker_option *prev_lo = NULL;
@@ -72,6 +73,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"Xl", required_argument, 0, LinkerOption},
                                   {"ld", required_argument, 0, Linker},
                                   {"asan", no_argument, 0, AddressSanitizer},
+                                  {"trace", no_argument, 0, TraceLogs},
                                   {0, 0, 0, 0}};
 
   int opt;
@@ -167,6 +169,9 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       case Linker: {
         into->ld = copy_to_heap(optarg);
       } break;
+      case TraceLogs:
+        into->flags[0] |= FLAG_TRACE;
+        break;
       default:
         usage();
         return -1;

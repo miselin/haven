@@ -513,12 +513,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_SIZEOF: {
-      LLVMTypeRef result_ty;
-      // if (ast->sizeof_expr.expr) {
-      //   result_ty = ast_ty_to_llvm_ty(codegen, ast->sizeof_expr.expr->ty);
-      // } else {
-      result_ty = ast_ty_to_llvm_ty(codegen, ast->ty);
-      //}
+      LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, ast->sizeof_expr.resolved);
       return const_i32(codegen, (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout, result_ty));
     } break;
 

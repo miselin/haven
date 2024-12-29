@@ -271,6 +271,9 @@ struct ast_ty *box_pointee_type(struct ast_ty *);
  */
 int type_is_indexable(struct ast_ty *);
 
+// Uniquely identify the given type in a string format that can be used as a name
+void mangle_type(struct ast_ty *ty, char *buf, size_t len, const char *prefix);
+
 struct type_repository *new_type_repository(struct compiler *compiler);
 
 // Registers the given type in the type repository.
@@ -279,6 +282,10 @@ struct ast_ty *type_repository_register(struct type_repository *, struct ast_ty 
 // Registers an alias in the type repository.
 struct ast_ty *type_repository_register_alias(struct type_repository *, const char *,
                                               struct ast_ty *);
+
+// Registers the given alias, overwriting the definition of an existing one if present.
+struct ast_ty *type_repository_overwrite_alias(struct type_repository *, const char *,
+                                               struct ast_ty *);
 
 // Looks up a type by name in the type repository.
 struct ast_ty *type_repository_lookup(struct type_repository *, const char *);

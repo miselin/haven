@@ -406,7 +406,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         } else if (ty->ty == AST_TYPE_BOX) {
           ty = box_pointee_type(ty);
         } else {
-          fprintf(stderr, "deref of %s has non-pointer type\n", ident);
+          fprintf(stderr, "deref of %s has non-pointer type %d\n", ident, ty->ty);
           ++typecheck->errors;
           return &typecheck->error_type;
         }
@@ -635,9 +635,10 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           return &typecheck->error_type;
         }
 
-        if (type_is_tbd(&entry->vdecl->parser_ty)) {
+        // TODO: what does this actually do?
+        if (type_is_tbd(entry->vdecl->ty)) {
           // inferred type
-          entry->vdecl->ty = ast->assign.expr->ty;
+          // entry->vdecl->ty = ast->assign.expr->ty;
 
           // remove constant flag if it was inferred
           // TODO?
@@ -933,9 +934,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       return ast->ty;
     } break;
 
-    case AST_EXPR_TYPE_NIL:
-      ast->ty->ty = AST_TYPE_NIL;
+    case AST_EXPR_TYPE_NIL: {
+      struct ast_ty lookup;
+      lookup.ty = AST_TYPE_NIL;
+      ast->ty = type_repository_lookup_ty(typecheck->type_repo, &lookup);
       return ast->ty;
+    } break;
 
     case AST_EXPR_TYPE_ENUM_INIT: {
       const char *ident = ast->enum_init.enum_ty_name.value.identv.ident;
@@ -1010,34 +1014,34 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_SIZEOF: {
-      // TODO
-      /*
+      struct ast_ty *inner_ty = NULL;
+
       int swapped_type = 0;
       if (ast->sizeof_expr.expr) {
+        // the parser can't distinguish between types and identifiers, so we need to do so here
         if (ast->sizeof_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
-          // is it actually a type?
-          struct alias_entry *entry = kv_lookup(
-              typecheck->aliases, ast->sizeof_expr.expr->variable.ident.value.identv.ident);
-          if (entry) {
-            ast->sizeof_expr.ty = entry->ty;
-            free_expr(ast->sizeof_expr.expr);
+          inner_ty = type_repository_lookup(
+              typecheck->type_repo, ast->sizeof_expr.expr->variable.ident.value.identv.ident);
+          if (inner_ty) {
+            free_expr(typecheck->compiler, ast->sizeof_expr.expr);
             ast->sizeof_expr.expr = NULL;
             swapped_type = 1;
           }
         }
 
         if (!swapped_type) {
-          struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->sizeof_expr.expr);
-          if (!expr_ty) {
+          inner_ty = typecheck_expr(typecheck, ast->sizeof_expr.expr);
+          if (!inner_ty) {
             return NULL;
           }
+
+          inner_ty = ast->sizeof_expr.expr->ty;
         }
+      } else {
+        inner_ty = resolve_parsed_type(typecheck, &ast->sizeof_expr.parsed_ty);
       }
 
-      if (!ast->sizeof_expr.expr) {
-        ast->sizeof_expr.ty = resolve_type(typecheck, &ast->sizeof_expr.ty);
-      }
-      */
+      ast->sizeof_expr.resolved = inner_ty;
 
       struct ast_ty itype;
       itype.ty = AST_TYPE_INTEGER;
@@ -1052,6 +1056,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       int swapped_type = 0;
       if (ast->box_expr.expr) {
+        // the parser can't distinguish between types and identifiers, so we need to do so here
         if (ast->box_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
           inner_ty = type_repository_lookup(typecheck->type_repo,
                                             ast->box_expr.expr->variable.ident.value.identv.ident);
@@ -1070,6 +1075,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
           inner_ty = ast->box_expr.expr->ty;
         }
+      } else {
+        inner_ty = resolve_parsed_type(typecheck, &ast->box_expr.parsed_ty);
       }
 
       struct ast_ty box_ty;
@@ -1096,7 +1103,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       // returns the underlying type of the box
-      ast->ty = resolve_type(typecheck, ast->box_expr.expr->ty->pointer.pointee);
+      ast->ty = ast->box_expr.expr->ty->pointer.pointee;
       return ast->ty;
     } break;
 

@@ -21,7 +21,7 @@ enum OutputFormat {
 
 enum RelocationsType { RelocsPIC, RelocsStatic };
 
-enum LogLevel { LogLevelError, LogLevelWarning, LogLevelInfo, LogLevelDebug };
+enum LogLevel { LogLevelError, LogLevelWarning, LogLevelInfo, LogLevelDebug, LogLevelTrace };
 
 enum DiagLevel { DiagError, DiagWarning, DiagNote, DiagDebug };
 
@@ -33,6 +33,7 @@ enum Pass {
   PassTypecheck,
   PassPurity,
   PassCFold,
+  PassDesugar,
   PassSemantic1,
   PassSemantic2,
 };
@@ -51,6 +52,8 @@ enum Pass {
 #define FLAG_NO_PREAMBLE (1U << 5)
 // Enable the Address Sanitizer
 #define FLAG_ASAN (1U << 6)
+// Enable trace level debugging, which is immensely verbose.
+#define FLAG_TRACE (1U << 7)
 
 struct compiler;
 

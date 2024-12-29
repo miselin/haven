@@ -380,8 +380,8 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->array_index.target, indent + 1);
       dump_expr(ast->array_index.index, indent + 1);
+      dump_expr(ast->array_index.target, indent + 1);
     } break;
 
     case AST_EXPR_TYPE_MATCH: {
@@ -455,11 +455,10 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      if (ast->box_expr.parsed_ty) {
-        dump_ty(ast->box_expr.parsed_ty);
-      }
       if (ast->box_expr.expr) {
         dump_expr(ast->box_expr.expr, indent + 1);
+      } else {
+        dump_ty(&ast->box_expr.parsed_ty);
       }
     } break;
 

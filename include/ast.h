@@ -250,12 +250,13 @@ struct ast_expr_union_init {
 };
 
 struct ast_expr_sizeof {
-  struct ast_ty parsed_ty;
+  struct ast_ty parsed_ty;  // only filled if expr is NULL
+  struct ast_ty *resolved;
   struct ast_expr *expr;
 };
 
 struct ast_expr_box {
-  struct ast_ty *parsed_ty;
+  struct ast_ty parsed_ty;  // only filled if expr is NULL
   struct ast_expr *expr;
 };
 

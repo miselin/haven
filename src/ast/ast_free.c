@@ -235,7 +235,7 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      free_parser_ty(compiler, ast->box_expr.parsed_ty);
+      free_parser_ty(compiler, &ast->box_expr.parsed_ty);
       if (ast->box_expr.expr) {
         free_expr(compiler, ast->box_expr.expr);
       }

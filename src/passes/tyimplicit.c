@@ -162,8 +162,6 @@ static int typecheck_implicit_stmt(struct ast_stmt *ast) {
 }
 
 static int typecheck_implicit_expr(struct ast_expr *ast) {
-  fprintf(stderr, "typecheck implicit expr @ %s:%zd:%zd\n", ast->loc.file, ast->loc.line,
-          ast->loc.column);
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
       switch (ast->ty->ty) {

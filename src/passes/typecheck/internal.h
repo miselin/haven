@@ -49,6 +49,10 @@ struct ast_ty *resolve_type(struct typecheck *typecheck, struct ast_ty *ty);
 // copied or otherwise modified to be resolved.
 struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *ty);
 
+// Patch TBDs caused by recursive definitions in the given type. Requires the actual type to
+// have been defined or else this will retain the TBDs.
+void patch_type_tbds(struct typecheck *typecheck, struct ast_ty *ty, struct ast_ty *parser_ty);
+
 void resolve_template_type(struct typecheck *typecheck, struct ast_template_ty *templates,
                            struct ast_ty *ty);
 

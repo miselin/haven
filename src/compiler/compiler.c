@@ -6,6 +6,7 @@
 
 #include "cfold.h"
 #include "codegen.h"
+#include "desugar.h"
 #include "internal.h"
 #include "lex.h"
 #include "parse.h"
@@ -144,6 +145,21 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   }
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from first semantic pass: %d", rc);
+
+  if (rc == 0) {
+    struct desugar *desugar = desugar_new(parser_get_ast(parser), compiler);
+    rc = desugar_run(desugar);
+    desugar_destroy(desugar);
+  }
+
+  if (until == PassDesugar) {
+    goto out;
+  }
+
+  fprintf(stderr, "== AST after desugar ==\n");
+  dump_ast(parser_get_ast(parser));
+
+  compiler_log(compiler, LogLevelDebug, "driver", "result from desugar: %d", rc);
 
   if (rc == 0) {
     struct cfolder *cfolder = new_cfolder(parser_get_ast(parser), compiler);

@@ -79,6 +79,9 @@ void present_diags(struct compiler *compiler, struct parser *parser) {
 
 int compiler_log(struct compiler *compiler, enum LogLevel level, const char *subsys,
                  const char *fmt, ...) {
+  if ((level == LogLevelTrace) && !(compiler->flags[0] & FLAG_TRACE)) {
+    return 0;
+  }
   if ((level == LogLevelDebug || level == LogLevelInfo) && !(compiler->flags[0] & FLAG_VERBOSE)) {
     return 0;
   }
@@ -101,6 +104,10 @@ int compiler_log(struct compiler *compiler, enum LogLevel level, const char *sub
     case LogLevelDebug:
       level_color = Blue;
       prefix = "D";
+      break;
+    case LogLevelTrace:
+      level_color = Purple;
+      prefix = "T";
       break;
   }
 

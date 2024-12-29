@@ -333,6 +333,8 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       while (seen) {
         if (!strcmp(ty->name, seen->ty->name)) {
           break;
+        } else if (seen->ty == ty) {
+          break;
         }
         seen = seen->next;
       }
@@ -349,19 +351,23 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
             snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
         struct ast_struct_field *field = ty->structty.fields;
         while (field) {
-          // TODO: maybe still want to emit the parsed type?
-          if (field->ty) {
-            if (field->ty->ty == AST_TYPE_POINTER || field->ty->ty == AST_TYPE_BOX) {
-              // don't emit the pointee type, just the name will do
-              offset +=
-                  snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ", ty->name,
-                           field->ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
-            } else {
-              char field_tyname[256] = {0};
-              type_name_into_ctx(field->ty, field_tyname, 256, new_ctx);
-              offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname,
-                                 field->name);
+          struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
+          if (field_ty->ty == AST_TYPE_POINTER || field_ty->ty == AST_TYPE_BOX) {
+            struct ast_ty *pointee = field_ty->pointer.pointee;
+
+            // don't emit the pointee type, just the name will do
+            offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ",
+                               pointee ? pointee->name : "<null-pointee>",
+                               field_ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
+
+            if (!pointee) {
+              fprintf(stderr, "null pointee in ty %p\n", (void *)field_ty);
             }
+          } else {
+            char field_tyname[256] = {0};
+            type_name_into_ctx(field_ty, field_tyname, 256, new_ctx);
+            offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname,
+                               field->name);
           }
           field = field->next;
         }
@@ -411,9 +417,10 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       while (field) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s = %" PRIu64, field->name,
                            field->value);
-        if (field->has_inner && field->inner) {
+        if (field->has_inner) {
+          struct ast_ty *enum_inner = field->inner ? field->inner : &field->parser_inner;
           offset += snprintf(buf + offset, maxlen - (size_t)offset, " (");
-          offset += type_name_into_ctx(field->inner, buf + offset, maxlen - (size_t)offset, ctx);
+          offset += type_name_into_ctx(enum_inner, buf + offset, maxlen - (size_t)offset, ctx);
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
         }
         if (field->next) {
@@ -444,6 +451,7 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
 
     case AST_TYPE_POINTER:
       offset += snprintf(buf, maxlen, "Pointer <");
+
       offset += type_name_into_ctx(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset, ctx);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
       break;
@@ -609,6 +617,8 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
         if (field->has_inner) {
           new_field->inner =
               type_repository_lookup_ty(repo, field->inner ? field->inner : &field->parser_inner);
+          fprintf(stderr, "copy_type enum inner %p -> %p\n", (void *)field->inner,
+                  (void *)new_field->inner);
         }
         field = field->next;
 
@@ -676,6 +686,13 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
     case AST_TYPE_POINTER:
     case AST_TYPE_BOX: {
       new_type->pointer.pointee = type_repository_lookup_ty(repo, ty->pointer.pointee);
+      if (!new_type->pointer.pointee) {
+        // make it a custom instead and let it get resolved later
+        struct ast_ty custom;
+        custom.ty = AST_TYPE_CUSTOM;
+        strncpy(custom.name, ty->pointer.pointee->name, sizeof(custom.name));
+        new_type->pointer.pointee = type_repository_lookup_ty(repo, &custom);
+      }
     } break;
   }
 
@@ -788,4 +805,94 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
 int type_is_indexable(struct ast_ty *ty) {
   return ty->ty == AST_TYPE_ARRAY || ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_FVEC ||
          ty->ty == AST_TYPE_MATRIX || ty->ty == AST_TYPE_BOX;
+}
+
+void mangle_type(struct ast_ty *ty, char *buf, size_t len, const char *prefix) {
+  *buf = 0;
+
+  if (prefix) {
+    strcat(buf, prefix);
+    size_t prefix_len = strlen(prefix);
+    buf += prefix_len;
+    len -= prefix_len;
+  }
+
+  switch (ty->ty) {
+    case AST_TYPE_INTEGER:
+      snprintf(buf, len, "i%zd", ty->integer.width);
+      break;
+
+    case AST_TYPE_STRING:
+      strcat(buf, "s");
+      break;
+
+    case AST_TYPE_FLOAT:
+      strcat(buf, "F32");
+      break;
+
+    case AST_TYPE_FVEC:
+      snprintf(buf, len, "F32V%zd", ty->fvec.width);
+      break;
+
+    case AST_TYPE_VOID:
+      strcat(buf, "V");
+      break;
+
+    case AST_TYPE_ARRAY:
+      snprintf(buf, len, "A%zd", ty->array.width);
+      break;
+
+    case AST_TYPE_MATRIX:
+      snprintf(buf, len, "M%zdx%zd", ty->matrix.rows, ty->matrix.cols);
+      break;
+
+    case AST_TYPE_STRUCT:
+      snprintf(buf, len, "S%s", ty->name);
+      break;
+
+    case AST_TYPE_ENUM:
+      snprintf(buf, len, "E%s", ty->name);
+      break;
+
+    case AST_TYPE_CUSTOM:
+      snprintf(buf, len, "C%s", ty->name);
+      break;
+
+    case AST_TYPE_NIL:
+      strcat(buf, "N");
+      break;
+
+    case AST_TYPE_FUNCTION:
+      strcat(buf, "Fn");
+      break;
+
+    case AST_TYPE_POINTER:
+      strcat(buf, "P");
+      break;
+
+    case AST_TYPE_BOX:
+      strcat(buf, "B");
+      break;
+
+    case AST_TYPE_TEMPLATE:
+      strcat(buf, "T");
+      strcat(buf, ty->tmpl.outer->name);
+      strcat(buf, "_");
+      struct ast_template_ty *inner = ty->tmpl.inners;
+      while (inner) {
+        char inner_buf[256];
+        mangle_type(&inner->parsed_ty, inner_buf, 256, NULL);
+        strcat(buf, inner_buf);
+        if (inner->next) {
+          strcat(buf, "_");
+        }
+        inner = inner->next;
+      }
+      break;
+
+    case AST_TYPE_ERROR:
+    case AST_TYPE_TBD:
+      // no.
+      break;
+  }
 }
