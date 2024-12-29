@@ -71,12 +71,17 @@ static int check_purity_expr(struct purity *purity, struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_CALL: {
       if (ast->call.fdecl->flags & DECL_FLAG_IMPURE) {
+        compiler_log(purity->compiler, LogLevelError, "purity",
+                     "call from pure function to impure function %s is not allowed",
+                     ast->call.ident.value.identv.ident);
         purity->errors++;
       }
     } break;
 
     case AST_EXPR_TYPE_DEREF:
       if (ast->deref.is_ptr) {
+        compiler_log(purity->compiler, LogLevelError, "purity",
+                     "dereference of pointer is not allowed in pure functions");
         purity->errors++;
       }
       break;
@@ -97,6 +102,8 @@ static int check_purity_expr(struct purity *purity, struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_LOAD:
+      compiler_log(purity->compiler, LogLevelError, "purity",
+                   "load is not allowed in pure functions");
       purity->errors++;
       break;
 
