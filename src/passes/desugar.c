@@ -315,10 +315,12 @@ static int desugar_expr(struct desugar *desugar, struct ast_expr *ast) {
         }
 
         struct ast_ty outer;
+        memset(&outer, 0, sizeof(struct ast_ty));
         outer.ty = AST_TYPE_CUSTOM;
         strncpy(outer.name, ast->enum_init.enum_ty_name.value.identv.ident, 256);
 
         struct ast_ty tmpl;
+        memset(&tmpl, 0, sizeof(struct ast_ty));
         tmpl.ty = AST_TYPE_TEMPLATE;
         tmpl.tmpl.outer = &outer;
         tmpl.tmpl.inners = ast->enum_init.tmpls;

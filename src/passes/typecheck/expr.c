@@ -87,6 +87,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
               size_t cols = ast->list->expr->list->num_elements;
 
               struct ast_ty new_ty;
+              memset(&new_ty, 0, sizeof(new_ty));
               new_ty.ty = AST_TYPE_MATRIX;
               new_ty.matrix.cols = cols;
               new_ty.matrix.rows = rows;
@@ -249,6 +250,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       struct ast_ty int_ty;
+      memset(&int_ty, 0, sizeof(int_ty));
       int_ty.ty = AST_TYPE_INTEGER;
       int_ty.integer.is_signed = 1;
       int_ty.integer.width = 32;
@@ -305,6 +307,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         // conditionals & logicals both emit 1-bit booleans
         // don't set signed flag - booleans need to zero-extend in conversions, not sign-extend
         struct ast_ty i1;
+        memset(&i1, 0, sizeof(i1));
         i1.ty = AST_TYPE_INTEGER;
         i1.integer.is_signed = 0;
         i1.integer.width = 1;
@@ -439,6 +442,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         max_field = ty->fvec.width;
 
         struct ast_ty lookup_ty;
+        memset(&lookup_ty, 0, sizeof(lookup_ty));
         lookup_ty.ty = AST_TYPE_FLOAT;
         ast->ty = type_repository_lookup_ty(typecheck->type_repo, &lookup_ty);
       } else if (ty->ty == AST_TYPE_STRUCT) {
@@ -476,6 +480,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         max_field = ty->matrix.rows;
 
         struct ast_ty vec_ty;
+        memset(&vec_ty, 0, sizeof(vec_ty));
         vec_ty.ty = AST_TYPE_FVEC;
         vec_ty.fvec.width = ty->matrix.cols;
         ast->ty = type_repository_lookup_ty(typecheck->type_repo, &vec_ty);
@@ -746,6 +751,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       struct ast_ty wrapped;
+      memset(&wrapped, 0, sizeof(wrapped));
       wrapped.ty = AST_TYPE_POINTER;
       wrapped.pointer.pointee = expr->ty;
       ast->ty = type_repository_lookup_ty(typecheck->type_repo, &wrapped);
@@ -936,6 +942,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_NIL: {
       struct ast_ty lookup;
+      memset(&lookup, 0, sizeof(lookup));
       lookup.ty = AST_TYPE_NIL;
       ast->ty = type_repository_lookup_ty(typecheck->type_repo, &lookup);
       return ast->ty;
@@ -1044,6 +1051,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       ast->sizeof_expr.resolved = inner_ty;
 
       struct ast_ty itype;
+      memset(&itype, 0, sizeof(itype));
       itype.ty = AST_TYPE_INTEGER;
       itype.integer.is_signed = 1;
       itype.integer.width = 32;
@@ -1080,6 +1088,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       struct ast_ty box_ty;
+      memset(&box_ty, 0, sizeof(box_ty));
       box_ty.ty = AST_TYPE_BOX;
       box_ty.pointer.pointee = inner_ty;
       ast->ty = type_repository_lookup_ty(typecheck->type_repo, &box_ty);

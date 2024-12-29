@@ -46,7 +46,7 @@ int typecheck_run(struct typecheck *typecheck) {
     return typecheck->errors;
   }
 
-  compiler_log(typecheck->compiler, LogLevelError, "typecheck",
+  compiler_log(typecheck->compiler, LogLevelInfo, "typecheck",
                "primary typecheck pass complete, moving on to implicit conversions");
 
   int rc = 0;
@@ -61,7 +61,7 @@ int typecheck_run(struct typecheck *typecheck) {
     }
   }
 
-  compiler_log(typecheck->compiler, LogLevelError, "typecheck",
+  compiler_log(typecheck->compiler, LogLevelInfo, "typecheck",
                "implicit conversion pass complete, moving on to verification");
 
   if (typecheck_verify_ast(typecheck->ast) < 0) {
@@ -142,6 +142,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     // set initial lookup for this name to allow for recursive types in structs and unions
     // struct ast_ty *tbd = type_repository_tbd(typecheck->type_repo);
     struct ast_ty custom;
+    memset(&custom, 0, sizeof(struct ast_ty));
     custom.ty = AST_TYPE_CUSTOM;
     strncpy(custom.name, alias_name, 256);
     compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
