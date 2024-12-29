@@ -1,0 +1,64 @@
+cimport "stdlib.h";
+
+type Scope = struct {
+    KV *values;
+    Scope *parent;
+};
+
+pub impure fn KVNode *scope_iter(Scope *scope);
+pub impure fn i8 *scope_next(mut KVIterator *iter_node);
+pub impure fn i32 scope_end(KVNode *iter_node);
+
+pub impure fn Scope *enter_scope(Scope *parent) {
+    let mut result = as Scope* malloc(as u64 sizeof Scope);
+    result->values = new_kv();
+    result->parent = parent;
+    result
+}
+
+pub impure fn Scope *exit_scope(Scope *scope) {
+    let mut parent = scope->parent;
+
+    let iter_node = scope_iter(scope);
+    while !scope_end(iter_node) {
+        let node = scope_next(ref iter_node);
+        free(node);
+    };
+
+    destroy_kv(scope->values);
+
+    free(scope);
+    parent
+}
+
+pub impure fn void scope_insert(Scope *scope, i8 *key, void *value) {
+    kv_delete(scope->values, key);
+    kv_insert(scope->values, key, value);
+}
+
+pub impure fn void *scope_lookup(Scope *scope, i8 *key, i32 recurse) {
+    let mut result = kv_lookup(scope->values, key);
+    if result != nil {
+        result
+    } else if recurse == 1 && scope->parent != nil {
+        scope_lookup(scope->parent, key, 1)
+    } else {
+        nil
+    }
+}
+
+pub impure fn KVNode *scope_iter(Scope *scope) {
+    kv_iter(scope->values)
+}
+
+pub impure fn i8 *scope_next(mut KVIterator *iter_node) {
+    kv_next(iter_node)
+}
+
+pub impure fn i32 scope_end(KVNode *iter_node) {
+    kv_end(iter_node)
+}
+
+pub impure fn Scope *scope_parent(Scope *scope) {
+    scope->parent
+}

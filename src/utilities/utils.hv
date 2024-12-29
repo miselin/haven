@@ -1,2 +1,3 @@
 import "trie.hv";
 import "kv.hv";
+import "scope.hv";
