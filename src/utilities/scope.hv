@@ -1,4 +1,5 @@
 cimport "stdlib.h";
+import "kv.hv";
 
 type Scope = struct {
     KV *values;

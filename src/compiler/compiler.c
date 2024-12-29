@@ -55,6 +55,13 @@ const char *compiler_get_output_file(struct compiler *compiler) {
 }
 
 void destroy_compiler(struct compiler *compiler) {
+  struct imported_file *cursor = compiler->imported_files;
+  while (cursor) {
+    struct imported_file *next = cursor->next;
+    free(cursor);
+    cursor = next;
+  }
+
   struct linker_option *lo = compiler->linker_options;
   while (lo) {
     struct linker_option *next = lo->next;

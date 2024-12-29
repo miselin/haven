@@ -25,6 +25,18 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
   struct stat st;
   stat(fullpath, &st);
 
+  struct imported_file *cursor = compiler->imported_files;
+  while (cursor) {
+    if (same_file(&cursor->st, &st)) {
+      // already imported, generate an empty AST for the import node
+      into->ast = calloc(1, sizeof(struct ast_program));
+      strncpy(into->ast->loc.file, fullpath, 256);
+      free((void *)fullpath);
+      return 0;
+    }
+    cursor = cursor->next;
+  }
+
   if (type == ImportTypeC) {
     if (!S_ISREG(st.st_mode)) {
       compiler_diag(compiler, DiagError, "not a regular file: %s\n", fullpath);
@@ -37,6 +49,8 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
       free((void *)fullpath);
       return -1;
     }
+
+    track_imported_file(compiler, &st);
 
     free((void *)fullpath);
     return 0;
@@ -61,6 +75,8 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
     }
   }
 
+  track_imported_file(compiler, &st);
+
   FILE *in = fopen(fullpath, "r");
   if (!in) {
     compiler_diag(compiler, DiagError, "failed to open import file %s\n", fullpath);
@@ -83,4 +99,15 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
   destroy_lexer(lexer);
   free((void *)fullpath);
   return rc;
+}
+
+int same_file(struct stat *a, struct stat *b) {
+  return a->st_dev == b->st_dev && a->st_ino == b->st_ino;
+}
+
+void track_imported_file(struct compiler *compiler, struct stat *st) {
+  struct imported_file *this_entry = calloc(1, sizeof(struct imported_file));
+  this_entry->st = *st;
+  this_entry->next = compiler->imported_files;
+  compiler->imported_files = this_entry;
 }

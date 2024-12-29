@@ -56,8 +56,8 @@ static void dump_toplevel(struct ast_toplevel *ast, int indent) {
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     INDENTED(indent, "PreprocessorDecl\n");
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    INDENTED(indent, "Import %s '%s'\n", ast->import.type == ImportTypeC ? "C" : "Haven",
-             ast->import.path);
+    INDENTED(indent, "Import %s '%s'%s\n", ast->import.type == ImportTypeC ? "C" : "Haven",
+             ast->import.path, ast->import.ast->decls ? "" : " (already imported)");
     dump_ast_indented(ast->import.ast, indent + 1);
   } else {
     INDENTED(indent, "<unknown-toplevel>\n");

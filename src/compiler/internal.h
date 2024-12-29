@@ -2,6 +2,7 @@
 #define _HAVEN_COMPILER_INTERNAL_H
 
 #include <stdio.h>
+#include <sys/stat.h>
 
 #include "compiler.h"
 #include "types.h"
@@ -57,6 +58,11 @@ struct linker_option {
   struct linker_option *next;
 };
 
+struct imported_file {
+  struct stat st;
+  struct imported_file *next;
+};
+
 struct compiler {
   const char *input_file;
   const char *output_file;
@@ -78,6 +84,8 @@ struct compiler {
   struct type_repository *type_repository;
 
   const char *ld;
+
+  struct imported_file *imported_files;
 };
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]);
@@ -92,5 +100,9 @@ int find_file_path(struct compiler *compiler, const char *filename, const char *
 void add_search_dir(struct compiler *compiler, const char *path);
 
 int compiler_link(struct compiler *compiler, const char *object_file);
+
+int same_file(struct stat *a, struct stat *b);
+
+void track_imported_file(struct compiler *compiler, struct stat *st);
 
 #endif
