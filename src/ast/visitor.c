@@ -68,6 +68,9 @@ static enum VisitorResult visitor_visit_toplevel(struct ast_visitor *visitor,
       break;
 
     case AST_DECL_TYPE_IMPORT:
+      if (ast->import.ast && visitor_visit_ast(visitor, ast->import.ast) == VisitorStop) {
+        return VisitorStop;
+      }
       break;
 
     default:

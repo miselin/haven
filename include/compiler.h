@@ -8,6 +8,8 @@
 
 #define COMPILER_IDENT "haven"
 
+struct ast_import;
+
 enum OptLevel { OptNone, OptLight, OptNormal, OptAggressive };
 
 enum OutputFormat {
@@ -75,7 +77,8 @@ const char *compiler_get_output_file(struct compiler *compiler);
 
 int compiler_run(struct compiler *compiler, enum Pass until);
 
-int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name);
+int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name,
+                          struct ast_import *into);
 
 struct ast_program *compiler_get_ast(struct compiler *compiler);
 struct type_repository *compiler_get_type_repository(struct compiler *compiler);

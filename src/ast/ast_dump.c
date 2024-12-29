@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "ast.h"
+#include "compiler.h"
 
 #define INDENTED(level, ...)      \
   do {                            \
@@ -15,7 +16,8 @@ static void print_indent(int level) {
   }
 }
 
-static void dump_toplevel(struct ast_toplevel *ast);
+static void dump_ast_indented(struct ast_program *ast, int indent);
+static void dump_toplevel(struct ast_toplevel *ast, int indent);
 static void dump_block(struct ast_block *ast, int indent);
 static void dump_stmt(struct ast_stmt *ast, int indent);
 static void dump_fdecl(struct ast_fdecl *ast, int indent);
@@ -33,31 +35,39 @@ static void dump_decl_flags(uint64_t flags);
 static void dump_expr_ty(struct ast_expr *ast);
 
 void dump_ast(struct ast_program *ast) {
+  dump_ast_indented(ast, 0);
+}
+
+static void dump_ast_indented(struct ast_program *ast, int indent) {
   struct ast_toplevel *decl = ast->decls;
   while (decl) {
-    dump_toplevel(decl);
+    dump_toplevel(decl, indent);
     decl = decl->next;
   }
 }
 
-static void dump_toplevel(struct ast_toplevel *ast) {
+static void dump_toplevel(struct ast_toplevel *ast, int indent) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    dump_fdecl(&ast->fdecl, 0);
+    dump_fdecl(&ast->fdecl, indent);
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    dump_vdecl(&ast->vdecl, 0);
+    dump_vdecl(&ast->vdecl, indent);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    dump_tydecl(&ast->tydecl, 0);
+    dump_tydecl(&ast->tydecl, indent);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
-    fprintf(stderr, "PreprocessorDecl\n");
+    INDENTED(indent, "PreprocessorDecl\n");
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    fprintf(stderr, "ImportDecl\n");
+    INDENTED(indent, "Import %s '%s'\n", ast->import.type == ImportTypeC ? "C" : "Haven",
+             ast->import.path);
+    dump_ast_indented(ast->import.ast, indent + 1);
   } else {
-    fprintf(stderr, "<unknown-toplevel>\n");
+    INDENTED(indent, "<unknown-toplevel>\n");
   }
 }
 
 static void dump_fdecl(struct ast_fdecl *ast, int indent) {
-  INDENTED(indent, "\nFunctionDecl %s [", ast->ident.value.identv.ident);
+  fputs("\n", stderr);
+
+  INDENTED(indent, "FunctionDecl %s [", ast->ident.value.identv.ident);
   dump_decl_flags(ast->flags);
   fprintf(stderr, "] -> ");
   dump_ty(ast->retty);

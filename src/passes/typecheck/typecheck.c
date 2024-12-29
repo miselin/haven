@@ -13,15 +13,9 @@
 
 int typecheck_implicit_ast(struct ast_program *ast);
 
-static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast, int only_tydecls);
-static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast,
-                               int only_tydecls);
+static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast);
+static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast);
 static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast);
-
-#if 0
-static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl);
-static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl);
-#endif
 
 struct typecheck *new_typecheck(struct ast_program *ast, struct compiler *compiler) {
   struct typecheck *result = calloc(1, sizeof(struct typecheck));
@@ -37,9 +31,7 @@ struct typecheck *new_typecheck(struct ast_program *ast, struct compiler *compil
 }
 
 int typecheck_run(struct typecheck *typecheck) {
-  // do the first pass with just type declarations so we can fully resolve forward-declared types
-  // typecheck_ast(typecheck, typecheck->ast, 1);
-  typecheck_ast(typecheck, typecheck->ast, 0);
+  typecheck_ast(typecheck, typecheck->ast);
   if (typecheck->errors) {
     return typecheck->errors;
   }
@@ -79,16 +71,15 @@ void destroy_typecheck(struct typecheck *typecheck) {
   free(typecheck);
 }
 
-static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast, int only_tydecls) {
+static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast) {
   struct ast_toplevel *decl = ast->decls;
   while (decl) {
-    typecheck_toplevel(typecheck, decl, only_tydecls);
+    typecheck_toplevel(typecheck, decl);
     decl = decl->next;
   }
 }
 
-static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast,
-                               int only_tydecls) {
+static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast) {
   compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "checking toplevel %d @ %s:%zd:%zd",
                ast->type, ast->loc.file, ast->loc.line, ast->loc.column);
 
@@ -164,10 +155,6 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     compiler_log(typecheck->compiler, LogLevelTrace, "typecheck", "resolved tydecl %s -> %s",
                  alias_name, target_type->name);
     ast->tydecl.resolved = target_type;
-  }
-
-  if (only_tydecls) {
-    return;
   }
 
   if (ast->type == AST_DECL_TYPE_FDECL) {
@@ -286,7 +273,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
         return;
       }
     }
-  } else if (ast->type == AST_DECL_TYPE_VDECL) {
+  }
+
+  if (ast->type == AST_DECL_TYPE_VDECL) {
     ast->vdecl.ty = resolve_parsed_type(typecheck, &ast->vdecl.parser_ty);
     if (!ast->vdecl.ty || type_is_error(ast->vdecl.ty) || type_is_tbd(ast->vdecl.ty)) {
       fprintf(stderr, "variable %s has unresolved type\n", ast->vdecl.ident.value.identv.ident);
@@ -332,31 +321,11 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       }
     }
   }
-}
 
-#if 0
-static void typecheck_struct_decl(struct typecheck *typecheck, struct ast_ty *decl) {
-  // TODO: causes infinite recursive loop on recursive struct definitions
-
-  struct ast_struct_field *field = decl->structty.fields;
-  while (field) {
-    // TODO: check for recursive definition, ensure it's a pointer if so, or it's not representable
-    field->ty = resolve_parsed_type(typecheck, &field->parsed_ty);
-    field = field->next;
+  if (ast->type == AST_DECL_TYPE_IMPORT) {
+    typecheck_ast(typecheck, ast->import.ast);
   }
 }
-
-static void typecheck_enum_decl(struct typecheck *typecheck, struct ast_ty *decl) {
-  struct ast_enum_field *field = decl->enumty.fields;
-  while (field) {
-    if (field->has_inner) {
-      resolve_template_type(typecheck, decl->enumty.templates, &field->parser_inner);
-      field->inner = resolve_parsed_type(typecheck, &field->parser_inner);
-    }
-    field = field->next;
-  }
-}
-#endif
 
 struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *ast) {
   typecheck->scope = enter_scope(typecheck->scope);

@@ -36,6 +36,10 @@ int parser_merge_asts(struct parser *parser, struct parser *other);
 
 int parser_merge_program(struct parser *parser, struct ast_program *program);
 
+// Merge the AST of the given parser into the given import node.
+// The parser's AST becomes empty in the process.
+int parser_merge_into(struct parser *parser, struct ast_import *into);
+
 #ifdef __cplusplus
 }
 #endif

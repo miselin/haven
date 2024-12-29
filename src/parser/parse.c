@@ -33,16 +33,7 @@ int parser_run(struct parser *parser, int root_tu) {
       return -1;
     }
 
-    if (decl->type == AST_DECL_TYPE_IMPORT) {
-      // need to reiterate the AST to make last valid again
-      struct ast_toplevel *d = parser->ast.decls;
-      while (d) {
-        last = d;
-        d = d->next;
-      }
-    }
-
-    if (!parser->ast.decls) {
+    if (!last) {
       parser->ast.decls = decl;
     } else {
       last->next = decl;
@@ -116,6 +107,20 @@ int parser_merge_program(struct parser *parser, struct ast_program *program) {
 
   // clear the other parser's AST
   program->decls = NULL;
+
+  return 0;
+}
+
+int parser_merge_into(struct parser *parser, struct ast_import *into) {
+  if (into->ast) {
+    compiler_log(parser->compiler, LogLevelError, "parser", "import node already has an AST");
+    return -1;
+  }
+
+  into->ast = calloc(1, sizeof(struct ast_program));
+  *into->ast = parser->ast;
+
+  parser->ast.decls = NULL;
 
   return 0;
 }

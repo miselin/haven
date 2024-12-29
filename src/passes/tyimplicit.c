@@ -59,6 +59,8 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
       }
       total += rc;
     }
+  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+    return typecheck_implicit_ast(ast->import.ast);
   }
 
   return total;

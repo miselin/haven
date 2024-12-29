@@ -120,6 +120,12 @@ struct ast_tydecl {
   struct ast_ty *resolved;
 };
 
+struct ast_import {
+  char path[256];
+  struct ast_program *ast;
+  enum ImportType type;
+};
+
 struct ast_toplevel {
   int type;
   struct lex_locator loc;
@@ -129,6 +135,7 @@ struct ast_toplevel {
     struct ast_vdecl vdecl;
     struct ast_fdecl fdecl;
     struct ast_tydecl tydecl;
+    struct ast_import import;
   };
 };
 

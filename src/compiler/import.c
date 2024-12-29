@@ -12,9 +12,10 @@ extern int haven_cimport_present(void) __attribute__((weak));
 
 extern int haven_cimport_process(const char *filename) __attribute__((weak));
 
-int cimport(struct parser *parser, const char *filename);
+int cimport(const char *filename, struct ast_import *into);
 
-int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name) {
+int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name,
+                          struct ast_import *into) {
   const char *fullpath = NULL;
   if (find_file_path(compiler, name, &fullpath) < 0) {
     compiler_diag(compiler, DiagError, "failed to find import file %s\n", name);
@@ -31,7 +32,7 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
       return -1;
     }
 
-    if (cimport(compiler->parser, fullpath) < 0) {
+    if (cimport(fullpath, into) < 0) {
       compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
       free((void *)fullpath);
       return -1;
@@ -75,7 +76,7 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
   present_diags(compiler, parser);
 
   if (rc == 0) {
-    rc = parser_merge_asts(compiler->parser, parser);
+    rc = parser_merge_into(parser, into);
   }
 
   destroy_parser(parser);

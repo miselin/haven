@@ -402,6 +402,8 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
 
   CXString loc_name = clang_getFileName(file);
 
+  strncpy(program->loc.file, clang_getCString(loc_name), 256);
+
   // Check if this is a file-scope declaration
   if (clang_equalCursors(clang_getCursorSemanticParent(cursor), TU_cursor)) {
     // Extract relevant information
@@ -512,7 +514,7 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
   return CXChildVisit_Continue;
 }
 
-int cimport(struct parser *parser, const char *filename) {
+int cimport(const char *filename, struct ast_import *into) {
   CXIndex index = clang_createIndex(0, 0);
   CXTranslationUnit unit = clang_parseTranslationUnit(index, filename, NULL, 0, NULL, 0,
                                                       CXTranslationUnit_SkipFunctionBodies);
@@ -530,10 +532,10 @@ int cimport(struct parser *parser, const char *filename) {
   clang_visitChildren(cursor, libclang_visitor_decls, program);
 
   if (program->decls) {
-    parser_merge_program(parser, program);
+    into->ast = program;
+  } else {
+    free(program);
   }
-
-  free(program);
 
   clang_disposeTranslationUnit(unit);
   clang_disposeIndex(index);

@@ -12,6 +12,7 @@ struct cfolder {
   struct compiler *compiler;
 };
 
+static void cfold_program(struct cfolder *cfolder, struct ast_program *ast);
 static void cfold_toplevel(struct cfolder *cfolder, struct ast_toplevel *ast);
 static void cfold_block(struct cfolder *cfolder, struct ast_block *ast);
 static void cfold_stmt(struct cfolder *cfolder, struct ast_stmt *ast);
@@ -27,13 +28,16 @@ struct cfolder *new_cfolder(struct ast_program *ast, struct compiler *compiler) 
 }
 
 int cfolder_run(struct cfolder *cfolder) {
-  struct ast_toplevel *decl = cfolder->ast->decls;
+  cfold_program(cfolder, cfolder->ast);
+  return 0;
+}
+
+static void cfold_program(struct cfolder *cfolder, struct ast_program *ast) {
+  struct ast_toplevel *decl = ast->decls;
   while (decl) {
     cfold_toplevel(cfolder, decl);
     decl = decl->next;
   }
-
-  return 0;
 }
 
 void destroy_cfolder(struct cfolder *cfolder) {
@@ -49,6 +53,8 @@ static void cfold_toplevel(struct cfolder *cfolder, struct ast_toplevel *ast) {
     if (ast->vdecl.init_expr) {
       ast->vdecl.init_expr = cfold_expr(cfolder, ast->vdecl.init_expr);
     }
+  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+    cfold_program(cfolder, ast->import.ast);
   }
 }
 

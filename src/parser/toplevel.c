@@ -362,12 +362,16 @@ struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType 
     return NULL;
   }
 
-  if (compiler_parse_import(parser->compiler, type, token.value.strv.s) < 0) {
-    return NULL;
-  }
-
   struct ast_toplevel *result = calloc(1, sizeof(struct ast_toplevel));
   result->type = AST_DECL_TYPE_IMPORT;
   result->loc = loc;
+  result->import.type = type;
+  strncpy(result->import.path, token.value.strv.s, 256);
+
+  if (compiler_parse_import(parser->compiler, type, token.value.strv.s, &result->import) < 0) {
+    free(result);
+    return NULL;
+  }
+
   return result;
 }
