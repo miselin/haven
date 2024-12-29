@@ -10,9 +10,7 @@
 #include "kv.h"
 #include "scope.h"
 #include "types.h"
-#include "utility.h"
 
-int typecheck_verify_ast(struct ast_program *ast);
 int typecheck_implicit_ast(struct ast_program *ast);
 
 static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast, int only_tydecls);
@@ -64,7 +62,7 @@ int typecheck_run(struct typecheck *typecheck) {
   compiler_log(typecheck->compiler, LogLevelInfo, "typecheck",
                "implicit conversion pass complete, moving on to verification");
 
-  if (typecheck_verify_ast(typecheck->ast) < 0) {
+  if (typecheck_verify_ast(typecheck->compiler, typecheck->ast) < 0) {
     return 1;
   }
   return 0;

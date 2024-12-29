@@ -70,6 +70,8 @@ struct ast_ty *typecheck_pattern_match(struct typecheck *typecheck, struct ast_e
                                        struct ast_expr_pattern_match *pattern,
                                        struct ast_ty *match_ty);
 
+int typecheck_verify_ast(struct compiler *compiler, struct ast_program *ast);
+
 __attribute__((format(printf, 3, 4))) void typecheck_diag_expr(struct typecheck *typecheck,
                                                                struct ast_expr *expr,
                                                                const char *msg, ...);
