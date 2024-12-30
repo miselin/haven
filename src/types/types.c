@@ -702,9 +702,11 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
     case AST_TYPE_ERROR:
       offset += snprintf(buf, maxlen, "error");
       return offset;
+
     case AST_TYPE_TBD:
       offset += snprintf(buf, maxlen, "tbd");
       return offset;
+
     case AST_TYPE_INTEGER:
       if (ty->integer.is_signed) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "i");
@@ -713,52 +715,57 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       }
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "%zd", ty->integer.width);
       break;
+
     case AST_TYPE_STRING:
       offset += snprintf(buf, maxlen, "str");
       break;
+
     case AST_TYPE_FLOAT:
       offset += snprintf(buf, maxlen, "float");
       break;
+
     case AST_TYPE_FVEC:
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->fvec.width);
       break;
+
     case AST_TYPE_VOID:
       offset += snprintf(buf, maxlen, "void");
       break;
+
     case AST_TYPE_ARRAY: {
       char element_ty[256];
-      type_name_into(ty->array.element_ty, element_ty, 256);
+      type_name_into_as_code(ty->array.element_ty, element_ty, 256);
       offset +=
           snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty, ty->array.width);
     } break;
+
     case AST_TYPE_CUSTOM:
       offset += snprintf(buf, maxlen, "%s", ty->name);
       break;
+
     case AST_TYPE_STRUCT: {
-      offset +=
-          snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
+      offset += snprintf(buf, maxlen, "%s %s%s{ ", ty->structty.is_union ? "union" : "struct",
+                         ty->name, ty->name[0] ? " " : "");
       struct ast_struct_field *field = ty->structty.fields;
       while (field) {
-        if (!strcmp(field->ty->name, ty->name)) {
-          // recursive def
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s%s; ",
-                             field->ty->ty == AST_TYPE_POINTER ? "*" : "", ty->name);
-        } else {
-          char field_ty[256];
-          type_name_into(field->ty, field_ty, 256);
-          offset +=
-              snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_ty, field->name);
-        }
+        struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
+        char field_tyname[256];
+        type_name_into_as_code(field_ty, field_tyname, 256);
+        offset +=
+            snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname, field->name);
         field = field->next;
       }
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
     } break;
+
     case AST_TYPE_NIL:
       offset += snprintf(buf, maxlen, "nil");
       break;
+
     case AST_TYPE_TEMPLATE:
       offset += snprintf(buf, maxlen, "template %s", ty->name);
       break;
+
     case AST_TYPE_ENUM:
       offset += snprintf(buf, maxlen, "enum {\n");
       struct ast_enum_field *field = ty->enumty.fields;
@@ -766,7 +773,8 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "  %s", field->name);
         if (field->has_inner) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, "(");
-          offset += type_name_into(field->inner, buf + offset, maxlen - (size_t)offset);
+          offset += type_name_into_as_code(field->inner ? field->inner : &field->parser_inner,
+                                           buf + offset, maxlen - (size_t)offset);
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
         }
         if (field->next) {
@@ -777,18 +785,16 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       }
 
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
-
       break;
+
+    case AST_TYPE_POINTER:
+      offset += type_name_into_as_code(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
+      break;
+
     default:
       offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
       return offset;
-  }
-
-  if (ty->flags & TYPE_FLAG_CONSTANT) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
-  }
-  if (ty->flags & ~TYPE_FLAG_CONSTANT) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %" PRIx64 ")", ty->flags);
   }
 
   buf[offset] = '\0';

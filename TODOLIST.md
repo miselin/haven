@@ -27,3 +27,4 @@
 - [x] emit_lvalue in codegen to stop the ref/not-ref/load/dont-load madness
 - [ ] `<stmt> unless <cond>`
 - [ ] va args (`va_arg` IR instruction + intrinsics)
+- [ ] maybe emit C for easier bootstrapping?

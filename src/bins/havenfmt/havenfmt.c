@@ -1,15 +1,7 @@
-
 #include <stdio.h>
 
 #include "ast.h"
-#include "cfold.h"
-#include "codegen.h"
 #include "compiler.h"
-#include "lex.h"
-#include "parse.h"
-#include "purity.h"
-#include "typecheck.h"
-#include "utility.h"
 
 int main(int argc, char *argv[]) {
   struct compiler *compiler = new_compiler(argc, (const char **)argv);
