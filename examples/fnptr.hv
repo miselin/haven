@@ -1,0 +1,12 @@
+fn i32 callback(i32 x) {
+    x
+}
+
+impure fn i32 call_callback(i32 x, fn i32 (i32) func) {
+    func(x)
+}
+
+pub impure fn i32 main() {
+    let func = callback;
+    call_callback(5, func)
+}
