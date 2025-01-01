@@ -47,6 +47,10 @@ add_executable(parse_test parse_test.cc)
 target_link_libraries(parse_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(parse_test)
 
+add_executable(string_builder_test string_builder_test.cc)
+target_link_libraries(string_builder_test haven_compiler_options_no_warnings compiler_bootstrap GTest::gtest_main)
+gtest_discover_tests(string_builder_test)
+
 macro(add_functional_test name expectedrc)
     add_executable(${name}_test rc_test.cc)
     add_haven_library(${name}_sut inputs/${name}.hv)
