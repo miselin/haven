@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ast.h"
+
 struct ast_ty type_tbd(void) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(ty));
@@ -429,10 +431,10 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
 
     case AST_TYPE_FUNCTION:
       offset += snprintf(buf, maxlen, "fn (");
-      for (size_t i = 0; i < ty->function.num_args; i++) {
-        offset +=
-            type_name_into_ctx(ty->function.args[i], buf + offset, maxlen - (size_t)offset, ctx);
-        if (i + 1 < ty->function.num_args) {
+      for (size_t i = 0; i < ty->function.num_params; i++) {
+        offset += type_name_into_ctx(ty->function.param_types[i], buf + offset,
+                                     maxlen - (size_t)offset, ctx);
+        if (i + 1 < ty->function.num_params) {
           offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
         }
       }
@@ -668,9 +670,10 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
     } break;
 
     case AST_TYPE_FUNCTION: {
-      new_type->function.args = calloc(ty->function.num_args, sizeof(struct ast_ty *));
-      for (size_t i = 0; i < ty->function.num_args; i++) {
-        new_type->function.args[i] = type_repository_lookup_ty(repo, ty->function.args[i]);
+      new_type->function.param_types = calloc(ty->function.num_params, sizeof(struct ast_ty));
+      for (size_t i = 0; i < ty->function.num_params; i++) {
+        new_type->function.param_types[i] =
+            type_repository_lookup_ty(repo, ty->function.param_types[i]);
       }
 
       new_type->function.retty = type_repository_lookup_ty(repo, ty->function.retty);

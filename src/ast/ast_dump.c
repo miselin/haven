@@ -67,17 +67,20 @@ static void dump_toplevel(struct ast_toplevel *ast, int indent) {
 static void dump_fdecl(struct ast_fdecl *ast, int indent) {
   fputs("\n", stderr);
 
+  struct ast_ty *ty = ast->function_ty ? ast->function_ty : &ast->parsed_function_ty;
+
   INDENTED(indent, "FunctionDecl %s [", ast->ident.value.identv.ident);
   dump_decl_flags(ast->flags);
   fprintf(stderr, "] -> ");
-  dump_ty(ast->retty);
+  dump_ty(ty->function.retty);
   fprintf(stderr, "\n");
 
   if (ast->num_params) {
     INDENTED(indent + 1, "Params:\n");
     for (size_t i = 0; i < ast->num_params; i++) {
-      INDENTED(indent + 2, "%s: ", ast->params[i]->ident.value.identv.ident);
-      dump_ty(ast->params[i]->ty);
+      // TODO: print flags
+      INDENTED(indent + 2, "%s: ", ast->params[i].name);
+      dump_ty(ty->function.param_types[i]);
       fprintf(stderr, "\n");
     }
   }
@@ -152,8 +155,8 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
         dump_expr(ast->iter.range.step, indent + 2);
       }
       INDENTED(indent + 2, "%s -> ", ast->iter.index.ident.value.identv.ident);
-      if (ast->iter.index_vdecl) {
-        dump_ty(ast->iter.index_vdecl->ty);
+      if (ast->iter.index_ty) {
+        dump_ty(ast->iter.index_ty);
       } else {
         fprintf(stderr, "<invalid-type>");
       }

@@ -146,7 +146,7 @@ static struct ast_template_ty *template_for_name(struct ast_template_ty *decl_tm
 }
 
 static int desugar_fdecl(struct desugar *desugar, struct ast_fdecl *ast) {
-  return maybe_desugar_type(desugar, &ast->parsed_retty);
+  return maybe_desugar_type(desugar, ast->parsed_function_ty.function.retty);
 }
 
 static int maybe_desugar_type(struct desugar *desugar, struct ast_ty *ty) {

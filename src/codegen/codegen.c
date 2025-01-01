@@ -212,12 +212,8 @@ void destroy_codegen(struct codegen *codegen) {
   iter = scope_iter(codegen->scope);
   while (!scope_end(iter)) {
     struct scope_entry *entry = scope_next(&iter);
-    if (entry->fdecl) {
+    if (entry->param_types) {
       free(entry->param_types);
-    }
-
-    if (entry->is_intrinsic) {
-      free(entry->fdecl);
     }
   }
 

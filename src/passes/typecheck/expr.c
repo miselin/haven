@@ -217,14 +217,18 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     case AST_EXPR_TYPE_VARIABLE: {
       struct scope_entry *entry =
           scope_lookup(typecheck->scope, ast->variable.ident.value.identv.ident, 1);
-      if (!entry || !entry->vdecl) {
-        fprintf(stderr, "%s not found or not a variable\n", ast->variable.ident.value.identv.ident);
+      if (!entry) {
+        fprintf(stderr, "%s not found\n", ast->variable.ident.value.identv.ident);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
-      compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "variable %s has type %p",
-                   ast->variable.ident.value.identv.ident, (void *)entry->vdecl->ty);
-      ast->ty = entry->vdecl->ty;
+
+      struct ast_ty *ty = entry->ty;
+
+      compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "%s has type %p",
+                   ast->variable.ident.value.identv.ident, (void *)ty);
+
+      ast->ty = ty;
       return ast->ty;
     } break;
 
@@ -329,36 +333,52 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_CALL: {
-      struct scope_entry *entry =
-          scope_lookup(typecheck->scope, ast->variable.ident.value.identv.ident, 1);
-      if (!entry || !entry->fdecl) {
-        fprintf(stderr, "%s not found or not a function\n", ast->variable.ident.value.identv.ident);
-        ++typecheck->errors;
-        return &typecheck->error_type;
+      struct ast_ty *function_ty = NULL;
+
+      {
+        struct scope_entry *entry =
+            scope_lookup(typecheck->scope, ast->variable.ident.value.identv.ident, 1);
+        if (!entry) {
+          fprintf(stderr, "%s not found\n", ast->variable.ident.value.identv.ident);
+          ++typecheck->errors;
+          return &typecheck->error_type;
+        }
+
+        if (entry->fdecl) {
+          ast->call.fdecl = entry->fdecl;
+
+          function_ty = entry->ty;
+        } else {
+          if (entry->ty->ty != AST_TYPE_FUNCTION) {
+            fprintf(stderr, "%s is not a function\n", ast->variable.ident.value.identv.ident);
+            ++typecheck->errors;
+            return &typecheck->error_type;
+          }
+
+          function_ty = entry->ty;
+        }
       }
 
       if (!ast->call.args) {
         // no arguments passed
-        if (entry->fdecl->num_params > 0) {
+        if (function_ty->function.num_params > 0) {
           fprintf(stderr, "function %s called with no arguments, expected %zu\n",
-                  ast->variable.ident.value.identv.ident, entry->fdecl->num_params);
+                  ast->variable.ident.value.identv.ident, function_ty->function.num_params);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
         }
-      } else if (entry->fdecl->num_params != ast->call.args->num_elements) {
-        if ((entry->fdecl->flags & DECL_FLAG_VARARG) == 0 ||
-            (ast->call.args->num_elements < entry->fdecl->num_params)) {
+      } else if (function_ty->function.num_params != ast->call.args->num_elements) {
+        if (ast->call.args->num_elements < function_ty->function.num_params &&
+            !function_ty->function.vararg) {
           fprintf(stderr, "function %s called with %zu arguments, expected %zu\n",
                   ast->variable.ident.value.identv.ident, ast->call.args->num_elements,
-                  entry->fdecl->num_params);
+                  function_ty->function.num_params);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
         }
       }
-
-      ast->call.fdecl = entry->fdecl;
 
       struct ast_expr_list *args = ast->call.args;
       size_t i = 0;
@@ -371,12 +391,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
 
         // check named parameters, don't check varargs (no types to check)
-        if (i < entry->fdecl->num_params) {
-          maybe_implicitly_convert(&args->expr->ty, &entry->fdecl->params[i]->ty);
-          if (!same_type(args->expr->ty, &entry->fdecl->params[i]->parser_ty)) {
+        if (i < function_ty->function.num_params) {
+          maybe_implicitly_convert(&args->expr->ty, &function_ty->function.param_types[i]);
+          if (!same_type(args->expr->ty, function_ty->function.param_types[i])) {
             char tystr[256], expectedstr[256];
             type_name_into(args->expr->ty, tystr, 256);
-            type_name_into(&entry->fdecl->params[i]->parser_ty, expectedstr, 256);
+            type_name_into(function_ty->function.param_types[i], expectedstr, 256);
 
             fprintf(stderr, "function %s argument %zu has type %s, expected %s\n",
                     ast->variable.ident.value.identv.ident, i + 1, tystr, expectedstr);
@@ -388,7 +408,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         ++i;
       }
 
-      ast->ty = resolve_type(typecheck, entry->fdecl->retty);
+      ast->call.function_ty = function_ty;
+      ast->ty = resolve_type(typecheck, function_ty->function.retty);
       return ast->ty;
     } break;
 
@@ -628,26 +649,16 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
 
         struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
-        if (!entry || !entry->vdecl) {
+        if (!entry || entry->fdecl) {
           fprintf(stderr, "in assignment, %s not found or not a variable\n", ident);
           ++typecheck->errors;
           return &typecheck->error_type;
         }
 
-        if (!(entry->vdecl->flags & DECL_FLAG_MUT)) {
+        if (!(entry->decl_flags & DECL_FLAG_MUT)) {
           fprintf(stderr, "%s is not mutable\n", ident);
           ++typecheck->errors;
           return &typecheck->error_type;
-        }
-
-        // TODO: what does this actually do?
-        if (type_is_tbd(entry->vdecl->ty)) {
-          // inferred type
-          // entry->vdecl->ty = ast->assign.expr->ty;
-
-          // remove constant flag if it was inferred
-          // TODO?
-          // entry->vdecl->parser_ty.flags &= ~TYPE_FLAG_CONSTANT;
         }
       }
 
@@ -744,7 +755,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       const char *ident = expr->variable.ident.value.identv.ident;
 
       struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
-      if (!entry || !entry->vdecl) {
+      if (!entry || entry->fdecl) {
         fprintf(stderr, "in ref, %s not found or not a variable\n", ident);
         ++typecheck->errors;
         return &typecheck->error_type;
@@ -873,7 +884,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           typecheck->scope = enter_scope(typecheck->scope);
 
           struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-          entry->vdecl = arm->pattern->pattern_match.inner_vdecl;
+          entry->ty = arm->pattern->pattern_match.inner_vdecl->ty;
+          entry->decl_flags = arm->pattern->pattern_match.inner_vdecl->flags;
           scope_insert(typecheck->scope,
                        arm->pattern->pattern_match.inner_vdecl->ident.value.identv.ident, entry);
 

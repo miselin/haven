@@ -23,6 +23,9 @@ LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
 }
 
 LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMValueRef into) {
+  compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit expr %d (into %p)", ast->type,
+               (void *)into);
+
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
       LLVMTypeRef const_ty = ast_ty_to_llvm_ty(codegen, ast->ty);
@@ -168,26 +171,31 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       struct scope_entry *lookup =
           scope_lookup(codegen->scope, ast->variable.ident.value.identv.ident, 1);
 
-      // temporaries are things like function parameters, and do not require loads
-      if (lookup->vdecl->flags & DECL_FLAG_TEMPORARY) {
-        return lookup->ref;
-      } else if (ast->ty->flags & TYPE_FLAG_REFERENCE) {
-        // refs require the address of the variable, not the value
-        return lookup->ref;
-      } else if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->enumty.no_wrapped_fields) {
-        // enum is actually a struct -- don't load
-        // with no wrapped fields, it's an integer
-        return lookup->ref;
-      } else if (ast->ty->ty == AST_TYPE_STRUCT) {
-        // don't load structs, they need to be accessed via GEP
-        return lookup->ref;
-      } else if (ast->ty->ty == AST_TYPE_ARRAY) {
-        // don't load arrays, they need to be accessed via GEP
+      if (lookup->variable_type) {
+        // temporaries are things like function parameters, and do not require loads
+        if (lookup->flags & DECL_FLAG_TEMPORARY) {
+          return lookup->ref;
+        } else if (ast->ty->flags & TYPE_FLAG_REFERENCE) {
+          // refs require the address of the variable, not the value
+          return lookup->ref;
+        } else if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->enumty.no_wrapped_fields) {
+          // enum is actually a struct -- don't load
+          // with no wrapped fields, it's an integer
+          return lookup->ref;
+        } else if (ast->ty->ty == AST_TYPE_STRUCT) {
+          // don't load structs, they need to be accessed via GEP
+          return lookup->ref;
+        } else if (ast->ty->ty == AST_TYPE_ARRAY) {
+          // don't load arrays, they need to be accessed via GEP
+          return lookup->ref;
+        }
+
+        return LLVMBuildLoad2(codegen->llvm_builder, lookup->variable_type, lookup->ref,
+                              ast->variable.ident.value.identv.ident);
+      } else {
+        // just return the function's ref
         return lookup->ref;
       }
-
-      return LLVMBuildLoad2(codegen->llvm_builder, lookup->variable_type, lookup->ref,
-                            ast->variable.ident.value.identv.ident);
     } break;
 
     case AST_EXPR_TYPE_BINARY: {
@@ -207,13 +215,24 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_CALL: {
-      struct scope_entry *entry =
-          scope_lookup(codegen->scope, ast->call.ident.value.identv.ident, 1);
+      LLVMValueRef call_target = NULL;
+      LLVMTypeRef llvm_function_ty = NULL;
+      if (ast->call.fdecl) {
+        struct scope_entry *entry =
+            scope_lookup(codegen->scope, ast->call.fdecl->ident.value.identv.ident, 1);
+        call_target = entry->ref;
+        llvm_function_ty = entry->function_type;
+      } else {
+        struct scope_entry *entry =
+            scope_lookup(codegen->scope, ast->call.ident.value.identv.ident, 1);
+        call_target = entry->ref;
+        llvm_function_ty = ast_llvm_function_ty(codegen, ast->call.function_ty);
+      }
 
-      size_t named_param_count = LLVMCountParams(entry->ref);
-      size_t is_complex = (size_t)type_is_complex(entry->fdecl->retty);
+      size_t named_param_count = LLVMCountParams(call_target);
+      size_t is_complex = (size_t)type_is_complex(ast->call.function_ty->function.retty);
 
-      LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, entry->fdecl->retty);
+      LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, ast->call.function_ty->function.retty);
 
       LLVMValueRef *args = NULL;
       unsigned int num_args = 0;
@@ -250,8 +269,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         ++num_args;
       }
 
-      LLVMValueRef call = LLVMBuildCall2(codegen->llvm_builder, entry->function_type, entry->ref,
-                                         args, num_args, "");
+      LLVMValueRef call =
+          LLVMBuildCall2(codegen->llvm_builder, llvm_function_ty, call_target, args, num_args, "");
 
       if (is_complex) {
         unsigned int kind = LLVMGetEnumAttributeKindForName("sret", 4);

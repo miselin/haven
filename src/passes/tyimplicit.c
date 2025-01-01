@@ -49,7 +49,8 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
         return -1;
       }
 
-      total += rc + maybe_implicitly_convert(&ast->fdecl.body->ty, &ast->fdecl.retty);
+      total += rc + maybe_implicitly_convert(&ast->fdecl.body->ty,
+                                             &ast->fdecl.function_ty->function.retty);
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
     if (ast->vdecl.init_expr) {

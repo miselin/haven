@@ -10,8 +10,9 @@
 #include "lex.h"
 
 struct scope_entry {
-  struct ast_vdecl *vdecl;
-  struct ast_fdecl *fdecl;
+  struct ast_ty *ty;
+
+  uint64_t flags;
 
   LLVMTypeRef function_type;
   LLVMTypeRef *param_types;
@@ -130,6 +131,9 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty);
 // Get the underlying type for types which have differing storage types to their underlying types
 // For example, enums with wrapped fields are carried as pointers, but accessed using a struct type
 LLVMTypeRef ast_underlying_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty);
+
+// Build an LLVM function type from the given AST_TYPE_FUNCTION type.
+LLVMTypeRef ast_llvm_function_ty(struct codegen *codegen, struct ast_ty *ty);
 
 LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast);
 

@@ -63,9 +63,6 @@ void free_stmt(struct compiler *compiler, struct ast_stmt *ast) {
         free_expr(compiler, ast->iter.range.step);
       }
       free_block(compiler, &ast->iter.block, 0);
-      if (ast->iter.index_vdecl) {
-        free_vdecl(compiler, ast->iter.index_vdecl, 1);
-      }
       break;
 
     case AST_STMT_TYPE_STORE:
@@ -253,7 +250,7 @@ void free_fdecl(struct compiler *compiler, struct ast_fdecl *ast, int heap) {
 
   if (ast->params) {
     for (size_t i = 0; i < ast->num_params; i++) {
-      free_vdecl(compiler, ast->params[i], 1);
+      free(ast->params[i].name);
     }
 
     free(ast->params);
@@ -263,7 +260,7 @@ void free_fdecl(struct compiler *compiler, struct ast_fdecl *ast, int heap) {
     free(ast->intrinsic_tys);
   }
 
-  free_parser_ty(compiler, &ast->parsed_retty);
+  free_parser_ty(compiler, &ast->parsed_function_ty);
   if (heap) {
     free(ast);
   }
@@ -342,7 +339,7 @@ void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap) {
   }
 
   if (ty->ty == AST_TYPE_FUNCTION) {
-    free(ty->function.args);
+    free(ty->function.param_types);
   }
 
   if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
@@ -434,11 +431,11 @@ void free_parser_ty(struct compiler *compiler, struct ast_ty *ty) {
       free_parser_ty(compiler, ty->function.retty);
       free(ty->function.retty);
 
-      for (size_t i = 0; i < ty->function.num_args; i++) {
-        free_parser_ty(compiler, ty->function.args[i]);
-        free(ty->function.args[i]);
+      for (size_t i = 0; i < ty->function.num_params; i++) {
+        free_parser_ty(compiler, ty->function.param_types[i]);
+        free(ty->function.param_types[i]);
       }
-      free(ty->function.args);
+      free(ty->function.param_types);
     } break;
 
     case AST_TYPE_POINTER:

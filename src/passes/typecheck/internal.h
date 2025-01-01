@@ -6,8 +6,9 @@
 #include "types.h"
 
 struct scope_entry {
-  struct ast_vdecl *vdecl;
   struct ast_fdecl *fdecl;
+  struct ast_ty *ty;
+  uint64_t decl_flags;
 };
 
 struct alias_entry {

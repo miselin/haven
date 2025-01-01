@@ -14,6 +14,7 @@
 #include "compiler.h"
 #include "internal.h"
 #include "kv.h"
+#include "scope.h"
 #include "types.h"
 #include "utility.h"
 
@@ -151,16 +152,9 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       compiler_log(codegen->compiler, LogLevelError, "codegen",
                    "custom type %s not resolved before codegen", ty->name);
       return NULL;
-    case AST_TYPE_FUNCTION: {
-      LLVMTypeRef retty = ast_ty_to_llvm_ty(codegen, ty->function.retty);
-      LLVMTypeRef *param_types = malloc(sizeof(LLVMTypeRef) * ty->function.num_args);
-      for (size_t i = 0; i < ty->function.num_args; i++) {
-        param_types[i] = ast_ty_to_llvm_ty(codegen, ty->function.args[i]);
-      }
-      inner = LLVMFunctionType(retty, param_types, (unsigned int)ty->function.num_args,
-                               ty->function.vararg);
-      free(param_types);
-    } break;
+    case AST_TYPE_FUNCTION:
+      inner = LLVMPointerTypeInContext(codegen->llvm_context, 0);
+      break;
     case AST_TYPE_MATRIX: {
       // matrix is actually a flat fvec (Rows * Cols)
       inner = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
@@ -473,4 +467,36 @@ void codegen_mangle(struct codegen *codegen, struct ast_fdecl *fdecl, char *buf,
   strncpy(buf, fdecl->ident.value.identv.ident, len);
 
   LLVMDisposeMessage(triple);
+}
+
+LLVMTypeRef ast_llvm_function_ty(struct codegen *codegen, struct ast_ty *ty) {
+  if (ty->ty != AST_TYPE_FUNCTION) {
+    return NULL;
+  }
+
+  LLVMTypeRef ret_ty = ast_underlying_ty_to_llvm_ty(codegen, ty->function.retty);
+
+  int rc = type_is_complex(ty->function.retty);
+  if (rc < 0) {
+    compiler_log(codegen->compiler, LogLevelError, "codegen",
+                 "type_is_complex returned a completely unexpected value %d", rc);
+    return NULL;
+  }
+
+  size_t complex_return = (size_t)rc;
+
+  size_t num_params = ty->function.num_params + complex_return;
+
+  LLVMTypeRef *param_types = malloc(sizeof(LLVMTypeRef) * num_params);
+  if (complex_return) {
+    param_types[0] = LLVMPointerTypeInContext(codegen->llvm_context, 0);
+  }
+  for (size_t i = 0; i < ty->function.num_params; i++) {
+    param_types[i + complex_return] =
+        ast_underlying_ty_to_llvm_ty(codegen, ty->function.param_types[i]);
+  }
+  LLVMTypeRef func_type =
+      LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params, ty->function.vararg);
+  free(param_types);
+  return func_type;
 }

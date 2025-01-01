@@ -115,12 +115,14 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
   entry->ty = copy_type(repo, ty);
   entry->is_alias = 0;
 
-  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "registering type %s", name);
+  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "registering type %s = %p", name,
+               (void *)entry->ty);
+
+  kv_insert(repo->types, name, entry);
 
   type_name_into(entry->ty, name, 1024);
   compiler_log(repo->compiler, LogLevelTrace, "typerepo", "... which after type copying became %s",
                name);
-  kv_insert(repo->types, name, entry);
 
   return entry->ty;
 }
@@ -262,7 +264,11 @@ int type_repository_is_shared_type(struct type_repository *repo, struct ast_ty *
 static void type_repository_free(struct type_repository *repo,
                                  struct type_repository_entry *entry) {
   if (!entry->is_alias) {
+    compiler_log(repo->compiler, LogLevelTrace, "typerepo", "freeing type %p", (void *)entry->ty);
     free_ty(repo->compiler, entry->ty, 1);
+  } else {
+    compiler_log(repo->compiler, LogLevelTrace, "typerepo",
+                 "not freeing type %p as it is part of an alias", (void *)entry->ty);
   }
 
   free(entry);

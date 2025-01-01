@@ -50,7 +50,7 @@ static enum VisitorResult tyverify_visitor(struct ast_visitor_node *node, void *
 
 static int typecheck_verify_toplevel(struct tyverify_state *state, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (is_bad_type(ast->fdecl.retty)) {
+    if (is_bad_type(ast->fdecl.function_ty->function.retty)) {
       compiler_log(state->compiler, LogLevelError, "tyverify",
                    "function %s has unresolved return type", ast->fdecl.ident.value.identv.ident);
       ++state->errors;
@@ -58,7 +58,7 @@ static int typecheck_verify_toplevel(struct tyverify_state *state, struct ast_to
     }
 
     for (size_t i = 0; i < ast->fdecl.num_params; i++) {
-      struct ast_ty *param_ty = ast->fdecl.params[i]->ty;
+      struct ast_ty *param_ty = ast->fdecl.function_ty->function.param_types[i];
       if (is_bad_type(param_ty)) {
         compiler_log(state->compiler, LogLevelError, "tyverify",
                      "function %s has unresolved parameter type for parameter %zd",

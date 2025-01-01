@@ -3,6 +3,7 @@
 
 #include "internal.h"
 #include "parse.h"
+#include "types.h"
 
 /**
  * Parse a variable declaration - for use in function parameter lists
@@ -143,7 +144,9 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
 
   struct ast_ty ty = parse_type(parser);
   if (decl->type == AST_DECL_TYPE_FDECL) {
-    fdecl->parsed_retty = ty;
+    fdecl->parsed_function_ty.ty = AST_TYPE_FUNCTION;
+    fdecl->parsed_function_ty.function.retty = calloc(1, sizeof(struct ast_ty));
+    *(fdecl->parsed_function_ty.function.retty) = ty;
   } else {
     vdecl->parser_ty = ty;
   }
@@ -177,6 +180,7 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       if (peek == TOKEN_ASTERISK) {
         parser_consume_peeked(parser, NULL);
         fdecl->flags |= DECL_FLAG_VARARG;
+        fdecl->parsed_function_ty.function.vararg = 1;
         break;
       }
 
@@ -185,19 +189,31 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       if (!param) {
         free(decl);
         return NULL;
+      } else if (param->init_expr) {
+        parser_diag(1, parser, NULL, "unexpected initializer in function parameter list");
+        free(decl);
+        return NULL;
       }
+
       param->flags |= DECL_FLAG_TEMPORARY;
 
-      if (!fdecl->params) {
-        fdecl->params = calloc(1, sizeof(struct ast_vdecl *));
-        fdecl->params[0] = param;
-      } else {
-        size_t new_size = fdecl->num_params + 1;
-        fdecl->params = realloc(fdecl->params, new_size * sizeof(struct ast_vdecl *));
-        fdecl->params[new_size - 1] = param;
-      }
-
+      fdecl->params =
+          realloc(fdecl->params, (fdecl->num_params + 1) * sizeof(struct ast_fdecl_param_metadata));
+      fdecl->params[fdecl->num_params].name = strdup(param->ident.value.identv.ident);
+      fdecl->params[fdecl->num_params].flags = param->flags;
       fdecl->num_params++;
+
+      fdecl->parsed_function_ty.function.param_types =
+          realloc(fdecl->parsed_function_ty.function.param_types,
+                  sizeof(struct ast_ty *) * (fdecl->parsed_function_ty.function.num_params + 1));
+      fdecl->parsed_function_ty.function
+          .param_types[fdecl->parsed_function_ty.function.num_params] =
+          calloc(1, sizeof(struct ast_ty));
+      *(fdecl->parsed_function_ty.function
+            .param_types[fdecl->parsed_function_ty.function.num_params]) = param->parser_ty;
+      fdecl->parsed_function_ty.function.num_params++;
+
+      free(param);
 
       if (parser_peek(parser) == TOKEN_COMMA) {
         parser_consume_peeked(parser, NULL);

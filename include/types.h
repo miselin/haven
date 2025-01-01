@@ -101,8 +101,9 @@ struct ast_ty {
     } tmpl;
     struct {
       struct ast_ty *retty;
-      struct ast_ty **args;
-      size_t num_args;
+      struct ast_ty **param_types;
+      size_t num_params;
+
       int vararg;
     } function;
     struct {

@@ -1,8 +1,12 @@
+#include "types.h"
+
 #include <stdlib.h>
 #include <string.h>
 
 #include "internal.h"
 #include "parse.h"
+#include "tokens.h"
+#include "utility.h"
 
 struct ast_ty parse_type(struct parser *parser) {
   struct token token;
@@ -107,6 +111,38 @@ struct ast_ty parse_type(struct parser *parser) {
     result.ty = AST_TYPE_MATRIX;
     result.matrix.cols = token.value.matv.x;
     result.matrix.rows = token.value.matv.y;
+  } else if (peek == TOKEN_KW_FN) {
+    parser_consume_peeked(parser, NULL);
+
+    result.ty = AST_TYPE_FUNCTION;
+
+    result.function.retty = calloc(1, sizeof(struct ast_ty));
+    *result.function.retty = parse_type(parser);
+    if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
+      result.ty = AST_TYPE_ERROR;
+      return result;
+    }
+
+    peek = parser_peek(parser);
+    while (peek != TOKEN_RPAREN) {
+      result.function.param_types = realloc(
+          result.function.param_types, sizeof(struct ast_ty *) * (result.function.num_params + 1));
+      result.function.param_types[result.function.num_params] = calloc(1, sizeof(struct ast_ty));
+      *(result.function.param_types[result.function.num_params]) = parse_type(parser);
+      result.function.num_params++;
+
+      peek = parser_peek(parser);
+      if (peek != TOKEN_COMMA) {
+        break;
+      }
+
+      parser_consume_peeked(parser, NULL);
+    }
+
+    if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
+      result.ty = AST_TYPE_ERROR;
+      return result;
+    }
   } else {
     parser_diag(1, parser, &parser->peek, "unexpected token of type %s when parsing type\n",
                 token_id_to_string(peek));

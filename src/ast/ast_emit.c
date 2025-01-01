@@ -184,13 +184,14 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
   if (ast->flags & DECL_FLAG_IMPURE) {
     fprintf(stream, "impure ");
   }
-  code_emit_ty(stream, &ast->parsed_retty);
+  code_emit_ty(stream, ast->parsed_function_ty.function.retty);
   fprintf(stream, " fn %s(", ast->ident.value.identv.ident);
   for (size_t i = 0; i < ast->num_params; i++) {
     if (i > 0) {
       fprintf(stream, ", ");
     }
-    code_emit_vdecl(stream, ast->params[i], indent);
+    // TODO
+    // code_emit_vdecl(stream, ast->params[i], indent);
   }
   fprintf(stream, ")");
   if (ast->body) {

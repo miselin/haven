@@ -92,7 +92,7 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
 
       // we need to unwrap & define the inner value here
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->vdecl = arm->pattern->pattern_match.inner_vdecl;
+      entry->flags = arm->pattern->pattern_match.inner_vdecl->flags;
       entry->variable_type = ast_ty_to_llvm_ty(codegen, binding_ty);
       if (type_is_complex(binding_ty)) {
         entry->ref = main_expr_buf;

@@ -45,6 +45,13 @@ static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCur
     return CXChildVisit_Continue;
   }
 
+  CXSourceLocation loc = clang_getCursorLocation(field_cursor);
+  CXFile file;
+  unsigned line, column, offset;
+  clang_getFileLocation(loc, &file, &line, &column, &offset);
+
+  CXString loc_name = clang_getFileName(file);
+
   struct ast_struct_field *last = ty->structty.fields;
   while (last && last->next) {
     last = last->next;
@@ -58,9 +65,13 @@ static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCur
   CXCursor field_type_decl = clang_getTypeDeclaration(field_type);
 
   if (clang_Cursor_isAnonymous(field_type_decl)) {
-    fprintf(stderr, "anonymous struct/union not handled yet...\n");
+    fprintf(stderr, "anonymous struct/union not handled yet (needed at %s:%d:%d)...\n",
+            clang_getCString(loc_name), line, column);
+    clang_disposeString(loc_name);
     return CXChildVisit_Continue;
   }
+
+  clang_disposeString(loc_name);
 
   CXString spelling = clang_getCursorSpelling(field_cursor);
   const char *spelling_c = clang_getCString(spelling);
@@ -228,8 +239,15 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
 
       pointee->ty = AST_TYPE_FUNCTION;
 
-      CXType return_type = clang_getResultType(type);
-      pointee->function.retty = parse_type(return_type);
+      struct ast_fdecl fdecl;
+      analyze_function_type(type, &fdecl);
+
+      *pointee = fdecl.parsed_function_ty;
+
+      for (size_t i = 0; i < fdecl.num_params; i++) {
+        free(fdecl.params[i].name);
+      }
+      free(fdecl.params);
     } break;
 
     case CXType_Pointer:
@@ -352,15 +370,16 @@ static void analyze_function_type(CXType type, struct ast_fdecl *fdecl) {
 
   fdecl->flags |= DECL_FLAG_EXTERN | DECL_FLAG_IMPURE;
 
-  struct ast_ty *retty = parse_type(return_type);
-  fdecl->parsed_retty = *retty;
-  free(retty);
+  fdecl->parsed_function_ty.ty = AST_TYPE_FUNCTION;
+  fdecl->parsed_function_ty.function.retty = parse_type(return_type);
 
   // Get the number of arguments
   size_t num_args = (size_t)clang_getNumArgTypes(type);
   fdecl->num_params = num_args;
+  fdecl->parsed_function_ty.function.num_params = num_args;
   if (num_args > 0) {
-    fdecl->params = calloc(num_args, sizeof(struct ast_vdecl *));
+    fdecl->params = calloc(num_args, sizeof(struct ast_fdecl_param_metadata));
+    fdecl->parsed_function_ty.function.param_types = calloc(num_args, sizeof(struct ast_ty *));
 
     // Get each parameter type
     for (size_t i = 0; i < num_args; i++) {
@@ -369,19 +388,18 @@ static void analyze_function_type(CXType type, struct ast_fdecl *fdecl) {
       clang_disposeString(param_type_spelling);
 
       // TODO: be nice to use the proper param name if it's present in the prototype
-      fdecl->params[i] = calloc(1, sizeof(struct ast_vdecl));
-      struct ast_ty *parsed_ty = parse_type(param_type);
-      fdecl->params[i]->parser_ty = *parsed_ty;
-      free(parsed_ty);
-      fdecl->params[i]->flags = 0;
-      fdecl->params[i]->ident.ident = TOKEN_IDENTIFIER;
-      snprintf(fdecl->params[i]->ident.value.identv.ident, 256, "p%zd", i);
+      char *param_name = (char *)malloc(256);
+      snprintf(param_name, 256, "p%zd", i);
+
+      fdecl->params[i].name = param_name;
+      fdecl->parsed_function_ty.function.param_types[i] = parse_type(param_type);
     }
   }
 
   // Check if the function is variadic
   if (clang_isFunctionTypeVariadic(type)) {
     fdecl->flags |= DECL_FLAG_VARARG;
+    fdecl->parsed_function_ty.function.vararg = 1;
   }
 }
 

@@ -96,15 +96,20 @@ struct ast_vdecl {
   struct ast_expr *init_expr;
 };
 
+struct ast_fdecl_param_metadata {
+  char *name;
+  uint64_t flags;
+};
+
 struct ast_fdecl {
   struct token ident;
-  struct ast_ty *retty;
-  struct ast_ty parsed_retty;
+  struct ast_ty *function_ty;
+  struct ast_ty parsed_function_ty;
 
   uint64_t flags;
 
   struct ast_block *body;
-  struct ast_vdecl **params;
+  struct ast_fdecl_param_metadata *params;
   size_t num_params;
 
   int is_intrinsic;
@@ -177,6 +182,7 @@ struct ast_expr_call {
   struct token ident;
   struct ast_fdecl *fdecl;
   struct ast_expr_list *args;
+  struct ast_ty *function_ty;
 };
 
 struct ast_expr_cast {
@@ -313,7 +319,7 @@ struct ast_stmt_iter {
   struct ast_block block;
 
   // only set after typecheck pass
-  struct ast_vdecl *index_vdecl;
+  struct ast_ty *index_ty;
 };
 
 struct ast_stmt_store {

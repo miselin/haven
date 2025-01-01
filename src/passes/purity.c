@@ -70,7 +70,12 @@ static int check_purity_expr(struct purity *purity, struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_CALL: {
-      if (ast->call.fdecl->flags & DECL_FLAG_IMPURE) {
+      if (!ast->call.fdecl) {
+        compiler_log(purity->compiler, LogLevelError, "purity",
+                     "calling function pointer in %s is not allowed from pure functions",
+                     ast->call.ident.value.identv.ident);
+        purity->errors++;
+      } else if (ast->call.fdecl->flags & DECL_FLAG_IMPURE) {
         compiler_log(purity->compiler, LogLevelError, "purity",
                      "call from pure function to impure function %s is not allowed",
                      ast->call.ident.value.identv.ident);

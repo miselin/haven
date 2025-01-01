@@ -165,9 +165,10 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     } break;
 
     case AST_TYPE_FUNCTION: {
-      resolved_ty->function.args = calloc(ty->function.num_args, sizeof(struct ast_ty *));
-      for (size_t i = 0; i < ty->function.num_args; i++) {
-        resolved_ty->function.args[i] = resolve_parsed_type(typecheck, ty->function.args[i]);
+      resolved_ty->function.param_types = calloc(ty->function.num_params, sizeof(struct ast_ty *));
+      for (size_t i = 0; i < ty->function.num_params; i++) {
+        resolved_ty->function.param_types[i] =
+            resolve_parsed_type(typecheck, ty->function.param_types[i]);
       }
 
       resolved_ty->function.retty = resolve_parsed_type(typecheck, ty->function.retty);
@@ -266,12 +267,12 @@ void patch_type_tbds(struct typecheck *typecheck, struct ast_ty *ty, struct ast_
     } break;
 
     case AST_TYPE_FUNCTION: {
-      for (size_t i = 0; i < ty->function.num_args; i++) {
-        if (ty->function.args[i]->ty == AST_TYPE_CUSTOM) {
-          ty->function.args[i] =
-              type_repository_lookup(typecheck->type_repo, ty->function.args[i]->name);
+      for (size_t i = 0; i < ty->function.num_params; i++) {
+        if (ty->function.param_types[i]->ty == AST_TYPE_CUSTOM) {
+          ty->function.param_types[i] =
+              type_repository_lookup(typecheck->type_repo, ty->function.param_types[i]->name);
         } else {
-          patch_type_tbds(typecheck, ty->function.args[i], NULL);
+          patch_type_tbds(typecheck, ty->function.param_types[i], NULL);
         }
       }
 

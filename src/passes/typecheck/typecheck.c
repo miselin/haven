@@ -158,35 +158,39 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
   }
 
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    ast->fdecl.retty = resolve_parsed_type(typecheck, &ast->fdecl.parsed_retty);
-    if (!ast->fdecl.retty || type_is_error(ast->fdecl.retty) || type_is_tbd(ast->fdecl.retty)) {
-      fprintf(stderr, "function %s has unresolved return type\n",
-              ast->fdecl.ident.value.identv.ident);
+    ast->fdecl.function_ty = resolve_parsed_type(typecheck, &ast->fdecl.parsed_function_ty);
+    if (!ast->fdecl.function_ty || !ast->fdecl.function_ty->function.retty ||
+        type_is_error(ast->fdecl.function_ty->function.retty) ||
+        type_is_tbd(ast->fdecl.function_ty->function.retty)) {
+      compiler_log(typecheck->compiler, LogLevelError, "typecheck",
+                   "function %s has unresolved return type", ast->fdecl.ident.value.identv.ident);
       ++typecheck->errors;
       return;
     }
 
     // specialize the return type if it's a template
-    if (ast->fdecl.retty->ty == AST_TYPE_ENUM && ast->fdecl.retty->enumty.templates) {
+    if (ast->fdecl.function_ty->function.retty->ty == AST_TYPE_ENUM &&
+        ast->fdecl.function_ty->function.retty->enumty.templates) {
       // create a specialized type and use it here
       struct ast_ty new_type;
       memset(&new_type, 0, sizeof(struct ast_ty));
       new_type.ty = AST_TYPE_ENUM;
       char new_name[1024];
       if (snprintf(new_name, 1024, "%s_spec_%s", ast->fdecl.ident.value.identv.ident,
-                   ast->fdecl.retty->name) > 256) {
+                   ast->fdecl.function_ty->function.retty->name) > 256) {
         fprintf(stderr, "enum specialization name too long\n");
         ++typecheck->errors;
         return;
       }
       strcpy(new_type.name, new_name);
 
-      new_type.enumty.fields = ast->fdecl.retty->enumty.fields;
-      new_type.enumty.no_wrapped_fields = ast->fdecl.retty->enumty.no_wrapped_fields;
-      new_type.enumty.num_fields = ast->fdecl.retty->enumty.num_fields;
-      new_type.enumty.templates = ast->fdecl.retty->enumty.templates;
+      new_type.enumty.fields = ast->fdecl.function_ty->function.retty->enumty.fields;
+      new_type.enumty.no_wrapped_fields =
+          ast->fdecl.function_ty->function.retty->enumty.no_wrapped_fields;
+      new_type.enumty.num_fields = ast->fdecl.function_ty->function.retty->enumty.num_fields;
+      new_type.enumty.templates = ast->fdecl.function_ty->function.retty->enumty.templates;
 
-      new_type.specialization_of = strdup(ast->fdecl.retty->name);
+      new_type.specialization_of = strdup(ast->fdecl.function_ty->function.retty->name);
     }
 
     struct scope_entry *existing =
@@ -194,6 +198,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
     struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
     entry->fdecl = &ast->fdecl;
+    entry->ty = ast->fdecl.function_ty;
 
     scope_insert(typecheck->scope, ast->fdecl.ident.value.identv.ident, entry);
 
@@ -203,10 +208,11 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       ++typecheck->errors;
     }
 
-    if (existing && !same_type(entry->fdecl->retty, existing->fdecl->retty)) {
+    if (existing && !same_type(entry->fdecl->function_ty->function.retty,
+                               existing->fdecl->function_ty->function.retty)) {
       char tystr[256], existingstr[256];
-      type_name_into(entry->fdecl->retty, tystr, 256);
-      type_name_into(existing->fdecl->retty, existingstr, 256);
+      type_name_into(entry->fdecl->function_ty->function.retty, tystr, 256);
+      type_name_into(existing->fdecl->function_ty->function.retty, existingstr, 256);
 
       fprintf(stderr, "function %s redeclared with different return type %s, expected %s\n",
               ast->fdecl.ident.value.identv.ident, tystr, existingstr);
@@ -221,14 +227,17 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       ++typecheck->errors;
     }
 
-    for (size_t i = 0; i < entry->fdecl->num_params; ++i) {
-      entry->fdecl->params[i]->ty =
-          resolve_parsed_type(typecheck, &entry->fdecl->params[i]->parser_ty);
+    entry->fdecl->function_ty->function.num_params = entry->fdecl->num_params;
 
-      if (existing && !same_type(entry->fdecl->params[i]->ty, existing->fdecl->params[i]->ty)) {
+    for (size_t i = 0; i < entry->fdecl->num_params; ++i) {
+      entry->fdecl->function_ty->function.param_types[i] =
+          resolve_parsed_type(typecheck, entry->fdecl->parsed_function_ty.function.param_types[i]);
+
+      if (existing && !same_type(entry->fdecl->function_ty->function.param_types[i],
+                                 existing->fdecl->function_ty->function.param_types[i])) {
         char tystr[256], existingstr[256];
-        type_name_into(entry->fdecl->params[i]->ty, tystr, 256);
-        type_name_into(existing->fdecl->params[i]->ty, existingstr, 256);
+        type_name_into(entry->fdecl->function_ty->function.param_types[i], tystr, 256);
+        type_name_into(existing->fdecl->function_ty->function.param_types[i], existingstr, 256);
 
         fprintf(stderr, "function %s parameter %zu has type %s, expected %s\n",
                 ast->fdecl.ident.value.identv.ident, i, tystr, existingstr);
@@ -247,8 +256,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       // declare the parameters in the function scope
       for (size_t i = 0; i < ast->fdecl.num_params; i++) {
         struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
-        param_entry->vdecl = ast->fdecl.params[i];
-        scope_insert(typecheck->scope, ast->fdecl.params[i]->ident.value.identv.ident, param_entry);
+        param_entry->ty = ast->fdecl.function_ty->function.param_types[i];
+        param_entry->decl_flags = DECL_FLAG_TEMPORARY | ast->fdecl.params[i].flags;
+        scope_insert(typecheck->scope, ast->fdecl.params[i].name, param_entry);
       }
 
       {
@@ -260,12 +270,12 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
       typecheck->scope = exit_scope(typecheck->scope);
 
-      maybe_implicitly_convert(&ast->fdecl.body->ty, &ast->fdecl.retty);
+      maybe_implicitly_convert(&ast->fdecl.body->ty, &ast->fdecl.function_ty->function.retty);
 
-      if (!same_type(ast->fdecl.body->ty, ast->fdecl.retty)) {
+      if (!same_type(ast->fdecl.body->ty, ast->fdecl.function_ty->function.retty)) {
         char resultstr[256], tystr[256];
         type_name_into(ast->fdecl.body->ty, resultstr, 256);
-        type_name_into(ast->fdecl.retty, tystr, 256);
+        type_name_into(ast->fdecl.function_ty->function.retty, tystr, 256);
 
         fprintf(stderr, "function %s returns %s, expected %s\n",
                 ast->fdecl.ident.value.identv.ident, resultstr, tystr);
@@ -293,7 +303,8 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     }
 
     struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-    entry->vdecl = &ast->vdecl;
+    entry->ty = ast->vdecl.ty;
+    entry->decl_flags = ast->vdecl.flags;
 
     // insert before checking the initializer to allow recursive references
     scope_insert(typecheck->scope, ast->vdecl.ident.value.identv.ident, entry);
@@ -360,7 +371,8 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
 
     case AST_STMT_TYPE_LET: {
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->vdecl = &ast->let;
+      entry->ty = ast->let.ty;
+      entry->decl_flags = ast->let.flags;
 
       // if a type was actually specified we need to resolve it
       if (!type_is_tbd(&ast->let.parser_ty)) {
@@ -404,6 +416,8 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
                             ast->let.ident.value.identv.ident, initstr, tystr);
         ++typecheck->errors;
       }
+
+      entry->ty = ast->let.ty;
     } break;
 
     case AST_STMT_TYPE_ITER: {
@@ -437,13 +451,13 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
         ++typecheck->errors;
       }
 
-      struct ast_vdecl *index = calloc(1, sizeof(struct ast_vdecl));
+      // struct ast_vdecl *index = calloc(1, sizeof(struct ast_vdecl));
 
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->vdecl = index;
-      entry->vdecl->ident = ast->iter.index.ident;
-      entry->vdecl->ty = ast->iter.range.start->ty;
-      ast->iter.index_vdecl = entry->vdecl;
+      entry->ty = ast->iter.range.start->ty;
+      // entry->decl_flags = index->flags;
+      // ast->iter.index_vdecl = index;
+      ast->iter.index_ty = entry->ty;
 
       // new scope for the loop variable
       typecheck->scope = enter_scope(typecheck->scope);

@@ -25,17 +25,17 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit fdecl %s (as %s)", ident,
                mangled);
 
-  if (fdecl->retty->specialization_of) {
+  if (fdecl->function_ty->function.retty->specialization_of) {
     // we need to create the return type as a new global
-    emit_enum_type(codegen, fdecl->retty);
+    emit_enum_type(codegen, fdecl->function_ty->function.retty);
   }
 
   LLVMValueRef func = NULL;
-  LLVMTypeRef ret_ty = ast_underlying_ty_to_llvm_ty(codegen, fdecl->retty);
+  LLVMTypeRef ret_ty = ast_underlying_ty_to_llvm_ty(codegen, fdecl->function_ty->function.retty);
   LLVMTypeRef orig_ret_ty = ret_ty;
   LLVMTypeRef *param_types = NULL;
 
-  int rc = type_is_complex(fdecl->retty);
+  int rc = type_is_complex(fdecl->function_ty->function.retty);
   if (rc < 0) {
     fprintf(stderr, "type_is_complex returned a completely unexpected value %d\n", rc);
     return;
@@ -56,7 +56,8 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       param_types[0] = LLVMPointerTypeInContext(codegen->llvm_context, 0);
     }
     for (size_t i = 0; i < fdecl->num_params; i++) {
-      param_types[i + complex_return] = ast_underlying_ty_to_llvm_ty(codegen, fdecl->params[i]->ty);
+      param_types[i + complex_return] =
+          ast_underlying_ty_to_llvm_ty(codegen, fdecl->function_ty->function.param_types[i]);
     }
     LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params,
                                              fdecl->flags & DECL_FLAG_VARARG);
@@ -103,7 +104,6 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     }
 
     entry = calloc(1, sizeof(struct scope_entry));
-    entry->fdecl = fdecl;
     entry->function_type = func_type;
     entry->param_types = param_types;
     entry->ref = func;
@@ -169,7 +169,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
 
   if (complex_return) {
     codegen->retval = LLVMGetParam(func, 0);
-  } else if (fdecl->retty->ty != AST_TYPE_VOID) {
+  } else if (fdecl->function_ty->function.retty->ty != AST_TYPE_VOID) {
     codegen->retval = new_alloca(codegen, ret_ty, "retval");
   } else {
     codegen->retval = NULL;
@@ -184,14 +184,15 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   codegen_internal_enter_scope(codegen, at, 0);
 
   for (size_t i = 0; i < fdecl->num_params; i++) {
-    const char *param_ident = fdecl->params[i]->ident.value.identv.ident;
+    const char *param_ident = fdecl->params[i].name;
     struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
-    param_entry->vdecl = fdecl->params[i];
+    param_entry->ty = fdecl->function_ty->function.param_types[i];
     param_entry->variable_type = param_types[i + complex_return];
     param_entry->ref = LLVMGetParam(func, (unsigned int)(i + complex_return));
+    param_entry->flags = fdecl->params[i].flags;
     scope_insert(codegen->scope, param_ident, param_entry);
 
-    if (fdecl->params[i]->ty->ty == AST_TYPE_BOX) {
+    if (param_entry->ty->ty == AST_TYPE_BOX) {
       compiler_log(codegen->compiler, LogLevelDebug, "codegen", "param %s is a box", param_ident);
       // need to store this param on the stack
       LLVMValueRef param = new_alloca(codegen, codegen_pointer_type(codegen), param_ident);
@@ -206,7 +207,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   }
 
   LLVMValueRef block_result = emit_block(codegen, fdecl->body);
-  if (fdecl->retty->ty == AST_TYPE_BOX) {
+  if (fdecl->function_ty->function.retty->ty == AST_TYPE_BOX) {
     // ref the box we're returning
     compiler_log(codegen->compiler, LogLevelDebug, "codegen", "box ref due to return");
     codegen_box_ref(codegen, block_result, 0);
@@ -216,15 +217,9 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
                                   block_result, "box.into.retval");
   }
 
-  if (fdecl->retty->ty != AST_TYPE_VOID) {
+  if (fdecl->function_ty->function.retty->ty != AST_TYPE_VOID) {
     // complex_return path sets retval to the return parameter
-    /*
-    if (fdecl->retty.flags == TYPE_FLAG_PTR && !LLVMIsNull(block_result)) {
-      block_result =
-          LLVMBuildLoad2(codegen->llvm_builder, ret_ty, block_result, "deref.ptr.retval");
-    }
-    */
-    emit_store(codegen, fdecl->retty, block_result, codegen->retval);
+    emit_store(codegen, fdecl->function_ty->function.retty, block_result, codegen->retval);
   }
 
   LLVMBuildBr(codegen->llvm_builder, defers);
@@ -266,7 +261,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   LLVMAppendExistingBasicBlock(codegen->current_function, return_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, return_block);
 
-  if (fdecl->retty->ty == AST_TYPE_VOID || complex_return) {
+  if (fdecl->function_ty->function.retty->ty == AST_TYPE_VOID || complex_return) {
     LLVMBuildRetVoid(codegen->llvm_builder);
   } else {
     LLVMValueRef retval =
