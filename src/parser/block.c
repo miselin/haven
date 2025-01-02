@@ -50,8 +50,8 @@ int parse_block(struct parser *parser, struct ast_block *into) {
     struct ast_stmt *stmt = calloc(1, sizeof(struct ast_stmt));
     stmt->type = AST_STMT_TYPE_EXPR;
     lexer_locate(parser->lexer, &stmt->loc);
-    stmt->expr = calloc(1, sizeof(struct ast_expr));
-    stmt->expr->type = AST_EXPR_TYPE_VOID;
+    stmt->stmt.expr = calloc(1, sizeof(struct ast_expr));
+    stmt->stmt.expr->type = AST_EXPR_TYPE_VOID;
     if (last) {
       last->next = stmt;
     } else {

@@ -232,17 +232,10 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
 
     // not technically built in, but doesn't get a name by any other means
     case CXType_FunctionProto: {
-      into->ty = AST_TYPE_FUNCTION;
-      into->pointer.pointee = calloc(1, sizeof(struct ast_ty));
-
-      struct ast_ty *pointee = into->pointer.pointee;
-
-      pointee->ty = AST_TYPE_FUNCTION;
-
       struct ast_fdecl fdecl;
       analyze_function_type(type, &fdecl);
 
-      *pointee = fdecl.parsed_function_ty;
+      *into = fdecl.parsed_function_ty;
 
       for (size_t i = 0; i < fdecl.num_params; i++) {
         free(fdecl.params[i].name);
@@ -250,13 +243,20 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
       free(fdecl.params);
     } break;
 
-    case CXType_Pointer:
-      into->ty = AST_TYPE_POINTER;
-      into->pointer.pointee = parse_type(clang_getPointeeType(type));
-      if (!into->pointer.pointee) {
-        rc = -1;
+    case CXType_Pointer: {
+      CXType pointee = clang_getPointeeType(type);
+      if (pointee.kind == CXType_FunctionProto) {
+        // fn ptrs are AST_TYPE_FUNCTION
+        parse_simple_type(pointee, into);
+      } else {
+        // true pointer type
+        into->ty = AST_TYPE_POINTER;
+        into->pointer.pointee = parse_type(clang_getPointeeType(type));
+        if (!into->pointer.pointee) {
+          rc = -1;
+        }
       }
-      break;
+    } break;
 
     default:
       rc = -1;
@@ -436,18 +436,18 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
     enum CXCursorKind kind = clang_getCursorKind(cursor);
     if (kind == CXCursor_FunctionDecl) {
       decl->type = AST_DECL_TYPE_FDECL;
-      decl->fdecl.flags |= DECL_FLAG_PUB;
-      decl->fdecl.ident.ident = TOKEN_IDENTIFIER;
-      strncpy(decl->fdecl.ident.value.identv.ident, spelling_c, 256);
-      analyze_function_type(clang_getCursorType(cursor), &decl->fdecl);
+      decl->toplevel.fdecl.flags |= DECL_FLAG_PUB;
+      decl->toplevel.fdecl.ident.ident = TOKEN_IDENTIFIER;
+      strncpy(decl->toplevel.fdecl.ident.value.identv.ident, spelling_c, 256);
+      analyze_function_type(clang_getCursorType(cursor), &decl->toplevel.fdecl);
     } else if (kind == CXCursor_VarDecl) {
       decl->type = AST_DECL_TYPE_VDECL;
-      decl->vdecl.ident.ident = TOKEN_IDENTIFIER;
-      strncpy(decl->vdecl.ident.value.identv.ident, spelling_c, 256);
+      decl->toplevel.vdecl.ident.ident = TOKEN_IDENTIFIER;
+      strncpy(decl->toplevel.vdecl.ident.value.identv.ident, spelling_c, 256);
       struct ast_ty *cursor_ty = parse_cursor_type(cursor);
-      decl->vdecl.parser_ty = *cursor_ty;
+      decl->toplevel.vdecl.parser_ty = *cursor_ty;
       free(cursor_ty);
-      decl->vdecl.flags = DECL_FLAG_PUB;  // TODO: mut etc
+      decl->toplevel.vdecl.flags = DECL_FLAG_PUB;  // TODO: mut etc
     } else if (kind == CXCursor_TypedefDecl) {
       UNUSED(next);
       CXType underlying = clang_getTypedefDeclUnderlyingType(cursor);
@@ -471,12 +471,12 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
       // don't emit an alias for `typedef struct <name> { } <name>;`
       if (strcmp(spelling_c, underlying_name_c) != 0) {
         decl->type = AST_DECL_TYPE_TYDECL;
-        decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
-        strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
+        decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
+        strncpy(decl->toplevel.tydecl.ident.value.identv.ident, spelling_c, 256);
 
-        if (parse_simple_type(underlying, &decl->tydecl.parsed_ty) < 0) {
-          decl->tydecl.parsed_ty.ty = AST_TYPE_CUSTOM;
-          strncpy(decl->tydecl.parsed_ty.name, underlying_name_c, 256);
+        if (parse_simple_type(underlying, &decl->toplevel.tydecl.parsed_ty) < 0) {
+          decl->toplevel.tydecl.parsed_ty.ty = AST_TYPE_CUSTOM;
+          strncpy(decl->toplevel.tydecl.parsed_ty.name, underlying_name_c, 256);
         }
       } else {
         free(decl);
@@ -487,22 +487,22 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
     } else if (kind == CXCursor_StructDecl || kind == CXCursor_UnionDecl) {
       // make it.
       decl->type = AST_DECL_TYPE_TYDECL;
-      decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
-      strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
+      decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
+      strncpy(decl->toplevel.tydecl.ident.value.identv.ident, spelling_c, 256);
       struct ast_ty *cursor_ty = parse_cursor_type(cursor);
-      decl->tydecl.parsed_ty = *cursor_ty;
+      decl->toplevel.tydecl.parsed_ty = *cursor_ty;
       free(cursor_ty);
-      collect_struct_fields(cursor, &decl->tydecl.parsed_ty);
+      collect_struct_fields(cursor, &decl->toplevel.tydecl.parsed_ty);
 
-      decl->tydecl.parsed_ty.structty.is_union = kind == CXCursor_UnionDecl;
+      decl->toplevel.tydecl.parsed_ty.structty.is_union = kind == CXCursor_UnionDecl;
     } else if (kind == CXCursor_EnumDecl) {
       decl->type = AST_DECL_TYPE_TYDECL;
-      decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
-      strncpy(decl->tydecl.ident.value.identv.ident, spelling_c, 256);
+      decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
+      strncpy(decl->toplevel.tydecl.ident.value.identv.ident, spelling_c, 256);
       struct ast_ty *cursor_ty = parse_cursor_type(cursor);
-      decl->tydecl.parsed_ty = *cursor_ty;
+      decl->toplevel.tydecl.parsed_ty = *cursor_ty;
       free(cursor_ty);
-      collect_enum_fields(cursor, &decl->tydecl.parsed_ty);
+      collect_enum_fields(cursor, &decl->toplevel.tydecl.parsed_ty);
     } else {
       free(decl);
       decl = NULL;

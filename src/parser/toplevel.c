@@ -39,7 +39,7 @@ struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
   decl->type = AST_DECL_TYPE_TYDECL;
   lexer_locate(parser->lexer, &decl->loc);
 
-  if (parser_consume(parser, &decl->tydecl.ident, TOKEN_IDENTIFIER) < 0) {
+  if (parser_consume(parser, &decl->toplevel.tydecl.ident, TOKEN_IDENTIFIER) < 0) {
     free(decl);
     return NULL;
   }
@@ -50,13 +50,14 @@ struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
       return NULL;
     }
 
-    decl->tydecl.parsed_ty = parse_type(parser);
-    // strncpy(decl->tydecl.ty.name, decl->tydecl.ident.value.identv.ident, 256);
+    decl->toplevel.tydecl.parsed_ty = parse_type(parser);
+    // strncpy(decl->toplevel.tydecl.ty.name, decl->toplevel.tydecl.ident.value.identv.ident, 256);
   } else {
     // forward declaration of a type that will be defined soon
-    decl->tydecl.parsed_ty.ty = AST_TYPE_CUSTOM;
-    decl->tydecl.parsed_ty.custom.is_forward_decl = 1;
-    strncpy(decl->tydecl.parsed_ty.name, decl->tydecl.ident.value.identv.ident, 256);
+    decl->toplevel.tydecl.parsed_ty.ty = AST_TYPE_CUSTOM;
+    decl->toplevel.tydecl.parsed_ty.custom.is_forward_decl = 1;
+    strncpy(decl->toplevel.tydecl.parsed_ty.name, decl->toplevel.tydecl.ident.value.identv.ident,
+            256);
   }
 
   if (parser_consume(parser, NULL, TOKEN_SEMI) < 0) {
@@ -110,8 +111,8 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
 
   struct ast_toplevel *decl = calloc(1, sizeof(struct ast_toplevel));
   decl->loc = loc;
-  struct ast_fdecl *fdecl = &decl->fdecl;
-  struct ast_vdecl *vdecl = &decl->vdecl;
+  struct ast_fdecl *fdecl = &decl->toplevel.fdecl;
+  struct ast_vdecl *vdecl = &decl->toplevel.vdecl;
 
   /**
    * [vis] <ty> [mut] <name> [= <init-expr>];
@@ -381,10 +382,11 @@ struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType 
   struct ast_toplevel *result = calloc(1, sizeof(struct ast_toplevel));
   result->type = AST_DECL_TYPE_IMPORT;
   result->loc = loc;
-  result->import.type = type;
-  strncpy(result->import.path, token.value.strv.s, 256);
+  result->toplevel.import.type = type;
+  strncpy(result->toplevel.import.path, token.value.strv.s, 256);
 
-  if (compiler_parse_import(parser->compiler, type, token.value.strv.s, &result->import) < 0) {
+  if (compiler_parse_import(parser->compiler, type, token.value.strv.s, &result->toplevel.import) <
+      0) {
     free(result);
     return NULL;
   }

@@ -84,47 +84,47 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
                ast->type, ast->loc.file, ast->loc.line, ast->loc.column);
 
   if (ast->type == AST_DECL_TYPE_TYDECL) {
-    if (ast->tydecl.parsed_ty.ty == AST_TYPE_CUSTOM) {
+    if (ast->toplevel.tydecl.parsed_ty.ty == AST_TYPE_CUSTOM) {
       // trying to make an alias to another existing type
       struct ast_ty *target_ty =
-          type_repository_lookup(typecheck->type_repo, ast->tydecl.parsed_ty.name);
+          type_repository_lookup(typecheck->type_repo, ast->toplevel.tydecl.parsed_ty.name);
       if (!target_ty) {
-        fprintf(stderr, "type %s not found [%s]\n", ast->tydecl.parsed_ty.name,
-                ast->tydecl.ident.value.identv.ident);
+        fprintf(stderr, "type %s not found [%s]\n", ast->toplevel.tydecl.parsed_ty.name,
+                ast->toplevel.tydecl.ident.value.identv.ident);
         ++typecheck->errors;
         return;
       }
 
       // already registered?
-      struct ast_ty *registered =
-          type_repository_lookup(typecheck->type_repo, ast->tydecl.ident.value.identv.ident);
+      struct ast_ty *registered = type_repository_lookup(
+          typecheck->type_repo, ast->toplevel.tydecl.ident.value.identv.ident);
       if (!registered) {
-        if (!type_repository_register_alias(typecheck->type_repo,
-                                            ast->tydecl.ident.value.identv.ident, target_ty)) {
-          compiler_log(typecheck->compiler, LogLevelError, "typecheck",
-                       "failed to register alias %s -> %s", ast->tydecl.ident.value.identv.ident,
-                       ast->tydecl.parsed_ty.name);
+        if (!type_repository_register_alias(
+                typecheck->type_repo, ast->toplevel.tydecl.ident.value.identv.ident, target_ty)) {
+          compiler_log(
+              typecheck->compiler, LogLevelError, "typecheck", "failed to register alias %s -> %s",
+              ast->toplevel.tydecl.ident.value.identv.ident, ast->toplevel.tydecl.parsed_ty.name);
           ++typecheck->errors;
         }
 
         registered = target_ty;
       }
 
-      ast->tydecl.resolved = registered;
+      ast->toplevel.tydecl.resolved = registered;
       return;
     }
 
-    const char *alias_name = ast->tydecl.ident.value.identv.ident;
+    const char *alias_name = ast->toplevel.tydecl.ident.value.identv.ident;
 
     // not custom - defining a real type
 
-    strncpy(ast->tydecl.parsed_ty.name, alias_name, 256);
+    strncpy(ast->toplevel.tydecl.parsed_ty.name, alias_name, 256);
 
     // already resolved? don't do additional work
     struct ast_ty *existing = type_repository_lookup(typecheck->type_repo, alias_name);
     if (existing) {
       // TODO: potentially update it to be a new type?
-      ast->tydecl.resolved = existing;
+      ast->toplevel.tydecl.resolved = existing;
       return;
     }
 
@@ -140,7 +140,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
                  "moving on with type alias creation");
 
-    struct ast_ty *target_type = resolve_parsed_type(typecheck, &ast->tydecl.parsed_ty);
+    struct ast_ty *target_type = resolve_parsed_type(typecheck, &ast->toplevel.tydecl.parsed_ty);
 
     compiler_log(typecheck->compiler, LogLevelTrace, "typecheck", "registering tydecl %s -> %s",
                  alias_name, target_type->name);
@@ -150,61 +150,64 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     compiler_log(typecheck->compiler, LogLevelTrace, "typecheck", "patching tydecl %s -> %s",
                  alias_name, target_type->name);
 
-    patch_type_tbds(typecheck, target_type, &ast->tydecl.parsed_ty);
+    patch_type_tbds(typecheck, target_type, &ast->toplevel.tydecl.parsed_ty);
 
     compiler_log(typecheck->compiler, LogLevelTrace, "typecheck", "resolved tydecl %s -> %s",
                  alias_name, target_type->name);
-    ast->tydecl.resolved = target_type;
+    ast->toplevel.tydecl.resolved = target_type;
   }
 
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    ast->fdecl.function_ty = resolve_parsed_type(typecheck, &ast->fdecl.parsed_function_ty);
-    if (!ast->fdecl.function_ty || !ast->fdecl.function_ty->function.retty ||
-        type_is_error(ast->fdecl.function_ty->function.retty) ||
-        type_is_tbd(ast->fdecl.function_ty->function.retty)) {
+    ast->toplevel.fdecl.function_ty =
+        resolve_parsed_type(typecheck, &ast->toplevel.fdecl.parsed_function_ty);
+    if (!ast->toplevel.fdecl.function_ty || !ast->toplevel.fdecl.function_ty->function.retty ||
+        type_is_error(ast->toplevel.fdecl.function_ty->function.retty) ||
+        type_is_tbd(ast->toplevel.fdecl.function_ty->function.retty)) {
       compiler_log(typecheck->compiler, LogLevelError, "typecheck",
-                   "function %s has unresolved return type", ast->fdecl.ident.value.identv.ident);
+                   "function %s has unresolved return type",
+                   ast->toplevel.fdecl.ident.value.identv.ident);
       ++typecheck->errors;
       return;
     }
 
     // specialize the return type if it's a template
-    if (ast->fdecl.function_ty->function.retty->ty == AST_TYPE_ENUM &&
-        ast->fdecl.function_ty->function.retty->enumty.templates) {
+    if (ast->toplevel.fdecl.function_ty->function.retty->ty == AST_TYPE_ENUM &&
+        ast->toplevel.fdecl.function_ty->function.retty->enumty.templates) {
       // create a specialized type and use it here
       struct ast_ty new_type;
       memset(&new_type, 0, sizeof(struct ast_ty));
       new_type.ty = AST_TYPE_ENUM;
       char new_name[1024];
-      if (snprintf(new_name, 1024, "%s_spec_%s", ast->fdecl.ident.value.identv.ident,
-                   ast->fdecl.function_ty->function.retty->name) > 256) {
+      if (snprintf(new_name, 1024, "%s_spec_%s", ast->toplevel.fdecl.ident.value.identv.ident,
+                   ast->toplevel.fdecl.function_ty->function.retty->name) > 256) {
         fprintf(stderr, "enum specialization name too long\n");
         ++typecheck->errors;
         return;
       }
       strcpy(new_type.name, new_name);
 
-      new_type.enumty.fields = ast->fdecl.function_ty->function.retty->enumty.fields;
+      new_type.enumty.fields = ast->toplevel.fdecl.function_ty->function.retty->enumty.fields;
       new_type.enumty.no_wrapped_fields =
-          ast->fdecl.function_ty->function.retty->enumty.no_wrapped_fields;
-      new_type.enumty.num_fields = ast->fdecl.function_ty->function.retty->enumty.num_fields;
-      new_type.enumty.templates = ast->fdecl.function_ty->function.retty->enumty.templates;
+          ast->toplevel.fdecl.function_ty->function.retty->enumty.no_wrapped_fields;
+      new_type.enumty.num_fields =
+          ast->toplevel.fdecl.function_ty->function.retty->enumty.num_fields;
+      new_type.enumty.templates = ast->toplevel.fdecl.function_ty->function.retty->enumty.templates;
 
-      new_type.specialization_of = strdup(ast->fdecl.function_ty->function.retty->name);
+      new_type.specialization_of = strdup(ast->toplevel.fdecl.function_ty->function.retty->name);
     }
 
     struct scope_entry *existing =
-        scope_lookup(typecheck->scope, ast->fdecl.ident.value.identv.ident, 1);
+        scope_lookup(typecheck->scope, ast->toplevel.fdecl.ident.value.identv.ident, 1);
 
     struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-    entry->fdecl = &ast->fdecl;
-    entry->ty = ast->fdecl.function_ty;
+    entry->fdecl = &ast->toplevel.fdecl;
+    entry->ty = ast->toplevel.fdecl.function_ty;
 
-    scope_insert(typecheck->scope, ast->fdecl.ident.value.identv.ident, entry);
+    scope_insert(typecheck->scope, ast->toplevel.fdecl.ident.value.identv.ident, entry);
 
     if (existing && entry->fdecl->flags != existing->fdecl->flags) {
       fprintf(stderr, "function %s redeclared with different flags\n",
-              ast->fdecl.ident.value.identv.ident);
+              ast->toplevel.fdecl.ident.value.identv.ident);
       ++typecheck->errors;
     }
 
@@ -215,14 +218,14 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       type_name_into(existing->fdecl->function_ty->function.retty, existingstr, 256);
 
       fprintf(stderr, "function %s redeclared with different return type %s, expected %s\n",
-              ast->fdecl.ident.value.identv.ident, tystr, existingstr);
+              ast->toplevel.fdecl.ident.value.identv.ident, tystr, existingstr);
       ++typecheck->errors;
     }
 
     if (existing && entry->fdecl->num_params != existing->fdecl->num_params) {
       fprintf(stderr,
               "function %s redeclared with different number of parameters %zu, expected %zu\n",
-              ast->fdecl.ident.value.identv.ident, entry->fdecl->num_params,
+              ast->toplevel.fdecl.ident.value.identv.ident, entry->fdecl->num_params,
               existing->fdecl->num_params);
       ++typecheck->errors;
     }
@@ -240,7 +243,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
         type_name_into(existing->fdecl->function_ty->function.param_types[i], existingstr, 256);
 
         fprintf(stderr, "function %s parameter %zu has type %s, expected %s\n",
-                ast->fdecl.ident.value.identv.ident, i, tystr, existingstr);
+                ast->toplevel.fdecl.ident.value.identv.ident, i, tystr, existingstr);
         ++typecheck->errors;
       }
     }
@@ -250,19 +253,19 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       free(existing);
     }
 
-    if (ast->fdecl.body) {
+    if (ast->toplevel.fdecl.body) {
       typecheck->scope = enter_scope(typecheck->scope);
 
       // declare the parameters in the function scope
-      for (size_t i = 0; i < ast->fdecl.num_params; i++) {
+      for (size_t i = 0; i < ast->toplevel.fdecl.num_params; i++) {
         struct scope_entry *param_entry = calloc(1, sizeof(struct scope_entry));
-        param_entry->ty = ast->fdecl.function_ty->function.param_types[i];
-        param_entry->decl_flags = DECL_FLAG_TEMPORARY | ast->fdecl.params[i].flags;
-        scope_insert(typecheck->scope, ast->fdecl.params[i].name, param_entry);
+        param_entry->ty = ast->toplevel.fdecl.function_ty->function.param_types[i];
+        param_entry->decl_flags = DECL_FLAG_TEMPORARY | ast->toplevel.fdecl.params[i].flags;
+        scope_insert(typecheck->scope, ast->toplevel.fdecl.params[i].name, param_entry);
       }
 
       {
-        struct ast_ty *result = typecheck_block(typecheck, ast->fdecl.body);
+        struct ast_ty *result = typecheck_block(typecheck, ast->toplevel.fdecl.body);
         if (!result) {
           return;
         }
@@ -270,15 +273,17 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
       typecheck->scope = exit_scope(typecheck->scope);
 
-      maybe_implicitly_convert(&ast->fdecl.body->ty, &ast->fdecl.function_ty->function.retty);
+      maybe_implicitly_convert(&ast->toplevel.fdecl.body->ty,
+                               &ast->toplevel.fdecl.function_ty->function.retty);
 
-      if (!same_type(ast->fdecl.body->ty, ast->fdecl.function_ty->function.retty)) {
+      if (!same_type(ast->toplevel.fdecl.body->ty,
+                     ast->toplevel.fdecl.function_ty->function.retty)) {
         char resultstr[256], tystr[256];
-        type_name_into(ast->fdecl.body->ty, resultstr, 256);
-        type_name_into(ast->fdecl.function_ty->function.retty, tystr, 256);
+        type_name_into(ast->toplevel.fdecl.body->ty, resultstr, 256);
+        type_name_into(ast->toplevel.fdecl.function_ty->function.retty, tystr, 256);
 
         fprintf(stderr, "function %s returns %s, expected %s\n",
-                ast->fdecl.ident.value.identv.ident, resultstr, tystr);
+                ast->toplevel.fdecl.ident.value.identv.ident, resultstr, tystr);
         ++typecheck->errors;
         return;
       }
@@ -286,47 +291,49 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
   }
 
   if (ast->type == AST_DECL_TYPE_VDECL) {
-    ast->vdecl.ty = resolve_parsed_type(typecheck, &ast->vdecl.parser_ty);
-    if (!ast->vdecl.ty || type_is_error(ast->vdecl.ty) || type_is_tbd(ast->vdecl.ty)) {
-      fprintf(stderr, "variable %s has unresolved type\n", ast->vdecl.ident.value.identv.ident);
+    ast->toplevel.vdecl.ty = resolve_parsed_type(typecheck, &ast->toplevel.vdecl.parser_ty);
+    if (!ast->toplevel.vdecl.ty || type_is_error(ast->toplevel.vdecl.ty) ||
+        type_is_tbd(ast->toplevel.vdecl.ty)) {
+      fprintf(stderr, "variable %s has unresolved type\n",
+              ast->toplevel.vdecl.ident.value.identv.ident);
       ++typecheck->errors;
       return;
     }
 
     struct scope_entry *existing =
-        scope_lookup(typecheck->scope, ast->vdecl.ident.value.identv.ident, 0);
+        scope_lookup(typecheck->scope, ast->toplevel.vdecl.ident.value.identv.ident, 0);
     if (existing) {
       fprintf(stderr, "typecheck: multiple definitions of variable %s\n",
-              ast->vdecl.ident.value.identv.ident);
+              ast->toplevel.vdecl.ident.value.identv.ident);
       ++typecheck->errors;
       return;
     }
 
     struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-    entry->ty = ast->vdecl.ty;
-    entry->decl_flags = ast->vdecl.flags;
+    entry->ty = ast->toplevel.vdecl.ty;
+    entry->decl_flags = ast->toplevel.vdecl.flags;
 
     // insert before checking the initializer to allow recursive references
-    scope_insert(typecheck->scope, ast->vdecl.ident.value.identv.ident, entry);
+    scope_insert(typecheck->scope, ast->toplevel.vdecl.ident.value.identv.ident, entry);
 
-    if (ast->vdecl.init_expr) {
+    if (ast->toplevel.vdecl.init_expr) {
       {
-        struct ast_ty *result = typecheck_expr(typecheck, ast->vdecl.init_expr);
+        struct ast_ty *result = typecheck_expr(typecheck, ast->toplevel.vdecl.init_expr);
         if (!result) {
           return;
         }
       }
 
-      maybe_implicitly_convert(&ast->vdecl.init_expr->ty, &ast->vdecl.ty);
+      maybe_implicitly_convert(&ast->toplevel.vdecl.init_expr->ty, &ast->toplevel.vdecl.ty);
 
-      if (!same_type(ast->vdecl.init_expr->ty, ast->vdecl.ty)) {
+      if (!same_type(ast->toplevel.vdecl.init_expr->ty, ast->toplevel.vdecl.ty)) {
         char resultstr[256], tystr[256];
-        type_name_into(ast->vdecl.init_expr->ty, resultstr, 256);
-        type_name_into(ast->vdecl.ty, tystr, 256);
+        type_name_into(ast->toplevel.vdecl.init_expr->ty, resultstr, 256);
+        type_name_into(ast->toplevel.vdecl.ty, tystr, 256);
 
-        typecheck_diag_expr(typecheck, ast->vdecl.init_expr,
+        typecheck_diag_expr(typecheck, ast->toplevel.vdecl.init_expr,
                             "variable %s initializer has type %s, expected %s\n",
-                            ast->vdecl.ident.value.identv.ident, resultstr, tystr);
+                            ast->toplevel.vdecl.ident.value.identv.ident, resultstr, tystr);
         ++typecheck->errors;
         return;
       }
@@ -334,7 +341,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
   }
 
   if (ast->type == AST_DECL_TYPE_IMPORT) {
-    typecheck_ast(typecheck, ast->import.ast);
+    typecheck_ast(typecheck, ast->toplevel.import.ast);
   }
 }
 
@@ -367,29 +374,29 @@ struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *as
 static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      return typecheck_expr(typecheck, ast->expr);
+      return typecheck_expr(typecheck, ast->stmt.expr);
 
     case AST_STMT_TYPE_LET: {
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->ty = ast->let.ty;
-      entry->decl_flags = ast->let.flags;
+      entry->ty = ast->stmt.let.ty;
+      entry->decl_flags = ast->stmt.let.flags;
 
       // if a type was actually specified we need to resolve it
-      if (!type_is_tbd(&ast->let.parser_ty)) {
-        ast->let.ty = resolve_parsed_type(typecheck, &ast->let.parser_ty);
+      if (!type_is_tbd(&ast->stmt.let.parser_ty)) {
+        ast->stmt.let.ty = resolve_parsed_type(typecheck, &ast->stmt.let.parser_ty);
       } else {
-        ast->let.ty = type_repository_tbd(typecheck->type_repo);
+        ast->stmt.let.ty = type_repository_tbd(typecheck->type_repo);
       }
 
       // insert before checking the initializer to allow recursive references
-      scope_insert(typecheck->scope, ast->let.ident.value.identv.ident, entry);
+      scope_insert(typecheck->scope, ast->stmt.let.ident.value.identv.ident, entry);
       {
-        struct ast_ty *init_ty = typecheck_expr(typecheck, ast->let.init_expr);
+        struct ast_ty *init_ty = typecheck_expr(typecheck, ast->stmt.let.init_expr);
         if (!init_ty) {
           return NULL;
         }
 
-        if (type_is_tbd(ast->let.ty)) {
+        if (type_is_tbd(ast->stmt.let.ty)) {
           if (init_ty->flags & TYPE_FLAG_CONSTANT) {
             struct ast_ty new_ty = *init_ty;
             new_ty.flags &= ~TYPE_FLAG_CONSTANT;
@@ -400,32 +407,32 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
           }
 
           // inferred type
-          ast->let.ty = init_ty;
+          ast->stmt.let.ty = init_ty;
         }
       }
 
-      maybe_implicitly_convert(&ast->let.init_expr->ty, &ast->let.ty);
+      maybe_implicitly_convert(&ast->stmt.let.init_expr->ty, &ast->stmt.let.ty);
 
-      if (!same_type(ast->let.ty, ast->let.init_expr->ty)) {
+      if (!same_type(ast->stmt.let.ty, ast->stmt.let.init_expr->ty)) {
         char tystr[256], initstr[256];
-        type_name_into(ast->let.ty, tystr, 256);
-        type_name_into(ast->let.init_expr->ty, initstr, 256);
+        type_name_into(ast->stmt.let.ty, tystr, 256);
+        type_name_into(ast->stmt.let.init_expr->ty, initstr, 256);
 
-        typecheck_diag_expr(typecheck, ast->let.init_expr,
+        typecheck_diag_expr(typecheck, ast->stmt.let.init_expr,
                             "let %s initializer has type %s, expected %s\n",
-                            ast->let.ident.value.identv.ident, initstr, tystr);
+                            ast->stmt.let.ident.value.identv.ident, initstr, tystr);
         ++typecheck->errors;
       }
 
-      entry->ty = ast->let.ty;
+      entry->ty = ast->stmt.let.ty;
     } break;
 
     case AST_STMT_TYPE_ITER: {
-      struct ast_ty *start = typecheck_expr(typecheck, ast->iter.range.start);
-      struct ast_ty *end = typecheck_expr(typecheck, ast->iter.range.end);
+      struct ast_ty *start = typecheck_expr(typecheck, ast->stmt.iter.range.start);
+      struct ast_ty *end = typecheck_expr(typecheck, ast->stmt.iter.range.end);
       struct ast_ty *step, step_ty;
-      if (ast->iter.range.step) {
-        step = typecheck_expr(typecheck, ast->iter.range.step);
+      if (ast->stmt.iter.range.step) {
+        step = typecheck_expr(typecheck, ast->stmt.iter.range.step);
       } else {
         step_ty.ty = AST_TYPE_INTEGER;
         step_ty.integer.is_signed = 1;
@@ -442,7 +449,7 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
         ++typecheck->errors;
       }
 
-      if (ast->iter.range.step && !same_type(start, step)) {
+      if (ast->stmt.iter.range.step && !same_type(start, step)) {
         char startstr[256], stepstr[256];
         type_name_into(start, startstr, 256);
         type_name_into(step, stepstr, 256);
@@ -454,18 +461,18 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
       // struct ast_vdecl *index = calloc(1, sizeof(struct ast_vdecl));
 
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->ty = ast->iter.range.start->ty;
+      entry->ty = ast->stmt.iter.range.start->ty;
       // entry->decl_flags = index->flags;
-      // ast->iter.index_vdecl = index;
-      ast->iter.index_ty = entry->ty;
+      // ast->stmt.iter.index_vdecl = index;
+      ast->stmt.iter.index_ty = entry->ty;
 
       // new scope for the loop variable
       typecheck->scope = enter_scope(typecheck->scope);
 
       // insert before checking the initializer to allow recursive references
-      scope_insert(typecheck->scope, ast->iter.index.ident.value.identv.ident, entry);
+      scope_insert(typecheck->scope, ast->stmt.iter.index.ident.value.identv.ident, entry);
 
-      if (!typecheck_block(typecheck, &ast->iter.block)) {
+      if (!typecheck_block(typecheck, &ast->stmt.iter.block)) {
         return NULL;
       }
 
@@ -473,8 +480,8 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
     } break;
 
     case AST_STMT_TYPE_STORE: {
-      struct ast_ty *lhs = typecheck_expr(typecheck, ast->store.lhs);
-      struct ast_ty *rhs = typecheck_expr(typecheck, ast->store.rhs);
+      struct ast_ty *lhs = typecheck_expr(typecheck, ast->stmt.store.lhs);
+      struct ast_ty *rhs = typecheck_expr(typecheck, ast->stmt.store.rhs);
 
       if (!lhs || !rhs) {
         return NULL;
@@ -500,29 +507,29 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
 
     case AST_STMT_TYPE_RETURN: {
       // TODO: make sure this expr type matches the function's return type
-      if (ast->expr) {
-        return typecheck_expr(typecheck, ast->expr);
+      if (ast->stmt.expr) {
+        return typecheck_expr(typecheck, ast->stmt.expr);
       } else {
         return &typecheck->void_type;
       }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
-      if (!typecheck_expr(typecheck, ast->expr)) {
+      if (!typecheck_expr(typecheck, ast->stmt.expr)) {
         return NULL;
       }
       // expression type is irrelevant; defer is a void statement
     } break;
 
     case AST_STMT_TYPE_WHILE: {
-      struct ast_ty *cond = typecheck_expr(typecheck, ast->while_stmt.cond);
+      struct ast_ty *cond = typecheck_expr(typecheck, ast->stmt.while_stmt.cond);
       if (!cond) {
         return NULL;
       }
 
       // TODO: needs to be an integer condition
 
-      if (!typecheck_block(typecheck, &ast->while_stmt.block)) {
+      if (!typecheck_block(typecheck, &ast->stmt.while_stmt.block)) {
         return NULL;
       }
     } break;

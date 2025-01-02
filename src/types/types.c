@@ -6,6 +6,15 @@
 #include <string.h>
 
 #include "ast.h"
+#include "utility.h"
+
+struct type_name_context {
+  struct ast_ty *ty;
+  struct type_name_context *next;
+};
+
+static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
+                              struct type_name_context *ctx);
 
 struct ast_ty type_tbd(void) {
   struct ast_ty ty;
@@ -265,66 +274,65 @@ const char *type_name(struct ast_ty *ty) {
   return buf;
 }
 
-struct type_name_context {
-  struct ast_ty *ty;
-  struct type_name_context *next;
-};
-
-static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
-                              struct type_name_context *ctx);
-
 int type_name_into(struct ast_ty *ty, char *buf, size_t maxlen) {
-  return type_name_into_ctx(ty, buf, maxlen, NULL);
+  struct string_builder *builder = new_string_builder_for(buf, maxlen);
+  type_name_into_ctx(ty, builder, NULL);
+
+  size_t len = string_builder_len(builder);
+  int wanted_resize = string_builder_needs_resize(builder);
+  free_string_builder(builder);
+
+  buf[len] = 0;
+  return wanted_resize ? -1 : 0;
 }
 
-static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
+static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
                               struct type_name_context *ctx) {
   if (!ty) {
-    return snprintf(buf, maxlen, "<null-type-ptr>");
+    string_builder_append(builder, "<null-type-ptr>");
+    return 0;
   }
 
   int offset = 0;
   switch (ty->ty) {
     case AST_TYPE_ERROR:
-      offset += snprintf(buf, maxlen, "error");
+      string_builder_append(builder, "error");
       return offset;
 
     case AST_TYPE_TBD:
-      offset += snprintf(buf, maxlen, "tbd");
+      string_builder_append(builder, "tbd");
       return offset;
 
     case AST_TYPE_INTEGER:
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%c%zd",
-                         ty->integer.is_signed ? 'i' : 'u', ty->integer.width);
+      string_builder_appendf(builder, "%c%zd", ty->integer.is_signed ? 'i' : 'u',
+                             ty->integer.width);
       break;
 
     case AST_TYPE_STRING:
-      offset += snprintf(buf, maxlen, "str");
+      string_builder_append(builder, "str");
       break;
 
     case AST_TYPE_FLOAT:
-      offset += snprintf(buf, maxlen, "float");
+      string_builder_append(builder, "float");
       break;
 
     case AST_TYPE_FVEC:
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->fvec.width);
+      string_builder_appendf(builder, "fvec%zd", ty->fvec.width);
       break;
 
     case AST_TYPE_VOID:
-      offset += snprintf(buf, maxlen, "void");
+      string_builder_append(builder, "void");
       break;
 
     case AST_TYPE_ARRAY: {
-      char element_ty[256];
-      type_name_into_ctx(ty->array.element_ty, element_ty, 256, ctx);
-      offset +=
-          snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty, ty->array.width);
+      type_name_into_ctx(ty->array.element_ty, builder, ctx);
+      string_builder_appendf(builder, "[%zu]", ty->array.width);
     } break;
 
     case AST_TYPE_CUSTOM:
-      offset += snprintf(buf, maxlen, "Ty(%s)", ty->name);
+      string_builder_appendf(builder, "Ty(%s)", ty->name);
       if (ty->custom.is_forward_decl) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, " (forward)");
+        string_builder_append(builder, " (forward)");
       }
       break;
 
@@ -341,15 +349,15 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
       }
 
       if (seen) {
-        offset +=
-            snprintf(buf, maxlen, "%s %s", ty->structty.is_union ? "union" : "struct", ty->name);
+        string_builder_appendf(builder, "%s %s", ty->structty.is_union ? "union" : "struct",
+                               ty->name);
       } else {
         struct type_name_context *new_ctx = malloc(sizeof(struct type_name_context));
         new_ctx->ty = ty;
         new_ctx->next = ctx;
 
-        offset +=
-            snprintf(buf, maxlen, "%s %s { ", ty->structty.is_union ? "union" : "struct", ty->name);
+        string_builder_appendf(builder, "%s %s { ", ty->structty.is_union ? "union" : "struct",
+                               ty->name);
         struct ast_struct_field *field = ty->structty.fields;
         while (field) {
           struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
@@ -357,122 +365,114 @@ static int type_name_into_ctx(struct ast_ty *ty, char *buf, size_t maxlen,
             struct ast_ty *pointee = field_ty->pointer.pointee;
 
             // don't emit the pointee type, just the name will do
-            offset += snprintf(buf + offset, maxlen - (size_t)offset, "struct %s %s%s; ",
-                               pointee ? pointee->name : "<null-pointee>",
-                               field_ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
+            string_builder_appendf(builder, "struct %s %s%s; ",
+                                   pointee ? pointee->name : "<null-pointee>",
+                                   field_ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
           } else {
-            char field_tyname[256] = {0};
-            type_name_into_ctx(field_ty, field_tyname, 256, new_ctx);
-            offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname,
-                               field->name);
+            type_name_into_ctx(field_ty, builder, new_ctx);
+            string_builder_appendf(builder, " %s; ", field->name);
           }
           field = field->next;
         }
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+        string_builder_append(builder, "}");
 
         free(new_ctx);
       }
     } break;
 
     case AST_TYPE_NIL:
-      offset += snprintf(buf, maxlen, "nil");
+      string_builder_append(builder, "nil");
       break;
 
     case AST_TYPE_TEMPLATE:
-      offset += snprintf(buf, maxlen, "template ");
-      offset += type_name_into_ctx(ty->tmpl.outer, buf + offset, maxlen - (size_t)offset, ctx);
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "<");
+      string_builder_append(builder, "template ");
+      type_name_into_ctx(ty->tmpl.outer, builder, ctx);
+      string_builder_append(builder, "<");
       struct ast_template_ty *inner = ty->tmpl.inners;
       while (inner) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s %d -> ", inner->name,
-                           inner->is_resolved);
+        string_builder_appendf(builder, "%s %d -> ", inner->name, inner->is_resolved);
         if (inner->resolved) {
-          offset += type_name_into_ctx(inner->resolved, buf + offset, maxlen - (size_t)offset, ctx);
+          type_name_into_ctx(inner->resolved, builder, ctx);
         }
         if (inner->next) {
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+          string_builder_append(builder, ", ");
         }
         inner = inner->next;
       }
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
+      string_builder_append(builder, ">");
       break;
 
     case AST_TYPE_ENUM:
-      offset += snprintf(buf, maxlen, "enum %s <", ty->name);
+      string_builder_appendf(builder, "enum %s <", ty->name);
       struct ast_template_ty *template = ty->enumty.templates;
       while (template) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s (%s)", template->name,
-                           template->is_resolved ? "resolved" : "unresolved");
+        string_builder_appendf(builder, "%s (%s)", template->name,
+                               template->is_resolved ? "resolved" : "unresolved");
         if (template->next) {
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+          string_builder_append(builder, ", ");
         }
         template = template->next;
       }
 
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "> { ");
+      string_builder_append(builder, "> { ");
       struct ast_enum_field *field = ty->enumty.fields;
       while (field) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s = %" PRIu64, field->name,
-                           field->value);
+        string_builder_appendf(builder, "%s = %" PRIu64, field->name, field->value);
         if (field->has_inner) {
           struct ast_ty *enum_inner = field->inner ? field->inner : &field->parser_inner;
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, " (");
-          offset += type_name_into_ctx(enum_inner, buf + offset, maxlen - (size_t)offset, ctx);
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
+          string_builder_append(builder, " (");
+          type_name_into_ctx(enum_inner, builder, ctx);
+          string_builder_append(builder, ")");
         }
         if (field->next) {
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+          string_builder_append(builder, ", ");
         }
         field = field->next;
       }
 
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+      string_builder_append(builder, "}");
       break;
 
     case AST_TYPE_FUNCTION:
-      offset += snprintf(buf, maxlen, "fn (");
+      string_builder_append(builder, "fn (");
       for (size_t i = 0; i < ty->function.num_params; i++) {
-        offset += type_name_into_ctx(ty->function.param_types[i], buf + offset,
-                                     maxlen - (size_t)offset, ctx);
+        type_name_into_ctx(ty->function.param_types[i], builder, ctx);
         if (i + 1 < ty->function.num_params) {
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, ", ");
+          string_builder_append(builder, ", ");
         }
       }
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, ") -> ");
-      offset += type_name_into_ctx(ty->function.retty, buf + offset, maxlen - (size_t)offset, ctx);
+      string_builder_append(builder, ") -> ");
+      type_name_into_ctx(ty->function.retty, builder, ctx);
       break;
 
     case AST_TYPE_MATRIX:
-      offset += snprintf(buf, maxlen, "matrix %zdx%zd", ty->matrix.cols, ty->matrix.rows);
+      string_builder_appendf(builder, "matrix %zdx%zd", ty->matrix.cols, ty->matrix.rows);
       break;
 
     case AST_TYPE_POINTER:
-      offset += snprintf(buf, maxlen, "Pointer <");
-
-      offset += type_name_into_ctx(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset, ctx);
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
+      string_builder_append(builder, "Pointer <");
+      type_name_into_ctx(ty->pointer.pointee, builder, ctx);
+      string_builder_append(builder, ">");
       break;
 
     case AST_TYPE_BOX:
-      offset += snprintf(buf, maxlen, "Box <");
-      offset += type_name_into_ctx(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset, ctx);
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, ">");
+      string_builder_append(builder, "Box <");
+      type_name_into_ctx(ty->pointer.pointee, builder, ctx);
+      string_builder_append(builder, ">");
       break;
 
     default:
-      offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
-      return offset;
+      string_builder_appendf(builder, "<unknown-type %d>", ty->ty);
   }
 
   if (ty->flags & TYPE_FLAG_CONSTANT) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, " const");
+    string_builder_append(builder, " const");
   }
   if (ty->flags & ~TYPE_FLAG_CONSTANT) {
-    offset += snprintf(buf + offset, maxlen - (size_t)offset, " (flags %" PRIx64 ")", ty->flags);
+    string_builder_appendf(builder, " (flags %" PRIx64 ")", ty->flags);
   }
 
-  buf[offset] = '\0';
-  return offset;
+  return 0;
 }
 
 int can_cast(struct ast_ty *ty1, struct ast_ty *ty2) {

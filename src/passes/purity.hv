@@ -1,0 +1,56 @@
+cimport "stdlib.h";
+cimport "../../include/ast.h";
+cimport "../../include/types.h";
+
+type PurityContext = struct {
+    ast_program *ast;
+    compiler *comp;
+    ast_toplevel *current_function;
+    i32 errors;
+};
+
+impure fn VisitorResult purity_visitor(ast_visitor_node *node, void *user_data);
+impure fn i32 check_purity_expr(PurityContext *ctx, ast_expr *ast);
+
+pub impure fn PurityContext *purity_new(ast_program *ast, compiler *comp) {
+    let mut result = as PurityContext *calloc(1, as u64 sizeof (PurityContext));
+    result->ast = ast;
+    result->comp = comp;
+    result
+}
+
+pub impure fn i32 purity_run(PurityContext *ctx) {
+    ast_visit(ctx->comp, ctx->ast, purity_visitor, ctx);
+    ctx->errors
+}
+
+pub impure fn void purity_destroy(PurityContext *ctx) {
+    free(ctx);
+}
+
+impure fn VisitorResult purity_visitor(ast_visitor_node *node, void *user_data) {
+    let ctx = as PurityContext* user_data;
+
+    if node->toplevel != nil {
+        if node->toplevel == AST_DECL_TYPE_FDECL {
+            ctx->current_function = node->toplevel;
+        } else {
+            ctx->current_function = nil;
+        };
+    } else if ctx->current_function != nil && node->expr != nil {
+        if (ctx->current_function->fdecl.flags & DECL_FLAG_IMPURE) == 0 {
+            check_purity_expr(ctx, expr);
+        };
+    };
+
+    if purity->errors > 0 {
+        VisitorResult::VisitorStop
+    } else {
+        VisitorResult::VisitorContinue
+    }
+}
+
+impure fn i32 check_purity_expr(PurityContext *ctx, ast_expr *ast) {
+    0
+}
+

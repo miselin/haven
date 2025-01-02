@@ -50,33 +50,34 @@ static enum VisitorResult tyverify_visitor(struct ast_visitor_node *node, void *
 
 static int typecheck_verify_toplevel(struct tyverify_state *state, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (is_bad_type(ast->fdecl.function_ty->function.retty)) {
+    if (is_bad_type(ast->toplevel.fdecl.function_ty->function.retty)) {
       compiler_log(state->compiler, LogLevelError, "tyverify",
-                   "function %s has unresolved return type", ast->fdecl.ident.value.identv.ident);
+                   "function %s has unresolved return type",
+                   ast->toplevel.fdecl.ident.value.identv.ident);
       ++state->errors;
       return -1;
     }
 
-    for (size_t i = 0; i < ast->fdecl.num_params; i++) {
-      struct ast_ty *param_ty = ast->fdecl.function_ty->function.param_types[i];
+    for (size_t i = 0; i < ast->toplevel.fdecl.num_params; i++) {
+      struct ast_ty *param_ty = ast->toplevel.fdecl.function_ty->function.param_types[i];
       if (is_bad_type(param_ty)) {
         compiler_log(state->compiler, LogLevelError, "tyverify",
                      "function %s has unresolved parameter type for parameter %zd",
-                     ast->fdecl.ident.value.identv.ident, i + 1);
+                     ast->toplevel.fdecl.ident.value.identv.ident, i + 1);
         ++state->errors;
         return -1;
       }
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    if (is_bad_type(ast->vdecl.ty)) {
+    if (is_bad_type(ast->toplevel.vdecl.ty)) {
       compiler_log(state->compiler, LogLevelError, "tyverify", "variable %s has unresolved type",
-                   ast->vdecl.ident.value.identv.ident);
+                   ast->toplevel.vdecl.ident.value.identv.ident);
       ++state->errors;
       return -1;
     }
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    if (ast->tydecl.resolved->ty == AST_TYPE_STRUCT) {
-      return typecheck_verify_struct_decl(state, ast->tydecl.resolved);
+    if (ast->toplevel.tydecl.resolved->ty == AST_TYPE_STRUCT) {
+      return typecheck_verify_struct_decl(state, ast->toplevel.tydecl.resolved);
     }
   }
 

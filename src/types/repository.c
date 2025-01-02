@@ -30,6 +30,9 @@ struct type_repository_entry {
   int is_alias;
 };
 
+// Return value is on the heap and must be freed by the caller.
+static char *repo_type_name(struct ast_ty *ty);
+
 struct type_repository *new_type_repository(struct compiler *compiler) {
   struct type_repository *repo = calloc(1, sizeof(struct type_repository));
   repo->compiler = compiler;
@@ -84,7 +87,6 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
     return NULL;
   }
 
-  char name[1024];
   if (ty->ty == AST_TYPE_INTEGER) {
     size_t index = integer_index(ty->integer.width, ty->flags & TYPE_FLAG_CONSTANT);
     if (index < 10) {
@@ -103,10 +105,11 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
     return &repo->nil_type;
   }
 
-  type_name_into(ty, name, 1024);
+  char *name = repo_type_name(ty);
 
   // do we need to add it?
   if (kv_lookup(repo->types, name)) {
+    free(name);
     compiler_log(repo->compiler, LogLevelError, "typerepo", "type %s already registered", name);
     return NULL;
   }
@@ -120,10 +123,13 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
 
   kv_insert(repo->types, name, entry);
 
-  type_name_into(entry->ty, name, 1024);
+  free(name);
+  name = repo_type_name(entry->ty);
+
   compiler_log(repo->compiler, LogLevelTrace, "typerepo", "... which after type copying became %s",
                name);
 
+  free(name);
   return entry->ty;
 }
 
@@ -222,12 +228,13 @@ struct ast_ty *type_repository_lookup_ty(struct type_repository *repo, struct as
     return &repo->nil_type;
   }
 
-  char name[1024];
-  type_name_into(ty, name, 1024);
+  char *name = repo_type_name(ty);
 
   struct type_repository_entry *entry = kv_lookup(repo->types, name);
   compiler_log(repo->compiler, LogLevelTrace, "typerepo", "lookup_ty looking up %s, got %p", name,
                (void *)entry);
+
+  free(name);
   return entry ? entry->ty : NULL;
 }
 
@@ -309,4 +316,22 @@ static size_t integer_index(size_t width, size_t is_constant) {
     default:
       return ~0U;
   }
+}
+
+static char *repo_type_name(struct ast_ty *ty) {
+  char *name = NULL;
+  int rc = -1;
+  size_t size = 256;
+
+  // keep upsizing until it fits
+  while (rc != 0) {
+    name = (char *)malloc(size);
+    rc = type_name_into(ty, name, size);
+    if (rc < 0) {
+      free(name);
+      size *= 2;
+    }
+  }
+
+  return name;
 }

@@ -45,6 +45,11 @@ int string_builder_appendf(struct string_builder *, const char *, ...)
 // new_string_builder_for.
 const char *string_builder_get(struct string_builder *);
 
+size_t string_builder_len(struct string_builder *);
+
+// Returns 1 if the string builder needed a resize but couldn't (e.g. due to static buffer).
+int string_builder_needs_resize(struct string_builder *);
+
 // Frees the string builder and its string if it was dynamically allocated.
 void free_string_builder(struct string_builder *);
 

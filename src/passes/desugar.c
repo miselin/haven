@@ -94,7 +94,7 @@ enum VisitorResult desugar_visitor(struct ast_visitor_node *node, void *user_dat
 
 static int desugar_toplevel(struct desugar *desugar, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    return desugar_fdecl(desugar, &ast->fdecl);
+    return desugar_fdecl(desugar, &ast->toplevel.fdecl);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
     return desugar_tydecl(desugar, ast);
   }
@@ -103,7 +103,7 @@ static int desugar_toplevel(struct desugar *desugar, struct ast_toplevel *ast) {
 }
 
 static int desugar_tydecl(struct desugar *desugar, struct ast_toplevel *ast) {
-  struct ast_tydecl *tydecl = &ast->tydecl;
+  struct ast_tydecl *tydecl = &ast->toplevel.tydecl;
 
   switch (tydecl->parsed_ty.ty) {
     case AST_TYPE_ENUM: {
@@ -208,7 +208,7 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
   // Step 1: Build a new enum type declaration with this specialized type.
   struct ast_toplevel *new_toplevel = calloc(1, sizeof(struct ast_toplevel));
   new_toplevel->type = AST_DECL_TYPE_TYDECL;
-  struct ast_tydecl *new_tydecl = &new_toplevel->tydecl;
+  struct ast_tydecl *new_tydecl = &new_toplevel->toplevel.tydecl;
 
   strncpy(new_tydecl->ident.value.identv.ident, mangled, 256);
   new_tydecl->parsed_ty = *desugar_enum->decl;
@@ -258,42 +258,42 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
 
 static int desugar_expr(struct desugar *desugar, struct ast_expr *ast) {
   if (ast->type == AST_EXPR_TYPE_ENUM_INIT) {
-    if (ast->enum_init.tmpls) {
+    if (ast->expr.enum_init.tmpls) {
       // desugar the enum
 
       struct desugar_enum *entry =
-          kv_lookup(desugar->enums, ast->enum_init.enum_ty_name.value.identv.ident);
+          kv_lookup(desugar->enums, ast->expr.enum_init.enum_ty_name.value.identv.ident);
       if (!entry) {
         compiler_log(desugar->compiler, LogLevelError, "desugar", "unknown enum %s in template",
-                     ast->enum_init.enum_ty_name.value.identv.ident);
+                     ast->expr.enum_init.enum_ty_name.value.identv.ident);
         return -1;
       }
 
       struct ast_ty outer;
       memset(&outer, 0, sizeof(struct ast_ty));
       outer.ty = AST_TYPE_CUSTOM;
-      strncpy(outer.name, ast->enum_init.enum_ty_name.value.identv.ident, 256);
+      strncpy(outer.name, ast->expr.enum_init.enum_ty_name.value.identv.ident, 256);
 
       struct ast_ty tmpl;
       memset(&tmpl, 0, sizeof(struct ast_ty));
       tmpl.ty = AST_TYPE_TEMPLATE;
       tmpl.tmpl.outer = &outer;
-      tmpl.tmpl.inners = ast->enum_init.tmpls;
+      tmpl.tmpl.inners = ast->expr.enum_init.tmpls;
 
       desugar_enum(desugar, &tmpl);
 
       char mangled[256];
       mangle_type(&tmpl, mangled, 256, "specialized.");
 
-      strncpy(ast->enum_init.enum_ty_name.value.identv.ident, mangled, 256);
+      strncpy(ast->expr.enum_init.enum_ty_name.value.identv.ident, mangled, 256);
 
-      struct ast_template_ty *tmpl_ty = ast->enum_init.tmpls;
+      struct ast_template_ty *tmpl_ty = ast->expr.enum_init.tmpls;
       while (tmpl_ty) {
         struct ast_template_ty *next = tmpl_ty->next;
         free(tmpl_ty);
         tmpl_ty = next;
       }
-      ast->enum_init.tmpls = NULL;
+      ast->expr.enum_init.tmpls = NULL;
     }
   }
 

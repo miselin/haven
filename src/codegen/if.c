@@ -12,14 +12,14 @@
 LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
   compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit_if %p", (void *)ast);
 
-  LLVMValueRef cond = emit_expr(codegen, ast->if_expr.cond);
+  LLVMValueRef cond = emit_expr(codegen, ast->expr.if_expr.cond);
   LLVMTypeKind kind = LLVMGetTypeKind(LLVMTypeOf(cond));
   if (kind == LLVMIntegerTypeKind) {
     // is it already bool?
     if (LLVMGetIntTypeWidth(LLVMTypeOf(cond)) != 1) {
-      cond = LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond,
-                           LLVMConstInt(ast_ty_to_llvm_ty(codegen, ast->if_expr.cond->ty), 0, 0),
-                           "tobool");
+      cond = LLVMBuildICmp(
+          codegen->llvm_builder, LLVMIntNE, cond,
+          LLVMConstInt(ast_ty_to_llvm_ty(codegen, ast->expr.if_expr.cond->ty), 0, 0), "tobool");
     }
   }
 
@@ -30,9 +30,9 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
   LLVMBasicBlockRef then_block = LLVMCreateBasicBlockInContext(context, "if.then");
   LLVMBasicBlockRef end_block = LLVMCreateBasicBlockInContext(context, "if.end");
   LLVMBasicBlockRef next_block =
-      ast->if_expr.elseifs ? LLVMCreateBasicBlockInContext(context, "if.elseif.cond") : NULL;
+      ast->expr.if_expr.elseifs ? LLVMCreateBasicBlockInContext(context, "if.elseif.cond") : NULL;
   LLVMBasicBlockRef else_block =
-      ast->if_expr.has_else ? LLVMCreateBasicBlockInContext(context, "if.else") : end_block;
+      ast->expr.if_expr.has_else ? LLVMCreateBasicBlockInContext(context, "if.else") : end_block;
 
   LLVMValueRef phi = NULL;
   if (ast->ty->ty != AST_TYPE_VOID) {
@@ -50,7 +50,7 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
 
   LLVMAppendExistingBasicBlock(codegen->current_function, then_block);
   LLVMPositionBuilderAtEnd(codegen->llvm_builder, then_block);
-  LLVMValueRef then_val = emit_block(codegen, &ast->if_expr.then_block);
+  LLVMValueRef then_val = emit_block(codegen, &ast->expr.if_expr.then_block);
   last_block = LLVMGetInsertBlock(codegen->llvm_builder);
   if (phi) {
     LLVMAddIncoming(phi, &then_val, &last_block, 1);
@@ -59,8 +59,8 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
     LLVMBuildBr(codegen->llvm_builder, end_block);
   }
 
-  if (ast->if_expr.elseifs) {
-    struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+  if (ast->expr.if_expr.elseifs) {
+    struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
     while (elseif) {
       LLVMBasicBlockRef this_block = next_block;
       next_block =
@@ -90,10 +90,10 @@ LLVMValueRef emit_if(struct codegen *codegen, struct ast_expr *ast) {
     }
   }
 
-  if (ast->if_expr.has_else) {
+  if (ast->expr.if_expr.has_else) {
     LLVMAppendExistingBasicBlock(codegen->current_function, else_block);
     LLVMPositionBuilderAtEnd(codegen->llvm_builder, else_block);
-    LLVMValueRef else_val = emit_block(codegen, &ast->if_expr.else_block);
+    LLVMValueRef else_val = emit_block(codegen, &ast->expr.if_expr.else_block);
     last_block = LLVMGetInsertBlock(codegen->llvm_builder);
     if (phi) {
       LLVMAddIncoming(phi, &else_val, &last_block, 1);

@@ -239,14 +239,14 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
 
 int extract_constant_int(struct ast_expr *expr, int64_t *into) {
   while (expr->type == AST_EXPR_TYPE_CAST) {
-    expr = expr->cast.expr;
+    expr = expr->expr.cast.expr;
   }
 
   if (expr->type != AST_EXPR_TYPE_CONSTANT) {
     return -1;
   }
 
-  *into = (int64_t)expr->constant.constant.value.intv.val;
+  *into = (int64_t)expr->expr.constant.constant.value.intv.val;
   return 0;
 }
 

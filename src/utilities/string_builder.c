@@ -9,6 +9,7 @@ struct string_builder {
   size_t len;
   size_t cap;
   int is_static;
+  int wanted_resize;
 };
 
 static void resize_string_builder(struct string_builder *builder, size_t new_cap) {
@@ -68,6 +69,7 @@ int string_builder_appendf(struct string_builder *builder, const char *fmt, ...)
     va_end(ap2);
 
     // can't resize, return the total buffer size needed
+    builder->wanted_resize = 1;
     return (int)(builder->len + required);
   }
 
@@ -98,6 +100,14 @@ int string_builder_appendf(struct string_builder *builder, const char *fmt, ...)
 
 const char *string_builder_get(struct string_builder *builder) {
   return builder->buf;
+}
+
+size_t string_builder_len(struct string_builder *builder) {
+  return builder->len;
+}
+
+int string_builder_needs_resize(struct string_builder *builder) {
+  return builder->wanted_resize;
 }
 
 void free_string_builder(struct string_builder *builder) {

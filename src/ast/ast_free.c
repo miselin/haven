@@ -16,16 +16,16 @@ void free_ast(struct compiler *compiler, struct ast_program *ast) {
 
 void free_toplevel(struct compiler *compiler, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    free_fdecl(compiler, &ast->fdecl, 0);
+    free_fdecl(compiler, &ast->toplevel.fdecl, 0);
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    free_vdecl(compiler, &ast->vdecl, 0);
+    free_vdecl(compiler, &ast->toplevel.vdecl, 0);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    free_tydecl(compiler, &ast->tydecl, 0);
+    free_tydecl(compiler, &ast->toplevel.tydecl, 0);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // nothing to be done here
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    free_ast(compiler, ast->import.ast);
-    free(ast->import.ast);
+    free_ast(compiler, ast->toplevel.import.ast);
+    free(ast->toplevel.import.ast);
   } else {
     fprintf(stderr, "unhandled free for toplevel type %d\n", ast->type);
   }
@@ -49,40 +49,40 @@ void free_block(struct compiler *compiler, struct ast_block *ast, int heap) {
 void free_stmt(struct compiler *compiler, struct ast_stmt *ast) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      free_expr(compiler, ast->expr);
+      free_expr(compiler, ast->stmt.expr);
       break;
 
     case AST_STMT_TYPE_LET:
-      free_vdecl(compiler, &ast->let, 0);
+      free_vdecl(compiler, &ast->stmt.let, 0);
       break;
 
     case AST_STMT_TYPE_ITER:
-      free_expr(compiler, ast->iter.range.start);
-      free_expr(compiler, ast->iter.range.end);
-      if (ast->iter.range.step) {
-        free_expr(compiler, ast->iter.range.step);
+      free_expr(compiler, ast->stmt.iter.range.start);
+      free_expr(compiler, ast->stmt.iter.range.end);
+      if (ast->stmt.iter.range.step) {
+        free_expr(compiler, ast->stmt.iter.range.step);
       }
-      free_block(compiler, &ast->iter.block, 0);
+      free_block(compiler, &ast->stmt.iter.block, 0);
       break;
 
     case AST_STMT_TYPE_STORE:
-      free_expr(compiler, ast->store.lhs);
-      free_expr(compiler, ast->store.rhs);
+      free_expr(compiler, ast->stmt.store.lhs);
+      free_expr(compiler, ast->stmt.store.rhs);
       break;
 
     case AST_STMT_TYPE_RETURN:
-      if (ast->expr) {
-        free_expr(compiler, ast->expr);
+      if (ast->stmt.expr) {
+        free_expr(compiler, ast->stmt.expr);
       }
       break;
 
     case AST_STMT_TYPE_DEFER:
-      free_expr(compiler, ast->expr);
+      free_expr(compiler, ast->stmt.expr);
       break;
 
     case AST_STMT_TYPE_WHILE:
-      free_expr(compiler, ast->while_stmt.cond);
-      free_block(compiler, &ast->while_stmt.block, 0);
+      free_expr(compiler, ast->stmt.while_stmt.cond);
+      free_block(compiler, &ast->stmt.while_stmt.block, 0);
       break;
 
     case AST_STMT_TYPE_CONTINUE:
@@ -104,7 +104,7 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY:
         case AST_TYPE_MATRIX:
-          free_expr_list(compiler, ast->list);
+          free_expr_list(compiler, ast->expr.list);
           break;
 
         default:
@@ -113,46 +113,46 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_STRUCT_INIT:
-      free_expr_list(compiler, ast->list);
+      free_expr_list(compiler, ast->expr.list);
       break;
 
     case AST_EXPR_TYPE_BLOCK:
-      free_block(compiler, &ast->block, 0);
+      free_block(compiler, &ast->expr.block, 0);
       break;
 
     case AST_EXPR_TYPE_BINARY:
-      free_expr(compiler, ast->binary.lhs);
-      free_expr(compiler, ast->binary.rhs);
+      free_expr(compiler, ast->expr.binary.lhs);
+      free_expr(compiler, ast->expr.binary.rhs);
       break;
 
     case AST_EXPR_TYPE_VARIABLE:
       break;
 
     case AST_EXPR_TYPE_DEREF:
-      free_expr(compiler, ast->deref.target);
+      free_expr(compiler, ast->expr.deref.target);
       break;
 
     case AST_EXPR_TYPE_CALL: {
-      free_expr_list(compiler, ast->call.args);
+      free_expr_list(compiler, ast->expr.call.args);
     } break;
 
     case AST_EXPR_TYPE_VOID:
       break;
 
     case AST_EXPR_TYPE_CAST:
-      free_parser_ty(compiler, &ast->cast.parsed_ty);
-      free_expr(compiler, ast->cast.expr);
+      free_parser_ty(compiler, &ast->expr.cast.parsed_ty);
+      free_expr(compiler, ast->expr.cast.expr);
       break;
 
     case AST_EXPR_TYPE_UNARY:
-      free_expr(compiler, ast->unary.expr);
+      free_expr(compiler, ast->expr.unary.expr);
       break;
 
     case AST_EXPR_TYPE_IF:
-      free_expr(compiler, ast->if_expr.cond);
-      free_block(compiler, &ast->if_expr.then_block, 0);
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+      free_expr(compiler, ast->expr.if_expr.cond);
+      free_block(compiler, &ast->expr.if_expr.then_block, 0);
+      if (ast->expr.if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           struct ast_expr_elseif *next = elseif->next;
           free_expr(compiler, elseif->cond);
@@ -161,32 +161,32 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
           elseif = next;
         }
       }
-      if (ast->if_expr.has_else) {
-        free_block(compiler, &ast->if_expr.else_block, 0);
+      if (ast->expr.if_expr.has_else) {
+        free_block(compiler, &ast->expr.if_expr.else_block, 0);
       }
       break;
 
     case AST_EXPR_TYPE_ASSIGN:
-      free_expr(compiler, ast->assign.lhs);
-      free_expr(compiler, ast->assign.expr);
+      free_expr(compiler, ast->expr.assign.lhs);
+      free_expr(compiler, ast->expr.assign.expr);
       break;
 
     case AST_EXPR_TYPE_REF:
-      free_expr(compiler, ast->ref.expr);
+      free_expr(compiler, ast->expr.ref.expr);
       break;
 
     case AST_EXPR_TYPE_LOAD:
-      free_expr(compiler, ast->load.expr);
+      free_expr(compiler, ast->expr.load.expr);
       break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX:
-      free_expr(compiler, ast->array_index.target);
-      free_expr(compiler, ast->array_index.index);
+      free_expr(compiler, ast->expr.array_index.target);
+      free_expr(compiler, ast->expr.array_index.index);
       break;
 
     case AST_EXPR_TYPE_MATCH: {
-      free_expr(compiler, ast->match.expr);
-      struct ast_expr_match_arm *arm = ast->match.arms;
+      free_expr(compiler, ast->expr.match.expr);
+      struct ast_expr_match_arm *arm = ast->expr.match.arms;
       while (arm) {
         struct ast_expr_match_arm *next = arm->next;
         free_expr(compiler, arm->pattern);
@@ -195,9 +195,9 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
         arm = next;
       }
 
-      if (ast->match.otherwise) {
-        free_expr(compiler, ast->match.otherwise->expr);
-        free(ast->match.otherwise);
+      if (ast->expr.match.otherwise) {
+        free_expr(compiler, ast->expr.match.otherwise->expr);
+        free(ast->expr.match.otherwise);
       }
     } break;
 
@@ -205,33 +205,33 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH:
-      if (ast->pattern_match.inner_vdecl) {
-        free_vdecl(compiler, ast->pattern_match.inner_vdecl, 1);
+      if (ast->expr.pattern_match.inner_vdecl) {
+        free_vdecl(compiler, ast->expr.pattern_match.inner_vdecl, 1);
       }
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      free_expr(compiler, ast->enum_init.inner);
+      free_expr(compiler, ast->expr.enum_init.inner);
       break;
 
     case AST_EXPR_TYPE_UNION_INIT:
-      free_parser_ty(compiler, &ast->union_init.parsed_ty);
-      free_expr(compiler, ast->union_init.inner);
+      free_parser_ty(compiler, &ast->expr.union_init.parsed_ty);
+      free_expr(compiler, ast->expr.union_init.inner);
       break;
 
     case AST_EXPR_TYPE_SIZEOF:
-      if (ast->sizeof_expr.expr) {
-        free_expr(compiler, ast->sizeof_expr.expr);
+      if (ast->expr.sizeof_expr.expr) {
+        free_expr(compiler, ast->expr.sizeof_expr.expr);
       } else {
-        free_parser_ty(compiler, &ast->sizeof_expr.parsed_ty);
+        free_parser_ty(compiler, &ast->expr.sizeof_expr.parsed_ty);
       }
       break;
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      free_parser_ty(compiler, &ast->box_expr.parsed_ty);
-      if (ast->box_expr.expr) {
-        free_expr(compiler, ast->box_expr.expr);
+      free_parser_ty(compiler, &ast->expr.box_expr.parsed_ty);
+      if (ast->expr.box_expr.expr) {
+        free_expr(compiler, ast->expr.box_expr.expr);
       }
       break;
 

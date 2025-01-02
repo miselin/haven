@@ -77,8 +77,8 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
       struct ast_expr *new_left = calloc(1, sizeof(struct ast_expr));
       lexer_locate(parser->lexer, &new_left->loc);
       new_left->type = AST_EXPR_TYPE_ASSIGN;
-      new_left->assign.lhs = left;
-      new_left->assign.expr = rhs;
+      new_left->expr.assign.lhs = left;
+      new_left->expr.assign.expr = rhs;
 
       left = new_left;
       continue;
@@ -101,12 +101,12 @@ static struct ast_expr *parse_expression_inner(struct parser *parser, int min_pr
     struct ast_expr *new_left = calloc(1, sizeof(struct ast_expr));
     lexer_locate(parser->lexer, &new_left->loc);
     new_left->type = AST_EXPR_TYPE_BINARY;
-    new_left->binary.op = binop;
-    new_left->binary.lhs = left;
+    new_left->expr.binary.op = binop;
+    new_left->expr.binary.lhs = left;
     compiler_log(parser->compiler, LogLevelDebug, "parser",
                  "parsing RHS of binary expression with min_prec %d", prec + 1);
-    new_left->binary.rhs = parse_expression_inner(parser, prec + 1);
-    if (!new_left->binary.rhs) {
+    new_left->expr.binary.rhs = parse_expression_inner(parser, prec + 1);
+    if (!new_left->expr.binary.rhs) {
       free_expr(parser->compiler, new_left);
       return NULL;
     }
@@ -132,10 +132,10 @@ struct ast_expr *parse_factor(struct parser *parser) {
     case TOKEN_NOT:
       parser_consume_peeked(parser, &token);
       result->type = AST_EXPR_TYPE_UNARY;
-      result->unary.op = peek == TOKEN_MINUS   ? AST_UNARY_OP_NEG
-                         : peek == TOKEN_TILDE ? AST_UNARY_OP_COMP
-                                               : AST_UNARY_OP_NOT;
-      result->unary.expr = parse_factor(parser);
+      result->expr.unary.op = peek == TOKEN_MINUS   ? AST_UNARY_OP_NEG
+                              : peek == TOKEN_TILDE ? AST_UNARY_OP_COMP
+                                                    : AST_UNARY_OP_NOT;
+      result->expr.unary.expr = parse_factor(parser);
       break;
 
     // POD constants
@@ -145,7 +145,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
     case TOKEN_FLOAT:
       parser_consume_peeked(parser, &token);
       result->type = AST_EXPR_TYPE_CONSTANT;
-      result->constant.constant = token;
+      result->expr.constant.constant = token;
 
       // constants have a fully resolved type immediately
       if (peek == TOKEN_INTEGER) {
@@ -205,13 +205,13 @@ struct ast_expr *parse_factor(struct parser *parser) {
       parser_consume_peeked(parser, NULL);
 
       result->type = AST_EXPR_TYPE_UNION_INIT;
-      result->union_init.parsed_ty = parse_type(parser);
+      result->expr.union_init.parsed_ty = parse_type(parser);
       if (parser_consume(parser, NULL, TOKEN_COLONCOLON) < 0) {
         free(result);
         return NULL;
       }
 
-      if (parser_consume(parser, &result->union_init.field, TOKEN_IDENTIFIER) < 0) {
+      if (parser_consume(parser, &result->expr.union_init.field, TOKEN_IDENTIFIER) < 0) {
         free(result);
         return NULL;
       }
@@ -220,8 +220,8 @@ struct ast_expr *parse_factor(struct parser *parser) {
         free(result);
         return NULL;
       }
-      result->union_init.inner = parse_expression(parser);
-      if (!result->union_init.inner) {
+      result->expr.union_init.inner = parse_expression(parser);
+      if (!result->expr.union_init.inner) {
         free(result);
         return NULL;
       }
@@ -239,13 +239,13 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
       result->type = AST_EXPR_TYPE_CONSTANT;
       result->parsed_ty.ty = AST_TYPE_FVEC;
-      result->list = parse_expression_list(parser, TOKEN_GT, 1);
-      if (!result->list) {
+      result->expr.list = parse_expression_list(parser, TOKEN_GT, 1);
+      if (!result->expr.list) {
         free(result);
         parser_diag(1, parser, NULL, "failed to parse expression list for vector initializer");
         return NULL;
       }
-      result->parsed_ty.fvec.width = result->list->num_elements;
+      result->parsed_ty.fvec.width = result->expr.list->num_elements;
       if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
         free(result);
         return NULL;
@@ -262,8 +262,8 @@ struct ast_expr *parse_factor(struct parser *parser) {
       } else if (next == TOKEN_LPAREN) {
         parser_consume_peeked(parser, NULL);
         result->type = AST_EXPR_TYPE_CALL;
-        result->call.ident = token;
-        result->call.args = parse_expression_list(parser, TOKEN_RPAREN, 0);
+        result->expr.call.ident = token;
+        result->expr.call.args = parse_expression_list(parser, TOKEN_RPAREN, 0);
         if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
           free(result);
           return NULL;
@@ -271,7 +271,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
       } else if (next == TOKEN_COLONCOLON) {
         parser_consume_peeked(parser, NULL);
         result->type = AST_EXPR_TYPE_ENUM_INIT;
-        result->enum_init.enum_ty_name = token;
+        result->expr.enum_init.enum_ty_name = token;
 
         if (parser_peek(parser) == TOKEN_LT) {
           parser_consume_peeked(parser, NULL);
@@ -286,8 +286,8 @@ struct ast_expr *parse_factor(struct parser *parser) {
               return NULL;
             }
 
-            if (!result->enum_init.tmpls) {
-              result->enum_init.tmpls = tmpl;
+            if (!result->expr.enum_init.tmpls) {
+              result->expr.enum_init.tmpls = tmpl;
             } else {
               last->next = tmpl;
             }
@@ -306,23 +306,23 @@ struct ast_expr *parse_factor(struct parser *parser) {
           }
         }
 
-        if (parser_consume(parser, &result->enum_init.enum_val_name, TOKEN_IDENTIFIER) < 0) {
+        if (parser_consume(parser, &result->expr.enum_init.enum_val_name, TOKEN_IDENTIFIER) < 0) {
           free(result);
           return NULL;
         }
 
         if (parser_peek(parser) == TOKEN_LPAREN) {
-          result->enum_init.inner = parse_factor(parser);
-          if (!result->enum_init.inner) {
+          result->expr.enum_init.inner = parse_factor(parser);
+          if (!result->expr.enum_init.inner) {
             free(result);
             return NULL;
           }
         } else {
-          result->enum_init.inner = NULL;
+          result->expr.enum_init.inner = NULL;
         }
       } else {
         result->type = AST_EXPR_TYPE_VARIABLE;
-        result->variable.ident = token;
+        result->expr.variable.ident = token;
       }
     } break;
 
@@ -340,7 +340,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
       // sub-blocks
     case TOKEN_LBRACE:
       result->type = AST_EXPR_TYPE_BLOCK;
-      if (parse_block(parser, &result->block) < 0) {
+      if (parse_block(parser, &result->expr.block) < 0) {
         free(result);
         return NULL;
       }
@@ -351,8 +351,8 @@ struct ast_expr *parse_factor(struct parser *parser) {
       // as <ty> <expr>
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_CAST;
-      result->cast.parsed_ty = parse_type(parser);
-      result->cast.expr = parse_factor(parser);
+      result->expr.cast.parsed_ty = parse_type(parser);
+      result->expr.cast.expr = parse_factor(parser);
       break;
 
       // ptr to value
@@ -360,7 +360,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
       // ref <expr>
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_REF;
-      result->ref.expr = parse_factor(parser);
+      result->expr.ref.expr = parse_factor(parser);
       break;
 
     // box a value
@@ -371,9 +371,9 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
       parser->mute_diags = 1;
       parser_mark(parser);
-      result->box_expr.parsed_ty.ty = AST_TYPE_TBD;
-      result->box_expr.expr = parse_expression(parser);
-      if (!result->box_expr.expr) {
+      result->expr.box_expr.parsed_ty.ty = AST_TYPE_TBD;
+      result->expr.box_expr.expr = parse_expression(parser);
+      if (!result->expr.box_expr.expr) {
         parser_rewind(parser);
         parser->mute_diags = 0;
         struct ast_ty ty = parse_type(parser);
@@ -383,7 +383,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
           return NULL;
         }
 
-        result->box_expr.parsed_ty = ty;
+        result->expr.box_expr.parsed_ty = ty;
       } else {
         parser_commit(parser);
       }
@@ -395,7 +395,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
       // unbox <expr>
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_UNBOX;
-      result->box_expr.expr = parse_factor(parser);
+      result->expr.box_expr.expr = parse_factor(parser);
       break;
 
       // deref ptr
@@ -403,19 +403,19 @@ struct ast_expr *parse_factor(struct parser *parser) {
       // load <expr>
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_LOAD;
-      result->load.expr = parse_factor(parser);
+      result->expr.load.expr = parse_factor(parser);
       break;
 
     // if expressions (which evaluate to a value) or statements (no value)
     case TOKEN_KW_IF:
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_IF;
-      result->if_expr.cond = parse_expression(parser);
-      if (parse_block(parser, &result->if_expr.then_block) < 0) {
+      result->expr.if_expr.cond = parse_expression(parser);
+      if (parse_block(parser, &result->expr.if_expr.then_block) < 0) {
         free(result);
         return NULL;
       }
-      result->if_expr.has_else = 0;
+      result->expr.if_expr.has_else = 0;
       struct ast_expr_elseif *prev_elseif = NULL;
       while (parser_peek(parser) == TOKEN_KW_ELSE) {
         parser_consume_peeked(parser, NULL);
@@ -432,13 +432,13 @@ struct ast_expr *parse_factor(struct parser *parser) {
           if (prev_elseif) {
             prev_elseif->next = elseif;
           } else {
-            result->if_expr.elseifs = elseif;
+            result->expr.if_expr.elseifs = elseif;
           }
 
           prev_elseif = elseif;
         } else {
-          result->if_expr.has_else = 1;
-          if (parse_block(parser, &result->if_expr.else_block) < 0) {
+          result->expr.if_expr.has_else = 1;
+          if (parse_block(parser, &result->expr.if_expr.else_block) < 0) {
             free(result);
             return NULL;
           }
@@ -452,7 +452,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
     case TOKEN_KW_MATCH:
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_MATCH;
-      result->match.expr = parse_expression(parser);
+      result->expr.match.expr = parse_expression(parser);
       if (parser_consume(parser, NULL, TOKEN_LBRACE) < 0) {
         free(result);
         return NULL;
@@ -490,15 +490,15 @@ struct ast_expr *parse_factor(struct parser *parser) {
         arm->expr = parse_expression(parser);
 
         if (is_otherwise) {
-          if (result->match.otherwise) {
+          if (result->expr.match.otherwise) {
             parser_diag(1, parser, &parser->peek, "multiple otherwise arms in match expression");
           }
-          result->match.otherwise = arm;
+          result->expr.match.otherwise = arm;
         } else {
-          if (!result->match.arms) {
-            result->match.arms = arm;
+          if (!result->expr.match.arms) {
+            result->expr.match.arms = arm;
           } else {
-            struct ast_expr_match_arm *last = result->match.arms;
+            struct ast_expr_match_arm *last = result->expr.match.arms;
             while (last->next) {
               last = last->next;
             }
@@ -506,7 +506,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
             last->next = arm;
           }
 
-          result->match.num_arms++;
+          result->expr.match.num_arms++;
         }
       }
       if (parser_consume(parser, NULL, TOKEN_RBRACE) < 0) {
@@ -527,13 +527,13 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
       parser->mute_diags = 1;
       parser_mark(parser);
-      result->sizeof_expr.parsed_ty = type_void();
-      result->sizeof_expr.expr = parse_expression(parser);
-      if (!result->sizeof_expr.expr) {
+      result->expr.sizeof_expr.parsed_ty = type_void();
+      result->expr.sizeof_expr.expr = parse_expression(parser);
+      if (!result->expr.sizeof_expr.expr) {
         parser_rewind(parser);
         parser->mute_diags = 0;
-        result->sizeof_expr.parsed_ty = parse_type(parser);
-        if (type_is_error(&result->sizeof_expr.parsed_ty)) {
+        result->expr.sizeof_expr.parsed_ty = parse_type(parser);
+        if (type_is_error(&result->expr.sizeof_expr.parsed_ty)) {
           parser_diag(1, parser, &parser->peek, "expected expression or type after sizeof");
           free(result);
           return NULL;
@@ -562,9 +562,9 @@ struct ast_expr *parse_factor(struct parser *parser) {
       struct ast_expr *deref = calloc(1, sizeof(struct ast_expr));
       deref->type = AST_EXPR_TYPE_DEREF;
       lexer_locate(parser->lexer, &deref->loc);
-      deref->deref.is_ptr = next == TOKEN_DASHGT;
-      deref->deref.target = result;
-      if (parser_consume(parser, &deref->deref.field, TOKEN_IDENTIFIER) < 0) {
+      deref->expr.deref.is_ptr = next == TOKEN_DASHGT;
+      deref->expr.deref.target = result;
+      if (parser_consume(parser, &deref->expr.deref.field, TOKEN_IDENTIFIER) < 0) {
         free(deref);
         free(result);
         return NULL;
@@ -579,9 +579,9 @@ struct ast_expr *parse_factor(struct parser *parser) {
       struct ast_expr *new_expr = calloc(1, sizeof(struct ast_expr));
       new_expr->type = AST_EXPR_TYPE_ARRAY_INDEX;
       lexer_locate(parser->lexer, &new_expr->loc);
-      new_expr->array_index.target = result;
-      new_expr->array_index.index = parse_expression(parser);
-      if (!new_expr->array_index.index) {
+      new_expr->expr.array_index.target = result;
+      new_expr->expr.array_index.index = parse_expression(parser);
+      if (!new_expr->expr.array_index.index) {
         free(new_expr);
         free(result);
         return NULL;

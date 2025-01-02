@@ -349,21 +349,22 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
   compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit toplevel %d", ast->type);
   update_debug_loc(codegen, &ast->loc);
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    emit_fdecl(codegen, &ast->fdecl, &ast->loc);
+    emit_fdecl(codegen, &ast->toplevel.fdecl, &ast->loc);
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    emit_vdecl(codegen, &ast->vdecl);
+    emit_vdecl(codegen, &ast->toplevel.vdecl);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    if (ast->tydecl.resolved->ty == AST_TYPE_STRUCT) {
+    if (ast->toplevel.tydecl.resolved->ty == AST_TYPE_STRUCT) {
       // generate the struct type
-      emit_struct_type(codegen, ast->tydecl.resolved);
-    } else if (ast->tydecl.resolved->ty == AST_TYPE_ENUM) {
-      emit_enum_type(codegen, ast->tydecl.resolved);
+      emit_struct_type(codegen, ast->toplevel.tydecl.resolved);
+    } else if (ast->toplevel.tydecl.resolved->ty == AST_TYPE_ENUM) {
+      emit_enum_type(codegen, ast->toplevel.tydecl.resolved);
     } else {
       // just make the type alias
-      // fprintf(stderr, "unhandled top level type declaration type %d\n", ast->tydecl.ty.ty);
+      // fprintf(stderr, "unhandled top level type declaration type %d\n",
+      // ast->toplevel.tydecl.ty.ty);
     }
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    emit_ast(codegen, ast->import.ast);
+    emit_ast(codegen, ast->toplevel.import.ast);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // no-op in codegen
   } else {

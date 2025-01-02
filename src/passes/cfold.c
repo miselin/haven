@@ -46,15 +46,15 @@ void destroy_cfolder(struct cfolder *cfolder) {
 
 static void cfold_toplevel(struct cfolder *cfolder, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (ast->fdecl.body) {
-      cfold_block(cfolder, ast->fdecl.body);
+    if (ast->toplevel.fdecl.body) {
+      cfold_block(cfolder, ast->toplevel.fdecl.body);
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    if (ast->vdecl.init_expr) {
-      ast->vdecl.init_expr = cfold_expr(cfolder, ast->vdecl.init_expr);
+    if (ast->toplevel.vdecl.init_expr) {
+      ast->toplevel.vdecl.init_expr = cfold_expr(cfolder, ast->toplevel.vdecl.init_expr);
     }
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    cfold_program(cfolder, ast->import.ast);
+    cfold_program(cfolder, ast->toplevel.import.ast);
   }
 }
 
@@ -69,42 +69,42 @@ static void cfold_block(struct cfolder *cfolder, struct ast_block *ast) {
 static void cfold_stmt(struct cfolder *cfolder, struct ast_stmt *ast) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      ast->expr = cfold_expr(cfolder, ast->expr);
+      ast->stmt.expr = cfold_expr(cfolder, ast->stmt.expr);
       break;
 
     case AST_STMT_TYPE_LET:
-      if (ast->let.init_expr) {
-        ast->let.init_expr = cfold_expr(cfolder, ast->let.init_expr);
+      if (ast->stmt.let.init_expr) {
+        ast->stmt.let.init_expr = cfold_expr(cfolder, ast->stmt.let.init_expr);
       }
       break;
 
     case AST_STMT_TYPE_ITER:
-      ast->iter.range.start = cfold_expr(cfolder, ast->iter.range.start);
-      ast->iter.range.end = cfold_expr(cfolder, ast->iter.range.end);
-      if (ast->iter.range.step) {
-        ast->iter.range.step = cfold_expr(cfolder, ast->iter.range.step);
+      ast->stmt.iter.range.start = cfold_expr(cfolder, ast->stmt.iter.range.start);
+      ast->stmt.iter.range.end = cfold_expr(cfolder, ast->stmt.iter.range.end);
+      if (ast->stmt.iter.range.step) {
+        ast->stmt.iter.range.step = cfold_expr(cfolder, ast->stmt.iter.range.step);
       }
-      cfold_block(cfolder, &ast->iter.block);
+      cfold_block(cfolder, &ast->stmt.iter.block);
       break;
 
     case AST_STMT_TYPE_STORE:
-      ast->store.lhs = cfold_expr(cfolder, ast->store.lhs);
-      ast->store.rhs = cfold_expr(cfolder, ast->store.rhs);
+      ast->stmt.store.lhs = cfold_expr(cfolder, ast->stmt.store.lhs);
+      ast->stmt.store.rhs = cfold_expr(cfolder, ast->stmt.store.rhs);
       break;
 
     case AST_STMT_TYPE_RETURN:
-      if (ast->expr) {
-        ast->expr = cfold_expr(cfolder, ast->expr);
+      if (ast->stmt.expr) {
+        ast->stmt.expr = cfold_expr(cfolder, ast->stmt.expr);
       }
       break;
 
     case AST_STMT_TYPE_DEFER:
-      ast->expr = cfold_expr(cfolder, ast->expr);
+      ast->stmt.expr = cfold_expr(cfolder, ast->stmt.expr);
       break;
 
     case AST_STMT_TYPE_WHILE:
-      ast->while_stmt.cond = cfold_expr(cfolder, ast->while_stmt.cond);
-      cfold_block(cfolder, &ast->while_stmt.block);
+      ast->stmt.while_stmt.cond = cfold_expr(cfolder, ast->stmt.while_stmt.cond);
+      cfold_block(cfolder, &ast->stmt.while_stmt.block);
       break;
 
     case AST_STMT_TYPE_BREAK:
@@ -122,7 +122,7 @@ static struct ast_expr *cfold_expr(struct cfolder *cfolder, struct ast_expr *ast
       switch (ast->parsed_ty.ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY: {
-          struct ast_expr_list *node = ast->list;
+          struct ast_expr_list *node = ast->expr.list;
           while (node) {
             node->expr = cfold_expr(cfolder, node->expr);
             node = node->next;
@@ -135,18 +135,18 @@ static struct ast_expr *cfold_expr(struct cfolder *cfolder, struct ast_expr *ast
       break;
 
     case AST_EXPR_TYPE_BINARY: {
-      ast->binary.lhs = cfold_expr(cfolder, ast->binary.lhs);
-      ast->binary.rhs = cfold_expr(cfolder, ast->binary.rhs);
+      ast->expr.binary.lhs = cfold_expr(cfolder, ast->expr.binary.lhs);
+      ast->expr.binary.rhs = cfold_expr(cfolder, ast->expr.binary.rhs);
 
       // TODO: if both are constants, fold them
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      cfold_block(cfolder, &ast->block);
+      cfold_block(cfolder, &ast->expr.block);
     } break;
 
     case AST_EXPR_TYPE_CALL: {
-      struct ast_expr_list *args = ast->call.args;
+      struct ast_expr_list *args = ast->expr.call.args;
       while (args) {
         args->expr = cfold_expr(cfolder, args->expr);
         args = args->next;
@@ -154,7 +154,7 @@ static struct ast_expr *cfold_expr(struct cfolder *cfolder, struct ast_expr *ast
     } break;
 
     case AST_EXPR_TYPE_CAST: {
-      ast->cast.expr = cfold_expr(cfolder, ast->cast.expr);
+      ast->expr.cast.expr = cfold_expr(cfolder, ast->expr.cast.expr);
     } break;
 
     case AST_EXPR_TYPE_UNARY: {
@@ -162,27 +162,27 @@ static struct ast_expr *cfold_expr(struct cfolder *cfolder, struct ast_expr *ast
     } break;
 
     case AST_EXPR_TYPE_IF: {
-      ast->if_expr.cond = cfold_expr(cfolder, ast->if_expr.cond);
-      cfold_block(cfolder, &ast->if_expr.then_block);
-      if (ast->if_expr.has_else) {
-        cfold_block(cfolder, &ast->if_expr.else_block);
+      ast->expr.if_expr.cond = cfold_expr(cfolder, ast->expr.if_expr.cond);
+      cfold_block(cfolder, &ast->expr.if_expr.then_block);
+      if (ast->expr.if_expr.has_else) {
+        cfold_block(cfolder, &ast->expr.if_expr.else_block);
       }
     } break;
 
     case AST_EXPR_TYPE_ASSIGN: {
-      ast->assign.expr = cfold_expr(cfolder, ast->assign.expr);
+      ast->expr.assign.expr = cfold_expr(cfolder, ast->expr.assign.expr);
     } break;
 
     case AST_EXPR_TYPE_REF: {
-      ast->ref.expr = cfold_expr(cfolder, ast->ref.expr);
+      ast->expr.ref.expr = cfold_expr(cfolder, ast->expr.ref.expr);
     } break;
 
     case AST_EXPR_TYPE_LOAD: {
-      ast->load.expr = cfold_expr(cfolder, ast->load.expr);
+      ast->expr.load.expr = cfold_expr(cfolder, ast->expr.load.expr);
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
-      ast->array_index.index = cfold_expr(cfolder, ast->array_index.index);
+      ast->expr.array_index.index = cfold_expr(cfolder, ast->expr.array_index.index);
     } break;
   }
 
@@ -193,8 +193,8 @@ static struct ast_expr *cfold_unary(struct cfolder *cfolder, struct ast_expr *un
   struct ast_expr *new_expr = calloc(1, sizeof(struct ast_expr));
   int folded = 0;
 
-  unary->unary.expr = cfold_expr(cfolder, unary->unary.expr);
-  struct ast_expr *inner = unary->unary.expr;
+  unary->expr.unary.expr = cfold_expr(cfolder, unary->expr.unary.expr);
+  struct ast_expr *inner = unary->expr.unary.expr;
 
   if (inner->type != AST_EXPR_TYPE_CONSTANT) {
     free(new_expr);
@@ -203,16 +203,17 @@ static struct ast_expr *cfold_unary(struct cfolder *cfolder, struct ast_expr *un
 
   memcpy(new_expr, inner, sizeof(struct ast_expr));
 
-  switch (unary->unary.op) {
+  switch (unary->expr.unary.op) {
     case AST_UNARY_OP_NEG:
       switch (inner->parsed_ty.ty) {
         case AST_TYPE_INTEGER: {
-          new_expr->constant.constant.value.intv.val = -inner->constant.constant.value.intv.val;
+          new_expr->expr.constant.constant.value.intv.val =
+              -inner->expr.constant.constant.value.intv.val;
           folded = 1;
         } break;
         case AST_TYPE_FLOAT: {
-          char *old_buf = inner->constant.constant.value.floatv.buf;
-          char *new_buf = new_expr->constant.constant.value.floatv.buf;
+          char *old_buf = inner->expr.constant.constant.value.floatv.buf;
+          char *new_buf = new_expr->expr.constant.constant.value.floatv.buf;
 
           if (strlen(old_buf) >= 255) {
             // constant is too long, don't bother
@@ -229,7 +230,7 @@ static struct ast_expr *cfold_unary(struct cfolder *cfolder, struct ast_expr *un
         } break;
 
         default:
-          fprintf(stderr, "unhandled constant type %d\n", inner->constant.constant.ident);
+          fprintf(stderr, "unhandled constant type %d\n", inner->expr.constant.constant.ident);
       }
       break;
   }

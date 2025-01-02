@@ -60,22 +60,22 @@ static int code_emit_toplevel(struct code_emitter *code_emitter, FILE *stream,
   }
 
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    return code_emit_fdecl(stream, &ast->fdecl, 0);
+    return code_emit_fdecl(stream, &ast->toplevel.fdecl, 0);
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    int rc = code_emit_vdecl(stream, &ast->vdecl, 0);
+    int rc = code_emit_vdecl(stream, &ast->toplevel.vdecl, 0);
     fprintf(stream, ";\n");
     return rc;
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    return code_emit_tydecl(stream, &ast->tydecl, 0);
+    return code_emit_tydecl(stream, &ast->toplevel.tydecl, 0);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // no-op
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    if (ast->import.type == ImportTypeC) {
+    if (ast->toplevel.import.type == ImportTypeC) {
       fprintf(stream, "cimport ");
     } else {
       fprintf(stream, "import ");
     }
-    fprintf(stream, "\"%s\";\n", ast->import.path);
+    fprintf(stream, "\"%s\";\n", ast->toplevel.import.path);
   } else {
     fprintf(stream, "<unhandled toplevel %d>\n", ast->type);
     return -1;
@@ -91,7 +91,7 @@ static int code_emit_block(FILE *stream, struct ast_block *ast, int indent) {
     if (code_emit_stmt(stream, stmt, indent + 1) < 0) {
       return -1;
     }
-    if (stmt->type == AST_STMT_TYPE_EXPR && stmt->expr->type == AST_EXPR_TYPE_VOID) {
+    if (stmt->type == AST_STMT_TYPE_EXPR && stmt->stmt.expr->type == AST_EXPR_TYPE_VOID) {
       // print nothing for void expressions
     } else if (stmt->next || stmt->type != AST_STMT_TYPE_EXPR) {
       fprintf(stream, ";\n");
@@ -107,43 +107,43 @@ static int code_emit_block(FILE *stream, struct ast_block *ast, int indent) {
 static int code_emit_stmt(FILE *stream, struct ast_stmt *ast, int indent) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      if (ast->expr->type == AST_EXPR_TYPE_VOID) {
+      if (ast->stmt.expr->type == AST_EXPR_TYPE_VOID) {
         return 0;
       }
       print_indent(stream, indent);
-      code_emit_expr(stream, ast->expr, indent);
+      code_emit_expr(stream, ast->stmt.expr, indent);
       break;
 
     case AST_STMT_TYPE_LET:
       INDENTED(stream, indent, "let ");
-      code_emit_vdecl(stream, &ast->let, indent);
+      code_emit_vdecl(stream, &ast->stmt.let, indent);
       break;
 
     case AST_STMT_TYPE_ITER:
       INDENTED(stream, indent, "iter ");
-      code_emit_expr(stream, ast->iter.range.start, indent);
+      code_emit_expr(stream, ast->stmt.iter.range.start, indent);
       fprintf(stream, ":");
-      code_emit_expr(stream, ast->iter.range.end, indent);
-      if (ast->iter.range.step) {
+      code_emit_expr(stream, ast->stmt.iter.range.end, indent);
+      if (ast->stmt.iter.range.step) {
         fprintf(stream, ":");
-        code_emit_expr(stream, ast->iter.range.step, indent);
+        code_emit_expr(stream, ast->stmt.iter.range.step, indent);
       }
       fprintf(stream, " ");
       // TODO: emit index variable
-      code_emit_block(stream, &ast->iter.block, indent);
+      code_emit_block(stream, &ast->stmt.iter.block, indent);
       break;
 
     case AST_STMT_TYPE_STORE:
       print_indent(stream, indent);
-      code_emit_expr(stream, ast->store.lhs, indent);
+      code_emit_expr(stream, ast->stmt.store.lhs, indent);
       fprintf(stream, " = ");
-      code_emit_expr(stream, ast->store.rhs, indent);
+      code_emit_expr(stream, ast->stmt.store.rhs, indent);
       break;
 
     case AST_STMT_TYPE_RETURN:
-      if (ast->expr) {
-        INDENTED(stream, indent, "ret%s", ast->expr->type == AST_EXPR_TYPE_VOID ? "" : " ");
-        code_emit_expr(stream, ast->expr, indent);
+      if (ast->stmt.expr) {
+        INDENTED(stream, indent, "ret%s", ast->stmt.expr->type == AST_EXPR_TYPE_VOID ? "" : " ");
+        code_emit_expr(stream, ast->stmt.expr, indent);
       } else {
         INDENTED(stream, indent, "ret");
       }
@@ -151,14 +151,14 @@ static int code_emit_stmt(FILE *stream, struct ast_stmt *ast, int indent) {
 
     case AST_STMT_TYPE_DEFER:
       INDENTED(stream, indent, "defer ");
-      code_emit_expr(stream, ast->expr, indent);
+      code_emit_expr(stream, ast->stmt.expr, indent);
       break;
 
     case AST_STMT_TYPE_WHILE:
       INDENTED(stream, indent, "while ");
-      code_emit_expr(stream, ast->while_stmt.cond, indent);
+      code_emit_expr(stream, ast->stmt.while_stmt.cond, indent);
       fprintf(stream, " ");
-      code_emit_block(stream, &ast->while_stmt.block, indent);
+      code_emit_block(stream, &ast->stmt.while_stmt.block, indent);
       break;
 
     case AST_STMT_TYPE_BREAK:
@@ -280,7 +280,7 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
       if (ast->parsed_ty.ty == AST_TYPE_FVEC || ast->parsed_ty.ty == AST_TYPE_ARRAY ||
           ast->parsed_ty.ty == AST_TYPE_MATRIX) {
         emit_opening(stream, &ast->parsed_ty);
-        struct ast_expr_list *node = ast->list;
+        struct ast_expr_list *node = ast->expr.list;
         while (node) {
           code_emit_expr(stream, node->expr, indent);
           if (node->next) {
@@ -290,55 +290,55 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
         }
         emit_closing(stream, &ast->parsed_ty);
       } else {
-        switch (ast->constant.constant.ident) {
+        switch (ast->expr.constant.constant.ident) {
           case TOKEN_INTEGER:
-            fprintf(stream, "%" PRIi64, ast->constant.constant.value.intv.val);
+            fprintf(stream, "%" PRIi64, ast->expr.constant.constant.value.intv.val);
             break;
 
           case TOKEN_FLOAT:
-            fprintf(stream, "%s", ast->constant.constant.value.floatv.buf);
+            fprintf(stream, "%s", ast->expr.constant.constant.value.floatv.buf);
             break;
 
           case TOKEN_STRING:
             fputc('"', stream);
-            print_escaped(stream, ast->constant.constant.value.strv.s);
+            print_escaped(stream, ast->expr.constant.constant.value.strv.s);
             fputc('"', stream);
             break;
 
           default:
             fprintf(stream, "<unimpl-constant-%d-or-%d>", ast->parsed_ty.ty,
-                    ast->constant.constant.ident);
+                    ast->expr.constant.constant.ident);
             break;
         }
       }
     } break;
 
     case AST_EXPR_TYPE_BLOCK:
-      code_emit_block(stream, &ast->block, indent);
+      code_emit_block(stream, &ast->expr.block, indent);
       break;
 
     case AST_EXPR_TYPE_BINARY:
-      code_emit_expr(stream, ast->binary.lhs, indent);
-      fprintf(stream, " %s ", ast_binary_op_to_str(ast->binary.op));
-      code_emit_expr(stream, ast->binary.rhs, indent);
+      code_emit_expr(stream, ast->expr.binary.lhs, indent);
+      fprintf(stream, " %s ", ast_binary_op_to_str(ast->expr.binary.op));
+      code_emit_expr(stream, ast->expr.binary.rhs, indent);
       break;
 
     case AST_EXPR_TYPE_VARIABLE:
-      fprintf(stream, "%s", ast->variable.ident.value.identv.ident);
+      fprintf(stream, "%s", ast->expr.variable.ident.value.identv.ident);
       break;
 
     case AST_EXPR_TYPE_DEREF:
-      code_emit_expr(stream, ast->deref.target, indent);
-      if (ast->deref.is_ptr) {
-        fprintf(stream, "->%s", ast->deref.field.value.identv.ident);
+      code_emit_expr(stream, ast->expr.deref.target, indent);
+      if (ast->expr.deref.is_ptr) {
+        fprintf(stream, "->%s", ast->expr.deref.field.value.identv.ident);
       } else {
-        fprintf(stream, ".%s", ast->deref.field.value.identv.ident);
+        fprintf(stream, ".%s", ast->expr.deref.field.value.identv.ident);
       }
       break;
 
     case AST_EXPR_TYPE_CALL: {
-      fprintf(stream, "%s(", ast->call.ident.value.identv.ident);
-      struct ast_expr_list *node = ast->call.args;
+      fprintf(stream, "%s(", ast->expr.call.ident.value.identv.ident);
+      struct ast_expr_list *node = ast->expr.call.args;
       while (node) {
         code_emit_expr(stream, node->expr, indent);
         if (node->next) {
@@ -354,23 +354,23 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
 
     case AST_EXPR_TYPE_CAST:
       fprintf(stream, "as ");
-      code_emit_ty(stream, &ast->cast.parsed_ty);
+      code_emit_ty(stream, &ast->expr.cast.parsed_ty);
       fprintf(stream, " ");
-      code_emit_expr(stream, ast->cast.expr, indent);
+      code_emit_expr(stream, ast->expr.cast.expr, indent);
       break;
 
     case AST_EXPR_TYPE_UNARY:
-      fprintf(stream, "%s", ast_unary_op_to_str(ast->unary.op));
-      code_emit_expr(stream, ast->unary.expr, indent);
+      fprintf(stream, "%s", ast_unary_op_to_str(ast->expr.unary.op));
+      code_emit_expr(stream, ast->expr.unary.expr, indent);
       break;
 
     case AST_EXPR_TYPE_IF:
       fprintf(stream, "if ");
-      code_emit_expr(stream, ast->if_expr.cond, indent);
+      code_emit_expr(stream, ast->expr.if_expr.cond, indent);
       fprintf(stream, " ");
-      code_emit_block(stream, &ast->if_expr.then_block, indent);
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+      code_emit_block(stream, &ast->expr.if_expr.then_block, indent);
+      if (ast->expr.if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           fprintf(stream, " else if ");
           code_emit_expr(stream, elseif->cond, indent);
@@ -379,40 +379,40 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
           elseif = elseif->next;
         }
       }
-      if (ast->if_expr.has_else) {
+      if (ast->expr.if_expr.has_else) {
         fprintf(stream, " else ");
-        code_emit_block(stream, &ast->if_expr.else_block, indent);
+        code_emit_block(stream, &ast->expr.if_expr.else_block, indent);
       }
       break;
 
     case AST_EXPR_TYPE_ASSIGN:
-      code_emit_expr(stream, ast->assign.lhs, indent);
+      code_emit_expr(stream, ast->expr.assign.lhs, indent);
       fprintf(stream, " = ");
-      code_emit_expr(stream, ast->assign.expr, indent);
+      code_emit_expr(stream, ast->expr.assign.expr, indent);
       break;
 
     case AST_EXPR_TYPE_REF:
       fprintf(stream, "ref ");
-      code_emit_expr(stream, ast->ref.expr, indent);
+      code_emit_expr(stream, ast->expr.ref.expr, indent);
       break;
 
     case AST_EXPR_TYPE_LOAD:
       fprintf(stream, "load ");
-      code_emit_expr(stream, ast->load.expr, indent);
+      code_emit_expr(stream, ast->expr.load.expr, indent);
       break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX:
-      code_emit_expr(stream, ast->array_index.target, indent);
+      code_emit_expr(stream, ast->expr.array_index.target, indent);
       fprintf(stream, "[");
-      code_emit_expr(stream, ast->array_index.index, indent);
+      code_emit_expr(stream, ast->expr.array_index.index, indent);
       fprintf(stream, "]");
       break;
 
     case AST_EXPR_TYPE_MATCH:
       fprintf(stream, "match ");
-      code_emit_expr(stream, ast->match.expr, indent);
+      code_emit_expr(stream, ast->expr.match.expr, indent);
       fprintf(stream, " {\n");
-      struct ast_expr_match_arm *arm = ast->match.arms;
+      struct ast_expr_match_arm *arm = ast->expr.match.arms;
       while (arm) {
         print_indent(stream, indent + 1);
         code_emit_expr(stream, arm->pattern, indent);
@@ -421,9 +421,9 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
         fprintf(stream, "\n");
         arm = arm->next;
       }
-      if (ast->match.otherwise) {
+      if (ast->expr.match.otherwise) {
         INDENTED(stream, indent + 1, "_ => ");
-        code_emit_expr(stream, ast->match.otherwise->expr, indent);
+        code_emit_expr(stream, ast->expr.match.otherwise->expr, indent);
         fprintf(stream, "\n");
       }
       INDENTED(stream, indent, "}");
@@ -431,7 +431,7 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
 
     case AST_EXPR_TYPE_STRUCT_INIT: {
       fprintf(stream, "struct {");
-      struct ast_expr_list *node = ast->list;
+      struct ast_expr_list *node = ast->expr.list;
       while (node) {
         code_emit_expr(stream, node->expr, indent);
         if (node->next) {
@@ -447,59 +447,59 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH: {
-      fprintf(stream, "enum %s::%s", ast->pattern_match.enum_name.value.identv.ident,
-              ast->pattern_match.name.value.identv.ident);
-      if (ast->pattern_match.inner_vdecl) {
+      fprintf(stream, "enum %s::%s", ast->expr.pattern_match.enum_name.value.identv.ident,
+              ast->expr.pattern_match.name.value.identv.ident);
+      if (ast->expr.pattern_match.inner_vdecl) {
         fprintf(stream, "(");
-        code_emit_vdecl(stream, ast->pattern_match.inner_vdecl, 0);
+        code_emit_vdecl(stream, ast->expr.pattern_match.inner_vdecl, 0);
         fprintf(stream, ")");
-      } else if (ast->pattern_match.bindings_ignored) {
+      } else if (ast->expr.pattern_match.bindings_ignored) {
         fprintf(stream, "(_)");
       }
     } break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      fprintf(stream, "%s::%s", ast->enum_init.enum_ty_name.value.identv.ident,
-              ast->enum_init.enum_val_name.value.identv.ident);
-      if (ast->enum_init.inner) {
+      fprintf(stream, "%s::%s", ast->expr.enum_init.enum_ty_name.value.identv.ident,
+              ast->expr.enum_init.enum_val_name.value.identv.ident);
+      if (ast->expr.enum_init.inner) {
         fprintf(stream, "(");
-        code_emit_expr(stream, ast->enum_init.inner, indent);
+        code_emit_expr(stream, ast->expr.enum_init.inner, indent);
         fprintf(stream, ")");
       }
       break;
 
     case AST_EXPR_TYPE_UNION_INIT:
-      fprintf(stream, "union %s::%s", ast->union_init.field.value.identv.ident,
-              ast->union_init.parsed_ty.name);
-      if (ast->union_init.inner) {
+      fprintf(stream, "union %s::%s", ast->expr.union_init.field.value.identv.ident,
+              ast->expr.union_init.parsed_ty.name);
+      if (ast->expr.union_init.inner) {
         fprintf(stream, "(");
-        code_emit_expr(stream, ast->union_init.inner, indent);
+        code_emit_expr(stream, ast->expr.union_init.inner, indent);
         fprintf(stream, ")");
       }
       break;
 
     case AST_EXPR_TYPE_SIZEOF:
       fprintf(stream, "sizeof (");
-      if (ast->sizeof_expr.expr) {
-        code_emit_expr(stream, ast->sizeof_expr.expr, indent);
+      if (ast->expr.sizeof_expr.expr) {
+        code_emit_expr(stream, ast->expr.sizeof_expr.expr, indent);
       } else {
-        code_emit_ty(stream, &ast->sizeof_expr.parsed_ty);
+        code_emit_ty(stream, &ast->expr.sizeof_expr.parsed_ty);
       }
       fprintf(stream, ")");
       break;
 
     case AST_EXPR_TYPE_BOX:
       fprintf(stream, "box ");
-      if (ast->box_expr.expr) {
-        code_emit_expr(stream, ast->box_expr.expr, indent);
+      if (ast->expr.box_expr.expr) {
+        code_emit_expr(stream, ast->expr.box_expr.expr, indent);
       } else {
-        code_emit_ty(stream, &ast->box_expr.parsed_ty);
+        code_emit_ty(stream, &ast->expr.box_expr.parsed_ty);
       }
       break;
 
     case AST_EXPR_TYPE_UNBOX:
       fprintf(stream, "unbox ");
-      code_emit_expr(stream, ast->box_expr.expr, indent);
+      code_emit_expr(stream, ast->expr.box_expr.expr, indent);
       break;
 
     default:

@@ -111,11 +111,11 @@ int ast_binary_op_logical(int op) {
 const char *ast_expr_ident(struct ast_expr *expr) {
   switch (expr->type) {
     case AST_EXPR_TYPE_DEREF:
-      return ast_expr_ident(expr->deref.target);
+      return ast_expr_ident(expr->expr.deref.target);
     case AST_EXPR_TYPE_VARIABLE:
-      return expr->variable.ident.value.identv.ident;
+      return expr->expr.variable.ident.value.identv.ident;
     case AST_EXPR_TYPE_ARRAY_INDEX:
-      return ast_expr_ident(expr->array_index.target);
+      return ast_expr_ident(expr->expr.array_index.target);
     default:
       return NULL;
   }

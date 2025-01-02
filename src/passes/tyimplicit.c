@@ -43,25 +43,25 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
   int total = 0;
 
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (ast->fdecl.body) {
-      int rc = typecheck_implicit_block(ast->fdecl.body);
+    if (ast->toplevel.fdecl.body) {
+      int rc = typecheck_implicit_block(ast->toplevel.fdecl.body);
       if (rc < 0) {
         return -1;
       }
 
-      total += rc + maybe_implicitly_convert(&ast->fdecl.body->ty,
-                                             &ast->fdecl.function_ty->function.retty);
+      total += rc + maybe_implicitly_convert(&ast->toplevel.fdecl.body->ty,
+                                             &ast->toplevel.fdecl.function_ty->function.retty);
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    if (ast->vdecl.init_expr) {
-      int rc = typecheck_implicit_expr(ast->vdecl.init_expr);
+    if (ast->toplevel.vdecl.init_expr) {
+      int rc = typecheck_implicit_expr(ast->toplevel.vdecl.init_expr);
       if (rc < 0) {
         return -1;
       }
       total += rc;
     }
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    return typecheck_implicit_ast(ast->import.ast);
+    return typecheck_implicit_ast(ast->toplevel.import.ast);
   }
 
   return total;
@@ -82,7 +82,7 @@ static int typecheck_implicit_block(struct ast_block *ast) {
   }
 
   if (last_stmt && last_stmt->type == AST_STMT_TYPE_EXPR) {
-    total += maybe_implicitly_convert(&last_stmt->expr->ty, &ast->ty);
+    total += maybe_implicitly_convert(&last_stmt->stmt.expr->ty, &ast->ty);
   }
 
   return total;
@@ -91,27 +91,27 @@ static int typecheck_implicit_block(struct ast_block *ast) {
 static int typecheck_implicit_stmt(struct ast_stmt *ast) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      return typecheck_implicit_expr(ast->expr);
+      return typecheck_implicit_expr(ast->stmt.expr);
 
     case AST_STMT_TYPE_LET: {
-      return typecheck_implicit_expr(ast->let.init_expr);
+      return typecheck_implicit_expr(ast->stmt.let.init_expr);
     } break;
 
     case AST_STMT_TYPE_ITER: {
       int total = 0;
-      int rc = typecheck_implicit_expr(ast->iter.range.start);
+      int rc = typecheck_implicit_expr(ast->stmt.iter.range.start);
       if (rc < 0) {
         return -1;
       }
       total += rc;
 
-      rc = typecheck_implicit_expr(ast->iter.range.end);
+      rc = typecheck_implicit_expr(ast->stmt.iter.range.end);
       if (rc < 0) {
         return -1;
       }
 
-      if (ast->iter.range.step) {
-        rc = typecheck_implicit_expr(ast->iter.range.step);
+      if (ast->stmt.iter.range.step) {
+        rc = typecheck_implicit_expr(ast->stmt.iter.range.step);
         if (rc < 0) {
           return -1;
         }
@@ -119,15 +119,15 @@ static int typecheck_implicit_stmt(struct ast_stmt *ast) {
         total += rc;
       }
 
-      return total + typecheck_implicit_block(&ast->iter.block);
+      return total + typecheck_implicit_block(&ast->stmt.iter.block);
     } break;
 
     case AST_STMT_TYPE_STORE: {
-      int a = typecheck_implicit_expr(ast->store.lhs);
+      int a = typecheck_implicit_expr(ast->stmt.store.lhs);
       if (a < 0) {
         return -1;
       }
-      int b = typecheck_implicit_expr(ast->store.rhs);
+      int b = typecheck_implicit_expr(ast->stmt.store.rhs);
       if (b < 0) {
         return -1;
       }
@@ -135,22 +135,22 @@ static int typecheck_implicit_stmt(struct ast_stmt *ast) {
     } break;
 
     case AST_STMT_TYPE_RETURN: {
-      if (ast->expr) {
-        return typecheck_implicit_expr(ast->expr);
+      if (ast->stmt.expr) {
+        return typecheck_implicit_expr(ast->stmt.expr);
       }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
-      return typecheck_implicit_expr(ast->expr);
+      return typecheck_implicit_expr(ast->stmt.expr);
     } break;
 
     case AST_STMT_TYPE_WHILE: {
-      int rc = typecheck_implicit_expr(ast->while_stmt.cond);
+      int rc = typecheck_implicit_expr(ast->stmt.while_stmt.cond);
       if (rc < 0) {
         return -1;
       }
 
-      return rc + typecheck_implicit_block(&ast->while_stmt.block);
+      return rc + typecheck_implicit_block(&ast->stmt.while_stmt.block);
     } break;
 
     case AST_STMT_TYPE_BREAK:
@@ -170,7 +170,7 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       switch (ast->ty->ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY: {
-          struct ast_expr_list *node = ast->list;
+          struct ast_expr_list *node = ast->expr.list;
           int total = 0;
           while (node) {
             int rc = typecheck_implicit_expr(node->expr);
@@ -189,7 +189,7 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_STRUCT_INIT: {
-      struct ast_expr_list *node = ast->list;
+      struct ast_expr_list *node = ast->expr.list;
       int total = 0;
       while (node) {
         int rc = typecheck_implicit_expr(node->expr);
@@ -206,7 +206,7 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_UNION_INIT:
-      return typecheck_implicit_expr(ast->union_init.inner);
+      return typecheck_implicit_expr(ast->expr.union_init.inner);
       break;
 
     case AST_EXPR_TYPE_VARIABLE:
@@ -216,10 +216,10 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_BINARY: {
-      int total = maybe_implicitly_convert(&ast->binary.lhs->ty, &ast->ty) +
-                  maybe_implicitly_convert(&ast->binary.rhs->ty, &ast->ty);
-      int left = typecheck_implicit_expr(ast->binary.lhs);
-      int right = typecheck_implicit_expr(ast->binary.rhs);
+      int total = maybe_implicitly_convert(&ast->expr.binary.lhs->ty, &ast->ty) +
+                  maybe_implicitly_convert(&ast->expr.binary.rhs->ty, &ast->ty);
+      int left = typecheck_implicit_expr(ast->expr.binary.lhs);
+      int right = typecheck_implicit_expr(ast->expr.binary.rhs);
       if (left < 0 || right < 0) {
         return -1;
       }
@@ -228,16 +228,16 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      int rc = typecheck_implicit_block(&ast->block);
+      int rc = typecheck_implicit_block(&ast->expr.block);
       if (rc < 0) {
         return -1;
       }
 
-      return rc + maybe_implicitly_convert(&ast->block.ty, &ast->ty);
+      return rc + maybe_implicitly_convert(&ast->expr.block.ty, &ast->ty);
     } break;
 
     case AST_EXPR_TYPE_CALL: {
-      struct ast_expr_list *args = ast->call.args;
+      struct ast_expr_list *args = ast->expr.call.args;
       int total = 0;
       while (args) {
         int rc = typecheck_implicit_expr(args->expr);
@@ -258,8 +258,8 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_CAST: {
-      int total = maybe_implicitly_convert(&ast->cast.expr->ty, &ast->ty);
-      int rc = typecheck_implicit_expr(ast->cast.expr);
+      int total = maybe_implicitly_convert(&ast->expr.cast.expr->ty, &ast->ty);
+      int rc = typecheck_implicit_expr(ast->expr.cast.expr);
       if (rc < 0) {
         return -1;
       }
@@ -268,22 +268,22 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
 
     case AST_EXPR_TYPE_IF: {
       int total = 0;
-      int rc = typecheck_implicit_expr(ast->if_expr.cond);
+      int rc = typecheck_implicit_expr(ast->expr.if_expr.cond);
       if (rc < 0) {
         return -1;
       }
       total += rc;
 
-      rc = typecheck_implicit_block(&ast->if_expr.then_block);
+      rc = typecheck_implicit_block(&ast->expr.if_expr.then_block);
       if (rc < 0) {
         return -1;
       }
       total += rc;
 
-      total += maybe_implicitly_convert(&ast->if_expr.then_block.ty, &ast->ty);
+      total += maybe_implicitly_convert(&ast->expr.if_expr.then_block.ty, &ast->ty);
 
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+      if (ast->expr.if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           rc = typecheck_implicit_expr(elseif->cond);
           if (rc < 0) {
@@ -303,50 +303,50 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
         }
       }
 
-      if (ast->if_expr.has_else) {
-        rc = typecheck_implicit_block(&ast->if_expr.else_block);
+      if (ast->expr.if_expr.has_else) {
+        rc = typecheck_implicit_block(&ast->expr.if_expr.else_block);
         if (rc < 0) {
           return -1;
         }
 
-        total += maybe_implicitly_convert(&ast->if_expr.else_block.ty, &ast->ty);
+        total += maybe_implicitly_convert(&ast->expr.if_expr.else_block.ty, &ast->ty);
       }
 
       return total + rc;
     } break;
 
     case AST_EXPR_TYPE_ASSIGN: {
-      return typecheck_implicit_expr(ast->assign.expr);
+      return typecheck_implicit_expr(ast->expr.assign.expr);
     } break;
 
     case AST_EXPR_TYPE_REF:
       break;
 
     case AST_EXPR_TYPE_LOAD: {
-      return typecheck_implicit_expr(ast->load.expr);
+      return typecheck_implicit_expr(ast->expr.load.expr);
     } break;
 
     case AST_EXPR_TYPE_UNARY: {
-      int rc = typecheck_implicit_expr(ast->unary.expr);
+      int rc = typecheck_implicit_expr(ast->expr.unary.expr);
       if (rc < 0) {
         return rc;
       }
 
-      return maybe_implicitly_convert(&ast->unary.expr->ty, &ast->ty) + rc;
+      return maybe_implicitly_convert(&ast->expr.unary.expr->ty, &ast->ty) + rc;
     } break;
 
     case AST_EXPR_TYPE_MATCH: {
-      int rc = typecheck_implicit_expr(ast->match.expr);
+      int rc = typecheck_implicit_expr(ast->expr.match.expr);
       if (rc < 0) {
         return -1;
       }
 
       int total = rc;
 
-      struct ast_expr_match_arm *arm = ast->match.arms;
+      struct ast_expr_match_arm *arm = ast->expr.match.arms;
       while (arm) {
         // implicit conversion for pattern
-        total += maybe_implicitly_convert(&arm->pattern->ty, &ast->match.expr->ty);
+        total += maybe_implicitly_convert(&arm->pattern->ty, &ast->expr.match.expr->ty);
         rc = typecheck_implicit_expr(arm->pattern);
         if (rc < 0) {
           return -1;
@@ -367,9 +367,9 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
         arm = arm->next;
       }
 
-      total += maybe_implicitly_convert(&ast->match.otherwise->expr->ty, &ast->ty);
-      // total += maybe_implicitly_convert(&ast->ty, &ast->match.otherwise->expr->ty);
-      rc = typecheck_implicit_expr(ast->match.otherwise->expr);
+      total += maybe_implicitly_convert(&ast->expr.match.otherwise->expr->ty, &ast->ty);
+      // total += maybe_implicitly_convert(&ast->ty, &ast->expr.match.otherwise->expr->ty);
+      rc = typecheck_implicit_expr(ast->expr.match.otherwise->expr);
       if (rc < 0) {
         return -1;
       }
@@ -384,9 +384,9 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      if (ast->enum_init.inner) {
+      if (ast->expr.enum_init.inner) {
         int total = 0;
-        int rc = typecheck_implicit_expr(ast->enum_init.inner);
+        int rc = typecheck_implicit_expr(ast->expr.enum_init.inner);
         if (rc < 0) {
           return -1;
         }
@@ -395,7 +395,7 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
 
         struct ast_enum_field *field = ast->ty->enumty.fields;
         while (field) {
-          if (!strcmp(ast->enum_init.enum_val_name.value.identv.ident, field->name)) {
+          if (!strcmp(ast->expr.enum_init.enum_val_name.value.identv.ident, field->name)) {
             break;
           }
 
@@ -403,13 +403,13 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
         }
 
         if (field) {
-          total += maybe_implicitly_convert(&ast->enum_init.inner->ty, &field->inner);
+          total += maybe_implicitly_convert(&ast->expr.enum_init.inner->ty, &field->inner);
         }
 
         // if after conversion the result type is a specialization, make sure the enum is set
         // accordingly
         if (ast->ty->specialization_of) {
-          strncpy(ast->enum_init.enum_ty_name.value.identv.ident, ast->ty->name, 256);
+          strncpy(ast->expr.enum_init.enum_ty_name.value.identv.ident, ast->ty->name, 256);
         }
 
         return total;
@@ -417,15 +417,15 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_SIZEOF: {
-      if (ast->sizeof_expr.expr) {
-        return typecheck_implicit_expr(ast->sizeof_expr.expr);
+      if (ast->expr.sizeof_expr.expr) {
+        return typecheck_implicit_expr(ast->expr.sizeof_expr.expr);
       }
     } break;
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      if (ast->box_expr.expr) {
-        return typecheck_implicit_expr(ast->box_expr.expr);
+      if (ast->expr.box_expr.expr) {
+        return typecheck_implicit_expr(ast->expr.box_expr.expr);
       }
       break;
 

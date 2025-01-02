@@ -1,0 +1,9 @@
+// purity: call from pure function to impure function bad is not allowed
+
+impure fn i32 bad() {
+    5
+}
+
+pub fn i32 main() {
+    bad()
+}

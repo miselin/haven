@@ -37,7 +37,7 @@ static enum VisitorResult purity_visitor(struct ast_visitor_node *node, void *us
 
   if (node->toplevel) {
     if (node->toplevel->type == AST_DECL_TYPE_FDECL) {
-      purity->current_function = &node->toplevel->fdecl;
+      purity->current_function = &node->toplevel->toplevel.fdecl;
     }
   } else if (node->expr) {
     // no need to process expressions in explicitly marked impure functions
@@ -70,21 +70,21 @@ static int check_purity_expr(struct purity *purity, struct ast_expr *ast) {
       break;
 
     case AST_EXPR_TYPE_CALL: {
-      if (!ast->call.fdecl) {
+      if (!ast->expr.call.fdecl) {
         compiler_log(purity->compiler, LogLevelError, "purity",
                      "calling function pointer in %s is not allowed from pure functions",
-                     ast->call.ident.value.identv.ident);
+                     ast->expr.call.ident.value.identv.ident);
         purity->errors++;
-      } else if (ast->call.fdecl->flags & DECL_FLAG_IMPURE) {
+      } else if (ast->expr.call.fdecl->flags & DECL_FLAG_IMPURE) {
         compiler_log(purity->compiler, LogLevelError, "purity",
                      "call from pure function to impure function %s is not allowed",
-                     ast->call.ident.value.identv.ident);
+                     ast->expr.call.ident.value.identv.ident);
         purity->errors++;
       }
     } break;
 
     case AST_EXPR_TYPE_DEREF:
-      if (ast->deref.is_ptr) {
+      if (ast->expr.deref.is_ptr) {
         compiler_log(purity->compiler, LogLevelError, "purity",
                      "dereference of pointer is not allowed in pure functions");
         purity->errors++;

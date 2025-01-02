@@ -141,7 +141,7 @@ struct ast_toplevel {
     struct ast_fdecl fdecl;
     struct ast_tydecl tydecl;
     struct ast_import import;
-  };
+  } toplevel;
 };
 
 struct ast_expr_constant {
@@ -304,7 +304,7 @@ struct ast_expr {
     struct ast_expr_union_init union_init;
     struct ast_expr_sizeof sizeof_expr;
     struct ast_expr_box box_expr;
-  };
+  } expr;
 };
 
 struct ast_range {
@@ -342,7 +342,7 @@ struct ast_stmt {
     struct ast_stmt_iter iter;
     struct ast_stmt_store store;
     struct ast_stmt_while while_stmt;
-  };
+  } stmt;
 
   struct ast_stmt *next;
 };

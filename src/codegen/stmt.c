@@ -24,20 +24,20 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
   update_debug_loc(codegen, &ast->loc);
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR: {
-      return emit_expr_into(codegen, ast->expr, into);
+      return emit_expr_into(codegen, ast->stmt.expr, into);
     } break;
 
     case AST_STMT_TYPE_LET: {
-      const char *ident = ast->let.ident.value.identv.ident;
-      LLVMTypeRef var_type = ast_underlying_ty_to_llvm_ty(codegen, ast->let.ty);
+      const char *ident = ast->stmt.let.ident.value.identv.ident;
+      LLVMTypeRef var_type = ast_underlying_ty_to_llvm_ty(codegen, ast->stmt.let.ty);
       LLVMValueRef var = new_alloca(codegen, var_type, ident);
-      LLVMValueRef init = emit_expr_into(codegen, ast->let.init_expr, var);
+      LLVMValueRef init = emit_expr_into(codegen, ast->stmt.let.init_expr, var);
       if (init != var) {
-        emit_store(codegen, ast->let.init_expr->ty, init, var);
+        emit_store(codegen, ast->stmt.let.init_expr->ty, init, var);
       }
 
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      entry->flags = ast->let.flags;
+      entry->flags = ast->stmt.let.flags;
       entry->variable_type = var_type;
       entry->ref = var;
       scope_insert(codegen->scope, ident, entry);
@@ -45,34 +45,34 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
     } break;
 
     case AST_STMT_TYPE_ITER: {
-      const char *ident = ast->iter.index.ident.value.identv.ident;
-      LLVMValueRef start = emit_expr(codegen, ast->iter.range.start);
-      LLVMValueRef end = emit_expr(codegen, ast->iter.range.end);
-      LLVMValueRef step = ast->iter.range.step
-                              ? emit_expr(codegen, ast->iter.range.step)
+      const char *ident = ast->stmt.iter.index.ident.value.identv.ident;
+      LLVMValueRef start = emit_expr(codegen, ast->stmt.iter.range.start);
+      LLVMValueRef end = emit_expr(codegen, ast->stmt.iter.range.end);
+      LLVMValueRef step = ast->stmt.iter.range.step
+                              ? emit_expr(codegen, ast->stmt.iter.range.step)
                               : LLVMConstInt(LLVMInt64TypeInContext(codegen->llvm_context), 1, 0);
 
       int direction = 1;
       int64_t iter_step = 1;
-      if (ast->iter.range.step) {
-        if (extract_constant_int(ast->iter.range.step, &iter_step) == 0) {
+      if (ast->stmt.iter.range.step) {
+        if (extract_constant_int(ast->stmt.iter.range.step, &iter_step) == 0) {
           if (iter_step < 0) {
             direction = -1;
           }
         }
       }
 
-      LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, ast->iter.index_ty);
+      LLVMTypeRef var_type = ast_ty_to_llvm_ty(codegen, ast->stmt.iter.index_ty);
 
       codegen_internal_enter_scope(codegen, &ast->loc, 1);
 
       LLVMValueRef index = new_alloca(codegen, var_type, ident);
 
-      emit_store(codegen, ast->iter.range.start->ty, start, index);
+      emit_store(codegen, ast->stmt.iter.range.start->ty, start, index);
 
       // insert the index variable to scope
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-      // entry->vdecl = ast->iter.index_vdecl;
+      // entry->vdecl = ast->stmt.iter.index_vdecl;
       entry->variable_type = var_type;
       entry->ref = index;
       scope_insert(codegen->scope, ident, entry);
@@ -98,21 +98,21 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
           LLVMBuildCondBr(codegen->llvm_builder, cmp, body_block, end_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, body_block);
-      emit_block(codegen, &ast->iter.block);
+      emit_block(codegen, &ast->stmt.iter.block);
 
       LLVMBuildBr(codegen->llvm_builder, step_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, step_block);
       LLVMValueRef next = LLVMBuildAdd(codegen->llvm_builder, index_val, step, "iter.next");
-      emit_store(codegen, ast->iter.index_ty, next, index);
+      emit_store(codegen, ast->stmt.iter.index_ty, next, index);
       LLVMBuildBr(codegen->llvm_builder, cond_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);
 
       int64_t istart = 0;
       int64_t iend = 0;
-      int rcstart = extract_constant_int(ast->iter.range.start, &istart);
-      int rcend = extract_constant_int(ast->iter.range.end, &iend);
+      int rcstart = extract_constant_int(ast->stmt.iter.range.start, &istart);
+      int rcend = extract_constant_int(ast->stmt.iter.range.end, &iend);
 
       // ok llvm is going a little far on unrolling some loops... let's not do this
       if (0 && rcstart == 0 && rcend == 0) {
@@ -150,17 +150,17 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
     } break;
 
     case AST_STMT_TYPE_RETURN: {
-      if (ast->expr) {
-        LLVMValueRef ret = emit_expr(codegen, ast->expr);
+      if (ast->stmt.expr) {
+        LLVMValueRef ret = emit_expr(codegen, ast->stmt.expr);
 
-        if (ast->expr->ty->ty == AST_TYPE_BOX) {
+        if (ast->stmt.expr->ty->ty == AST_TYPE_BOX) {
           // ref the box on the way out
           compiler_log(codegen->compiler, LogLevelDebug, "codegen",
                        "box ref due to STMT_TYPE_RETURN");
           codegen_box_ref(codegen, ret, 0);
         }
 
-        emit_store(codegen, ast->expr->ty, ret, codegen->retval);
+        emit_store(codegen, ast->stmt.expr->ty, ret, codegen->retval);
       }
       LLVMBuildBr(codegen->llvm_builder, codegen->return_block);
       LLVMBasicBlockRef new_block = LLVMAppendBasicBlockInContext(
@@ -169,9 +169,9 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
     } break;
 
     case AST_STMT_TYPE_STORE: {
-      LLVMValueRef lhs = emit_expr(codegen, ast->store.lhs);
-      LLVMValueRef rhs = emit_expr(codegen, ast->store.rhs);
-      emit_store(codegen, ast->store.rhs->ty, rhs, lhs);
+      LLVMValueRef lhs = emit_expr(codegen, ast->stmt.store.lhs);
+      LLVMValueRef rhs = emit_expr(codegen, ast->stmt.store.rhs);
+      emit_store(codegen, ast->stmt.store.rhs->ty, rhs, lhs);
     } break;
 
     case AST_STMT_TYPE_DEFER: {
@@ -183,7 +183,7 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
       entry->llvm_block =
           LLVMAppendBasicBlockInContext(codegen->llvm_context, codegen->current_function, "defer");
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, entry->llvm_block);
-      emit_expr(codegen, ast->expr);
+      emit_expr(codegen, ast->stmt.expr);
       entry->llvm_block_after = LLVMGetInsertBlock(codegen->llvm_builder);
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, current);
 
@@ -212,15 +212,15 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
       LLVMBuildBr(codegen->llvm_builder, cond_block);
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, cond_block);
 
-      LLVMTypeRef cond_type = ast_ty_to_llvm_ty(codegen, ast->while_stmt.cond->ty);
+      LLVMTypeRef cond_type = ast_ty_to_llvm_ty(codegen, ast->stmt.while_stmt.cond->ty);
 
-      LLVMValueRef cond = emit_expr(codegen, ast->while_stmt.cond);
+      LLVMValueRef cond = emit_expr(codegen, ast->stmt.while_stmt.cond);
       LLVMValueRef comp = LLVMBuildICmp(codegen->llvm_builder, LLVMIntNE, cond,
                                         LLVMConstInt(cond_type, 0, 0), "while.cond");
       LLVMBuildCondBr(codegen->llvm_builder, comp, body_block, end_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, body_block);
-      emit_block(codegen, &ast->while_stmt.block);
+      emit_block(codegen, &ast->stmt.while_stmt.block);
       LLVMBuildBr(codegen->llvm_builder, cond_block);
 
       LLVMPositionBuilderAtEnd(codegen->llvm_builder, end_block);

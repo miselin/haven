@@ -78,23 +78,23 @@ int check_semantic_ast(struct semantic *semantic, struct ast_program *ast) {
 
 static int check_semantic_toplevel(struct semantic *semantic, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (ast->fdecl.body) {
-      if (check_semantic_block(semantic, ast->fdecl.body) < 0) {
+    if (ast->toplevel.fdecl.body) {
+      if (check_semantic_block(semantic, ast->toplevel.fdecl.body) < 0) {
         return -1;
       }
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    if (ast->vdecl.init_expr) {
-      if (check_semantic_expr(semantic, ast->vdecl.init_expr) < 0) {
+    if (ast->toplevel.vdecl.init_expr) {
+      if (check_semantic_expr(semantic, ast->toplevel.vdecl.init_expr) < 0) {
         return -1;
       }
     }
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    if (check_semantic_tydecl(semantic, &ast->tydecl) < 0) {
+    if (check_semantic_tydecl(semantic, &ast->toplevel.tydecl) < 0) {
       return -1;
     }
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    if (check_semantic_ast(semantic, ast->import.ast) < 0) {
+    if (check_semantic_ast(semantic, ast->toplevel.import.ast) < 0) {
       return -1;
     }
   }
@@ -117,35 +117,35 @@ static int check_semantic_block(struct semantic *semantic, struct ast_block *ast
 static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      return check_semantic_expr(semantic, ast->expr);
+      return check_semantic_expr(semantic, ast->stmt.expr);
 
     case AST_STMT_TYPE_LET: {
-      return check_semantic_expr(semantic, ast->let.init_expr);
+      return check_semantic_expr(semantic, ast->stmt.let.init_expr);
     } break;
 
     case AST_STMT_TYPE_ITER: {
-      if (!(ast->iter.range.start && ast->iter.range.end)) {
+      if (!(ast->stmt.iter.range.start && ast->stmt.iter.range.end)) {
         semantic_diag_at(semantic, DiagError, &ast->loc, "iteration range must have start and end");
         return -1;
       }
 
-      if (check_semantic_expr(semantic, ast->iter.range.start) < 0) {
+      if (check_semantic_expr(semantic, ast->stmt.iter.range.start) < 0) {
         return -1;
       }
 
-      if (check_semantic_expr(semantic, ast->iter.range.end) < 0) {
+      if (check_semantic_expr(semantic, ast->stmt.iter.range.end) < 0) {
         return -1;
       }
 
-      if (ast->iter.range.step) {
-        if (check_semantic_expr(semantic, ast->iter.range.step) < 0) {
+      if (ast->stmt.iter.range.step) {
+        if (check_semantic_expr(semantic, ast->stmt.iter.range.step) < 0) {
           return -1;
         }
 
         if (semantic->pass > 0) {
-          struct ast_expr *step = ast->iter.range.step;
+          struct ast_expr *step = ast->stmt.iter.range.step;
           if (step->type == AST_EXPR_TYPE_CAST) {
-            step = step->cast.expr;
+            step = step->expr.cast.expr;
           }
 
           if (step->type != AST_EXPR_TYPE_CONSTANT) {
@@ -157,32 +157,32 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
 
       if (semantic->pass > 0) {
         int direction = 1;
-        struct ast_expr *step = ast->iter.range.step;
+        struct ast_expr *step = ast->stmt.iter.range.step;
         if (step) {
           if (step->type == AST_EXPR_TYPE_CAST) {
-            step = step->cast.expr;
+            step = step->expr.cast.expr;
           }
 
-          if ((int64_t)step->constant.constant.value.intv.val < 0) {
+          if ((int64_t)step->expr.constant.constant.value.intv.val < 0) {
             direction = -1;
           }
         }
 
-        struct ast_expr *start_expr = ast->iter.range.start;
-        struct ast_expr *end_expr = ast->iter.range.end;
+        struct ast_expr *start_expr = ast->stmt.iter.range.start;
+        struct ast_expr *end_expr = ast->stmt.iter.range.end;
         if (start_expr->type == AST_EXPR_TYPE_CAST) {
-          start_expr = start_expr->cast.expr;
+          start_expr = start_expr->expr.cast.expr;
         }
         if (end_expr->type == AST_EXPR_TYPE_CAST) {
-          end_expr = end_expr->cast.expr;
+          end_expr = end_expr->expr.cast.expr;
         }
 
         // if the start/end are constants, check that the direction leads to at least one
         // iteration
         if (start_expr->type == AST_EXPR_TYPE_CONSTANT &&
             end_expr->type == AST_EXPR_TYPE_CONSTANT) {
-          int64_t start = (int64_t)start_expr->constant.constant.value.intv.val;
-          int64_t end = (int64_t)end_expr->constant.constant.value.intv.val;
+          int64_t start = (int64_t)start_expr->expr.constant.constant.value.intv.val;
+          int64_t end = (int64_t)end_expr->expr.constant.constant.value.intv.val;
           if (start == end) {
             semantic_diag_at(semantic, DiagError, &ast->loc, "iteration range is empty");
             return -1;
@@ -201,37 +201,37 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
       }
 
       semantic->loop_depth++;
-      int rc = check_semantic_block(semantic, &ast->iter.block);
+      int rc = check_semantic_block(semantic, &ast->stmt.iter.block);
       semantic->loop_depth--;
       return rc;
     } break;
 
     case AST_STMT_TYPE_STORE: {
-      if (check_semantic_expr(semantic, ast->store.lhs) < 0) {
+      if (check_semantic_expr(semantic, ast->stmt.store.lhs) < 0) {
         return -1;
       }
-      if (check_semantic_expr(semantic, ast->store.rhs) < 0) {
+      if (check_semantic_expr(semantic, ast->stmt.store.rhs) < 0) {
         return -1;
       }
     } break;
 
     case AST_STMT_TYPE_RETURN: {
-      if (ast->expr) {
-        return check_semantic_expr(semantic, ast->expr);
+      if (ast->stmt.expr) {
+        return check_semantic_expr(semantic, ast->stmt.expr);
       }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
-      return check_semantic_expr(semantic, ast->expr);
+      return check_semantic_expr(semantic, ast->stmt.expr);
     } break;
 
     case AST_STMT_TYPE_WHILE: {
-      if (check_semantic_expr(semantic, ast->while_stmt.cond) < 0) {
+      if (check_semantic_expr(semantic, ast->stmt.while_stmt.cond) < 0) {
         return -1;
       }
 
       semantic->loop_depth++;
-      int rc = check_semantic_block(semantic, &ast->while_stmt.block);
+      int rc = check_semantic_block(semantic, &ast->stmt.while_stmt.block);
       semantic->loop_depth--;
       return rc;
     } break;
@@ -259,7 +259,7 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY:
         case AST_TYPE_MATRIX: {
-          struct ast_expr_list *node = ast->list;
+          struct ast_expr_list *node = ast->expr.list;
           while (node) {
             if (check_semantic_expr(semantic, node->expr) < 0) {
               return -1;
@@ -273,7 +273,7 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
     } break;
 
     case AST_EXPR_TYPE_STRUCT_INIT: {
-      struct ast_expr_list *node = ast->list;
+      struct ast_expr_list *node = ast->expr.list;
       while (node) {
         if (check_semantic_expr(semantic, node->expr) < 0) {
           return -1;
@@ -292,20 +292,20 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       break;
 
     case AST_EXPR_TYPE_BINARY: {
-      if (check_semantic_expr(semantic, ast->binary.lhs) < 0) {
+      if (check_semantic_expr(semantic, ast->expr.binary.lhs) < 0) {
         return -1;
       }
-      if (check_semantic_expr(semantic, ast->binary.rhs) < 0) {
+      if (check_semantic_expr(semantic, ast->expr.binary.rhs) < 0) {
         return -1;
       }
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      return check_semantic_block(semantic, &ast->block);
+      return check_semantic_block(semantic, &ast->expr.block);
     } break;
 
     case AST_EXPR_TYPE_CALL: {
-      struct ast_expr_list *args = ast->call.args;
+      struct ast_expr_list *args = ast->expr.call.args;
       while (args) {
         if (check_semantic_expr(semantic, args->expr) < 0) {
           return -1;
@@ -316,27 +316,27 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
     } break;
 
     case AST_EXPR_TYPE_DEREF:
-      return check_semantic_expr(semantic, ast->deref.target);
+      return check_semantic_expr(semantic, ast->expr.deref.target);
       break;
 
     case AST_EXPR_TYPE_VOID:
       break;
 
     case AST_EXPR_TYPE_CAST: {
-      return check_semantic_expr(semantic, ast->cast.expr);
+      return check_semantic_expr(semantic, ast->expr.cast.expr);
     } break;
 
     case AST_EXPR_TYPE_IF: {
-      if (check_semantic_expr(semantic, ast->if_expr.cond) < 0) {
+      if (check_semantic_expr(semantic, ast->expr.if_expr.cond) < 0) {
         return -1;
       }
 
-      if (check_semantic_block(semantic, &ast->if_expr.then_block) < 0) {
+      if (check_semantic_block(semantic, &ast->expr.if_expr.then_block) < 0) {
         return -1;
       }
 
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+      if (ast->expr.if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           if (check_semantic_expr(semantic, elseif->cond) < 0) {
             return -1;
@@ -350,45 +350,45 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
         }
       }
 
-      if (check_semantic_block(semantic, &ast->if_expr.else_block) < 0) {
+      if (check_semantic_block(semantic, &ast->expr.if_expr.else_block) < 0) {
         return -1;
       }
     } break;
 
     case AST_EXPR_TYPE_ASSIGN: {
-      return check_semantic_expr(semantic, ast->assign.expr);
+      return check_semantic_expr(semantic, ast->expr.assign.expr);
     } break;
 
     case AST_EXPR_TYPE_REF:
       break;
 
     case AST_EXPR_TYPE_LOAD: {
-      return check_semantic_expr(semantic, ast->load.expr);
+      return check_semantic_expr(semantic, ast->expr.load.expr);
     } break;
 
     case AST_EXPR_TYPE_UNARY: {
-      return check_semantic_expr(semantic, ast->unary.expr);
+      return check_semantic_expr(semantic, ast->expr.unary.expr);
     } break;
 
     case AST_EXPR_TYPE_MATCH: {
-      if (check_semantic_expr(semantic, ast->match.expr) < 0) {
+      if (check_semantic_expr(semantic, ast->expr.match.expr) < 0) {
         return -1;
       }
 
-      if (!ast->match.otherwise) {
+      if (!ast->expr.match.otherwise) {
         semantic_diag_at(semantic, DiagError, &ast->loc,
                          "match expression must have an otherwise arm");
         return -1;
       }
 
-      if (!ast->match.arms) {
+      if (!ast->expr.match.arms) {
         semantic_diag_at(
             semantic, DiagNote, &ast->loc,
             "a match expression should have at least one arm other than the otherwise arm");
         return -1;
       }
 
-      struct ast_expr_match_arm *arm = ast->match.arms;
+      struct ast_expr_match_arm *arm = ast->expr.match.arms;
       while (arm) {
         if (check_semantic_expr(semantic, arm->pattern) < 0) {
           return -1;
@@ -401,7 +401,7 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
         arm = arm->next;
       }
 
-      if (check_semantic_expr(semantic, ast->match.otherwise->expr) < 0) {
+      if (check_semantic_expr(semantic, ast->expr.match.otherwise->expr) < 0) {
         return -1;
       }
     } break;
@@ -410,7 +410,8 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       break;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      return ast->enum_init.inner ? check_semantic_expr(semantic, ast->enum_init.inner) : 0;
+      return ast->expr.enum_init.inner ? check_semantic_expr(semantic, ast->expr.enum_init.inner)
+                                       : 0;
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH: {
@@ -421,7 +422,7 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
 
       struct ast_enum_field *field = ast->ty->enumty.fields;
       while (field) {
-        if (!strcmp(field->name, ast->pattern_match.name.value.identv.ident)) {
+        if (!strcmp(field->name, ast->expr.pattern_match.name.value.identv.ident)) {
           break;
         }
         field = field->next;
@@ -429,13 +430,13 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
 
       if (!field) {
         semantic_diag_at(semantic, DiagError, &ast->loc, "enum field %s not found in enum %s",
-                         ast->pattern_match.name.value.identv.ident,
-                         ast->pattern_match.enum_name.value.identv.ident);
+                         ast->expr.pattern_match.name.value.identv.ident,
+                         ast->expr.pattern_match.enum_name.value.identv.ident);
         return -1;
       }
 
-      if (field->has_inner && !ast->pattern_match.inner_vdecl &&
-          !ast->pattern_match.bindings_ignored) {
+      if (field->has_inner && !ast->expr.pattern_match.inner_vdecl &&
+          !ast->expr.pattern_match.bindings_ignored) {
         semantic_diag_at(semantic, DiagError, &ast->loc,
                          "enum field %s requires a binding in this pattern match, or to explicitly "
                          "opt out of binding with (_)",
@@ -445,21 +446,21 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
     } break;
 
     case AST_EXPR_TYPE_UNION_INIT: {
-      if (check_semantic_expr(semantic, ast->union_init.inner) < 0) {
+      if (check_semantic_expr(semantic, ast->expr.union_init.inner) < 0) {
         return -1;
       }
     } break;
 
     case AST_EXPR_TYPE_SIZEOF: {
-      if (ast->sizeof_expr.expr) {
-        return check_semantic_expr(semantic, ast->sizeof_expr.expr);
+      if (ast->expr.sizeof_expr.expr) {
+        return check_semantic_expr(semantic, ast->expr.sizeof_expr.expr);
       }
     } break;
 
     case AST_EXPR_TYPE_BOX:
     case AST_EXPR_TYPE_UNBOX:
-      if (ast->box_expr.expr) {
-        return check_semantic_expr(semantic, ast->box_expr.expr);
+      if (ast->expr.box_expr.expr) {
+        return check_semantic_expr(semantic, ast->expr.box_expr.expr);
       }
       break;
 

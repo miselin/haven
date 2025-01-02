@@ -54,7 +54,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY:
         case AST_TYPE_MATRIX: {
-          struct ast_expr_list *node = ast->list;
+          struct ast_expr_list *node = ast->expr.list;
           while (node) {
             struct ast_ty *ty = typecheck_expr(typecheck, node->expr);
             if (!ty) {
@@ -83,8 +83,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
               size_t correct_cols = ast->ty->array.element_ty->matrix.cols;
               size_t correct_rows = ast->ty->array.element_ty->matrix.rows;
 
-              size_t rows = ast->list->num_elements;
-              size_t cols = ast->list->expr->list->num_elements;
+              size_t rows = ast->expr.list->num_elements;
+              size_t cols = ast->expr.list->expr->expr.list->num_elements;
 
               struct ast_ty new_ty;
               memset(&new_ty, 0, sizeof(new_ty));
@@ -126,7 +126,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       ast->parsed_ty.array.element_ty = NULL;
 
       struct ast_struct_field *field = ast->ty->structty.fields;
-      struct ast_expr_list *node = ast->list;
+      struct ast_expr_list *node = ast->expr.list;
       while (node) {
         // TODO: fuzzer found field to be null here, the AST doesn't make sense to cause that
         // either way though, we should check that both node & field are non-null
@@ -170,7 +170,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_UNION_INIT: {
       // unions are a simplified variant of structs - they initialize one field, and that's it
-      struct ast_ty *union_ty = resolve_type(typecheck, &ast->union_init.parsed_ty);
+      struct ast_ty *union_ty = resolve_type(typecheck, &ast->expr.union_init.parsed_ty);
 
       if (type_is_error(union_ty)) {
         typecheck_diag_expr(typecheck, ast, "union type could not be resolved\n");
@@ -180,7 +180,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       // find the field
       struct ast_struct_field *field = union_ty->structty.fields;
       while (field) {
-        if (strcmp(field->name, ast->union_init.field.value.identv.ident) == 0) {
+        if (strcmp(field->name, ast->expr.union_init.field.value.identv.ident) == 0) {
           break;
         }
         field = field->next;
@@ -188,25 +188,25 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       if (!field) {
         typecheck_diag_expr(typecheck, ast, "union field %s not found\n",
-                            ast->union_init.field.value.identv.ident);
+                            ast->expr.union_init.field.value.identv.ident);
         return &typecheck->error_type;
       }
 
-      struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->union_init.inner);
+      struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.union_init.inner);
       if (!expr_ty) {
         return NULL;
       }
 
-      maybe_implicitly_convert(&ast->union_init.inner->ty, &field->ty);
+      maybe_implicitly_convert(&ast->expr.union_init.inner->ty, &field->ty);
 
-      if (!same_type(ast->union_init.inner->ty, field->ty)) {
+      if (!same_type(ast->expr.union_init.inner->ty, field->ty)) {
         char exprty[256];
         char fieldty[256];
-        type_name_into(ast->union_init.inner->ty, exprty, 256);
+        type_name_into(ast->expr.union_init.inner->ty, exprty, 256);
         type_name_into(field->ty, fieldty, 256);
 
         fprintf(stderr, "union initializer field %s has type %s, expected %s\n",
-                ast->union_init.field.value.identv.ident, exprty, fieldty);
+                ast->expr.union_init.field.value.identv.ident, exprty, fieldty);
         ++typecheck->errors;
       }
 
@@ -216,9 +216,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_VARIABLE: {
       struct scope_entry *entry =
-          scope_lookup(typecheck->scope, ast->variable.ident.value.identv.ident, 1);
+          scope_lookup(typecheck->scope, ast->expr.variable.ident.value.identv.ident, 1);
       if (!entry) {
-        fprintf(stderr, "%s not found\n", ast->variable.ident.value.identv.ident);
+        fprintf(stderr, "%s not found\n", ast->expr.variable.ident.value.identv.ident);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -226,29 +226,30 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty *ty = entry->ty;
 
       compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "%s has type %p",
-                   ast->variable.ident.value.identv.ident, (void *)ty);
+                   ast->expr.variable.ident.value.identv.ident, (void *)ty);
 
       ast->ty = ty;
       return ast->ty;
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
-      struct ast_ty *target_ty = typecheck_expr(typecheck, ast->array_index.target);
+      struct ast_ty *target_ty = typecheck_expr(typecheck, ast->expr.array_index.target);
       if (!target_ty) {
         return NULL;
       }
 
-      const char *ident = ast_expr_ident(ast->array_index.target);
+      const char *ident = ast_expr_ident(ast->expr.array_index.target);
 
       // is the target indexable?
       if (!type_is_indexable(target_ty)) {
-        typecheck_diag_expr(typecheck, ast->array_index.target, "%s is not indexable\n", ident);
+        typecheck_diag_expr(typecheck, ast->expr.array_index.target, "%s is not indexable\n",
+                            ident);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
 
       // try to coerce the index to a 32-bit integer
-      struct ast_ty *index_ty = typecheck_expr(typecheck, ast->array_index.index);
+      struct ast_ty *index_ty = typecheck_expr(typecheck, ast->expr.array_index.index);
       if (!index_ty) {
         return NULL;
       }
@@ -260,9 +261,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       int_ty.integer.width = 32;
       struct ast_ty *i32 = type_repository_lookup_ty(typecheck->type_repo, &int_ty);
 
-      maybe_implicitly_convert(&ast->array_index.index->ty, &i32);
+      maybe_implicitly_convert(&ast->expr.array_index.index->ty, &i32);
 
-      struct ast_expr *target_expr = ast->array_index.target;
+      struct ast_expr *target_expr = ast->expr.array_index.target;
 
       if (target_expr->ty->ty == AST_TYPE_ARRAY) {
         ast->ty = resolve_type(typecheck, target_expr->ty->array.element_ty);
@@ -273,7 +274,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         // type of expression is the type pointed to by the box
         ast->ty = resolve_type(typecheck, box_pointee_type(target_expr->ty));
       } else {
-        typecheck_diag_expr(typecheck, ast->array_index.target,
+        typecheck_diag_expr(typecheck, ast->expr.array_index.target,
                             "indexable type has an unimplemented type resolve\n");
         ++typecheck->errors;
         return &typecheck->error_type;
@@ -283,31 +284,33 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_BINARY: {
       {
-        struct ast_ty *lhs = typecheck_expr(typecheck, ast->binary.lhs);
-        struct ast_ty *rhs = typecheck_expr(typecheck, ast->binary.rhs);
+        struct ast_ty *lhs = typecheck_expr(typecheck, ast->expr.binary.lhs);
+        struct ast_ty *rhs = typecheck_expr(typecheck, ast->expr.binary.rhs);
 
         if (!lhs || !rhs) {
           return NULL;
         }
       }
 
-      maybe_implicitly_convert(&ast->binary.lhs->ty, &ast->binary.rhs->ty);
-      maybe_implicitly_convert(&ast->binary.rhs->ty, &ast->binary.lhs->ty);
+      maybe_implicitly_convert(&ast->expr.binary.lhs->ty, &ast->expr.binary.rhs->ty);
+      maybe_implicitly_convert(&ast->expr.binary.rhs->ty, &ast->expr.binary.lhs->ty);
 
-      if (!same_type(ast->binary.lhs->ty, ast->binary.rhs->ty) &&
-          !binary_mismatch_ok(ast->binary.op, ast->binary.lhs->ty, ast->binary.rhs->ty)) {
+      if (!same_type(ast->expr.binary.lhs->ty, ast->expr.binary.rhs->ty) &&
+          !binary_mismatch_ok(ast->expr.binary.op, ast->expr.binary.lhs->ty,
+                              ast->expr.binary.rhs->ty)) {
         char lhsstr[256], rhsstr[256];
-        type_name_into(ast->binary.lhs->ty, lhsstr, 256);
-        type_name_into(ast->binary.rhs->ty, rhsstr, 256);
+        type_name_into(ast->expr.binary.lhs->ty, lhsstr, 256);
+        type_name_into(ast->expr.binary.rhs->ty, rhsstr, 256);
 
         typecheck_diag_expr(typecheck, ast,
                             "binary op %s has mismatching lhs type %s, rhs type %s\n",
-                            ast_binary_op_to_str(ast->binary.op), lhsstr, rhsstr);
+                            ast_binary_op_to_str(ast->expr.binary.op), lhsstr, rhsstr);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
 
-      if (ast_binary_op_conditional(ast->binary.op) || ast_binary_op_logical(ast->binary.op)) {
+      if (ast_binary_op_conditional(ast->expr.binary.op) ||
+          ast_binary_op_logical(ast->expr.binary.op)) {
         // conditionals & logicals both emit 1-bit booleans
         // don't set signed flag - booleans need to zero-extend in conversions, not sign-extend
         struct ast_ty i1;
@@ -319,16 +322,16 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         return ast->ty;
       }
 
-      ast->ty = ast->binary.lhs->ty;
+      ast->ty = ast->expr.binary.lhs->ty;
       return ast->ty;
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      struct ast_ty *ty = typecheck_block(typecheck, &ast->block);
+      struct ast_ty *ty = typecheck_block(typecheck, &ast->expr.block);
       if (!ty) {
         return NULL;
       }
-      ast->ty = resolve_type(typecheck, ast->block.ty);
+      ast->ty = resolve_type(typecheck, ast->expr.block.ty);
       return ast->ty;
     } break;
 
@@ -337,20 +340,20 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       {
         struct scope_entry *entry =
-            scope_lookup(typecheck->scope, ast->variable.ident.value.identv.ident, 1);
+            scope_lookup(typecheck->scope, ast->expr.variable.ident.value.identv.ident, 1);
         if (!entry) {
-          fprintf(stderr, "%s not found\n", ast->variable.ident.value.identv.ident);
+          fprintf(stderr, "%s not found\n", ast->expr.variable.ident.value.identv.ident);
           ++typecheck->errors;
           return &typecheck->error_type;
         }
 
         if (entry->fdecl) {
-          ast->call.fdecl = entry->fdecl;
+          ast->expr.call.fdecl = entry->fdecl;
 
           function_ty = entry->ty;
         } else {
           if (entry->ty->ty != AST_TYPE_FUNCTION) {
-            fprintf(stderr, "%s is not a function\n", ast->variable.ident.value.identv.ident);
+            fprintf(stderr, "%s is not a function\n", ast->expr.variable.ident.value.identv.ident);
             ++typecheck->errors;
             return &typecheck->error_type;
           }
@@ -359,20 +362,20 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
       }
 
-      if (!ast->call.args) {
+      if (!ast->expr.call.args) {
         // no arguments passed
         if (function_ty->function.num_params > 0) {
           fprintf(stderr, "function %s called with no arguments, expected %zu\n",
-                  ast->variable.ident.value.identv.ident, function_ty->function.num_params);
+                  ast->expr.variable.ident.value.identv.ident, function_ty->function.num_params);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
         }
-      } else if (function_ty->function.num_params != ast->call.args->num_elements) {
-        if (ast->call.args->num_elements < function_ty->function.num_params &&
+      } else if (function_ty->function.num_params != ast->expr.call.args->num_elements) {
+        if (ast->expr.call.args->num_elements < function_ty->function.num_params &&
             !function_ty->function.vararg) {
           fprintf(stderr, "function %s called with %zu arguments, expected %zu\n",
-                  ast->variable.ident.value.identv.ident, ast->call.args->num_elements,
+                  ast->expr.variable.ident.value.identv.ident, ast->expr.call.args->num_elements,
                   function_ty->function.num_params);
           ++typecheck->errors;
           return &typecheck->error_type;
@@ -380,7 +383,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
       }
 
-      struct ast_expr_list *args = ast->call.args;
+      struct ast_expr_list *args = ast->expr.call.args;
       size_t i = 0;
       while (args) {
         {
@@ -399,7 +402,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
             type_name_into(function_ty->function.param_types[i], expectedstr, 256);
 
             fprintf(stderr, "function %s argument %zu has type %s, expected %s\n",
-                    ast->variable.ident.value.identv.ident, i + 1, tystr, expectedstr);
+                    ast->expr.variable.ident.value.identv.ident, i + 1, tystr, expectedstr);
             ++typecheck->errors;
           }
         }
@@ -408,14 +411,14 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         ++i;
       }
 
-      ast->call.function_ty = function_ty;
+      ast->expr.call.function_ty = function_ty;
       ast->ty = resolve_type(typecheck, function_ty->function.retty);
       return ast->ty;
     } break;
 
     case AST_EXPR_TYPE_DEREF: {
       {
-        struct ast_ty *target_ty = typecheck_expr(typecheck, ast->deref.target);
+        struct ast_ty *target_ty = typecheck_expr(typecheck, ast->expr.deref.target);
         if (!target_ty) {
           return NULL;
         }
@@ -423,8 +426,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       const char *ident = ast_expr_ident(ast);
 
-      struct ast_ty *ty = ast->deref.target->ty;
-      if (ast->deref.is_ptr) {
+      struct ast_ty *ty = ast->expr.deref.target->ty;
+      if (ast->expr.deref.is_ptr) {
         if (ty->ty == AST_TYPE_POINTER) {
           ty = ptr_pointee_type(ty);
         } else if (ty->ty == AST_TYPE_BOX) {
@@ -451,15 +454,15 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       size_t max_field = 0;
 
       if (ty->ty == AST_TYPE_FVEC) {
-        int deref = deref_to_index(ast->deref.field.value.identv.ident);
+        int deref = deref_to_index(ast->expr.deref.field.value.identv.ident);
         if (deref < 0) {
           fprintf(stderr, "fvec deref %s has unknown field %s\n", ident,
-                  ast->deref.field.value.identv.ident);
+                  ast->expr.deref.field.value.identv.ident);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
         }
-        ast->deref.field_idx = (size_t)deref;
+        ast->expr.deref.field_idx = (size_t)deref;
         max_field = ty->fvec.width;
 
         struct ast_ty lookup_ty;
@@ -470,8 +473,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         struct ast_struct_field *field = ty->structty.fields;
         size_t i = 0;
         while (field) {
-          if (strcmp(field->name, ast->deref.field.value.identv.ident) == 0) {
-            ast->deref.field_idx = i;
+          if (strcmp(field->name, ast->expr.deref.field.value.identv.ident) == 0) {
+            ast->expr.deref.field_idx = i;
             break;
           }
           field = field->next;
@@ -480,7 +483,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
         if (!field) {
           fprintf(stderr, "struct deref %s references unknown field %s\n", ident,
-                  ast->deref.field.value.identv.ident);
+                  ast->expr.deref.field.value.identv.ident);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
@@ -489,15 +492,15 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         ast->ty = field->ty;
         max_field = ty->structty.num_fields;
       } else if (ty->ty == AST_TYPE_MATRIX) {
-        int deref = deref_to_index(ast->deref.field.value.identv.ident);
+        int deref = deref_to_index(ast->expr.deref.field.value.identv.ident);
         if (deref < 0) {
           fprintf(stderr, "matrix deref %s has unknown field %s\n", ident,
-                  ast->deref.field.value.identv.ident);
+                  ast->expr.deref.field.value.identv.ident);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
         }
-        ast->deref.field_idx = (size_t)deref;
+        ast->expr.deref.field_idx = (size_t)deref;
         max_field = ty->matrix.rows;
 
         struct ast_ty vec_ty;
@@ -511,9 +514,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       // can't deref past the width of the vector
-      if (ast->deref.field_idx >= max_field) {
+      if (ast->expr.deref.field_idx >= max_field) {
         fprintf(stderr, "deref %s has field #%zd, exceeding field count of %zd\n", ident,
-                ast->deref.field_idx, max_field);
+                ast->expr.deref.field_idx, max_field);
         ++typecheck->errors;
         return &typecheck->error_type;
       }
@@ -526,22 +529,22 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       return ast->ty;
 
     case AST_EXPR_TYPE_CAST: {
-      struct ast_ty *resolved = resolve_parsed_type(typecheck, &ast->cast.parsed_ty);
+      struct ast_ty *resolved = resolve_parsed_type(typecheck, &ast->expr.cast.parsed_ty);
       if (!resolved) {
         return NULL;
       }
 
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->cast.expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.cast.expr);
         if (!expr_ty) {
           return NULL;
         }
       }
 
-      if (!can_cast(resolved, ast->cast.expr->ty)) {
+      if (!can_cast(resolved, ast->expr.cast.expr->ty)) {
         char tystr[256], exprstr[256];
         type_name_into(resolved, tystr, 256);
-        type_name_into(ast->cast.expr->ty, exprstr, 256);
+        type_name_into(ast->expr.cast.expr->ty, exprstr, 256);
 
         fprintf(stderr, "incompatible cast from %s to %s\n", exprstr, tystr);
         ++typecheck->errors;
@@ -554,19 +557,19 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_IF: {
       {
-        struct ast_ty *cond = typecheck_expr(typecheck, ast->if_expr.cond);
+        struct ast_ty *cond = typecheck_expr(typecheck, ast->expr.if_expr.cond);
         if (!cond) {
           return NULL;
         }
 
-        struct ast_ty *then_ty = typecheck_block(typecheck, &ast->if_expr.then_block);
+        struct ast_ty *then_ty = typecheck_block(typecheck, &ast->expr.if_expr.then_block);
         if (!then_ty) {
           return NULL;
         }
       }
 
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+      if (ast->expr.if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           {
             struct ast_ty *cond_ty = typecheck_expr(typecheck, elseif->cond);
@@ -580,11 +583,11 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
             }
           }
 
-          maybe_implicitly_convert(&elseif->block.ty, &ast->if_expr.then_block.ty);
+          maybe_implicitly_convert(&elseif->block.ty, &ast->expr.if_expr.then_block.ty);
 
-          if (!same_type(ast->if_expr.then_block.ty, elseif->block.ty)) {
+          if (!same_type(ast->expr.if_expr.then_block.ty, elseif->block.ty)) {
             char thenstr[256], blockstr[256];
-            type_name_into(ast->if_expr.then_block.ty, thenstr, 256);
+            type_name_into(ast->expr.if_expr.then_block.ty, thenstr, 256);
             type_name_into(elseif->block.ty, blockstr, 256);
 
             fprintf(stderr, "elseif block has type %s, expected %s\n", blockstr, thenstr);
@@ -596,20 +599,21 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
       }
 
-      if (ast->if_expr.has_else) {
+      if (ast->expr.if_expr.has_else) {
         {
-          struct ast_ty *else_ty = typecheck_block(typecheck, &ast->if_expr.else_block);
+          struct ast_ty *else_ty = typecheck_block(typecheck, &ast->expr.if_expr.else_block);
           if (!else_ty) {
             return NULL;
           }
         }
 
-        maybe_implicitly_convert(&ast->if_expr.else_block.ty, &ast->if_expr.then_block.ty);
+        maybe_implicitly_convert(&ast->expr.if_expr.else_block.ty,
+                                 &ast->expr.if_expr.then_block.ty);
 
-        if (!same_type(ast->if_expr.then_block.ty, ast->if_expr.else_block.ty)) {
+        if (!same_type(ast->expr.if_expr.then_block.ty, ast->expr.if_expr.else_block.ty)) {
           char thenstr[256], elsestr[256];
-          type_name_into(ast->if_expr.then_block.ty, thenstr, 256);
-          type_name_into(ast->if_expr.else_block.ty, elsestr, 256);
+          type_name_into(ast->expr.if_expr.then_block.ty, thenstr, 256);
+          type_name_into(ast->expr.if_expr.else_block.ty, elsestr, 256);
 
           fprintf(stderr, "if then block has type %s, else block has type %s\n", thenstr, elsestr);
           ++typecheck->errors;
@@ -617,30 +621,30 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
       }
 
-      if (ast->if_expr.then_block.ty->ty != AST_TYPE_VOID && !ast->if_expr.has_else) {
+      if (ast->expr.if_expr.then_block.ty->ty != AST_TYPE_VOID && !ast->expr.if_expr.has_else) {
         fprintf(stderr, "an else block is required when if is used as an expression\n");
         ++typecheck->errors;
         return &typecheck->error_type;
       }
 
-      ast->ty = ast->if_expr.then_block.ty;
+      ast->ty = ast->expr.if_expr.then_block.ty;
       return ast->ty;
     } break;
 
     case AST_EXPR_TYPE_ASSIGN: {
       {
-        struct ast_ty *lhs_ty = typecheck_expr(typecheck, ast->assign.lhs);
+        struct ast_ty *lhs_ty = typecheck_expr(typecheck, ast->expr.assign.lhs);
         if (!lhs_ty) {
           return NULL;
         }
 
-        struct ast_ty *expr_ty = typecheck_expr_with_tbds(typecheck, ast->assign.expr);
+        struct ast_ty *expr_ty = typecheck_expr_with_tbds(typecheck, ast->expr.assign.expr);
         if (!expr_ty) {
           return NULL;
         }
       }
 
-      const char *ident = ast_expr_ident(ast->assign.lhs);
+      const char *ident = ast_expr_ident(ast->expr.assign.lhs);
 
       {
         if (!ident) {
@@ -662,16 +666,16 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
       }
 
-      struct ast_ty **desired_ty = &ast->assign.lhs->ty;
+      struct ast_ty **desired_ty = &ast->expr.assign.lhs->ty;
 
       const char *field_name = NULL;
 
-      if (ast->assign.lhs->type == AST_EXPR_TYPE_DEREF) {
+      if (ast->expr.assign.lhs->type == AST_EXPR_TYPE_DEREF) {
         // all the checks in this block are probably already handled fine by DEREF, but let's make
         // sure
 
-        struct ast_ty *deref_ty = ast->assign.lhs->deref.target->ty;
-        if (ast->assign.lhs->deref.is_ptr) {
+        struct ast_ty *deref_ty = ast->expr.assign.lhs->expr.deref.target->ty;
+        if (ast->expr.assign.lhs->expr.deref.is_ptr) {
           if (deref_ty->ty == AST_TYPE_POINTER) {
             deref_ty = ptr_pointee_type(deref_ty);
           } else if (deref_ty->ty == AST_TYPE_BOX) {
@@ -689,7 +693,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
         if (deref_ty->ty != AST_TYPE_STRUCT) {
           char tyname[256];
-          type_name_into(ast->assign.lhs->ty, tyname, 256);
+          type_name_into(ast->expr.assign.lhs->ty, tyname, 256);
           fprintf(stderr, "in field assignment, lhs %s has non-struct type %s\n", ident, tyname);
           ++typecheck->errors;
           return &typecheck->error_type;
@@ -697,7 +701,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
         struct ast_struct_field *field = deref_ty->structty.fields;
         while (field) {
-          if (strcmp(field->name, ast->assign.lhs->deref.field.value.identv.ident) == 0) {
+          if (strcmp(field->name, ast->expr.assign.lhs->expr.deref.field.value.identv.ident) == 0) {
             field_name = field->name;
             desired_ty = &field->ty;
             break;
@@ -707,18 +711,18 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
         if (!field) {
           fprintf(stderr, "field %s not found in struct %s\n",
-                  ast->assign.lhs->deref.field.value.identv.ident, ident);
+                  ast->expr.assign.lhs->expr.deref.field.value.identv.ident, ident);
           ++typecheck->errors;
           return &typecheck->error_type;
         }
       }
 
-      maybe_implicitly_convert(&ast->assign.expr->ty, desired_ty);
+      maybe_implicitly_convert(&ast->expr.assign.expr->ty, desired_ty);
 
-      if (!same_type(*desired_ty, ast->assign.expr->ty)) {
+      if (!same_type(*desired_ty, ast->expr.assign.expr->ty)) {
         char tystr[256], exprstr[256];
         type_name_into(*desired_ty, tystr, 256);
-        type_name_into(ast->assign.expr->ty, exprstr, 256);
+        type_name_into(ast->expr.assign.expr->ty, exprstr, 256);
 
         if (field_name) {
           fprintf(stderr, "field assignment to %s.%s has type %s, expected %s\n", ident, field_name,
@@ -730,14 +734,14 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         return &typecheck->error_type;
       }
 
-      ast->ty = ast->assign.expr->ty;
+      ast->ty = ast->expr.assign.expr->ty;
       return ast->ty;
     } break;
 
     case AST_EXPR_TYPE_REF: {
       compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "typechecking ref");
 
-      struct ast_expr *expr = ast->ref.expr;
+      struct ast_expr *expr = ast->expr.ref.expr;
 
       {
         struct ast_ty *expr_ty = typecheck_expr(typecheck, expr);
@@ -752,7 +756,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         return &typecheck->error_type;
       }
 
-      const char *ident = expr->variable.ident.value.identv.ident;
+      const char *ident = expr->expr.variable.ident.value.identv.ident;
 
       struct scope_entry *entry = scope_lookup(typecheck->scope, ident, 1);
       if (!entry || entry->fdecl) {
@@ -773,7 +777,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_LOAD: {
-      struct ast_expr *expr = ast->load.expr;
+      struct ast_expr *expr = ast->expr.load.expr;
 
       {
         struct ast_ty *expr_ty = typecheck_expr(typecheck, expr);
@@ -794,49 +798,49 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_UNARY: {
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->unary.expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.unary.expr);
         if (!expr_ty) {
           return NULL;
         }
       }
 
-      switch (ast->unary.op) {
+      switch (ast->expr.unary.op) {
         case AST_UNARY_OP_NEG:
-          if (ast->unary.expr->ty->ty != AST_TYPE_INTEGER &&
-              ast->unary.expr->ty->ty != AST_TYPE_FLOAT) {
+          if (ast->expr.unary.expr->ty->ty != AST_TYPE_INTEGER &&
+              ast->expr.unary.expr->ty->ty != AST_TYPE_FLOAT) {
             fprintf(stderr, "negation expression must resolve to an integer or float\n");
             ++typecheck->errors;
             return &typecheck->error_type;
             ;
           }
 
-          ast->ty = ast->unary.expr->ty;
+          ast->ty = ast->expr.unary.expr->ty;
           return ast->ty;
 
         case AST_UNARY_OP_NOT:
-          if (ast->unary.expr->ty->ty != AST_TYPE_INTEGER) {
+          if (ast->expr.unary.expr->ty->ty != AST_TYPE_INTEGER) {
             fprintf(stderr, "not expression must resolve to an integer\n");
             ++typecheck->errors;
             return &typecheck->error_type;
             ;
           }
 
-          ast->ty = ast->unary.expr->ty;
+          ast->ty = ast->expr.unary.expr->ty;
           return ast->ty;
 
         case AST_UNARY_OP_COMP:
-          if (ast->unary.expr->ty->ty != AST_TYPE_INTEGER) {
+          if (ast->expr.unary.expr->ty->ty != AST_TYPE_INTEGER) {
             fprintf(stderr, "complement expression must resolve to an integer\n");
             ++typecheck->errors;
             return &typecheck->error_type;
             ;
           }
 
-          ast->ty = ast->unary.expr->ty;
+          ast->ty = ast->expr.unary.expr->ty;
           return ast->ty;
 
         default:
-          fprintf(stderr, "unhandled unary op %d\n", ast->unary.op);
+          fprintf(stderr, "unhandled unary op %d\n", ast->expr.unary.op);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
@@ -845,29 +849,29 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_MATCH: {
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->match.expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.match.expr);
         if (!expr_ty) {
           return NULL;
         }
       }
 
       // first pass: check that all arms have the same pattern type, and check their expressions
-      struct ast_expr_match_arm *arm = ast->match.arms;
+      struct ast_expr_match_arm *arm = ast->expr.match.arms;
       while (arm) {
         {
           struct ast_ty *pattern_ty = typecheck_pattern_match(
-              typecheck, arm->pattern, &arm->pattern->pattern_match, ast->match.expr->ty);
+              typecheck, arm->pattern, &arm->pattern->expr.pattern_match, ast->expr.match.expr->ty);
           if (!pattern_ty) {
             return NULL;
           }
         }
 
-        maybe_implicitly_convert(&arm->pattern->ty, &ast->match.expr->ty);
+        maybe_implicitly_convert(&arm->pattern->ty, &ast->expr.match.expr->ty);
 
-        if (!same_type(arm->pattern->ty, ast->match.expr->ty)) {
+        if (!same_type(arm->pattern->ty, ast->expr.match.expr->ty)) {
           char wantstr[256], gotstr[256];
           type_name_into(arm->pattern->ty, wantstr, 256);
-          type_name_into(ast->match.expr->ty, gotstr, 256);
+          type_name_into(ast->expr.match.expr->ty, gotstr, 256);
 
           typecheck_diag_expr(typecheck, ast,
                               "match pattern has incorrect type, wanted %s but got %s\n", wantstr,
@@ -880,14 +884,15 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         struct scope_entry *inner_var = NULL;
 
         if (arm->pattern->type == AST_EXPR_TYPE_PATTERN_MATCH &&
-            arm->pattern->pattern_match.inner_vdecl) {
+            arm->pattern->expr.pattern_match.inner_vdecl) {
           typecheck->scope = enter_scope(typecheck->scope);
 
           struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
-          entry->ty = arm->pattern->pattern_match.inner_vdecl->ty;
-          entry->decl_flags = arm->pattern->pattern_match.inner_vdecl->flags;
+          entry->ty = arm->pattern->expr.pattern_match.inner_vdecl->ty;
+          entry->decl_flags = arm->pattern->expr.pattern_match.inner_vdecl->flags;
           scope_insert(typecheck->scope,
-                       arm->pattern->pattern_match.inner_vdecl->ident.value.identv.ident, entry);
+                       arm->pattern->expr.pattern_match.inner_vdecl->ident.value.identv.ident,
+                       entry);
 
           inner_var = entry;
         }
@@ -905,13 +910,13 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         arm = arm->next;
       }
 
-      if (!ast->match.otherwise) {
+      if (!ast->expr.match.otherwise) {
         typecheck_diag_expr(typecheck, ast, "match expression has no otherwise arm\n");
         ++typecheck->errors;
         return &typecheck->error_type;
       }
 
-      struct ast_ty *otherwise_ty = typecheck_expr(typecheck, ast->match.otherwise->expr);
+      struct ast_ty *otherwise_ty = typecheck_expr(typecheck, ast->expr.match.otherwise->expr);
       if (!otherwise_ty) {
         return NULL;
       }
@@ -919,9 +924,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty *largest_ty = otherwise_ty;
 
       // second pass: check that all arms have the same type
-      arm = ast->match.arms;
+      arm = ast->expr.match.arms;
       while (arm) {
-        struct ast_expr_match_arm *next = arm->next ? arm->next : ast->match.otherwise;
+        struct ast_expr_match_arm *next = arm->next ? arm->next : ast->expr.match.otherwise;
         if (next) {
           if (!maybe_implicitly_convert(&arm->expr->ty, &next->expr->ty)) {
             maybe_implicitly_convert(&next->expr->ty, &arm->expr->ty);
@@ -961,7 +966,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_ENUM_INIT: {
-      const char *ident = ast->enum_init.enum_ty_name.value.identv.ident;
+      const char *ident = ast->expr.enum_init.enum_ty_name.value.identv.ident;
       struct ast_ty *enumty = type_repository_lookup(typecheck->type_repo, ident);
       if (!enumty) {
         typecheck_diag_expr(typecheck, ast, "enum type %s not found\n", ident);
@@ -970,13 +975,13 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       if (enumty->ty != AST_TYPE_ENUM) {
         typecheck_diag_expr(typecheck, ast, "type %s is not an enum\n",
-                            ast->enum_init.enum_ty_name.value.identv.ident);
+                            ast->expr.enum_init.enum_ty_name.value.identv.ident);
         return &typecheck->error_type;
       }
 
       struct ast_enum_field *field = enumty->enumty.fields;
       while (field) {
-        if (!strcmp(field->name, ast->enum_init.enum_val_name.value.identv.ident)) {
+        if (!strcmp(field->name, ast->expr.enum_init.enum_val_name.value.identv.ident)) {
           break;
         }
         field = field->next;
@@ -984,12 +989,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       if (!field) {
         typecheck_diag_expr(typecheck, ast, "enum field %s not found in enum %s\n",
-                            ast->enum_init.enum_val_name.value.identv.ident,
-                            ast->enum_init.enum_ty_name.value.identv.ident);
+                            ast->expr.enum_init.enum_val_name.value.identv.ident,
+                            ast->expr.enum_init.enum_ty_name.value.identv.ident);
         return &typecheck->error_type;
       }
 
-      if (ast->enum_init.inner) {
+      if (ast->expr.enum_init.inner) {
         if (!field->has_inner) {
           typecheck_diag_expr(typecheck, ast, "enum field %s does not have an inner\n",
                               field->name);
@@ -998,19 +1003,19 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
         // includes an inner, ensure it matches the enum field's type
         {
-          struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->enum_init.inner);
+          struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->expr.enum_init.inner);
           if (!inner_ty) {
             return NULL;
           }
         }
 
-        maybe_implicitly_convert(&ast->enum_init.inner->ty, &field->inner);
+        maybe_implicitly_convert(&ast->expr.enum_init.inner->ty, &field->inner);
 
         if (field->inner->ty != AST_TYPE_CUSTOM) {
           // can't check types if the inner is as yet unresolved
-          if (!same_type(ast->enum_init.inner->ty, field->inner)) {
+          if (!same_type(ast->expr.enum_init.inner->ty, field->inner)) {
             char innerstr[256], fieldstr[256];
-            type_name_into(ast->enum_init.inner->ty, innerstr, 256);
+            type_name_into(ast->expr.enum_init.inner->ty, innerstr, 256);
             type_name_into(field->inner, fieldstr, 256);
 
             typecheck_diag_expr(typecheck, ast,
@@ -1036,31 +1041,32 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty *inner_ty = NULL;
 
       int swapped_type = 0;
-      if (ast->sizeof_expr.expr) {
+      if (ast->expr.sizeof_expr.expr) {
         // the parser can't distinguish between types and identifiers, so we need to do so here
-        if (ast->sizeof_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
+        if (ast->expr.sizeof_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
           inner_ty = type_repository_lookup(
-              typecheck->type_repo, ast->sizeof_expr.expr->variable.ident.value.identv.ident);
+              typecheck->type_repo,
+              ast->expr.sizeof_expr.expr->expr.variable.ident.value.identv.ident);
           if (inner_ty) {
-            free_expr(typecheck->compiler, ast->sizeof_expr.expr);
-            ast->sizeof_expr.expr = NULL;
+            free_expr(typecheck->compiler, ast->expr.sizeof_expr.expr);
+            ast->expr.sizeof_expr.expr = NULL;
             swapped_type = 1;
           }
         }
 
         if (!swapped_type) {
-          inner_ty = typecheck_expr(typecheck, ast->sizeof_expr.expr);
+          inner_ty = typecheck_expr(typecheck, ast->expr.sizeof_expr.expr);
           if (!inner_ty) {
             return NULL;
           }
 
-          inner_ty = ast->sizeof_expr.expr->ty;
+          inner_ty = ast->expr.sizeof_expr.expr->ty;
         }
       } else {
-        inner_ty = resolve_parsed_type(typecheck, &ast->sizeof_expr.parsed_ty);
+        inner_ty = resolve_parsed_type(typecheck, &ast->expr.sizeof_expr.parsed_ty);
       }
 
-      ast->sizeof_expr.resolved = inner_ty;
+      ast->expr.sizeof_expr.resolved = inner_ty;
 
       struct ast_ty itype;
       memset(&itype, 0, sizeof(itype));
@@ -1075,28 +1081,29 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty *inner_ty = NULL;
 
       int swapped_type = 0;
-      if (ast->box_expr.expr) {
+      if (ast->expr.box_expr.expr) {
         // the parser can't distinguish between types and identifiers, so we need to do so here
-        if (ast->box_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
-          inner_ty = type_repository_lookup(typecheck->type_repo,
-                                            ast->box_expr.expr->variable.ident.value.identv.ident);
+        if (ast->expr.box_expr.expr->type == AST_EXPR_TYPE_VARIABLE) {
+          inner_ty = type_repository_lookup(
+              typecheck->type_repo,
+              ast->expr.box_expr.expr->expr.variable.ident.value.identv.ident);
           if (inner_ty) {
-            free_expr(typecheck->compiler, ast->box_expr.expr);
-            ast->box_expr.expr = NULL;
+            free_expr(typecheck->compiler, ast->expr.box_expr.expr);
+            ast->expr.box_expr.expr = NULL;
             swapped_type = 1;
           }
         }
 
         if (!swapped_type) {
-          inner_ty = typecheck_expr(typecheck, ast->box_expr.expr);
+          inner_ty = typecheck_expr(typecheck, ast->expr.box_expr.expr);
           if (!inner_ty) {
             return NULL;
           }
 
-          inner_ty = ast->box_expr.expr->ty;
+          inner_ty = ast->expr.box_expr.expr->ty;
         }
       } else {
-        inner_ty = resolve_parsed_type(typecheck, &ast->box_expr.parsed_ty);
+        inner_ty = resolve_parsed_type(typecheck, &ast->expr.box_expr.parsed_ty);
       }
 
       struct ast_ty box_ty;
@@ -1112,19 +1119,19 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_UNBOX: {
       {
-        struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->box_expr.expr);
+        struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->expr.box_expr.expr);
         if (!inner_ty) {
           return NULL;
         }
       }
 
-      if (ast->box_expr.expr->ty->ty != AST_TYPE_BOX) {
+      if (ast->expr.box_expr.expr->ty->ty != AST_TYPE_BOX) {
         typecheck_diag_expr(typecheck, ast, "unbox can only be used with boxed types\n");
         return &typecheck->error_type;
       }
 
       // returns the underlying type of the box
-      ast->ty = ast->box_expr.expr->ty->pointer.pointee;
+      ast->ty = ast->expr.box_expr.expr->ty->pointer.pointee;
       return ast->ty;
     } break;
 

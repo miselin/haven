@@ -22,7 +22,7 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
       parser_consume_peeked(parser, NULL);
       if (parser_peek(parser) == TOKEN_KW_MUT) {
         parser_consume_peeked(parser, NULL);
-        result->let.flags |= DECL_FLAG_MUT;
+        result->stmt.let.flags |= DECL_FLAG_MUT;
       }
 
       int is_typed = 1;
@@ -45,14 +45,14 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
         return NULL;
       }
       result->type = AST_STMT_TYPE_LET;
-      result->let.ident = token;
+      result->stmt.let.ident = token;
       if (parser_consume(parser, NULL, TOKEN_ASSIGN) < 0) {
         free(result);
         return NULL;
       }
-      result->let.init_expr = parse_expression(parser);
-      result->let.parser_ty = ty;
-      if (!result->let.init_expr) {
+      result->stmt.let.init_expr = parse_expression(parser);
+      result->stmt.let.parser_ty = ty;
+      if (!result->stmt.let.init_expr) {
         free(result);
         return NULL;
       }
@@ -61,13 +61,13 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
     case TOKEN_KW_ITER: {
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_ITER;
-      result->iter.range = parse_range(parser);
+      result->stmt.iter.range = parse_range(parser);
       if (parser_consume(parser, &token, TOKEN_IDENTIFIER) < 0) {
         free(result);
         return NULL;
       }
-      result->iter.index.ident = token;
-      if (parse_block(parser, &result->iter.block) < 0) {
+      result->stmt.iter.index.ident = token;
+      if (parse_block(parser, &result->stmt.iter.block) < 0) {
         free(result);
         return NULL;
       }
@@ -76,9 +76,9 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
     case TOKEN_KW_STORE: {
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_STORE;
-      result->store.lhs = parse_factor(parser);
-      result->store.rhs = parse_expression(parser);
-      if (!(result->store.lhs && result->store.rhs)) {
+      result->stmt.store.lhs = parse_factor(parser);
+      result->stmt.store.rhs = parse_expression(parser);
+      if (!(result->stmt.store.lhs && result->stmt.store.rhs)) {
         free(result);
         return NULL;
       }
@@ -89,9 +89,9 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
       result->type = AST_STMT_TYPE_RETURN;
       parser_mark(parser);
       parser->mute_diags = 1;
-      result->expr = parse_expression(parser);
+      result->stmt.expr = parse_expression(parser);
       parser->mute_diags = 0;
-      if (!result->expr) {
+      if (!result->stmt.expr) {
         // probably a void return
         parser_rewind(parser);
       } else {
@@ -102,8 +102,8 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
     case TOKEN_KW_DEFER:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_DEFER;
-      result->expr = parse_expression(parser);
-      if (!result->expr) {
+      result->stmt.expr = parse_expression(parser);
+      if (!result->stmt.expr) {
         free(result);
         return NULL;
       }
@@ -112,12 +112,12 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
     case TOKEN_KW_WHILE:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_WHILE;
-      result->while_stmt.cond = parse_expression(parser);
-      if (!result->while_stmt.cond) {
+      result->stmt.while_stmt.cond = parse_expression(parser);
+      if (!result->stmt.while_stmt.cond) {
         free(result);
         return NULL;
       }
-      if (parse_block(parser, &result->while_stmt.block) < 0) {
+      if (parse_block(parser, &result->stmt.while_stmt.block) < 0) {
         free(result);
         return NULL;
       }
@@ -135,9 +135,9 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
 
     default:
       // it's actually an expression
-      result->expr = parse_expression(parser);
+      result->stmt.expr = parse_expression(parser);
       result->type = AST_STMT_TYPE_EXPR;
-      if (!result->expr) {
+      if (!result->stmt.expr) {
         free(result);
         return NULL;
       }

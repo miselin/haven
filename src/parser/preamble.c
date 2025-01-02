@@ -14,29 +14,29 @@ int parser_add_preamble(struct parser *parser) {
   // TODO: platform specific
   decl->type = AST_DECL_TYPE_TYDECL;
   lexer_locate(parser->lexer, &decl->loc);
-  decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
-  strncpy(decl->tydecl.ident.value.identv.ident, "__va_list_tag", 256);
-  decl->tydecl.parsed_ty.ty = AST_TYPE_STRUCT;
-  strncpy(decl->tydecl.parsed_ty.name, "__va_list_tag", 256);
-  decl->tydecl.parsed_ty.structty.fields = calloc(1, sizeof(struct ast_struct_field));
-  decl->tydecl.parsed_ty.structty.fields->parsed_ty.ty = AST_TYPE_INTEGER;
-  decl->tydecl.parsed_ty.structty.fields->parsed_ty.integer.is_signed = 1;
-  decl->tydecl.parsed_ty.structty.fields->parsed_ty.integer.width = 64;
-  strncpy(decl->tydecl.parsed_ty.structty.fields->name, "gp_offset", 256);
-  decl->tydecl.parsed_ty.structty.num_fields = 1;
+  decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
+  strncpy(decl->toplevel.tydecl.ident.value.identv.ident, "__va_list_tag", 256);
+  decl->toplevel.tydecl.parsed_ty.ty = AST_TYPE_STRUCT;
+  strncpy(decl->toplevel.tydecl.parsed_ty.name, "__va_list_tag", 256);
+  decl->toplevel.tydecl.parsed_ty.structty.fields = calloc(1, sizeof(struct ast_struct_field));
+  decl->toplevel.tydecl.parsed_ty.structty.fields->parsed_ty.ty = AST_TYPE_INTEGER;
+  decl->toplevel.tydecl.parsed_ty.structty.fields->parsed_ty.integer.is_signed = 1;
+  decl->toplevel.tydecl.parsed_ty.structty.fields->parsed_ty.integer.width = 64;
+  strncpy(decl->toplevel.tydecl.parsed_ty.structty.fields->name, "gp_offset", 256);
+  decl->toplevel.tydecl.parsed_ty.structty.num_fields = 1;
 
   // __builtin_va_list is an array of one __va_list_tag
   decl->next = calloc(1, sizeof(struct ast_toplevel));
   decl = decl->next;
   decl->type = AST_DECL_TYPE_TYDECL;
   lexer_locate(parser->lexer, &decl->loc);
-  decl->tydecl.ident.ident = TOKEN_IDENTIFIER;
-  strncpy(decl->tydecl.ident.value.identv.ident, "__builtin_va_list", 256);
-  decl->tydecl.parsed_ty.ty = AST_TYPE_ARRAY;
-  decl->tydecl.parsed_ty.array.width = 1;
-  decl->tydecl.parsed_ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
-  decl->tydecl.parsed_ty.array.element_ty->ty = AST_TYPE_CUSTOM;
-  strncpy(decl->tydecl.parsed_ty.array.element_ty->name, "__va_list_tag", 256);
+  decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
+  strncpy(decl->toplevel.tydecl.ident.value.identv.ident, "__builtin_va_list", 256);
+  decl->toplevel.tydecl.parsed_ty.ty = AST_TYPE_ARRAY;
+  decl->toplevel.tydecl.parsed_ty.array.width = 1;
+  decl->toplevel.tydecl.parsed_ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
+  decl->toplevel.tydecl.parsed_ty.array.element_ty->ty = AST_TYPE_CUSTOM;
+  strncpy(decl->toplevel.tydecl.parsed_ty.array.element_ty->name, "__va_list_tag", 256);
 
   decl->next = parser->ast.decls;
   parser->ast.decls = preamble;

@@ -48,17 +48,18 @@ static void dump_ast_indented(struct ast_program *ast, int indent) {
 
 static void dump_toplevel(struct ast_toplevel *ast, int indent) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    dump_fdecl(&ast->fdecl, indent);
+    dump_fdecl(&ast->toplevel.fdecl, indent);
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
-    dump_vdecl(&ast->vdecl, indent);
+    dump_vdecl(&ast->toplevel.vdecl, indent);
   } else if (ast->type == AST_DECL_TYPE_TYDECL) {
-    dump_tydecl(&ast->tydecl, indent);
+    dump_tydecl(&ast->toplevel.tydecl, indent);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     INDENTED(indent, "PreprocessorDecl\n");
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    INDENTED(indent, "Import %s '%s'%s\n", ast->import.type == ImportTypeC ? "C" : "Haven",
-             ast->import.path, ast->import.ast->decls ? "" : " (already imported)");
-    dump_ast_indented(ast->import.ast, indent + 1);
+    INDENTED(indent, "Import %s '%s'%s\n", ast->toplevel.import.type == ImportTypeC ? "C" : "Haven",
+             ast->toplevel.import.path,
+             ast->toplevel.import.ast->decls ? "" : " (already imported)");
+    dump_ast_indented(ast->toplevel.import.ast, indent + 1);
   } else {
     INDENTED(indent, "<unknown-toplevel>\n");
   }
@@ -139,44 +140,44 @@ static void dump_block(struct ast_block *ast, int indent) {
 static void dump_stmt(struct ast_stmt *ast, int indent) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      dump_expr(ast->expr, indent);
+      dump_expr(ast->stmt.expr, indent);
       break;
 
     case AST_STMT_TYPE_LET:
-      dump_vdecl(&ast->let, indent);
+      dump_vdecl(&ast->stmt.let, indent);
       break;
 
     case AST_STMT_TYPE_ITER:
       INDENTED(indent, "Iter\n");
       INDENTED(indent + 1, "Range\n");
-      dump_expr(ast->iter.range.start, indent + 2);
-      dump_expr(ast->iter.range.end, indent + 2);
-      if (ast->iter.range.step) {
-        dump_expr(ast->iter.range.step, indent + 2);
+      dump_expr(ast->stmt.iter.range.start, indent + 2);
+      dump_expr(ast->stmt.iter.range.end, indent + 2);
+      if (ast->stmt.iter.range.step) {
+        dump_expr(ast->stmt.iter.range.step, indent + 2);
       }
-      INDENTED(indent + 2, "%s -> ", ast->iter.index.ident.value.identv.ident);
-      if (ast->iter.index_ty) {
-        dump_ty(ast->iter.index_ty);
+      INDENTED(indent + 2, "%s -> ", ast->stmt.iter.index.ident.value.identv.ident);
+      if (ast->stmt.iter.index_ty) {
+        dump_ty(ast->stmt.iter.index_ty);
       } else {
         fprintf(stderr, "<invalid-type>");
       }
       fprintf(stderr, "\n");
 
-      dump_block(&ast->iter.block, indent + 3);
+      dump_block(&ast->stmt.iter.block, indent + 3);
       break;
 
     case AST_STMT_TYPE_STORE:
       INDENTED(indent, "Store\n");
-      dump_expr(ast->store.lhs, indent + 1);
-      dump_expr(ast->store.rhs, indent + 1);
+      dump_expr(ast->stmt.store.lhs, indent + 1);
+      dump_expr(ast->stmt.store.rhs, indent + 1);
       break;
 
     case AST_STMT_TYPE_RETURN:
-      if (ast->expr) {
+      if (ast->stmt.expr) {
         INDENTED(indent, "Return -> ");
-        dump_ty(ast->expr->ty);
+        dump_ty(ast->stmt.expr->ty);
         fprintf(stderr, "\n");
-        dump_expr(ast->expr, indent + 1);
+        dump_expr(ast->stmt.expr, indent + 1);
       } else {
         INDENTED(indent, "Return\n");
       }
@@ -184,15 +185,15 @@ static void dump_stmt(struct ast_stmt *ast, int indent) {
 
     case AST_STMT_TYPE_DEFER: {
       INDENTED(indent, "Defer\n");
-      dump_expr(ast->expr, indent + 1);
+      dump_expr(ast->stmt.expr, indent + 1);
     } break;
 
     case AST_STMT_TYPE_WHILE:
       INDENTED(indent, "While\n");
       INDENTED(indent + 1, "Cond: ");
-      dump_expr(ast->while_stmt.cond, indent);
+      dump_expr(ast->stmt.while_stmt.cond, indent);
       fprintf(stderr, "\n");
-      dump_block(&ast->while_stmt.block, indent + 1);
+      dump_block(&ast->stmt.while_stmt.block, indent + 1);
       break;
 
     case AST_STMT_TYPE_BREAK:
@@ -222,20 +223,20 @@ void dump_expr(struct ast_expr *ast, int indent) {
       struct ast_ty *ty = ast->ty ? ast->ty : &ast->parsed_ty;
       switch (ty->ty) {
         case AST_TYPE_INTEGER:
-          INDENTED(indent + 1, "Integer %" PRIi64, ast->constant.constant.value.intv.val);
+          INDENTED(indent + 1, "Integer %" PRIi64, ast->expr.constant.constant.value.intv.val);
           break;
 
         case AST_TYPE_FLOAT:
-          INDENTED(indent + 1, "Float %s", ast->constant.constant.value.floatv.buf);
+          INDENTED(indent + 1, "Float %s", ast->expr.constant.constant.value.floatv.buf);
           break;
 
         case AST_TYPE_STRING:
-          INDENTED(indent + 1, "String \"%s\"", ast->constant.constant.value.strv.s);
+          INDENTED(indent + 1, "String \"%s\"", ast->expr.constant.constant.value.strv.s);
           break;
 
         case AST_TYPE_FVEC: {
           INDENTED(indent + 1, "FVec\n");
-          struct ast_expr_list *node = ast->list;
+          struct ast_expr_list *node = ast->expr.list;
           for (size_t i = 0; i < ty->fvec.width; i++) {
             dump_expr(node->expr, indent + 2);
             node = node->next;
@@ -249,7 +250,7 @@ void dump_expr(struct ast_expr *ast, int indent) {
 
         case AST_TYPE_MATRIX: {
           fprintf(stderr, "Matrix%zdx%zd\n", ty->matrix.cols, ty->matrix.rows);
-          struct ast_expr_list *node = ast->list;
+          struct ast_expr_list *node = ast->expr.list;
           for (size_t i = 0; i < ty->matrix.rows; i++) {
             dump_expr(node->expr, indent + 2);
             node = node->next;
@@ -268,8 +269,8 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      if (ast->list) {
-        struct ast_expr_list *node = ast->list;
+      if (ast->expr.list) {
+        struct ast_expr_list *node = ast->expr.list;
         while (node) {
           dump_expr(node->expr, indent + 1);
           node = node->next;
@@ -278,39 +279,39 @@ void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_BLOCK:
-      dump_block(&ast->block, indent);
+      dump_block(&ast->expr.block, indent);
       break;
 
     case AST_EXPR_TYPE_BINARY:
-      INDENTED(indent, "BinaryExpr %s -> ", ast_binary_op_to_str(ast->binary.op));
+      INDENTED(indent, "BinaryExpr %s -> ", ast_binary_op_to_str(ast->expr.binary.op));
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->binary.lhs, indent + 1);
-      dump_expr(ast->binary.rhs, indent + 1);
+      dump_expr(ast->expr.binary.lhs, indent + 1);
+      dump_expr(ast->expr.binary.rhs, indent + 1);
       break;
 
     case AST_EXPR_TYPE_VARIABLE:
-      INDENTED(indent, "VariableExpr %s -> ", ast->variable.ident.value.identv.ident);
+      INDENTED(indent, "VariableExpr %s -> ", ast->expr.variable.ident.value.identv.ident);
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
       break;
 
     case AST_EXPR_TYPE_DEREF:
-      INDENTED(indent, "Deref %s [#%zd] -> ", ast->deref.field.value.identv.ident,
-               ast->deref.field_idx);
+      INDENTED(indent, "Deref %s [#%zd] -> ", ast->expr.deref.field.value.identv.ident,
+               ast->expr.deref.field_idx);
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->deref.target, indent + 1);
+      dump_expr(ast->expr.deref.target, indent + 1);
       break;
 
     case AST_EXPR_TYPE_CALL: {
-      INDENTED(indent, "Call %s -> ", ast->call.ident.value.identv.ident);
+      INDENTED(indent, "Call %s -> ", ast->expr.call.ident.value.identv.ident);
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      struct ast_expr_list *node = ast->call.args;
+      struct ast_expr_list *node = ast->expr.call.args;
       if (node) {
         INDENTED(indent + 1, "Args\n");
         while (node) {
@@ -326,22 +327,22 @@ void dump_expr(struct ast_expr *ast, int indent) {
 
     case AST_EXPR_TYPE_CAST:
       INDENTED(indent, "Cast -> ");
-      dump_ty(&ast->cast.parsed_ty);
+      dump_ty(&ast->expr.cast.parsed_ty);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->cast.expr, indent + 1);
+      dump_expr(ast->expr.cast.expr, indent + 1);
       break;
 
     case AST_EXPR_TYPE_IF:
-      INDENTED(indent, "If [has_else=%d] -> ", ast->if_expr.has_else);
+      INDENTED(indent, "If [has_else=%d] -> ", ast->expr.if_expr.has_else);
       dump_expr_ty(ast);
       fprintf(stderr, " \n");
 
-      dump_expr(ast->if_expr.cond, indent + 1);
-      dump_block(&ast->if_expr.then_block, indent + 1);
+      dump_expr(ast->expr.if_expr.cond, indent + 1);
+      dump_block(&ast->expr.if_expr.then_block, indent + 1);
 
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+      if (ast->expr.if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           INDENTED(indent + 1, "ElseIf\n");
           dump_expr(elseif->cond, indent + 2);
@@ -350,8 +351,8 @@ void dump_expr(struct ast_expr *ast, int indent) {
         }
       }
 
-      if (ast->if_expr.else_block.stmt) {
-        dump_block(&ast->if_expr.else_block, indent + 1);
+      if (ast->expr.if_expr.else_block.stmt) {
+        dump_block(&ast->expr.if_expr.else_block, indent + 1);
       }
       break;
 
@@ -360,8 +361,8 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->assign.lhs, indent + 1);
-      dump_expr(ast->assign.expr, indent + 1);
+      dump_expr(ast->expr.assign.lhs, indent + 1);
+      dump_expr(ast->expr.assign.expr, indent + 1);
       break;
 
     case AST_EXPR_TYPE_REF: {
@@ -369,7 +370,7 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->ref.expr, indent + 1);
+      dump_expr(ast->expr.ref.expr, indent + 1);
     } break;
 
     case AST_EXPR_TYPE_LOAD: {
@@ -377,15 +378,15 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->load.expr, indent + 1);
+      dump_expr(ast->expr.load.expr, indent + 1);
     } break;
 
     case AST_EXPR_TYPE_UNARY: {
-      INDENTED(indent, "Unary %s -> ", ast_unary_op_to_str(ast->unary.op));
+      INDENTED(indent, "Unary %s -> ", ast_unary_op_to_str(ast->expr.unary.op));
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->unary.expr, indent + 1);
+      dump_expr(ast->expr.unary.expr, indent + 1);
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
@@ -393,8 +394,8 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->array_index.index, indent + 1);
-      dump_expr(ast->array_index.target, indent + 1);
+      dump_expr(ast->expr.array_index.index, indent + 1);
+      dump_expr(ast->expr.array_index.target, indent + 1);
     } break;
 
     case AST_EXPR_TYPE_MATCH: {
@@ -402,13 +403,13 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->match.expr, indent + 1);
+      dump_expr(ast->expr.match.expr, indent + 1);
 
-      dump_match_arms(ast->match.arms, indent + 1);
+      dump_match_arms(ast->expr.match.arms, indent + 1);
 
-      if (ast->match.otherwise) {
+      if (ast->expr.match.otherwise) {
         INDENTED(indent + 1, "Otherwise\n");
-        dump_expr(ast->match.otherwise->expr, indent + 2);
+        dump_expr(ast->expr.match.otherwise->expr, indent + 2);
       }
     } break;
 
@@ -417,26 +418,26 @@ void dump_expr(struct ast_expr *ast, int indent) {
       break;
 
     case AST_EXPR_TYPE_PATTERN_MATCH: {
-      INDENTED(indent, "PatternMatch %s -> ", ast->pattern_match.name.value.identv.ident);
+      INDENTED(indent, "PatternMatch %s -> ", ast->expr.pattern_match.name.value.identv.ident);
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      if (ast->pattern_match.inner_vdecl) {
-        // fprintf(stderr, "%s", ast->pattern_match.inner.value.identv.ident);
-        dump_vdecl(ast->pattern_match.inner_vdecl, indent + 1);
+      if (ast->expr.pattern_match.inner_vdecl) {
+        // fprintf(stderr, "%s", ast->expr.pattern_match.inner.value.identv.ident);
+        dump_vdecl(ast->expr.pattern_match.inner_vdecl, indent + 1);
       } else {
         INDENTED(indent + 1, "_");
       }
     } break;
 
     case AST_EXPR_TYPE_ENUM_INIT: {
-      INDENTED(indent, "EnumInit %s %s -> ", ast->enum_init.enum_ty_name.value.identv.ident,
-               ast->enum_init.enum_val_name.value.identv.ident);
+      INDENTED(indent, "EnumInit %s %s -> ", ast->expr.enum_init.enum_ty_name.value.identv.ident,
+               ast->expr.enum_init.enum_val_name.value.identv.ident);
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      if (ast->enum_init.tmpls) {
-        struct ast_template_ty *tmpl = ast->enum_init.tmpls;
+      if (ast->expr.enum_init.tmpls) {
+        struct ast_template_ty *tmpl = ast->expr.enum_init.tmpls;
         while (tmpl) {
           INDENTED(indent + 1, "Template ");
           dump_ty(tmpl->resolved);
@@ -445,17 +446,17 @@ void dump_expr(struct ast_expr *ast, int indent) {
         }
       }
 
-      if (ast->enum_init.inner) {
-        dump_expr(ast->enum_init.inner, indent + 1);
+      if (ast->expr.enum_init.inner) {
+        dump_expr(ast->expr.enum_init.inner, indent + 1);
       }
     } break;
 
     case AST_EXPR_TYPE_UNION_INIT:
-      INDENTED(indent, "UnionInit %s -> ", ast->union_init.field.value.identv.ident);
-      dump_ty(&ast->union_init.parsed_ty);
+      INDENTED(indent, "UnionInit %s -> ", ast->expr.union_init.field.value.identv.ident);
+      dump_ty(&ast->expr.union_init.parsed_ty);
       fprintf(stderr, "\n");
 
-      dump_expr(ast->union_init.inner, indent + 1);
+      dump_expr(ast->expr.union_init.inner, indent + 1);
       break;
 
     case AST_EXPR_TYPE_SIZEOF: {
@@ -463,11 +464,11 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      if (ast->sizeof_expr.expr) {
-        dump_expr(ast->sizeof_expr.expr, indent + 1);
+      if (ast->expr.sizeof_expr.expr) {
+        dump_expr(ast->expr.sizeof_expr.expr, indent + 1);
       } else {
         INDENTED(indent + 1, "Type ");
-        dump_ty(&ast->sizeof_expr.parsed_ty);
+        dump_ty(&ast->expr.sizeof_expr.parsed_ty);
         fprintf(stderr, "\n");
       }
     } break;
@@ -478,10 +479,10 @@ void dump_expr(struct ast_expr *ast, int indent) {
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 
-      if (ast->box_expr.expr) {
-        dump_expr(ast->box_expr.expr, indent + 1);
+      if (ast->expr.box_expr.expr) {
+        dump_expr(ast->expr.box_expr.expr, indent + 1);
       } else {
-        dump_ty(&ast->box_expr.parsed_ty);
+        dump_ty(&ast->expr.box_expr.parsed_ty);
       }
     } break;
 
@@ -552,7 +553,7 @@ static void dump_array(struct ast_expr *ast, int indent) {
   dump_ty(ty->array.element_ty);
   fprintf(stderr, "\n");
 
-  struct ast_expr_list *node = ast->list;
+  struct ast_expr_list *node = ast->expr.list;
   while (node) {
     dump_expr(node->expr, indent + 1);
     node = node->next;

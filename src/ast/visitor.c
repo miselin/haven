@@ -49,14 +49,15 @@ static enum VisitorResult visitor_visit_toplevel(struct ast_visitor *visitor,
 
   switch (ast->type) {
     case AST_DECL_TYPE_FDECL:
-      if (ast->fdecl.body && visitor_visit_block(visitor, ast->fdecl.body) == VisitorStop) {
+      if (ast->toplevel.fdecl.body &&
+          visitor_visit_block(visitor, ast->toplevel.fdecl.body) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_DECL_TYPE_VDECL:
-      if (ast->vdecl.init_expr &&
-          visitor_visit_expr(visitor, ast->vdecl.init_expr) == VisitorStop) {
+      if (ast->toplevel.vdecl.init_expr &&
+          visitor_visit_expr(visitor, ast->toplevel.vdecl.init_expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
@@ -68,7 +69,8 @@ static enum VisitorResult visitor_visit_toplevel(struct ast_visitor *visitor,
       break;
 
     case AST_DECL_TYPE_IMPORT:
-      if (ast->import.ast && visitor_visit_ast(visitor, ast->import.ast) == VisitorStop) {
+      if (ast->toplevel.import.ast &&
+          visitor_visit_ast(visitor, ast->toplevel.import.ast) == VisitorStop) {
         return VisitorStop;
       }
       break;
@@ -115,57 +117,57 @@ static enum VisitorResult visitor_visit_stmt(struct ast_visitor *visitor, struct
 
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      return visitor_visit_expr(visitor, ast->expr);
+      return visitor_visit_expr(visitor, ast->stmt.expr);
 
     case AST_STMT_TYPE_LET:
-      if (ast->let.init_expr) {
-        return visitor_visit_expr(visitor, ast->let.init_expr);
+      if (ast->stmt.let.init_expr) {
+        return visitor_visit_expr(visitor, ast->stmt.let.init_expr);
       }
       break;
 
     case AST_STMT_TYPE_ITER:
-      if (visitor_visit_expr(visitor, ast->iter.range.start) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->stmt.iter.range.start) == VisitorStop) {
         return VisitorStop;
       }
-      if (visitor_visit_expr(visitor, ast->iter.range.end) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->stmt.iter.range.end) == VisitorStop) {
         return VisitorStop;
       }
-      if (ast->iter.range.step &&
-          visitor_visit_expr(visitor, ast->iter.range.step) == VisitorStop) {
+      if (ast->stmt.iter.range.step &&
+          visitor_visit_expr(visitor, ast->stmt.iter.range.step) == VisitorStop) {
         return VisitorStop;
       }
 
-      if (visitor_visit_block(visitor, &ast->iter.block) == VisitorStop) {
+      if (visitor_visit_block(visitor, &ast->stmt.iter.block) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_STMT_TYPE_STORE:
-      if (visitor_visit_expr(visitor, ast->store.lhs) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->stmt.store.lhs) == VisitorStop) {
         return VisitorStop;
       }
-      if (visitor_visit_expr(visitor, ast->store.rhs) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->stmt.store.rhs) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_STMT_TYPE_RETURN:
-      if (ast->expr && visitor_visit_expr(visitor, ast->expr) == VisitorStop) {
+      if (ast->stmt.expr && visitor_visit_expr(visitor, ast->stmt.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_STMT_TYPE_DEFER:
-      if (visitor_visit_expr(visitor, ast->expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->stmt.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_STMT_TYPE_WHILE:
-      if (visitor_visit_expr(visitor, ast->while_stmt.cond) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->stmt.while_stmt.cond) == VisitorStop) {
         return VisitorStop;
       }
-      if (visitor_visit_block(visitor, &ast->while_stmt.block) == VisitorStop) {
+      if (visitor_visit_block(visitor, &ast->stmt.while_stmt.block) == VisitorStop) {
         return VisitorStop;
       }
       break;
@@ -201,8 +203,8 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
     case AST_EXPR_TYPE_CONSTANT: {
       if (expr_ty(ast) == AST_TYPE_FVEC || expr_ty(ast) == AST_TYPE_ARRAY ||
           expr_ty(ast) == AST_TYPE_MATRIX) {
-        if (ast->list) {
-          struct ast_expr_list *list_node = ast->list;
+        if (ast->expr.list) {
+          struct ast_expr_list *list_node = ast->expr.list;
           while (list_node) {
             if (visitor_visit_expr(visitor, list_node->expr) == VisitorStop) {
               return VisitorStop;
@@ -215,13 +217,13 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
     } break;
 
     case AST_EXPR_TYPE_BLOCK:
-      return visitor_visit_block(visitor, &ast->block);
+      return visitor_visit_block(visitor, &ast->expr.block);
 
     case AST_EXPR_TYPE_BINARY:
-      if (visitor_visit_expr(visitor, ast->binary.lhs) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.binary.lhs) == VisitorStop) {
         return VisitorStop;
       }
-      if (visitor_visit_expr(visitor, ast->binary.rhs) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.binary.rhs) == VisitorStop) {
         return VisitorStop;
       }
       break;
@@ -230,7 +232,7 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
       return VisitorContinue;
 
     case AST_EXPR_TYPE_DEREF:
-      if (visitor_visit_expr(visitor, ast->deref.target) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.deref.target) == VisitorStop) {
         return VisitorStop;
       }
       break;
@@ -239,7 +241,7 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
       break;
 
     case AST_EXPR_TYPE_CALL: {
-      struct ast_expr_list *args = ast->call.args;
+      struct ast_expr_list *args = ast->expr.call.args;
       while (args) {
         if (visitor_visit_expr(visitor, args->expr) == VisitorStop) {
           return VisitorStop;
@@ -249,26 +251,26 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
     } break;
 
     case AST_EXPR_TYPE_CAST:
-      if (visitor_visit_expr(visitor, ast->cast.expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.cast.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_UNARY:
-      if (visitor_visit_expr(visitor, ast->unary.expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.unary.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_IF:
-      if (visitor_visit_expr(visitor, ast->if_expr.cond) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.if_expr.cond) == VisitorStop) {
         return VisitorStop;
       }
-      if (visitor_visit_block(visitor, &ast->if_expr.then_block) == VisitorStop) {
+      if (visitor_visit_block(visitor, &ast->expr.if_expr.then_block) == VisitorStop) {
         return VisitorStop;
       }
-      if (ast->if_expr.elseifs) {
-        struct ast_expr_elseif *elseif = ast->if_expr.elseifs;
+      if (ast->expr.if_expr.elseifs) {
+        struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           if (visitor_visit_expr(visitor, elseif->cond) == VisitorStop) {
             return VisitorStop;
@@ -279,48 +281,48 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
           elseif = elseif->next;
         }
       }
-      if (ast->if_expr.has_else) {
-        if (visitor_visit_block(visitor, &ast->if_expr.else_block) == VisitorStop) {
+      if (ast->expr.if_expr.has_else) {
+        if (visitor_visit_block(visitor, &ast->expr.if_expr.else_block) == VisitorStop) {
           return VisitorStop;
         }
       }
       break;
 
     case AST_EXPR_TYPE_ASSIGN:
-      if (visitor_visit_expr(visitor, ast->assign.lhs) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.assign.lhs) == VisitorStop) {
         return VisitorStop;
       }
-      if (visitor_visit_expr(visitor, ast->assign.expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.assign.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_REF:
-      if (visitor_visit_expr(visitor, ast->ref.expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.ref.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_LOAD:
-      if (visitor_visit_expr(visitor, ast->load.expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.load.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX:
-      if (visitor_visit_expr(visitor, ast->array_index.target) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.array_index.target) == VisitorStop) {
         return VisitorStop;
       }
-      if (visitor_visit_expr(visitor, ast->array_index.index) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.array_index.index) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_MATCH:
-      if (visitor_visit_expr(visitor, ast->match.expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.match.expr) == VisitorStop) {
         return VisitorStop;
       }
-      struct ast_expr_match_arm *arm = ast->match.arms;
+      struct ast_expr_match_arm *arm = ast->expr.match.arms;
       while (arm) {
         if (visitor_visit_expr(visitor, arm->pattern) == VisitorStop) {
           return VisitorStop;
@@ -330,16 +332,16 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
         }
         arm = arm->next;
       }
-      if (ast->match.otherwise) {
-        if (visitor_visit_expr(visitor, ast->match.otherwise->expr) == VisitorStop) {
+      if (ast->expr.match.otherwise) {
+        if (visitor_visit_expr(visitor, ast->expr.match.otherwise->expr) == VisitorStop) {
           return VisitorStop;
         }
       }
       break;
 
     case AST_EXPR_TYPE_STRUCT_INIT: {
-      if (ast->list) {
-        struct ast_expr_list *list_node = ast->list;
+      if (ast->expr.list) {
+        struct ast_expr_list *list_node = ast->expr.list;
         while (list_node) {
           if (visitor_visit_expr(visitor, list_node->expr) == VisitorStop) {
             return VisitorStop;
@@ -356,32 +358,33 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
       return VisitorContinue;
 
     case AST_EXPR_TYPE_ENUM_INIT:
-      if (ast->enum_init.inner) {
-        return visitor_visit_expr(visitor, ast->enum_init.inner);
+      if (ast->expr.enum_init.inner) {
+        return visitor_visit_expr(visitor, ast->expr.enum_init.inner);
       }
       break;
 
     case AST_EXPR_TYPE_UNION_INIT:
-      if (visitor_visit_expr(visitor, ast->union_init.inner) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.union_init.inner) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_SIZEOF:
-      if (ast->sizeof_expr.expr &&
-          visitor_visit_expr(visitor, ast->sizeof_expr.expr) == VisitorStop) {
+      if (ast->expr.sizeof_expr.expr &&
+          visitor_visit_expr(visitor, ast->expr.sizeof_expr.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_BOX:
-      if (ast->box_expr.expr && visitor_visit_expr(visitor, ast->box_expr.expr) == VisitorStop) {
+      if (ast->expr.box_expr.expr &&
+          visitor_visit_expr(visitor, ast->expr.box_expr.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
 
     case AST_EXPR_TYPE_UNBOX:
-      if (visitor_visit_expr(visitor, ast->box_expr.expr) == VisitorStop) {
+      if (visitor_visit_expr(visitor, ast->expr.box_expr.expr) == VisitorStop) {
         return VisitorStop;
       }
       break;
