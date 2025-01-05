@@ -471,8 +471,14 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         ast->ty = type_repository_lookup_ty(typecheck->type_repo, &lookup_ty);
       } else if (ty->ty == AST_TYPE_STRUCT) {
         struct ast_struct_field *field = ty->structty.fields;
+        if (!field) {
+          compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "struct %s has no fields",
+                       ident);
+        }
         size_t i = 0;
         while (field) {
+          compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "check field '%s' vs '%s'",
+                       field->name, ast->expr.deref.field.value.identv.ident);
           if (strcmp(field->name, ast->expr.deref.field.value.identv.ident) == 0) {
             ast->expr.deref.field_idx = i;
             break;

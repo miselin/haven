@@ -257,10 +257,10 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
 
   unsigned int num_fields = ty->structty.is_union ? 1 : (unsigned int)ty->structty.num_fields;
 
-  size_t size = type_size(ty);
-
   LLVMTypeRef *element_types = NULL;
   if (ty->structty.is_union) {
+    size_t size = type_size(ty);
+
     element_types = malloc(sizeof(LLVMTypeRef));
     element_types[0] =
         LLVMArrayType(LLVMInt8TypeInContext(codegen->llvm_context), (unsigned int)size);
@@ -269,6 +269,13 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
     struct ast_struct_field *field = ty->structty.fields;
     for (size_t i = 0; i < ty->structty.num_fields; i++) {
       element_types[i] = ast_underlying_ty_to_llvm_ty(codegen, field->ty);
+      if (field->ty->ty == AST_TYPE_STRUCT && !element_types[i]) {
+        // just-in-time emit the struct type to see if that helps
+        emit_struct_type(codegen, field->ty);
+        element_types[i] = ast_underlying_ty_to_llvm_ty(codegen, field->ty);
+      }
+      fprintf(stderr, "struct %s element_types[%zd] for field %s: %p\n", ty->name, i, field->name,
+              (void *)element_types[i]);
       field = field->next;
     }
   }
@@ -363,7 +370,7 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
       // fprintf(stderr, "unhandled top level type declaration type %d\n",
       // ast->toplevel.tydecl.ty.ty);
     }
-  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+  } else if (ast->type == AST_DECL_TYPE_IMPORT && ast->toplevel.import.ast) {
     emit_ast(codegen, ast->toplevel.import.ast);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // no-op in codegen

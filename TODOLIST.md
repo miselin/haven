@@ -28,3 +28,4 @@
 - [ ] `<stmt> unless <cond>`
 - [ ] va args (`va_arg` IR instruction + intrinsics)
 - [ ] maybe emit C for easier bootstrapping?
+- [ ] contextual KWs from the lexer - e.g. `type` or `iter` could be a valid identifier, as `type` and `iter` have very specific contexts in which they are valid keywords

@@ -80,6 +80,8 @@ int compiler_run(struct compiler *compiler, enum Pass until);
 int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name,
                           struct ast_import *into);
 
+int compiler_finalize_imports(struct compiler *compiler, struct ast_import *into);
+
 struct ast_program *compiler_get_ast(struct compiler *compiler);
 struct type_repository *compiler_get_type_repository(struct compiler *compiler);
 

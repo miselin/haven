@@ -86,6 +86,8 @@ struct compiler {
   const char *ld;
 
   struct imported_file *imported_files;
+
+  struct cimport *cimporter;
 };
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]);

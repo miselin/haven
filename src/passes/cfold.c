@@ -53,7 +53,7 @@ static void cfold_toplevel(struct cfolder *cfolder, struct ast_toplevel *ast) {
     if (ast->toplevel.vdecl.init_expr) {
       ast->toplevel.vdecl.init_expr = cfold_expr(cfolder, ast->toplevel.vdecl.init_expr);
     }
-  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+  } else if (ast->type == AST_DECL_TYPE_IMPORT && ast->toplevel.import.ast) {
     cfold_program(cfolder, ast->toplevel.import.ast);
   }
 }

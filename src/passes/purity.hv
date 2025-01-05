@@ -29,28 +29,61 @@ pub impure fn void purity_destroy(PurityContext *ctx) {
 }
 
 impure fn VisitorResult purity_visitor(ast_visitor_node *node, void *user_data) {
-    let ctx = as PurityContext* user_data;
+    let mut ctx = as PurityContext* user_data;
+
+    fprintf(stderr, "purity_visitor...\n");
 
     if node->toplevel != nil {
-        if node->toplevel == AST_DECL_TYPE_FDECL {
-            ctx->current_function = node->toplevel;
+        let toplevel = node->toplevel;
+        // AST_DECL_TYPE_FDECL
+        if toplevel->type == 2 {
+            ctx->current_function = toplevel;
         } else {
-            ctx->current_function = nil;
+           ctx->current_function = nil;
         };
     } else if ctx->current_function != nil && node->expr != nil {
-        if (ctx->current_function->fdecl.flags & DECL_FLAG_IMPURE) == 0 {
-            check_purity_expr(ctx, expr);
+        let func = ctx->current_function;
+        let tl = func->toplevel;
+        let fd = tl.fdecl;
+        let flags = fd.flags;
+        // DECL_FLAG_IMPURE
+        if (flags & (1 << 4)) == 0 {
+            check_purity_expr(ctx, node->expr);
         };
     };
 
-    if purity->errors > 0 {
+    if ctx->errors > 0 {
         VisitorResult::VisitorStop
     } else {
         VisitorResult::VisitorContinue
     }
 }
 
-impure fn i32 check_purity_expr(PurityContext *ctx, ast_expr *ast) {
+impure fn i32 check_purity_expr(mut PurityContext *ctx, ast_expr *ast) {
+    ctx->errors = ctx->errors + match ast->type {
+        // AST_EXPR_TYPE_DEREF
+        7 => {
+            // TODO
+
+            0
+        }
+
+        // AST_EXPR_TYPE_CALL
+        8 => {
+            // TODO
+
+            0
+        }
+
+        // AST_EXPR_TYPE_LOAD
+        15 => {
+            1
+        }
+
+        _ => {
+            0
+        }
+    };
+
     0
 }
-

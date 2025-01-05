@@ -23,7 +23,7 @@ void free_toplevel(struct compiler *compiler, struct ast_toplevel *ast) {
     free_tydecl(compiler, &ast->toplevel.tydecl, 0);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // nothing to be done here
-  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+  } else if (ast->type == AST_DECL_TYPE_IMPORT && ast->toplevel.import.ast) {
     free_ast(compiler, ast->toplevel.import.ast);
     free(ast->toplevel.import.ast);
   } else {

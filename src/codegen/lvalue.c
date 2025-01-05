@@ -72,7 +72,8 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
         return target;
       }
 
-      compiler_log(codegen->compiler, LogLevelDebug, "codegen", "struct GEP2");
+      compiler_log(codegen->compiler, LogLevelDebug, "codegen", "struct GEP2 field %s",
+                   ast->expr.deref.field.value.identv.ident);
 
       // struct -> GEP the field
       snprintf(name, 512, "deref.gep.%s", ast->expr.deref.field.value.identv.ident);

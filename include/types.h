@@ -60,7 +60,7 @@ enum ast_ty_id {
 struct ast_ty {
   enum ast_ty_id ty;
   uint64_t flags;
-  char name[256];           // filled for custom, struct, templat, and enum types
+  char name[256];           // filled for custom, struct, template, and enum types
   char *specialization_of;  // if this is a specialization of a generic type, the original type name
                             // will be here
   union {

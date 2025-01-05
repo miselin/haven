@@ -42,7 +42,27 @@ int parser_run(struct parser *parser, int root_tu) {
     last = decl;
   }
 
-  return root_tu ? parser_add_preamble(parser) : 0;
+  if (root_tu) {
+    struct ast_toplevel *import_decl = calloc(1, sizeof(struct ast_toplevel));
+    import_decl->toplevel.import.type = ImportTypeC;
+    strncpy(import_decl->toplevel.import.path, "merged.cimports.h", 256);
+    if (compiler_finalize_imports(parser->compiler, &import_decl->toplevel.import) < 0) {
+      free(import_decl);
+      return -1;
+    }
+
+    import_decl->type = AST_DECL_TYPE_IMPORT;
+    import_decl->loc = parser->ast.loc;
+    import_decl->next = parser->ast.decls;
+    parser->ast.decls = import_decl;
+
+    // preamble must be added after the import; it must be the first decls as C imports depend on it
+    if (parser_add_preamble(parser) < 0) {
+      return -1;
+    }
+  }
+
+  return 0;
 }
 
 struct ast_program *parser_get_ast(struct parser *parser) {

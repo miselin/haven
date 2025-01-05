@@ -365,9 +365,9 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
             struct ast_ty *pointee = field_ty->pointer.pointee;
 
             // don't emit the pointee type, just the name will do
-            string_builder_appendf(builder, "struct %s %s%s; ",
-                                   pointee ? pointee->name : "<null-pointee>",
-                                   field_ty->ty == AST_TYPE_POINTER ? "* " : "^ ", field->name);
+            string_builder_appendf(builder, "%s <%s> %s; ",
+                                   field_ty->ty == AST_TYPE_POINTER ? "Pointer" : "Box",
+                                   pointee ? pointee->name : "<null-pointee>", field->name);
           } else {
             type_name_into_ctx(field_ty, builder, new_ctx);
             string_builder_appendf(builder, " %s; ", field->name);

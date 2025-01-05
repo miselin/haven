@@ -64,6 +64,7 @@ int lex_maybe_keyword_inner(struct lex_state *state, struct token *token, const 
   for (size_t i = 0; i < sizeof(keywords) / sizeof(struct lookup); i++) {
     if (!strcmp(ident, keywords[i].name)) {
       token->ident = keywords[i].ident;
+      token->is_keyword = 1;
       return 0;
     }
   }
@@ -82,6 +83,7 @@ int lex_maybe_keyword_trie_inner(struct lex_state *state, struct token *token, c
   struct lookup *entry = trie_lookup(state->keywords, token->value.identv.ident);
   if (entry) {
     token->ident = entry->ident;
+    token->is_keyword = 1;
     return 0;
   }
 

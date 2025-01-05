@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "cimport.h"
 #include "compiler.h"
 #include "internal.h"
 #include "lex.h"
@@ -11,8 +12,6 @@
 extern int haven_cimport_present(void) __attribute__((weak));
 
 extern int haven_cimport_process(const char *filename) __attribute__((weak));
-
-int cimport(const char *filename, struct ast_import *into);
 
 int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name,
                           struct ast_import *into) {
@@ -44,7 +43,7 @@ int compiler_parse_import(struct compiler *compiler, enum ImportType type, const
       return -1;
     }
 
-    if (cimport(fullpath, into) < 0) {
+    if (cimport(compiler->cimporter, fullpath) < 0) {
       compiler_diag(compiler, DiagError, "failed to process C import %s\n", fullpath);
       free((void *)fullpath);
       return -1;
@@ -110,4 +109,8 @@ void track_imported_file(struct compiler *compiler, struct stat *st) {
   this_entry->st = *st;
   this_entry->next = compiler->imported_files;
   compiler->imported_files = this_entry;
+}
+
+int compiler_finalize_imports(struct compiler *compiler, struct ast_import *into) {
+  return cimport_finalize(compiler->cimporter, into);
 }

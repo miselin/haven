@@ -60,7 +60,7 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
       }
       total += rc;
     }
-  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+  } else if (ast->type == AST_DECL_TYPE_IMPORT && ast->toplevel.import.ast) {
     return typecheck_implicit_ast(ast->toplevel.import.ast);
   }
 

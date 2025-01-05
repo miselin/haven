@@ -94,7 +94,7 @@ static int check_semantic_toplevel(struct semantic *semantic, struct ast_topleve
       return -1;
     }
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    if (check_semantic_ast(semantic, ast->toplevel.import.ast) < 0) {
+    if (ast->toplevel.import.ast && check_semantic_ast(semantic, ast->toplevel.import.ast) < 0) {
       return -1;
     }
   }

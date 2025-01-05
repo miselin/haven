@@ -50,6 +50,7 @@ struct token {
     } matv;
   } value;
 
+  int is_keyword;
   struct lex_locator loc;
 };
 

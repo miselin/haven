@@ -4,6 +4,7 @@
 #include "internal.h"
 #include "lex.h"
 #include "parse.h"
+#include "tokens.h"
 #include "tokenstream.h"
 
 void parser_diag(int fatal, struct parser *parser, struct token *token, const char *msg, ...) {
@@ -105,9 +106,14 @@ int parser_consume(struct parser *parser, struct token *token, enum token_id exp
     parser_diag(1, parser, NULL, "unexpected EOF or other error in token stream");
     return -1;
   } else if (parser->peek.ident != expected) {
-    parser_diag(1, parser, &parser->peek, "unexpected token %s, wanted %s",
-                token_id_to_string(parser->peek.ident), token_id_to_string(expected));
-    return -1;
+    if (parser->peek.is_keyword && expected == TOKEN_IDENTIFIER) {
+      // keywords are valid identifiers, the parser defines the context in which they are treated as
+      // such in this case, OK to treat the keyword as an identifier
+    } else {
+      parser_diag(1, parser, &parser->peek, "unexpected token %s, wanted %s",
+                  token_id_to_string(parser->peek.ident), token_id_to_string(expected));
+      return -1;
+    }
   }
 
   if (token) {

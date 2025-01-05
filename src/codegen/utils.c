@@ -136,6 +136,8 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
                      ty->name);
         return NULL;
       }
+      compiler_log(codegen->compiler, LogLevelDebug, "codegen", "struct %s found in codegen",
+                   ty->name);
       inner = entry->type;
     } break;
     case AST_TYPE_NIL:
@@ -221,8 +223,14 @@ void emit_store(struct codegen *codegen, struct ast_ty *ty, LLVMValueRef value, 
   }
 
   int is_null = LLVMIsNull(value);
+  int is_not_ptr = 0;
 
-  if (is_null || !type_is_complex(ty)) {
+  LLVMTypeRef value_ty = LLVMTypeOf(value);
+  if (LLVMGetTypeKind(value_ty) != LLVMPointerTypeKind) {
+    is_not_ptr = 1;
+  }
+
+  if (is_null || !type_is_complex(ty) || is_not_ptr) {
     LLVMBuildStore(codegen->llvm_builder, value, ptr);
     return;
   }

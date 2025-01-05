@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "ast.h"
+#include "compiler.h"
 #include "internal.h"
 #include "kv.h"
 #include "typecheck.h"
@@ -79,6 +80,8 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
         struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
         *new_field = *field;
         new_field->ty = resolve_parsed_type(typecheck, &field->parsed_ty);
+        compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
+                     "resolved type for struct field %s to %p", field->name, (void *)new_field->ty);
         field = field->next;
 
         if (last == NULL) {

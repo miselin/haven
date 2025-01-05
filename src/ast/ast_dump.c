@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "ast.h"
 #include "compiler.h"
@@ -511,9 +512,19 @@ static void dump_match_arm(struct ast_expr_match_arm *arm, int indent) {
 static void dump_ty(struct ast_ty *ty) {
   fprintf(stderr, "ty %p: ", (void *)ty);
 
-  char buf[1024];
-  type_name_into(ty, buf, 1024);
-  fprintf(stderr, "%s", buf);
+  size_t bufsz = 1024;
+  while (1) {
+    char *buf = malloc(bufsz);
+    if (type_name_into(ty, buf, bufsz) < 0) {
+      free(buf);
+      bufsz *= 2;
+      continue;
+    }
+
+    fprintf(stderr, "%s", buf);
+    free(buf);
+    break;
+  }
 }
 
 static void dump_maybe_space(const char *s, int first) {

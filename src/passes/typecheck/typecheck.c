@@ -85,6 +85,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
   if (ast->type == AST_DECL_TYPE_TYDECL) {
     if (ast->toplevel.tydecl.parsed_ty.ty == AST_TYPE_CUSTOM) {
+      compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "it's a custom type -> %s",
+                   ast->toplevel.tydecl.parsed_ty.name);
+
       // trying to make an alias to another existing type
       struct ast_ty *target_ty =
           type_repository_lookup(typecheck->type_repo, ast->toplevel.tydecl.parsed_ty.name);
@@ -114,19 +117,35 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       return;
     }
 
+    compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "it's a real type");
+
     const char *alias_name = ast->toplevel.tydecl.ident.value.identv.ident;
 
     // not custom - defining a real type
 
     strncpy(ast->toplevel.tydecl.parsed_ty.name, alias_name, 256);
 
+    // remove the alias if it exists, so we can replace it
+    type_repostory_remove(typecheck->type_repo, alias_name);
+
+#if 0
     // already resolved? don't do additional work
     struct ast_ty *existing = type_repository_lookup(typecheck->type_repo, alias_name);
     if (existing) {
-      // TODO: potentially update it to be a new type?
-      ast->toplevel.tydecl.resolved = existing;
-      return;
+      if (existing->ty == AST_TYPE_CUSTOM && ast->toplevel.tydecl.parsed_ty.ty != AST_TYPE_CUSTOM) {
+        // we want to resolve to overwrite the previous one
+        compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
+                     "TC wants to overwrite alias %s from %s, as the new type is not a custom",
+                     alias_name, existing->name);
+      } else {
+        // TODO: potentially update it to be a new type?
+        compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
+                     "alias %s already resolved to %s, not replacing", alias_name, existing->name);
+        ast->toplevel.tydecl.resolved = existing;
+        return;
+      }
     }
+#endif
 
     // set initial lookup for this name to allow for recursive types in structs and unions
     // struct ast_ty *tbd = type_repository_tbd(typecheck->type_repo);
@@ -340,7 +359,7 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
     }
   }
 
-  if (ast->type == AST_DECL_TYPE_IMPORT) {
+  if (ast->type == AST_DECL_TYPE_IMPORT && ast->toplevel.import.ast) {
     typecheck_ast(typecheck, ast->toplevel.import.ast);
   }
 }

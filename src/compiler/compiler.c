@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "cfold.h"
+#include "cimport.h"
 #include "codegen.h"
 #include "desugar.h"
 #include "internal.h"
@@ -27,6 +28,7 @@ struct compiler *new_compiler(int argc, const char *argv[]) {
     return NULL;
   }
   result->type_repository = new_type_repository(result);
+  result->cimporter = cimport_create();
   return result;
 }
 
@@ -86,6 +88,7 @@ void destroy_compiler(struct compiler *compiler) {
     destroy_lexer(compiler->lexer);
   }
   destroy_type_repository(compiler->type_repository);
+  cimport_destroy(compiler->cimporter);
   free(compiler);
 }
 

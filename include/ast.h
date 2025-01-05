@@ -4,7 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "compiler/internal.h"
 #include "lex.h"
 #include "types.h"
 
@@ -136,7 +135,7 @@ struct ast_toplevel {
   struct lex_locator loc;
 
   struct ast_toplevel *next;
-  union {
+  union toplevel_oneof {
     struct ast_vdecl vdecl;
     struct ast_fdecl fdecl;
     struct ast_tydecl tydecl;
