@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "ast.h"
+#include "compiler.h"
 #include "kv.h"
 #include "types.h"
 
@@ -201,6 +202,8 @@ struct ast_ty *type_repository_overwrite_alias(struct type_repository *repo, con
 
 struct ast_ty *type_repository_lookup(struct type_repository *repo, const char *name) {
   struct type_repository_entry *entry = kv_lookup(repo->types, name);
+  compiler_log(repo->compiler, LogLevelTrace, "typerepo", "lookup for '%s' got entry %p", name,
+               (void *)entry);
   return entry ? entry->ty : NULL;
 }
 
@@ -248,6 +251,30 @@ struct ast_ty *type_repository_void(struct type_repository *repo) {
 
 struct ast_ty *type_repository_error(struct type_repository *repo) {
   return &repo->error_type;
+}
+
+int type_repository_resolve_customs(struct type_repository *repo) {
+  void *iter = kv_iter(repo->types);
+  while (iter) {
+    struct type_repository_entry *entry = kv_next(&iter);
+    if (entry->is_alias) {
+      continue;
+    }
+
+    if (entry->ty->ty != AST_TYPE_CUSTOM) {
+      continue;
+    }
+
+    struct ast_ty *resolved = type_repository_lookup_ty(repo, entry->ty);
+    if (!resolved) {
+      return -1;
+    }
+
+    memcpy(entry->ty, resolved, sizeof(struct ast_ty));
+    entry->is_alias = 1;  // don't free the resolved type; it's shared
+  }
+
+  return 0;
 }
 
 int type_repository_is_shared_type(struct type_repository *repo, struct ast_ty *ty) {

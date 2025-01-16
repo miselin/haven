@@ -299,6 +299,9 @@ struct ast_ty *type_repository_tbd(struct type_repository *);
 struct ast_ty *type_repository_void(struct type_repository *);
 struct ast_ty *type_repository_error(struct type_repository *);
 
+// Resolves pending custom types in the repository. Returns -1 if a type fails to resolve.
+int type_repository_resolve_customs(struct type_repository *);
+
 // Returns 1 if the type is a shared type that's part of the repository, not allocated.
 int type_repository_is_shared_type(struct type_repository *, struct ast_ty *);
 

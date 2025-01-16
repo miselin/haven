@@ -11,6 +11,8 @@
 #include "types.h"
 #include "utility.h"
 
+#define USE_INDEX_INSTEAD_OF_VISITOR 1
+
 struct cimport_file {
   const char *filename;
   struct cimport_file *next;
@@ -26,19 +28,17 @@ struct cimport {
 static uint64_t next = 0;
 
 static struct ast_ty *parse_cursor_type(CXCursor cursor);
-static struct ast_ty *parse_type(CXType type, CXCursor cursor);
+static struct ast_ty *parse_type(CXType type);
 static struct ast_ty *parse_simple_type_or_custom(CXType type);
 
 static void analyze_function_type(CXType type, struct ast_fdecl *fdecl);
 
-static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty);
+static void collect_struct_fields(CXType type, struct ast_ty *ty);
 
 static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor parent,
                                                       CXClientData client_data);
 
-static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCursor parent,
-                                                    CXClientData client_data) {
-  UNUSED(parent);
+static enum CXVisitorResult struct_field_visitor(CXCursor field_cursor, CXClientData client_data) {
   struct ast_ty *ty = (struct ast_ty *)client_data;
 
   /**
@@ -58,7 +58,7 @@ static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCur
     fprintf(stderr, "skipping non-field cursor kind %d\n", clang_getCursorKind(field_cursor));
     fprintf(stderr, " -> StructDecl is %d, UnionDecl is %d\n", CXCursor_StructDecl,
             CXCursor_UnionDecl);
-    return CXChildVisit_Continue;
+    return CXVisit_Continue;
   }
 
   CXSourceLocation loc = clang_getCursorLocation(field_cursor);
@@ -84,7 +84,7 @@ static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCur
     fprintf(stderr, "anonymous struct/union not handled yet (needed at %s:%d:%d)...\n",
             clang_getCString(loc_name), line, column);
     clang_disposeString(loc_name);
-    return CXChildVisit_Continue;
+    return CXVisit_Continue;
   }
 
   clang_disposeString(loc_name);
@@ -93,7 +93,7 @@ static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCur
   const char *spelling_c = clang_getCString(spelling);
 
   struct ast_struct_field *field = calloc(1, sizeof(struct ast_struct_field));
-  struct ast_ty *field_ty = parse_type(field_type, field_type_decl);
+  struct ast_ty *field_ty = parse_type(field_type);
   field->parsed_ty = *field_ty;
   free(field_ty);
   strncpy(field->name, *spelling_c ? spelling_c : "<unknown-spelling>", 256);
@@ -108,15 +108,15 @@ static enum CXChildVisitResult struct_field_visitor(CXCursor field_cursor, CXCur
 
   clang_disposeString(spelling);
 
-  return CXChildVisit_Continue;
+  return CXVisit_Continue;
 }
 
-static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty) {
-  clang_visitChildren(cursor, struct_field_visitor, ty);
+static void collect_struct_fields(CXType type, struct ast_ty *ty) {
+  clang_Type_visitFields(type, struct_field_visitor, ty);
 
-  // C has forward-declared structs that don't require fields, as long as they are used as pointers
-  // Haven requires at least one field for each struct. So just add an opaque field if there are no
-  // other fields in the C type.
+  // C has forward-declared structs that don't require fields, as long as they are used as
+  // pointers Haven requires at least one field for each struct. So just add an opaque field if
+  // there are no other fields in the C type.
   if (!ty->structty.num_fields) {
     struct ast_struct_field *field = calloc(1, sizeof(struct ast_struct_field));
     field->parsed_ty.ty = AST_TYPE_INTEGER;
@@ -128,10 +128,13 @@ static void collect_struct_fields(CXCursor cursor, struct ast_ty *ty) {
   }
 }
 
-static enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCursor parent,
+static enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCursor parent_cursor,
                                                   CXClientData client_data) {
-  UNUSED(parent);
+  UNUSED(parent_cursor);
+
   struct ast_ty *ty = (struct ast_ty *)client_data;
+
+  fprintf(stderr, "cimport: enum field visitor kind %d\n", clang_getCursorKind(field_cursor));
 
   if (clang_getCursorKind(field_cursor) != CXCursor_EnumConstantDecl) {
     return CXChildVisit_Continue;
@@ -163,8 +166,9 @@ static enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCurso
   return CXChildVisit_Continue;
 }
 
-static void collect_enum_fields(CXCursor cursor, struct ast_ty *ty) {
-  clang_visitChildren(cursor, enum_field_visitor, ty);
+static void collect_enum_fields(CXType type, struct ast_ty *ty) {
+  CXCursor decl = clang_getTypeDeclaration(type);
+  clang_visitChildren(decl, enum_field_visitor, ty);
 }
 
 static int parse_simple_type(CXType type, struct ast_ty *into) {
@@ -280,7 +284,7 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
   return rc;
 }
 
-static struct ast_ty *parse_type(CXType type, CXCursor cursor) {
+static struct ast_ty *parse_type(CXType type) {
   struct ast_ty *result = calloc(1, sizeof(struct ast_ty));
 
   if (parse_simple_type(type, result) == 0) {
@@ -322,13 +326,13 @@ static struct ast_ty *parse_type(CXType type, CXCursor cursor) {
 
     case CXType_Record: {
       result->ty = AST_TYPE_STRUCT;
-      collect_struct_fields(cursor, result);
+      collect_struct_fields(type, result);
     } break;
 
     case CXType_Enum: {
       result->ty = AST_TYPE_ENUM;
       result->enumty.no_wrapped_fields = 1;
-      collect_enum_fields(cursor, result);
+      collect_enum_fields(type, result);
     } break;
 
     case CXType_Typedef:
@@ -380,7 +384,7 @@ static struct ast_ty *parse_simple_type_or_custom(CXType type) {
 
 static struct ast_ty *parse_cursor_type(CXCursor cursor) {
   CXType type = clang_getCursorType(cursor);
-  return parse_type(type, cursor);
+  return parse_type(type);
 }
 
 static void analyze_function_type(CXType type, struct ast_fdecl *fdecl) {
@@ -606,6 +610,13 @@ static void indexCallback(CXClientData client_data, const CXIdxDeclInfo *decl) {
     default:
       fprintf(stderr, "unknown %d\n", decl->entityInfo->kind);
   }
+
+  if (!USE_INDEX_INSTEAD_OF_VISITOR) {
+    return;
+  }
+
+  CXCursor parent = clang_getNullCursor();
+  libclang_visitor_decls(decl->cursor, parent, client_data);
 }
 
 static int abortQuery(CXClientData client_data, void *reserved) {
@@ -731,15 +742,14 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
     return -1;
   }
 
-  fprintf(stderr, "about to index merged TU\n");
-  clang_indexTranslationUnit(importer->action, NULL, &cbs, sizeof(cbs), CXIndexOpt_None, unit);
-
-  fprintf(stderr, "indexing TU complete\n");
-
   struct ast_program *program = calloc(1, sizeof(struct ast_program));
 
-  CXCursor cursor = clang_getTranslationUnitCursor(unit);
-  clang_visitChildren(cursor, libclang_visitor_decls, program);
+  if (USE_INDEX_INSTEAD_OF_VISITOR) {
+    clang_indexTranslationUnit(importer->action, program, &cbs, sizeof(cbs), CXIndexOpt_None, unit);
+  } else {
+    CXCursor cursor = clang_getTranslationUnitCursor(unit);
+    clang_visitChildren(cursor, libclang_visitor_decls, program);
+  }
 
   if (program->decls) {
     into->ast = program;

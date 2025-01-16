@@ -36,6 +36,8 @@ int typecheck_run(struct typecheck *typecheck) {
     return typecheck->errors;
   }
 
+  type_repository_resolve_customs(typecheck->type_repo);
+
   compiler_log(typecheck->compiler, LogLevelInfo, "typecheck",
                "primary typecheck pass complete, moving on to implicit conversions");
 
@@ -73,7 +75,7 @@ void destroy_typecheck(struct typecheck *typecheck) {
 
 static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast) {
   struct ast_toplevel *decl = ast->decls;
-  while (decl) {
+  while (decl && !typecheck->errors) {
     typecheck_toplevel(typecheck, decl);
     decl = decl->next;
   }
@@ -88,9 +90,15 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "it's a custom type -> %s",
                    ast->toplevel.tydecl.parsed_ty.name);
 
-      // trying to make an alias to another existing type
-      struct ast_ty *target_ty =
-          type_repository_lookup(typecheck->type_repo, ast->toplevel.tydecl.parsed_ty.name);
+      struct ast_ty *target_ty = NULL;
+
+      if (ast->toplevel.tydecl.parsed_ty.custom.is_forward_decl) {
+        target_ty = type_repository_tbd(typecheck->type_repo);
+      } else {
+        target_ty =
+            type_repository_lookup(typecheck->type_repo, ast->toplevel.tydecl.parsed_ty.name);
+      }
+
       if (!target_ty) {
         fprintf(stderr, "type %s not found [%s]\n", ast->toplevel.tydecl.parsed_ty.name,
                 ast->toplevel.tydecl.ident.value.identv.ident);
