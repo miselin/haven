@@ -576,11 +576,13 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
 static void indexCallback(CXClientData client_data, const CXIdxDeclInfo *decl) {
   UNUSED(client_data);
 
-  if (!decl->isDefinition) {
+  // functions should be declarations, but in all other cases we only want definitions
+  if (decl->isDefinition == 0 && decl->entityInfo->kind != CXIdxEntity_Function) {
     return;
   }
 
-  fprintf(stderr, "decl: '%s' USR='%s' ", decl->entityInfo->name, decl->entityInfo->USR);
+  fprintf(stderr, "decl: '%s' %s USR='%s' ", decl->entityInfo->name,
+          decl->isDefinition ? "defn" : "decl", decl->entityInfo->USR);
   switch (decl->entityInfo->kind) {
     case CXIdxEntity_Function:
       fprintf(stderr, "function\n");
@@ -615,7 +617,53 @@ static void indexCallback(CXClientData client_data, const CXIdxDeclInfo *decl) {
     return;
   }
 
-  CXCursor parent = clang_getNullCursor();
+  CXCursor parent = clang_getCursorSemanticParent(decl->cursor);
+  CXCursor lparent = clang_getCursorLexicalParent(decl->cursor);
+  if (clang_getCursorKind(parent) == CXCursor_TypedefDecl) {
+    fprintf(stderr, "skipping emit of type because parent is a typedef\n");
+    return;
+  }
+
+  CXString spelling = clang_getCursorSpelling(parent);
+  fprintf(stderr, "semantic parent: %s\n", clang_getCString(spelling));
+  clang_disposeString(spelling);
+
+  spelling = clang_getCursorSpelling(lparent);
+  fprintf(stderr, "lexical parent: %s\n", clang_getCString(spelling));
+  clang_disposeString(spelling);
+
+  // for typedefs, we need to know if the underlying type is declared in the same typedef statement
+  // if it is, we can emit the underlying type first followed by the typedef
+  // if it isn't, we assume the type already exists and just emit the typedef
+  // ... but is it possible to determine that from the index cursors?
+
+  if (decl->entityInfo->kind == CXIdxEntity_Typedef) {
+    fprintf(stderr, "potentially reordering typedef/type decls...\n");
+    CXType underlying = clang_getTypedefDeclUnderlyingType(decl->cursor);
+    spelling = clang_getTypeSpelling(underlying);
+    fprintf(stderr, "underlying type spelling '%s'\n", clang_getCString(spelling));
+    clang_disposeString(spelling);
+    CXCursor underlying_decl = clang_getTypeDeclaration(underlying);
+    CXCursor underlying_parent = clang_getCursorSemanticParent(underlying_decl);
+    if (clang_equalCursors(underlying_decl, decl->cursor)) {
+      fprintf(stderr, "emitting underlying typedef type before the typedef...\n");
+      // type is declared inside this typedef - emit it first
+      libclang_visitor_decls(underlying_decl, underlying_parent, client_data);
+    } else {
+      fprintf(stderr, "type decl parent != decl cursor\n");
+
+      CXString parent_spelling = clang_getCursorSpelling(decl->cursor);
+      CXString decl_spelling = clang_getCursorSpelling(decl->entityInfo->cursor);
+
+      fprintf(stderr, "A spelling: %s\n", clang_getCString(parent_spelling));
+      fprintf(stderr, "B spelling: %s\n", clang_getCString(decl_spelling));
+
+      clang_disposeString(parent_spelling);
+      clang_disposeString(decl_spelling);
+    }
+  }
+
+  // CXCursor parent = clang_getNullCursor();
   libclang_visitor_decls(decl->cursor, parent, client_data);
 }
 
