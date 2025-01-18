@@ -7,8 +7,9 @@ extern "C" {
 
 struct cimport;
 struct ast_import;
+struct compiler;
 
-struct cimport *cimport_create(void);
+struct cimport *cimport_create(struct compiler *compiler);
 void cimport_destroy(struct cimport *importer);
 
 // Track the given C file as a C import.

@@ -19,19 +19,18 @@ set (COMPILER_BASE_DEPS
     $<TARGET_OBJECTS:pass_tyimplicit>
     $<TARGET_OBJECTS:pass_semantic>
     $<TARGET_OBJECTS:pass_desugar>
-    $<TARGET_OBJECTS:pass_purity>
 )
 
 set (COMPILER_BOOTSTRAP_DEPS
     ${COMPILER_BASE_DEPS}
     $<TARGET_OBJECTS:utilities_bootstrap>
-    # $<TARGET_OBJECTS:pass_purity>
+    $<TARGET_OBJECTS:pass_purity>
 )
 
 set (COMPILER_DEPS
     ${COMPILER_BASE_DEPS}
     $<TARGET_OBJECTS:utilities>
-    # $<TARGET_OBJECTS:pass_haven_purity>
+    $<TARGET_OBJECTS:pass_haven_purity>
 )
 
 set (LLVM_LIBS libclang ${llvm_libs})

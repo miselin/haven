@@ -1,4 +1,5 @@
 cimport "stdlib.h";
+cimport "stdio.h";
 cimport "../../include/ast.h";
 cimport "../../include/types.h";
 
@@ -63,20 +64,43 @@ impure fn i32 check_purity_expr(mut PurityContext *ctx, ast_expr *ast) {
     ctx->errors = ctx->errors + match ast->type {
         // AST_EXPR_TYPE_DEREF
         7 => {
-            // TODO
+            let expr = ast->expr;
+            let deref = expr.deref;
 
-            0
+            if deref.is_ptr {
+                compiler_log(ctx->comp, LogLevel::LogLevelError, "purity", "dereference of pointers is not allowed in pure functions");
+                1
+            } else {
+                0
+            }
         }
 
         // AST_EXPR_TYPE_CALL
         8 => {
-            // TODO
+            let expr = ast->expr;
+            let call = expr.call;
+            let fdecl = call.fdecl;
+            let tok = call.ident;
+            let tokv = tok.value;
+            let identv = tokv.identv;
+            let ident = identv.ident;
 
-            0
+            if fdecl == nil {
+                // fn ptrs are always impure
+                compiler_log(ctx->comp, LogLevel::LogLevelError, "purity", "calling function pointers is not allowed from pure functions (attempted usage from %s)", ident);
+                1
+            } else if (fdecl->flags & (1 << 4)) != 0 {
+                // DECL_FLAG_IMPURE
+                compiler_log(ctx->comp, LogLevel::LogLevelError, "purity", "call from pure function to impure function %s is not allowed", ident);
+                1
+            } else {
+                0
+            }
         }
 
         // AST_EXPR_TYPE_LOAD
         15 => {
+            compiler_log(ctx->comp, LogLevel::LogLevelError, "purity", "dereference of pointers is not allowed in pure functions");
             1
         }
 

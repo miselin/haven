@@ -28,7 +28,7 @@ struct compiler *new_compiler(int argc, const char *argv[]) {
     return NULL;
   }
   result->type_repository = new_type_repository(result);
-  result->cimporter = cimport_create();
+  result->cimporter = cimport_create(result);
   return result;
 }
 

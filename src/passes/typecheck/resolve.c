@@ -180,6 +180,9 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     case AST_TYPE_POINTER:
     case AST_TYPE_BOX:
       resolved_ty->pointer.pointee = resolve_parsed_type(typecheck, ty->pointer.pointee);
+      if (!resolved_ty->pointer.pointee) {
+        resolved_ty->pointer.pointee = type_repository_error(typecheck->type_repo);
+      }
       break;
   }
 
@@ -187,8 +190,9 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
   compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "resolve_parsed_type lookup...");
   struct ast_ty *target = type_repository_lookup_ty(typecheck->type_repo, resolved_ty);
   compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "got %p...", (void *)target);
-  if (!target) {
+  if (!target && resolved_ty->ty != AST_TYPE_CUSTOM) {
     // register the new type with resolved inner fields, which copies the type
+    // customs can't be registered in the type repo - they should have been resolved
     target = type_repository_register(typecheck->type_repo, resolved_ty);
   }
 

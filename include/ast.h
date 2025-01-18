@@ -274,6 +274,29 @@ struct ast_expr_box {
   struct ast_expr *expr;
 };
 
+union ast_expr_union {
+  struct ast_expr_constant constant;
+  struct ast_block block;
+  struct ast_expr_binary binary;
+  struct ast_expr_variable variable;
+  struct ast_expr_list *list;
+  struct ast_expr_deref deref;
+  struct ast_expr_call call;
+  struct ast_expr_cast cast;
+  struct ast_expr_unary unary;
+  struct ast_expr_if if_expr;
+  struct ast_expr_assign assign;
+  struct ast_expr_ref ref;
+  struct ast_expr_load load;
+  struct ast_expr_array_index array_index;
+  struct ast_expr_match match;
+  struct ast_expr_pattern_match pattern_match;
+  struct ast_expr_enum_init enum_init;
+  struct ast_expr_union_init union_init;
+  struct ast_expr_sizeof sizeof_expr;
+  struct ast_expr_box box_expr;
+};
+
 struct ast_expr {
   int type;
   // The actual resolved type of the expression. Requires typecheck pass to be run.
@@ -282,28 +305,8 @@ struct ast_expr {
   // The typecheck pass will use this to fill the actual type.
   struct ast_ty parsed_ty;
   struct lex_locator loc;
-  union {
-    struct ast_expr_constant constant;
-    struct ast_block block;
-    struct ast_expr_binary binary;
-    struct ast_expr_variable variable;
-    struct ast_expr_list *list;
-    struct ast_expr_deref deref;
-    struct ast_expr_call call;
-    struct ast_expr_cast cast;
-    struct ast_expr_unary unary;
-    struct ast_expr_if if_expr;
-    struct ast_expr_assign assign;
-    struct ast_expr_ref ref;
-    struct ast_expr_load load;
-    struct ast_expr_array_index array_index;
-    struct ast_expr_match match;
-    struct ast_expr_pattern_match pattern_match;
-    struct ast_expr_enum_init enum_init;
-    struct ast_expr_union_init union_init;
-    struct ast_expr_sizeof sizeof_expr;
-    struct ast_expr_box box_expr;
-  } expr;
+
+  union ast_expr_union expr;
 };
 
 struct ast_range {

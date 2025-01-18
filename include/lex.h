@@ -16,39 +16,58 @@ struct lex_locator {
   char file[256];
 };
 
+struct token_int_value {
+  uint64_t val;
+  char sign;
+};
+
+struct token_char_value {
+  char c;
+};
+
+struct token_str_value {
+  char s[256];
+  size_t length;
+};
+
+struct token_ident_value {
+  char ident[256];
+};
+
+struct token_type_value {
+  size_t dimension;
+};
+
+struct token_float_value {
+  char buf[256];
+  size_t length;
+};
+
+struct token_comment_value {
+  char buf[256];
+  size_t length;
+};
+
+struct token_matrix_value {
+  size_t x;
+  size_t y;
+};
+
+union token_value {
+  struct token_int_value intv;
+  struct token_char_value charv;
+  struct token_str_value strv;
+  struct token_ident_value identv;
+  struct token_type_value tyv;
+  struct token_float_value floatv;
+  struct token_comment_value commentv;
+  struct token_matrix_value matv;
+};
+
 struct token {
   enum token_id ident;
-  union {
-    struct {
-      uint64_t val;
-      char sign;
-    } intv;
-    struct {
-      char c;
-    } charv;
-    struct {
-      char s[256];
-      size_t length;
-    } strv;
-    struct {
-      char ident[256];
-    } identv;
-    struct {
-      size_t dimension;
-    } tyv;
-    struct {
-      char buf[256];
-      size_t length;
-    } floatv;
-    struct {
-      char buf[256];
-      size_t length;
-    } commentv;
-    struct {
-      size_t x;
-      size_t y;
-    } matv;
-  } value;
+
+  union token_value value;
 
   int is_keyword;
   struct lex_locator loc;

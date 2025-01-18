@@ -336,6 +336,10 @@ void dump_expr(struct ast_expr *ast, int indent) {
 
     case AST_EXPR_TYPE_CAST:
       INDENTED(indent, "Cast -> ");
+      if (ast->ty) {
+        dump_ty(ast->ty);
+        fprintf(stderr, " / parser ");
+      }
       dump_ty(&ast->expr.cast.parsed_ty);
       fprintf(stderr, "\n");
 

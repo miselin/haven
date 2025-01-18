@@ -19,7 +19,7 @@ target_link_libraries(pass_semantic PRIVATE haven_compiler_options)
 add_library(pass_desugar OBJECT desugar.c)
 target_link_libraries(pass_desugar PRIVATE haven_compiler_options)
 
-# add_bootstrap_haven_library(pass_haven_purity purity.hv)
+add_bootstrap_haven_library(pass_haven_purity purity.hv)
 
 add_library(passes OBJECT
     $<TARGET_OBJECTS:pass_cfold>

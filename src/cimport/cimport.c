@@ -7,6 +7,7 @@
 #include "ast.h"
 #include "clang-c/CXFile.h"
 #include "clang-c/CXString.h"
+#include "compiler.h"
 #include "tokens.h"
 #include "types.h"
 #include "utility.h"
@@ -18,14 +19,27 @@ struct cimport_file {
   struct cimport_file *next;
 };
 
+struct cimport_known_type {
+  CXType type;
+  struct cimport_known_type *next;
+};
+
 struct cimport {
+  struct compiler *compiler;
+
   CXIndex index;
   CXIndexAction action;
 
+  struct ast_program *program;
+
   struct cimport_file *imports;
+  struct cimport_known_type *known_types;
 };
 
 static uint64_t next = 0;
+
+static int cimport_is_known_type(struct cimport *importer, CXType type);
+static void cimport_add_known_type(struct cimport *importer, CXType type);
 
 static struct ast_ty *parse_cursor_type(CXCursor cursor);
 static struct ast_ty *parse_type(CXType type);
@@ -133,8 +147,6 @@ static enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCurso
   UNUSED(parent_cursor);
 
   struct ast_ty *ty = (struct ast_ty *)client_data;
-
-  fprintf(stderr, "cimport: enum field visitor kind %d\n", clang_getCursorKind(field_cursor));
 
   if (clang_getCursorKind(field_cursor) != CXCursor_EnumConstantDecl) {
     return CXChildVisit_Continue;
@@ -327,6 +339,10 @@ static struct ast_ty *parse_type(CXType type) {
     case CXType_Record: {
       result->ty = AST_TYPE_STRUCT;
       collect_struct_fields(type, result);
+
+      // is it actually a union?
+      CXCursor decl = clang_getTypeDeclaration(type);
+      result->structty.is_union = clang_getCursorKind(decl) == CXCursor_UnionDecl;
     } break;
 
     case CXType_Enum: {
@@ -434,23 +450,9 @@ static void analyze_function_type(CXType type, struct ast_fdecl *fdecl) {
 // Visitor function to handle declarations
 static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor parent,
                                                       CXClientData client_data) {
-  /**
-   * New algorithm we need here...
-   *
-   * We need to basically iterate through all the different declarations that matter.
-   * All types of declaration (functions, variables, etc)
-   * Then, for each spelling, we need to find the most specific declaration (i.e. not an
-   * anonymous or forward declaration) and use that as the generated ast_toplevel node.
-   *
-   * 1. Load all declarations, storing them in a table with a list of declarations for that name
-   * 2. Iterate through the list and find the most specific declaration
-   * 3. Emit an ast_toplevel for it
-   *
-   * recursive type defs? edge cases abound
-   */
-
   UNUSED(parent);
-  struct ast_program *program = (struct ast_program *)client_data;
+  struct cimport *importer = (struct cimport *)client_data;
+  struct ast_program *program = importer->program;
 
   CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
   CXCursor TU_cursor = clang_getTranslationUnitCursor(TU);
@@ -494,12 +496,29 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
     } else if (kind == CXCursor_TypedefDecl) {
       UNUSED(next);
       CXType underlying = clang_getTypedefDeclUnderlyingType(cursor);
-      if (underlying.kind == CXType_Elaborated) {
+      while (underlying.kind == CXType_Elaborated) {
         underlying = clang_Type_getNamedType(underlying);
       }
 
       CXString underlying_name = clang_getTypeSpelling(underlying);
       const char *underlying_name_c = clang_getCString(underlying_name);
+
+      if (!cimport_is_known_type(importer, underlying)) {
+        // didn't yet see the type the typedef is referring to; emit it first unless it's a builtin
+        if ((underlying.kind < CXType_FirstBuiltin || underlying.kind > CXType_LastBuiltin) &&
+            underlying.kind != CXType_Pointer && underlying.kind != CXType_FunctionProto &&
+            strncmp("__builtin_", underlying_name_c, 10)) {
+          compiler_log(
+              importer->compiler, LogLevelTrace, "cimport",
+              "need to emit underlying type of typedef '%s' (which is '%s'), not known yet",
+              spelling_c, underlying_name_c);
+
+          CXCursor underlying_decl = clang_getTypeDeclaration(underlying);
+          if (!clang_Cursor_isNull(underlying_decl)) {
+            libclang_visitor_decls(underlying_decl, cursor, importer);
+          }
+        }
+      }
 
       while (1) {
         if (!strncmp(underlying_name_c, "struct ", 7)) {
@@ -527,23 +546,42 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
       }
 
       clang_disposeString(underlying_name);
-    } else if (kind == CXCursor_StructDecl || kind == CXCursor_UnionDecl) {
-      // make it.
-      decl->type = AST_DECL_TYPE_TYDECL;
-      decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
-      strncpy(decl->toplevel.tydecl.ident.value.identv.ident, spelling_c, 256);
-      struct ast_ty *cursor_ty = parse_cursor_type(cursor);
-      decl->toplevel.tydecl.parsed_ty = *cursor_ty;
-      free(cursor_ty);
 
-      decl->toplevel.tydecl.parsed_ty.structty.is_union = kind == CXCursor_UnionDecl;
+      CXType type = clang_getCursorType(cursor);
+      cimport_add_known_type(importer, type);
+    } else if (kind == CXCursor_StructDecl || kind == CXCursor_UnionDecl) {
+      CXType type = clang_getCursorType(cursor);
+      if (!cimport_is_known_type(importer, type)) {
+        // make it.
+        decl->type = AST_DECL_TYPE_TYDECL;
+        decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
+        strncpy(decl->toplevel.tydecl.ident.value.identv.ident, spelling_c, 256);
+        struct ast_ty *cursor_ty = parse_cursor_type(cursor);
+        decl->toplevel.tydecl.parsed_ty = *cursor_ty;
+        free(cursor_ty);
+
+        decl->toplevel.tydecl.parsed_ty.structty.is_union = kind == CXCursor_UnionDecl;
+
+        cimport_add_known_type(importer, type);
+      } else {
+        free(decl);
+        decl = NULL;
+      }
     } else if (kind == CXCursor_EnumDecl) {
-      decl->type = AST_DECL_TYPE_TYDECL;
-      decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
-      strncpy(decl->toplevel.tydecl.ident.value.identv.ident, spelling_c, 256);
-      struct ast_ty *cursor_ty = parse_cursor_type(cursor);
-      decl->toplevel.tydecl.parsed_ty = *cursor_ty;
-      free(cursor_ty);
+      CXType type = clang_getCursorType(cursor);
+      if (!cimport_is_known_type(importer, type)) {
+        decl->type = AST_DECL_TYPE_TYDECL;
+        decl->toplevel.tydecl.ident.ident = TOKEN_IDENTIFIER;
+        strncpy(decl->toplevel.tydecl.ident.value.identv.ident, spelling_c, 256);
+        struct ast_ty *cursor_ty = parse_cursor_type(cursor);
+        decl->toplevel.tydecl.parsed_ty = *cursor_ty;
+        free(cursor_ty);
+
+        cimport_add_known_type(importer, type);
+      } else {
+        free(decl);
+        decl = NULL;
+      }
     } else {
       free(decl);
       decl = NULL;
@@ -563,9 +601,6 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
     }
 
     clang_disposeString(spelling);
-  } else {
-    fprintf(stderr, "skipping cursor kind %s\n",
-            clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(cursor))));
   }
 
   clang_disposeString(loc_name);
@@ -574,97 +609,64 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
 }
 
 static void indexCallback(CXClientData client_data, const CXIdxDeclInfo *decl) {
-  UNUSED(client_data);
+  struct cimport *importer = (struct cimport *)client_data;
+
+  // TODO: create empty struct/enum types and use CXIdxEntity_EnumConstant/CXIdxEntity_Field to fill
+  // them out that saves us from having to use visitors later on and makes the indexing more
+  // beneficial
 
   // functions should be declarations, but in all other cases we only want definitions
-  if (decl->isDefinition == 0 && decl->entityInfo->kind != CXIdxEntity_Function) {
-    return;
+  if (decl->isDefinition == 0) {
+    switch (decl->entityInfo->kind) {
+      case CXIdxEntity_Function:
+      case CXIdxEntity_Variable:
+        break;
+      default:
+        return;
+    }
   }
 
-  fprintf(stderr, "decl: '%s' %s USR='%s' ", decl->entityInfo->name,
-          decl->isDefinition ? "defn" : "decl", decl->entityInfo->USR);
+  const char *kind = NULL;
   switch (decl->entityInfo->kind) {
     case CXIdxEntity_Function:
-      fprintf(stderr, "function\n");
+      kind = "function";
       break;
     case CXIdxEntity_Variable:
-      fprintf(stderr, "variable\n");
+      kind = "variable";
       break;
     case CXIdxEntity_Typedef:
-      fprintf(stderr, "typedef\n");
+      kind = "typedef";
       break;
     case CXIdxEntity_EnumConstant:
-      fprintf(stderr, "enum constant\n");
+      kind = "enum constant";
       break;
     case CXIdxEntity_Struct:
-      fprintf(stderr, "struct\n");
+      kind = "struct";
       break;
     case CXIdxEntity_Union:
-      fprintf(stderr, "union\n");
+      kind = "union";
       break;
     case CXIdxEntity_Enum:
-      fprintf(stderr, "enum\n");
+      kind = "enum";
       break;
     case CXIdxEntity_Field:
-      fprintf(stderr, "field\n");
+      kind = "field";
       break;
 
     default:
-      fprintf(stderr, "unknown %d\n", decl->entityInfo->kind);
+      kind = "unknown";
   }
+
+  compiler_log(importer->compiler, LogLevelTrace, "cimport", "decl: '%s' %s USR='%s' %s",
+               decl->entityInfo->name, decl->isDefinition ? "defn" : "decl", decl->entityInfo->USR,
+               kind);
 
   if (!USE_INDEX_INSTEAD_OF_VISITOR) {
     return;
   }
 
   CXCursor parent = clang_getCursorSemanticParent(decl->cursor);
-  CXCursor lparent = clang_getCursorLexicalParent(decl->cursor);
-  if (clang_getCursorKind(parent) == CXCursor_TypedefDecl) {
-    fprintf(stderr, "skipping emit of type because parent is a typedef\n");
-    return;
-  }
-
-  CXString spelling = clang_getCursorSpelling(parent);
-  fprintf(stderr, "semantic parent: %s\n", clang_getCString(spelling));
-  clang_disposeString(spelling);
-
-  spelling = clang_getCursorSpelling(lparent);
-  fprintf(stderr, "lexical parent: %s\n", clang_getCString(spelling));
-  clang_disposeString(spelling);
-
-  // for typedefs, we need to know if the underlying type is declared in the same typedef statement
-  // if it is, we can emit the underlying type first followed by the typedef
-  // if it isn't, we assume the type already exists and just emit the typedef
-  // ... but is it possible to determine that from the index cursors?
-
-  if (decl->entityInfo->kind == CXIdxEntity_Typedef) {
-    fprintf(stderr, "potentially reordering typedef/type decls...\n");
-    CXType underlying = clang_getTypedefDeclUnderlyingType(decl->cursor);
-    spelling = clang_getTypeSpelling(underlying);
-    fprintf(stderr, "underlying type spelling '%s'\n", clang_getCString(spelling));
-    clang_disposeString(spelling);
-    CXCursor underlying_decl = clang_getTypeDeclaration(underlying);
-    CXCursor underlying_parent = clang_getCursorSemanticParent(underlying_decl);
-    if (clang_equalCursors(underlying_decl, decl->cursor)) {
-      fprintf(stderr, "emitting underlying typedef type before the typedef...\n");
-      // type is declared inside this typedef - emit it first
-      libclang_visitor_decls(underlying_decl, underlying_parent, client_data);
-    } else {
-      fprintf(stderr, "type decl parent != decl cursor\n");
-
-      CXString parent_spelling = clang_getCursorSpelling(decl->cursor);
-      CXString decl_spelling = clang_getCursorSpelling(decl->entityInfo->cursor);
-
-      fprintf(stderr, "A spelling: %s\n", clang_getCString(parent_spelling));
-      fprintf(stderr, "B spelling: %s\n", clang_getCString(decl_spelling));
-
-      clang_disposeString(parent_spelling);
-      clang_disposeString(decl_spelling);
-    }
-  }
-
-  // CXCursor parent = clang_getNullCursor();
-  libclang_visitor_decls(decl->cursor, parent, client_data);
+  libclang_visitor_decls(decl->cursor, parent, importer);
 }
 
 static int abortQuery(CXClientData client_data, void *reserved) {
@@ -716,10 +718,11 @@ IndexerCallbacks cbs = {
     indexCallback,  indexEntityReference,
 };
 
-struct cimport *cimport_create(void) {
+struct cimport *cimport_create(struct compiler *compiler) {
   struct cimport *importer = calloc(1, sizeof(struct cimport));
   importer->index = clang_createIndex(0, 0);
   importer->action = clang_IndexAction_create(importer->index);
+  importer->compiler = compiler;
   return importer;
 }
 
@@ -731,6 +734,14 @@ void cimport_destroy(struct cimport *importer) {
     free(cursor);
     cursor = next_file;
   }
+
+  struct cimport_known_type *known_types = importer->known_types;
+  while (known_types) {
+    struct cimport_known_type *ktnext = known_types->next;
+    free(known_types);
+    known_types = ktnext;
+  }
+
   clang_IndexAction_dispose(importer->action);
   clang_disposeIndex(importer->index);
   free(importer);
@@ -761,7 +772,7 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
   {
     struct cimport_file *cursor = importer->imports;
     while (cursor) {
-      fprintf(stderr, "importing %s\n", cursor->filename);
+      compiler_log(importer->compiler, LogLevelTrace, "cimport", "importing %s", cursor->filename);
       string_builder_appendf(builder, "#include \"%s\"\n", cursor->filename);
       cursor = cursor->next;
     }
@@ -785,28 +796,60 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
 
   if (rc != CXError_Success) {
     // TODO: get the errors, print em
-    fprintf(stderr, "Unable to parse translation unit (error %d). Quitting.\n", rc);
+    compiler_log(importer->compiler, LogLevelError, "cimport",
+                 "Unable to parse translation unit (error %d)", rc);
     clang_disposeIndex(importer->index);
     return -1;
   }
 
-  struct ast_program *program = calloc(1, sizeof(struct ast_program));
+  importer->program = calloc(1, sizeof(struct ast_program));
 
   if (USE_INDEX_INSTEAD_OF_VISITOR) {
-    clang_indexTranslationUnit(importer->action, program, &cbs, sizeof(cbs), CXIndexOpt_None, unit);
+    clang_indexTranslationUnit(importer->action, importer, &cbs, sizeof(cbs), CXIndexOpt_None,
+                               unit);
   } else {
     CXCursor cursor = clang_getTranslationUnitCursor(unit);
-    clang_visitChildren(cursor, libclang_visitor_decls, program);
+    clang_visitChildren(cursor, libclang_visitor_decls, importer);
   }
 
-  if (program->decls) {
-    into->ast = program;
+  if (importer->program->decls) {
+    into->ast = importer->program;
   } else {
-    free(program);
+    free(importer->program);
   }
+
+  importer->program = NULL;
 
   clang_disposeTranslationUnit(unit);
 
   free_string_builder(builder);
   return 0;
+}
+
+static int cimport_is_known_type(struct cimport *importer, CXType type) {
+  struct cimport_known_type *cursor = importer->known_types;
+  while (cursor) {
+    if (clang_equalTypes(cursor->type, type)) {
+      return 1;
+    }
+    cursor = cursor->next;
+  }
+
+  return 0;
+}
+
+static void cimport_add_known_type(struct cimport *importer, CXType type) {
+  struct cimport_known_type *known = calloc(1, sizeof(struct cimport_known_type));
+  known->type = type;
+
+  struct cimport_known_type *cursor = importer->known_types;
+  while (cursor && cursor->next) {
+    cursor = cursor->next;
+  }
+
+  if (cursor) {
+    cursor->next = known;
+  } else {
+    importer->known_types = known;
+  }
 }
