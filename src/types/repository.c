@@ -110,8 +110,8 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
 
   // do we need to add it?
   if (kv_lookup(repo->types, name)) {
-    free(name);
     compiler_log(repo->compiler, LogLevelError, "typerepo", "type %s already registered", name);
+    free(name);
     return NULL;
   }
 

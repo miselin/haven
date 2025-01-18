@@ -19,18 +19,19 @@ set (COMPILER_BASE_DEPS
     $<TARGET_OBJECTS:pass_tyimplicit>
     $<TARGET_OBJECTS:pass_semantic>
     $<TARGET_OBJECTS:pass_desugar>
+    $<TARGET_OBJECTS:pass_purity>
 )
 
 set (COMPILER_BOOTSTRAP_DEPS
     ${COMPILER_BASE_DEPS}
     $<TARGET_OBJECTS:utilities_bootstrap>
-    $<TARGET_OBJECTS:pass_purity>
+    # $<TARGET_OBJECTS:pass_purity>
 )
 
 set (COMPILER_DEPS
     ${COMPILER_BASE_DEPS}
     $<TARGET_OBJECTS:utilities>
-    $<TARGET_OBJECTS:pass_haven_purity>
+    # $<TARGET_OBJECTS:pass_haven_purity>
 )
 
 set (LLVM_LIBS libclang ${llvm_libs})
@@ -40,5 +41,5 @@ target_link_libraries(compiler_bootstrap PUBLIC ${LLVM_LIBS})
 target_link_libraries(compiler_bootstrap PRIVATE haven_compiler_options)
 
 add_library(compiler STATIC ${COMPILER_DEPS})
-target_link_libraries(compiler PUBLIC ${LLVM_LIBS} utilities_haven pass_haven_purity)
+target_link_libraries(compiler PUBLIC ${LLVM_LIBS} utilities_haven) # pass_haven_purity)
 target_link_libraries(compiler PRIVATE haven_compiler_options)
