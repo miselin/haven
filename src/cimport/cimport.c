@@ -255,6 +255,8 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
     // not technically built in, but doesn't get a name by any other means
     case CXType_FunctionProto: {
       struct ast_fdecl fdecl;
+      memset(&fdecl, 0, sizeof(struct ast_fdecl));
+
       analyze_function_type(type, &fdecl);
 
       *into = fdecl.parsed_function_ty;
@@ -807,8 +809,15 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
   importer->program = calloc(1, sizeof(struct ast_program));
 
   if (USE_INDEX_INSTEAD_OF_VISITOR) {
-    clang_indexTranslationUnit(importer->action, importer, &cbs, sizeof(cbs), CXIndexOpt_None,
-                               unit);
+    int result = clang_indexTranslationUnit(importer->action, importer, &cbs, sizeof(cbs),
+                                            CXIndexOpt_None, unit);
+    if (result < 0) {
+      compiler_log(importer->compiler, LogLevelError, "cimport",
+                   "Unable to index translation unit (error %d)", result);
+
+      // TODO: clean up any decls that did get created
+      importer->program->decls = NULL;
+    }
   } else {
     CXCursor cursor = clang_getTranslationUnitCursor(unit);
     clang_visitChildren(cursor, libclang_visitor_decls, importer);
