@@ -62,7 +62,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
             }
 
             if (ast->ty->ty == AST_TYPE_ARRAY) {
-              if (ast->ty->array.element_ty->ty == AST_TYPE_MATRIX) {
+              if (ast->ty->oneof.array.element_ty->ty == AST_TYPE_MATRIX) {
                 // swap to matrix type after checking the inners are actually fvecs
                 if (ty->ty != AST_TYPE_FVEC) {
                   typecheck_diag_expr(typecheck, node->expr,
@@ -71,7 +71,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
                 }
               }
 
-              maybe_implicitly_convert(&node->expr->ty, &ast->ty->array.element_ty);
+              maybe_implicitly_convert(&node->expr->ty, &ast->ty->oneof.array.element_ty);
             }
 
             node = node->next;
@@ -79,9 +79,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
           // convert from array to full matrix type
           if (ast->ty->ty == AST_TYPE_ARRAY) {
-            if (ast->ty->array.element_ty->ty == AST_TYPE_MATRIX) {
-              size_t correct_cols = ast->ty->array.element_ty->matrix.cols;
-              size_t correct_rows = ast->ty->array.element_ty->matrix.rows;
+            if (ast->ty->oneof.array.element_ty->ty == AST_TYPE_MATRIX) {
+              size_t correct_cols = ast->ty->oneof.array.element_ty->oneof.matrix.cols;
+              size_t correct_rows = ast->ty->oneof.array.element_ty->oneof.matrix.rows;
 
               size_t rows = ast->expr.list->num_elements;
               size_t cols = ast->expr.list->expr->expr.list->num_elements;
@@ -89,8 +89,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
               struct ast_ty new_ty;
               memset(&new_ty, 0, sizeof(new_ty));
               new_ty.ty = AST_TYPE_MATRIX;
-              new_ty.matrix.cols = cols;
-              new_ty.matrix.rows = rows;
+              new_ty.oneof.matrix.cols = cols;
+              new_ty.oneof.matrix.rows = rows;
 
               ast->ty = type_repository_lookup_ty(typecheck->type_repo, &new_ty);
               if (!ast->ty) {
@@ -119,13 +119,13 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_STRUCT_INIT: {
-      ast->ty = resolve_parsed_type(typecheck, ast->parsed_ty.array.element_ty);
+      ast->ty = resolve_parsed_type(typecheck, ast->parsed_ty.oneof.array.element_ty);
 
       // the element_ty was just a carrier for the struct type, we can free it now
-      free(ast->parsed_ty.array.element_ty);
-      ast->parsed_ty.array.element_ty = NULL;
+      free(ast->parsed_ty.oneof.array.element_ty);
+      ast->parsed_ty.oneof.array.element_ty = NULL;
 
-      struct ast_struct_field *field = ast->ty->structty.fields;
+      struct ast_struct_field *field = ast->ty->oneof.structty.fields;
       struct ast_expr_list *node = ast->expr.list;
       while (node) {
         // TODO: fuzzer found field to be null here, the AST doesn't make sense to cause that
@@ -178,7 +178,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       // find the field
-      struct ast_struct_field *field = union_ty->structty.fields;
+      struct ast_struct_field *field = union_ty->oneof.structty.fields;
       while (field) {
         if (strcmp(field->name, ast->expr.union_init.field.value.identv.ident) == 0) {
           break;
@@ -257,8 +257,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty int_ty;
       memset(&int_ty, 0, sizeof(int_ty));
       int_ty.ty = AST_TYPE_INTEGER;
-      int_ty.integer.is_signed = 1;
-      int_ty.integer.width = 32;
+      int_ty.oneof.integer.is_signed = 1;
+      int_ty.oneof.integer.width = 32;
       struct ast_ty *i32 = type_repository_lookup_ty(typecheck->type_repo, &int_ty);
 
       maybe_implicitly_convert(&ast->expr.array_index.index->ty, &i32);
@@ -266,7 +266,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_expr *target_expr = ast->expr.array_index.target;
 
       if (target_expr->ty->ty == AST_TYPE_ARRAY) {
-        ast->ty = resolve_type(typecheck, target_expr->ty->array.element_ty);
+        ast->ty = resolve_type(typecheck, target_expr->ty->oneof.array.element_ty);
       } else if (target_expr->ty->ty == AST_TYPE_POINTER) {
         // type of expression is the type pointed to by the pointer
         ast->ty = resolve_type(typecheck, ptr_pointee_type(target_expr->ty));
@@ -316,8 +316,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         struct ast_ty i1;
         memset(&i1, 0, sizeof(i1));
         i1.ty = AST_TYPE_INTEGER;
-        i1.integer.is_signed = 0;
-        i1.integer.width = 1;
+        i1.oneof.integer.is_signed = 0;
+        i1.oneof.integer.width = 1;
         ast->ty = type_repository_lookup_ty(typecheck->type_repo, &i1);
         return ast->ty;
       }
@@ -364,19 +364,20 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       if (!ast->expr.call.args) {
         // no arguments passed
-        if (function_ty->function.num_params > 0) {
+        if (function_ty->oneof.function.num_params > 0) {
           fprintf(stderr, "function %s called with no arguments, expected %zu\n",
-                  ast->expr.variable.ident.value.identv.ident, function_ty->function.num_params);
+                  ast->expr.variable.ident.value.identv.ident,
+                  function_ty->oneof.function.num_params);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
         }
-      } else if (function_ty->function.num_params != ast->expr.call.args->num_elements) {
-        if (ast->expr.call.args->num_elements < function_ty->function.num_params &&
-            !function_ty->function.vararg) {
+      } else if (function_ty->oneof.function.num_params != ast->expr.call.args->num_elements) {
+        if (ast->expr.call.args->num_elements < function_ty->oneof.function.num_params &&
+            !function_ty->oneof.function.vararg) {
           fprintf(stderr, "function %s called with %zu arguments, expected %zu\n",
                   ast->expr.variable.ident.value.identv.ident, ast->expr.call.args->num_elements,
-                  function_ty->function.num_params);
+                  function_ty->oneof.function.num_params);
           ++typecheck->errors;
           return &typecheck->error_type;
           ;
@@ -394,12 +395,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
 
         // check named parameters, don't check varargs (no types to check)
-        if (i < function_ty->function.num_params) {
-          maybe_implicitly_convert(&args->expr->ty, &function_ty->function.param_types[i]);
-          if (!same_type(args->expr->ty, function_ty->function.param_types[i])) {
+        if (i < function_ty->oneof.function.num_params) {
+          maybe_implicitly_convert(&args->expr->ty, &function_ty->oneof.function.param_types[i]);
+          if (!same_type(args->expr->ty, function_ty->oneof.function.param_types[i])) {
             char tystr[256], expectedstr[256];
             type_name_into(args->expr->ty, tystr, 256);
-            type_name_into(function_ty->function.param_types[i], expectedstr, 256);
+            type_name_into(function_ty->oneof.function.param_types[i], expectedstr, 256);
 
             fprintf(stderr, "function %s argument %zu has type %s, expected %s\n",
                     ast->expr.variable.ident.value.identv.ident, i + 1, tystr, expectedstr);
@@ -412,7 +413,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       ast->expr.call.function_ty = function_ty;
-      ast->ty = resolve_type(typecheck, function_ty->function.retty);
+      ast->ty = resolve_type(typecheck, function_ty->oneof.function.retty);
       return ast->ty;
     } break;
 
@@ -463,14 +464,14 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           ;
         }
         ast->expr.deref.field_idx = (size_t)deref;
-        max_field = ty->fvec.width;
+        max_field = ty->oneof.fvec.width;
 
         struct ast_ty lookup_ty;
         memset(&lookup_ty, 0, sizeof(lookup_ty));
         lookup_ty.ty = AST_TYPE_FLOAT;
         ast->ty = type_repository_lookup_ty(typecheck->type_repo, &lookup_ty);
       } else if (ty->ty == AST_TYPE_STRUCT) {
-        struct ast_struct_field *field = ty->structty.fields;
+        struct ast_struct_field *field = ty->oneof.structty.fields;
         if (!field) {
           compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "struct %s has no fields",
                        ident);
@@ -496,7 +497,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
 
         ast->ty = field->ty;
-        max_field = ty->structty.num_fields;
+        max_field = ty->oneof.structty.num_fields;
       } else if (ty->ty == AST_TYPE_MATRIX) {
         int deref = deref_to_index(ast->expr.deref.field.value.identv.ident);
         if (deref < 0) {
@@ -507,12 +508,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           ;
         }
         ast->expr.deref.field_idx = (size_t)deref;
-        max_field = ty->matrix.rows;
+        max_field = ty->oneof.matrix.rows;
 
         struct ast_ty vec_ty;
         memset(&vec_ty, 0, sizeof(vec_ty));
         vec_ty.ty = AST_TYPE_FVEC;
-        vec_ty.fvec.width = ty->matrix.cols;
+        vec_ty.oneof.fvec.width = ty->oneof.matrix.cols;
         ast->ty = type_repository_lookup_ty(typecheck->type_repo, &vec_ty);
         if (!ast->ty) {
           ast->ty = type_repository_register(typecheck->type_repo, &vec_ty);
@@ -705,7 +706,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           return &typecheck->error_type;
         }
 
-        struct ast_struct_field *field = deref_ty->structty.fields;
+        struct ast_struct_field *field = deref_ty->oneof.structty.fields;
         while (field) {
           if (strcmp(field->name, ast->expr.assign.lhs->expr.deref.field.value.identv.ident) == 0) {
             field_name = field->name;
@@ -774,7 +775,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty wrapped;
       memset(&wrapped, 0, sizeof(wrapped));
       wrapped.ty = AST_TYPE_POINTER;
-      wrapped.pointer.pointee = expr->ty;
+      wrapped.oneof.pointer.pointee = expr->ty;
       ast->ty = type_repository_lookup_ty(typecheck->type_repo, &wrapped);
       if (!ast->ty) {
         ast->ty = type_repository_register(typecheck->type_repo, &wrapped);
@@ -985,7 +986,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         return &typecheck->error_type;
       }
 
-      struct ast_enum_field *field = enumty->enumty.fields;
+      struct ast_enum_field *field = enumty->oneof.enumty.fields;
       while (field) {
         if (!strcmp(field->name, ast->expr.enum_init.enum_val_name.value.identv.ident)) {
           break;
@@ -1077,8 +1078,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty itype;
       memset(&itype, 0, sizeof(itype));
       itype.ty = AST_TYPE_INTEGER;
-      itype.integer.is_signed = 1;
-      itype.integer.width = 32;
+      itype.oneof.integer.is_signed = 1;
+      itype.oneof.integer.width = 32;
       ast->ty = resolve_type(typecheck, &itype);
       return ast->ty;
     } break;
@@ -1115,7 +1116,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_ty box_ty;
       memset(&box_ty, 0, sizeof(box_ty));
       box_ty.ty = AST_TYPE_BOX;
-      box_ty.pointer.pointee = inner_ty;
+      box_ty.oneof.pointer.pointee = inner_ty;
       ast->ty = type_repository_lookup_ty(typecheck->type_repo, &box_ty);
       if (!ast->ty) {
         ast->ty = type_repository_register(typecheck->type_repo, &box_ty);
@@ -1137,7 +1138,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       // returns the underlying type of the box
-      ast->ty = ast->expr.box_expr.expr->ty->pointer.pointee;
+      ast->ty = ast->expr.box_expr.expr->ty->oneof.pointer.pointee;
       return ast->ty;
     } break;
 

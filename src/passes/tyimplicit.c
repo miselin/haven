@@ -49,8 +49,9 @@ static int typecheck_implicit_toplevel(struct ast_toplevel *ast) {
         return -1;
       }
 
-      total += rc + maybe_implicitly_convert(&ast->toplevel.fdecl.body->ty,
-                                             &ast->toplevel.fdecl.function_ty->function.retty);
+      total +=
+          rc + maybe_implicitly_convert(&ast->toplevel.fdecl.body->ty,
+                                        &ast->toplevel.fdecl.function_ty->oneof.function.retty);
     }
   } else if (ast->type == AST_DECL_TYPE_VDECL) {
     if (ast->toplevel.vdecl.init_expr) {
@@ -393,7 +394,7 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
 
         total = rc;
 
-        struct ast_enum_field *field = ast->ty->enumty.fields;
+        struct ast_enum_field *field = ast->ty->oneof.enumty.fields;
         while (field) {
           if (!strcmp(ast->expr.enum_init.enum_val_name.value.identv.ident, field->name)) {
             break;

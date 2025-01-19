@@ -57,63 +57,68 @@ enum ast_ty_id {
   AST_TYPE_BOX,      // similar to a pointer, but with more logic
 };
 
+struct ast_ty;
+
+union ast_ty_oneof {
+  struct integer_ty {
+    int is_signed;
+    size_t width;
+  } integer;
+  struct fvec_ty {
+    size_t width;
+  } fvec;
+  struct enum_ty {
+    struct ast_template_ty *templates;
+    struct ast_enum_field *fields;
+    size_t num_fields;
+    // if 1, no fields have an inner type and the enum is a simple integer enum
+    int no_wrapped_fields;
+  } enumty;
+  struct struct_ty {
+    struct ast_struct_field *fields;
+    size_t num_fields;
+    int is_union;  // if 1, all the fields consume the same memory space
+  } structty;
+  struct array_ty {
+    size_t width;
+    struct ast_ty *element_ty;
+  } array;
+  struct custom_ty {
+    // if 1, the custom type is a template that will be resolved in instantiation
+    int is_template;
+
+    // if 1, the custom type is a forward declaration that will be resolved later
+    int is_forward_decl;
+  } custom;
+  struct tmpl_ty {
+    // both of these are CUSTOM after parsing and real types after type checking
+    struct ast_ty *outer;
+    struct ast_template_ty *inners;
+  } tmpl;
+  struct function_ty {
+    struct ast_ty *retty;
+    struct ast_ty **param_types;
+    size_t num_params;
+
+    int vararg;
+  } function;
+  struct matrix_ty {
+    size_t cols;
+    size_t rows;
+  } matrix;
+  struct pointer_ty {
+    struct ast_ty *pointee;
+  } pointer;
+};
+
 struct ast_ty {
   enum ast_ty_id ty;
   uint64_t flags;
   char name[256];           // filled for custom, struct, template, and enum types
   char *specialization_of;  // if this is a specialization of a generic type, the original type name
                             // will be here
-  union {
-    struct {
-      int is_signed;
-      size_t width;
-    } integer;
-    struct {
-      size_t width;
-    } fvec;
-    struct {
-      struct ast_template_ty *templates;
-      struct ast_enum_field *fields;
-      size_t num_fields;
-      // if 1, no fields have an inner type and the enum is a simple integer enum
-      int no_wrapped_fields;
-    } enumty;
-    struct {
-      struct ast_struct_field *fields;
-      size_t num_fields;
-      int is_union;  // if 1, all the fields consume the same memory space
-    } structty;
-    struct {
-      size_t width;
-      struct ast_ty *element_ty;
-    } array;
-    struct {
-      // if 1, the custom type is a template that will be resolved in instantiation
-      int is_template;
 
-      // if 1, the custom type is a forward declaration that will be resolved later
-      int is_forward_decl;
-    } custom;
-    struct {
-      // both of these are CUSTOM after parsing and real types after type checking
-      struct ast_ty *outer;
-      struct ast_template_ty *inners;
-    } tmpl;
-    struct {
-      struct ast_ty *retty;
-      struct ast_ty **param_types;
-      size_t num_params;
-
-      int vararg;
-    } function;
-    struct {
-      size_t cols;
-      size_t rows;
-    } matrix;
-    struct {
-      struct ast_ty *pointee;
-    } pointer;
-  };
+  union ast_ty_oneof oneof;
 };
 
 struct ast_struct_field {

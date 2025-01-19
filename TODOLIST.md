@@ -29,3 +29,4 @@
 - [ ] va args (`va_arg` IR instruction + intrinsics)
 - [ ] maybe emit C for easier bootstrapping?
 - [ ] contextual KWs from the lexer - e.g. `type` or `iter` could be a valid identifier, as `type` and `iter` have very specific contexts in which they are valid keywords
+- [ ] there's a subtle bug in struct layout somewhere - specifically around alignment - that's affecting C ABI compatibility (seeing it a lot with AST data structures in particular)

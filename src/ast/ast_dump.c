@@ -82,7 +82,7 @@ static void dump_fdecl(struct ast_fdecl *ast, int indent) {
   INDENTED(indent, "FunctionDecl %s [", ast->ident.value.identv.ident);
   dump_decl_flags(ast->flags);
   fprintf(stderr, "] -> ");
-  dump_ty(ty->function.retty);
+  dump_ty(ty->oneof.function.retty);
   fprintf(stderr, "\n");
 
   if (ast->num_params) {
@@ -90,7 +90,7 @@ static void dump_fdecl(struct ast_fdecl *ast, int indent) {
     for (size_t i = 0; i < ast->num_params; i++) {
       // TODO: print flags
       INDENTED(indent + 2, "%s: ", ast->params[i].name);
-      dump_ty(ty->function.param_types[i]);
+      dump_ty(ty->oneof.function.param_types[i]);
       fprintf(stderr, "\n");
     }
   }
@@ -246,7 +246,7 @@ void dump_expr(struct ast_expr *ast, int indent) {
         case AST_TYPE_FVEC: {
           INDENTED(indent + 1, "FVec\n");
           struct ast_expr_list *node = ast->expr.list;
-          for (size_t i = 0; i < ty->fvec.width; i++) {
+          for (size_t i = 0; i < ty->oneof.fvec.width; i++) {
             dump_expr(node->expr, indent + 2);
             node = node->next;
           }
@@ -258,9 +258,9 @@ void dump_expr(struct ast_expr *ast, int indent) {
         } break;
 
         case AST_TYPE_MATRIX: {
-          fprintf(stderr, "Matrix%zdx%zd\n", ty->matrix.cols, ty->matrix.rows);
+          fprintf(stderr, "Matrix%zdx%zd\n", ty->oneof.matrix.cols, ty->oneof.matrix.rows);
           struct ast_expr_list *node = ast->expr.list;
-          for (size_t i = 0; i < ty->matrix.rows; i++) {
+          for (size_t i = 0; i < ty->oneof.matrix.rows; i++) {
             dump_expr(node->expr, indent + 2);
             node = node->next;
           }
@@ -318,8 +318,6 @@ void dump_expr(struct ast_expr *ast, int indent) {
     case AST_EXPR_TYPE_CALL: {
       INDENTED(indent, "Call %s -> ", ast->expr.call.ident.value.identv.ident);
       dump_expr_ty(ast);
-      fprintf(stderr, "\n");
-
       struct ast_expr_list *node = ast->expr.call.args;
       if (node) {
         INDENTED(indent + 1, "Args\n");
@@ -573,7 +571,7 @@ static void dump_decl_flags(uint64_t flags) {
 static void dump_array(struct ast_expr *ast, int indent) {
   INDENTED(indent, "Array -> ");
   struct ast_ty *ty = ast->ty ? ast->ty : &ast->parsed_ty;
-  dump_ty(ty->array.element_ty);
+  dump_ty(ty->oneof.array.element_ty);
   fprintf(stderr, "\n");
 
   struct ast_expr_list *node = ast->expr.list;

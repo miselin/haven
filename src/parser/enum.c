@@ -9,13 +9,13 @@ int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into) {
   struct token token;
 
   into->ty = AST_TYPE_ENUM;
-  into->enumty.no_wrapped_fields = 1;
+  into->oneof.enumty.no_wrapped_fields = 1;
 
   enum token_id peek = parser_peek(parser);
   if (peek == TOKEN_LT) {
     parser_consume_peeked(parser, NULL);
 
-    struct ast_template_ty *last = into->enumty.templates;
+    struct ast_template_ty *last = into->oneof.enumty.templates;
 
     // parse templates
     peek = parser_peek(parser);
@@ -31,7 +31,7 @@ int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into) {
         last->next = template;
         last = template;
       } else {
-        into->enumty.templates = template;
+        into->oneof.enumty.templates = template;
         last = template;
       }
 
@@ -51,7 +51,7 @@ int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into) {
     return -1;
   }
 
-  struct ast_enum_field *last = into->enumty.fields;
+  struct ast_enum_field *last = into->oneof.enumty.fields;
   peek = parser_peek(parser);
   uint64_t value = 0;
   while (peek != TOKEN_RBRACE) {
@@ -75,14 +75,14 @@ int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into) {
         return -1;
       }
 
-      into->enumty.no_wrapped_fields = 0;
+      into->oneof.enumty.no_wrapped_fields = 0;
     }
 
     if (last) {
       last->next = field;
       last = field;
     } else {
-      into->enumty.fields = field;
+      into->oneof.enumty.fields = field;
       last = field;
     }
 

@@ -55,7 +55,7 @@ struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
   } else {
     // forward declaration of a type that will be defined soon
     decl->toplevel.tydecl.parsed_ty.ty = AST_TYPE_CUSTOM;
-    decl->toplevel.tydecl.parsed_ty.custom.is_forward_decl = 1;
+    decl->toplevel.tydecl.parsed_ty.oneof.custom.is_forward_decl = 1;
     strncpy(decl->toplevel.tydecl.parsed_ty.name, decl->toplevel.tydecl.ident.value.identv.ident,
             256);
   }
@@ -146,8 +146,8 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
   struct ast_ty ty = parse_type(parser);
   if (decl->type == AST_DECL_TYPE_FDECL) {
     fdecl->parsed_function_ty.ty = AST_TYPE_FUNCTION;
-    fdecl->parsed_function_ty.function.retty = calloc(1, sizeof(struct ast_ty));
-    *(fdecl->parsed_function_ty.function.retty) = ty;
+    fdecl->parsed_function_ty.oneof.function.retty = calloc(1, sizeof(struct ast_ty));
+    *(fdecl->parsed_function_ty.oneof.function.retty) = ty;
   } else {
     vdecl->parser_ty = ty;
   }
@@ -181,7 +181,7 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       if (peek == TOKEN_ASTERISK) {
         parser_consume_peeked(parser, NULL);
         fdecl->flags |= DECL_FLAG_VARARG;
-        fdecl->parsed_function_ty.function.vararg = 1;
+        fdecl->parsed_function_ty.oneof.function.vararg = 1;
         break;
       }
 
@@ -204,15 +204,15 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       fdecl->params[fdecl->num_params].flags = param->flags;
       fdecl->num_params++;
 
-      fdecl->parsed_function_ty.function.param_types =
-          realloc(fdecl->parsed_function_ty.function.param_types,
-                  sizeof(struct ast_ty *) * (fdecl->parsed_function_ty.function.num_params + 1));
-      fdecl->parsed_function_ty.function
-          .param_types[fdecl->parsed_function_ty.function.num_params] =
+      fdecl->parsed_function_ty.oneof.function.param_types = realloc(
+          fdecl->parsed_function_ty.oneof.function.param_types,
+          sizeof(struct ast_ty *) * (fdecl->parsed_function_ty.oneof.function.num_params + 1));
+      fdecl->parsed_function_ty.oneof.function
+          .param_types[fdecl->parsed_function_ty.oneof.function.num_params] =
           calloc(1, sizeof(struct ast_ty));
-      *(fdecl->parsed_function_ty.function
-            .param_types[fdecl->parsed_function_ty.function.num_params]) = param->parser_ty;
-      fdecl->parsed_function_ty.function.num_params++;
+      *(fdecl->parsed_function_ty.oneof.function
+            .param_types[fdecl->parsed_function_ty.oneof.function.num_params]) = param->parser_ty;
+      fdecl->parsed_function_ty.oneof.function.num_params++;
 
       free(param);
 

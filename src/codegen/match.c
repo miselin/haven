@@ -17,7 +17,7 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
   LLVMValueRef otherwise_value = NULL;
 
   LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, ty);
-  if (ty->ty == AST_TYPE_ENUM && !ty->enumty.no_wrapped_fields) {
+  if (ty->ty == AST_TYPE_ENUM && !ty->oneof.enumty.no_wrapped_fields) {
     result_ty = LLVMPointerType(result_ty, 0);
   }
 
@@ -26,7 +26,7 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
   // inner storage of an enum type, for pattern matches
   LLVMValueRef main_expr_buf = NULL;
 
-  if (match->expr->ty->ty == AST_TYPE_ENUM && !match->expr->ty->enumty.no_wrapped_fields) {
+  if (match->expr->ty->ty == AST_TYPE_ENUM && !match->expr->ty->oneof.enumty.no_wrapped_fields) {
     LLVMTypeRef enum_ty = ast_underlying_ty_to_llvm_ty(codegen, match->expr->ty);
     LLVMValueRef tag_ptr =
         LLVMBuildStructGEP2(codegen->llvm_builder, enum_ty, main_expr, 0, "tagptr");

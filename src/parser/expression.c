@@ -151,13 +151,13 @@ struct ast_expr *parse_factor(struct parser *parser) {
       if (peek == TOKEN_INTEGER) {
         result->parsed_ty.ty = AST_TYPE_INTEGER;
         result->parsed_ty.flags |= TYPE_FLAG_CONSTANT;
-        result->parsed_ty.integer.is_signed = 1;
+        result->parsed_ty.oneof.integer.is_signed = 1;
         if (token.value.intv.val == 0) {
-          result->parsed_ty.integer.width = 1;
+          result->parsed_ty.oneof.integer.width = 1;
         } else {
           // width is the number of bits required to represent the value
           // also, constants are all positive, so add one bit for sign
-          result->parsed_ty.integer.width =
+          result->parsed_ty.oneof.integer.width =
               (8 * sizeof(token.value.intv.val) - (uint64_t)__builtin_clzll(token.value.intv.val)) +
               1;
         }
@@ -165,8 +165,8 @@ struct ast_expr *parse_factor(struct parser *parser) {
         result->parsed_ty.ty = AST_TYPE_STRING;
       } else if (peek == TOKEN_CHAR) {
         result->parsed_ty.ty = AST_TYPE_INTEGER;
-        result->parsed_ty.integer.is_signed = 1;
-        result->parsed_ty.integer.width = 8;
+        result->parsed_ty.oneof.integer.is_signed = 1;
+        result->parsed_ty.oneof.integer.width = 8;
       } else if (peek == TOKEN_FLOAT) {
         result->parsed_ty.ty = AST_TYPE_FLOAT;
       }
@@ -245,7 +245,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
         parser_diag(1, parser, NULL, "failed to parse expression list for vector initializer");
         return NULL;
       }
-      result->parsed_ty.fvec.width = result->expr.list->num_elements;
+      result->parsed_ty.oneof.fvec.width = result->expr.list->num_elements;
       if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
         free(result);
         return NULL;

@@ -90,12 +90,13 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
               (unsigned int)ast->expr.constant.constant.value.floatv.length);
 
         case AST_TYPE_ARRAY: {
-          LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(codegen, ast->ty->array.element_ty);
+          LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(codegen, ast->ty->oneof.array.element_ty);
           LLVMValueRef *values = malloc(sizeof(LLVMValueRef) * ast->expr.list->num_elements);
           struct ast_expr_list *node = ast->expr.list;
           for (size_t i = 0; i < ast->expr.list->num_elements; i++) {
             values[i] = emit_expr(codegen, node->expr);
-            values[i] = emit_cast(codegen, values[i], node->expr->ty, ast->ty->array.element_ty);
+            values[i] =
+                emit_cast(codegen, values[i], node->expr->ty, ast->ty->oneof.array.element_ty);
 
             node = node->next;
           }
@@ -105,7 +106,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         } break;
 
         case AST_TYPE_MATRIX: {
-          // size_t total_elements = ast->ty->matrix.cols * ast->ty->matrix.rows;
+          // size_t total_elements = ast->ty->oneof.matrix.cols * ast->ty->oneof.matrix.rows;
           //  LLVMValueRef zero = LLVMConstNull(LLVMVectorType(
           //  LLVMFloatTypeInContext(codegen->llvm_context), (unsigned int)total_elements));
 
@@ -123,7 +124,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
                                             ast_ty_to_llvm_ty(codegen, ast->ty), vec_stack, "vec");
 
           // LLVMTypeRef row_ty = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
-          // (unsigned int)ast->ty->matrix.cols);
+          // (unsigned int)ast->ty->oneof.matrix.cols);
 
           struct ast_expr_list *node = ast->expr.list;
           for (size_t j = 0; j < ast->expr.list->num_elements; j++) {
@@ -134,7 +135,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
             LLVMValueRef indicies[2] = {
                 LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
                 LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), j *
-            ast->ty->matrix.cols, 0),
+            ast->ty->oneof.matrix.cols, 0),
             };
 
             LLVMValueRef row = LLVMBuildGEP2(codegen->llvm_builder, row_ty, vec_stack, indicies, 2,
@@ -142,11 +143,11 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
             emit_store(codegen, &node->expr->ty, expr, row);
             */
 
-            for (size_t col = 0; col < ast->ty->matrix.cols; col++) {
+            for (size_t col = 0; col < ast->ty->oneof.matrix.cols; col++) {
               LLVMValueRef col_idx =
                   LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), col, 0);
               LLVMValueRef matrix_idx = LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context),
-                                                     j * ast->ty->matrix.cols + col, 0);
+                                                     j * ast->ty->oneof.matrix.cols + col, 0);
               LLVMValueRef element =
                   LLVMBuildExtractElement(codegen->llvm_builder, expr, col_idx, "element");
               vec = LLVMBuildInsertElement(codegen->llvm_builder, vec, element, matrix_idx,
@@ -179,7 +180,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         } else if (ast->ty->flags & TYPE_FLAG_REFERENCE) {
           // refs require the address of the variable, not the value
           return lookup->ref;
-        } else if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->enumty.no_wrapped_fields) {
+        } else if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->oneof.enumty.no_wrapped_fields) {
           // enum is actually a struct -- don't load
           // with no wrapped fields, it's an integer
           return lookup->ref;
@@ -231,9 +232,10 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       }
 
       size_t named_param_count = LLVMCountParams(call_target);
-      size_t is_complex = (size_t)type_is_complex(ast->expr.call.function_ty->function.retty);
+      size_t is_complex = (size_t)type_is_complex(ast->expr.call.function_ty->oneof.function.retty);
 
-      LLVMTypeRef ret_ty = ast_ty_to_llvm_ty(codegen, ast->expr.call.function_ty->function.retty);
+      LLVMTypeRef ret_ty =
+          ast_ty_to_llvm_ty(codegen, ast->expr.call.function_ty->oneof.function.retty);
 
       LLVMValueRef *args = NULL;
       unsigned int num_args = 0;
@@ -323,12 +325,14 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, ast->ty);
       LLVMValueRef lvalue = emit_lvalue(codegen, ast);
-      if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->enumty.no_wrapped_fields) {
+
+      if (type_is_complex(ast->ty)) {
         return lvalue;
       } else if (ast->ty->ty == AST_TYPE_ARRAY) {
         // we rarely want to actually load/move the underlying array
         return lvalue;
       }
+
       return LLVMBuildLoad2(codegen->llvm_builder, result_ty, lvalue, "deref");
     }; break;
 
@@ -427,7 +431,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMValueRef val = emit_lvalue(codegen, ast);
 
       // certain types need to stay pointers
-      if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->enumty.no_wrapped_fields) {
+      if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->oneof.enumty.no_wrapped_fields) {
         return val;
       } else if (ast->ty->ty == AST_TYPE_STRUCT) {
         return val;
@@ -470,7 +474,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       // the match expression handler handles unwrapping an inner value, if any, and storing it
 
       // find the field
-      struct ast_enum_field *field = ast->ty->enumty.fields;
+      struct ast_enum_field *field = ast->ty->oneof.enumty.fields;
       while (field) {
         if (!strcmp(field->name, ast->expr.enum_init.enum_val_name.value.identv.ident)) {
           break;
@@ -488,7 +492,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       // LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, ast->expr.enum_init.field_ty);
 
       // find the field
-      struct ast_enum_field *field = ast->ty->enumty.fields;
+      struct ast_enum_field *field = ast->ty->oneof.enumty.fields;
       while (field) {
         if (!strcmp(field->name, ast->expr.enum_init.enum_val_name.value.identv.ident)) {
           break;
@@ -499,7 +503,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       LLVMValueRef tag_value =
           LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), field->value, 0);
 
-      if (ast->ty->enumty.no_wrapped_fields) {
+      if (ast->ty->oneof.enumty.no_wrapped_fields) {
         return tag_value;
       }
 

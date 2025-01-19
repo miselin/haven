@@ -23,9 +23,11 @@ void free_toplevel(struct compiler *compiler, struct ast_toplevel *ast) {
     free_tydecl(compiler, &ast->toplevel.tydecl, 0);
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // nothing to be done here
-  } else if (ast->type == AST_DECL_TYPE_IMPORT && ast->toplevel.import.ast) {
-    free_ast(compiler, ast->toplevel.import.ast);
-    free(ast->toplevel.import.ast);
+  } else if (ast->type == AST_DECL_TYPE_IMPORT) {
+    if (ast->toplevel.import.ast) {
+      free_ast(compiler, ast->toplevel.import.ast);
+      free(ast->toplevel.import.ast);
+    }
   } else {
     fprintf(stderr, "unhandled free for toplevel type %d\n", ast->type);
   }
@@ -298,52 +300,52 @@ void free_ty(struct compiler *compiler, struct ast_ty *ty, int heap) {
   }
 
   if (ty->ty == AST_TYPE_STRUCT) {
-    struct ast_struct_field *field = ty->structty.fields;
+    struct ast_struct_field *field = ty->oneof.structty.fields;
     while (field) {
       struct ast_struct_field *next = field->next;
       free(field);
       field = next;
     }
 
-    ty->structty.fields = NULL;
+    ty->oneof.structty.fields = NULL;
   }
 
   if (ty->ty == AST_TYPE_ENUM) {
-    struct ast_enum_field *field = ty->enumty.fields;
+    struct ast_enum_field *field = ty->oneof.enumty.fields;
     while (field) {
       struct ast_enum_field *next = field->next;
       free(field);
       field = next;
     }
 
-    struct ast_template_ty *template = ty->enumty.templates;
+    struct ast_template_ty *template = ty->oneof.enumty.templates;
     while (template) {
       struct ast_template_ty *next = template->next;
       free(template);
       template = next;
     }
 
-    ty->enumty.fields = NULL;
-    ty->enumty.templates = NULL;
+    ty->oneof.enumty.fields = NULL;
+    ty->oneof.enumty.templates = NULL;
   }
 
   if (ty->ty == AST_TYPE_TEMPLATE) {
-    struct ast_template_ty *inner = ty->tmpl.inners;
+    struct ast_template_ty *inner = ty->oneof.tmpl.inners;
     while (inner) {
       struct ast_template_ty *next = inner->next;
       free(inner);
       inner = next;
     }
 
-    ty->tmpl.inners = NULL;
+    ty->oneof.tmpl.inners = NULL;
   }
 
   if (ty->ty == AST_TYPE_FUNCTION) {
-    free(ty->function.param_types);
+    free(ty->oneof.function.param_types);
   }
 
   if (ty->ty == AST_TYPE_POINTER || ty->ty == AST_TYPE_BOX) {
-    ty->pointer.pointee = NULL;
+    ty->oneof.pointer.pointee = NULL;
   }
 
   if (!type_repository_is_shared_type(compiler_get_type_repository(compiler), ty)) {
@@ -374,7 +376,7 @@ void free_parser_ty(struct compiler *compiler, struct ast_ty *ty) {
       break;
 
     case AST_TYPE_ENUM: {
-      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *field = ty->oneof.enumty.fields;
       while (field) {
         struct ast_enum_field *next = field->next;
         free_parser_ty(compiler, &field->parser_inner);
@@ -382,19 +384,19 @@ void free_parser_ty(struct compiler *compiler, struct ast_ty *ty) {
         field = next;
       }
 
-      struct ast_template_ty *template = ty->enumty.templates;
+      struct ast_template_ty *template = ty->oneof.enumty.templates;
       while (template) {
         struct ast_template_ty *next = template->next;
         free(template);
         template = next;
       }
 
-      ty->enumty.fields = NULL;
-      ty->enumty.templates = NULL;
+      ty->oneof.enumty.fields = NULL;
+      ty->oneof.enumty.templates = NULL;
     } break;
 
     case AST_TYPE_STRUCT: {
-      struct ast_struct_field *field = ty->structty.fields;
+      struct ast_struct_field *field = ty->oneof.structty.fields;
       while (field) {
         struct ast_struct_field *next = field->next;
         free_parser_ty(compiler, &field->parsed_ty);
@@ -404,15 +406,15 @@ void free_parser_ty(struct compiler *compiler, struct ast_ty *ty) {
     } break;
 
     case AST_TYPE_ARRAY:
-      if (ty->array.element_ty) {
-        free_parser_ty(compiler, ty->array.element_ty);
-        free(ty->array.element_ty);
+      if (ty->oneof.array.element_ty) {
+        free_parser_ty(compiler, ty->oneof.array.element_ty);
+        free(ty->oneof.array.element_ty);
       }
-      ty->array.element_ty = NULL;
+      ty->oneof.array.element_ty = NULL;
       break;
 
     case AST_TYPE_TEMPLATE: {
-      struct ast_template_ty *inner = ty->tmpl.inners;
+      struct ast_template_ty *inner = ty->oneof.tmpl.inners;
       while (inner) {
         struct ast_template_ty *next = inner->next;
         free_parser_ty(compiler, &inner->parsed_ty);
@@ -420,29 +422,29 @@ void free_parser_ty(struct compiler *compiler, struct ast_ty *ty) {
         inner = next;
       }
 
-      free_parser_ty(compiler, ty->tmpl.outer);
-      free(ty->tmpl.outer);
+      free_parser_ty(compiler, ty->oneof.tmpl.outer);
+      free(ty->oneof.tmpl.outer);
 
-      ty->tmpl.inners = NULL;
-      ty->tmpl.outer = NULL;
+      ty->oneof.tmpl.inners = NULL;
+      ty->oneof.tmpl.outer = NULL;
     } break;
 
     case AST_TYPE_FUNCTION: {
-      free_parser_ty(compiler, ty->function.retty);
-      free(ty->function.retty);
+      free_parser_ty(compiler, ty->oneof.function.retty);
+      free(ty->oneof.function.retty);
 
-      for (size_t i = 0; i < ty->function.num_params; i++) {
-        free_parser_ty(compiler, ty->function.param_types[i]);
-        free(ty->function.param_types[i]);
+      for (size_t i = 0; i < ty->oneof.function.num_params; i++) {
+        free_parser_ty(compiler, ty->oneof.function.param_types[i]);
+        free(ty->oneof.function.param_types[i]);
       }
-      free(ty->function.param_types);
+      free(ty->oneof.function.param_types);
     } break;
 
     case AST_TYPE_POINTER:
     case AST_TYPE_BOX:
-      free_parser_ty(compiler, ty->pointer.pointee);
-      free(ty->pointer.pointee);
-      ty->pointer.pointee = NULL;
+      free_parser_ty(compiler, ty->oneof.pointer.pointee);
+      free(ty->oneof.pointer.pointee);
+      ty->oneof.pointer.pointee = NULL;
       break;
   }
 }

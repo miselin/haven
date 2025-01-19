@@ -63,7 +63,7 @@ int type_is_complex(struct ast_ty *ty) {
     return 1;
   }
 
-  if (ty->ty == AST_TYPE_ENUM && !ty->enumty.no_wrapped_fields) {
+  if (ty->ty == AST_TYPE_ENUM && !ty->oneof.enumty.no_wrapped_fields) {
     return 1;
   }
 
@@ -76,7 +76,8 @@ int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
 
   int same = (ty1->ty == ty2->ty) && (flags1 == flags2);
   if (ty1->ty == AST_TYPE_ARRAY) {
-    same = same && same_type_class(ty1->array.element_ty, ty2->array.element_ty, flagmask);
+    same =
+        same && same_type_class(ty1->oneof.array.element_ty, ty2->oneof.array.element_ty, flagmask);
   }
 
   if (same) {
@@ -93,7 +94,7 @@ int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
     }
 
     struct ast_ty *pointee = ptr_pointee_type(otherty);
-    if (pointee->ty == AST_TYPE_INTEGER && pointee->integer.width == 8) {
+    if (pointee->ty == AST_TYPE_INTEGER && pointee->oneof.integer.width == 8) {
       return 1;
     }
   }
@@ -103,7 +104,7 @@ int same_type_class(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) {
     struct ast_ty *otherty = ty1->ty == AST_TYPE_POINTER ? ty2 : ty1;
 
     if (otherty->ty == AST_TYPE_ARRAY) {
-      return same_type_class(ptr_pointee_type(ptrty), otherty->array.element_ty, flagmask);
+      return same_type_class(ptr_pointee_type(ptrty), otherty->oneof.array.element_ty, flagmask);
     }
   }
 
@@ -153,10 +154,10 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
     case AST_TYPE_INTEGER:
       // destination type must be at least large enough for the constant
       if (type_is_constant(ty2)) {
-        return ty1->integer.width >= ty2->integer.width;
+        return ty1->oneof.integer.width >= ty2->oneof.integer.width;
       }
 
-      return ty1->integer.width == ty2->integer.width;
+      return ty1->oneof.integer.width == ty2->oneof.integer.width;
 
     default:
       return 0;
@@ -176,16 +177,16 @@ int same_type_masked(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) 
 
   switch (ty1->ty) {
     case AST_TYPE_INTEGER:
-      if (ty1->integer.is_signed != ty2->integer.is_signed) {
+      if (ty1->oneof.integer.is_signed != ty2->oneof.integer.is_signed) {
         return 0;
       }
 
-      return ty1->integer.width == ty2->integer.width;
+      return ty1->oneof.integer.width == ty2->oneof.integer.width;
     case AST_TYPE_FVEC:
-      return ty1->fvec.width == ty2->fvec.width;
+      return ty1->oneof.fvec.width == ty2->oneof.fvec.width;
     case AST_TYPE_ARRAY:
-      return ty1->array.width == ty2->array.width &&
-             same_type_masked(ty1->array.element_ty, ty2->array.element_ty, flagmask);
+      return ty1->oneof.array.width == ty2->oneof.array.width &&
+             same_type_masked(ty1->oneof.array.element_ty, ty2->oneof.array.element_ty, flagmask);
     default:
       return 1;
   }
@@ -207,11 +208,11 @@ int narrower_type(struct ast_ty *ty1, struct ast_ty *ty2) {
 
   switch (ty1->ty) {
     case AST_TYPE_INTEGER:
-      return ty1->integer.width < ty2->integer.width;
+      return ty1->oneof.integer.width < ty2->oneof.integer.width;
     case AST_TYPE_FVEC:
-      return ty1->fvec.width < ty2->fvec.width;
+      return ty1->oneof.fvec.width < ty2->oneof.fvec.width;
     case AST_TYPE_ARRAY:
-      return narrower_type(ty1->array.element_ty, ty2->array.element_ty);
+      return narrower_type(ty1->oneof.array.element_ty, ty2->oneof.array.element_ty);
     default:
       return 0;
   }
@@ -224,11 +225,11 @@ int wider_type(struct ast_ty *ty1, struct ast_ty *ty2) {
 
   switch (ty1->ty) {
     case AST_TYPE_INTEGER:
-      return ty1->integer.width > ty2->integer.width;
+      return ty1->oneof.integer.width > ty2->oneof.integer.width;
     case AST_TYPE_FVEC:
-      return ty1->fvec.width > ty2->fvec.width;
+      return ty1->oneof.fvec.width > ty2->oneof.fvec.width;
     case AST_TYPE_ARRAY:
-      return wider_type(ty1->array.element_ty, ty2->array.element_ty);
+      return wider_type(ty1->oneof.array.element_ty, ty2->oneof.array.element_ty);
     default:
       return 0;
   }
@@ -238,8 +239,8 @@ struct ast_ty ptr_type(struct ast_ty pointee) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(ty));
   ty.ty = AST_TYPE_POINTER;
-  ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
-  *ty.pointer.pointee = pointee;
+  ty.oneof.pointer.pointee = calloc(1, sizeof(struct ast_ty));
+  *ty.oneof.pointer.pointee = pointee;
   return ty;
 }
 
@@ -248,15 +249,15 @@ struct ast_ty *ptr_pointee_type(struct ast_ty *ty) {
     return NULL;
   }
 
-  return ty->pointer.pointee;
+  return ty->oneof.pointer.pointee;
 }
 
 struct ast_ty box_type(struct ast_ty pointee) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(ty));
   ty.ty = AST_TYPE_BOX;
-  ty.pointer.pointee = calloc(1, sizeof(struct ast_ty));
-  *ty.pointer.pointee = pointee;
+  ty.oneof.pointer.pointee = calloc(1, sizeof(struct ast_ty));
+  *ty.oneof.pointer.pointee = pointee;
   return ty;
 }
 
@@ -265,7 +266,7 @@ struct ast_ty *box_pointee_type(struct ast_ty *ty) {
     return NULL;
   }
 
-  return ty->pointer.pointee;
+  return ty->oneof.pointer.pointee;
 }
 
 const char *type_name(struct ast_ty *ty) {
@@ -304,8 +305,8 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
       return offset;
 
     case AST_TYPE_INTEGER:
-      string_builder_appendf(builder, "%c%zd", ty->integer.is_signed ? 'i' : 'u',
-                             ty->integer.width);
+      string_builder_appendf(builder, "%c%zd", ty->oneof.integer.is_signed ? 'i' : 'u',
+                             ty->oneof.integer.width);
       break;
 
     case AST_TYPE_STRING:
@@ -317,7 +318,7 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
       break;
 
     case AST_TYPE_FVEC:
-      string_builder_appendf(builder, "fvec%zd", ty->fvec.width);
+      string_builder_appendf(builder, "fvec%zd", ty->oneof.fvec.width);
       break;
 
     case AST_TYPE_VOID:
@@ -325,13 +326,13 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
       break;
 
     case AST_TYPE_ARRAY: {
-      type_name_into_ctx(ty->array.element_ty, builder, ctx);
-      string_builder_appendf(builder, "[%zu]", ty->array.width);
+      type_name_into_ctx(ty->oneof.array.element_ty, builder, ctx);
+      string_builder_appendf(builder, "[%zu]", ty->oneof.array.width);
     } break;
 
     case AST_TYPE_CUSTOM:
       string_builder_appendf(builder, "Ty(%s)", ty->name);
-      if (ty->custom.is_forward_decl) {
+      if (ty->oneof.custom.is_forward_decl) {
         string_builder_append(builder, " (forward)");
       }
       break;
@@ -349,20 +350,20 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
       }
 
       if (seen) {
-        string_builder_appendf(builder, "%s %s", ty->structty.is_union ? "union" : "struct",
+        string_builder_appendf(builder, "%s %s", ty->oneof.structty.is_union ? "union" : "struct",
                                ty->name);
       } else {
         struct type_name_context *new_ctx = malloc(sizeof(struct type_name_context));
         new_ctx->ty = ty;
         new_ctx->next = ctx;
 
-        string_builder_appendf(builder, "%s %s { ", ty->structty.is_union ? "union" : "struct",
-                               ty->name);
-        struct ast_struct_field *field = ty->structty.fields;
+        string_builder_appendf(builder, "%s %s { ",
+                               ty->oneof.structty.is_union ? "union" : "struct", ty->name);
+        struct ast_struct_field *field = ty->oneof.structty.fields;
         while (field) {
           struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
           if (field_ty->ty == AST_TYPE_POINTER || field_ty->ty == AST_TYPE_BOX) {
-            struct ast_ty *pointee = field_ty->pointer.pointee;
+            struct ast_ty *pointee = field_ty->oneof.pointer.pointee;
 
             // don't emit the pointee type, just the name will do
             string_builder_appendf(builder, "%s <%s> %s; ",
@@ -386,9 +387,9 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
 
     case AST_TYPE_TEMPLATE:
       string_builder_append(builder, "template ");
-      type_name_into_ctx(ty->tmpl.outer, builder, ctx);
+      type_name_into_ctx(ty->oneof.tmpl.outer, builder, ctx);
       string_builder_append(builder, "<");
-      struct ast_template_ty *inner = ty->tmpl.inners;
+      struct ast_template_ty *inner = ty->oneof.tmpl.inners;
       while (inner) {
         string_builder_appendf(builder, "%s %d -> ", inner->name, inner->is_resolved);
         if (inner->resolved) {
@@ -404,7 +405,7 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
 
     case AST_TYPE_ENUM:
       string_builder_appendf(builder, "enum %s <", ty->name);
-      struct ast_template_ty *template = ty->enumty.templates;
+      struct ast_template_ty *template = ty->oneof.enumty.templates;
       while (template) {
         string_builder_appendf(builder, "%s (%s)", template->name,
                                template->is_resolved ? "resolved" : "unresolved");
@@ -415,7 +416,7 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
       }
 
       string_builder_append(builder, "> { ");
-      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *field = ty->oneof.enumty.fields;
       while (field) {
         string_builder_appendf(builder, "%s = %" PRIu64, field->name, field->value);
         if (field->has_inner) {
@@ -435,29 +436,30 @@ static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
 
     case AST_TYPE_FUNCTION:
       string_builder_append(builder, "fn (");
-      for (size_t i = 0; i < ty->function.num_params; i++) {
-        type_name_into_ctx(ty->function.param_types[i], builder, ctx);
-        if (i + 1 < ty->function.num_params) {
+      for (size_t i = 0; i < ty->oneof.function.num_params; i++) {
+        type_name_into_ctx(ty->oneof.function.param_types[i], builder, ctx);
+        if (i + 1 < ty->oneof.function.num_params) {
           string_builder_append(builder, ", ");
         }
       }
       string_builder_append(builder, ") -> ");
-      type_name_into_ctx(ty->function.retty, builder, ctx);
+      type_name_into_ctx(ty->oneof.function.retty, builder, ctx);
       break;
 
     case AST_TYPE_MATRIX:
-      string_builder_appendf(builder, "matrix %zdx%zd", ty->matrix.cols, ty->matrix.rows);
+      string_builder_appendf(builder, "matrix %zdx%zd", ty->oneof.matrix.cols,
+                             ty->oneof.matrix.rows);
       break;
 
     case AST_TYPE_POINTER:
       string_builder_append(builder, "Pointer <");
-      type_name_into_ctx(ty->pointer.pointee, builder, ctx);
+      type_name_into_ctx(ty->oneof.pointer.pointee, builder, ctx);
       string_builder_append(builder, ">");
       break;
 
     case AST_TYPE_BOX:
       string_builder_append(builder, "Box <");
-      type_name_into_ctx(ty->pointer.pointee, builder, ctx);
+      type_name_into_ctx(ty->oneof.pointer.pointee, builder, ctx);
       string_builder_append(builder, ">");
       break;
 
@@ -502,17 +504,17 @@ size_t type_size(struct ast_ty *ty) {
 
   switch (ty->ty) {
     case AST_TYPE_INTEGER:
-      return ty->integer.width / 8;
+      return ty->oneof.integer.width / 8;
     case AST_TYPE_FLOAT:
       return 4;
     case AST_TYPE_FVEC:
-      return ty->fvec.width * 4;
+      return ty->oneof.fvec.width * 4;
     case AST_TYPE_ARRAY:
-      return ty->array.width * type_size(ty->array.element_ty);
+      return ty->oneof.array.width * type_size(ty->oneof.array.element_ty);
     case AST_TYPE_STRUCT: {
       size_t size = 0;
       size_t largest_field = 0;
-      struct ast_struct_field *field = ty->structty.fields;
+      struct ast_struct_field *field = ty->oneof.structty.fields;
       while (field) {
         size_t field_size = type_size(field->ty);
         size += field_size;
@@ -521,15 +523,15 @@ size_t type_size(struct ast_ty *ty) {
         }
         field = field->next;
       }
-      return ty->structty.is_union ? largest_field : size;
+      return ty->oneof.structty.is_union ? largest_field : size;
     }
     case AST_TYPE_ENUM: {
-      if (ty->enumty.no_wrapped_fields) {
+      if (ty->oneof.enumty.no_wrapped_fields) {
         return 4;  // tag
       }
 
       size_t size = 4;  // tag
-      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *field = ty->oneof.enumty.fields;
       size_t largest_inner = 0;
       while (field) {
         if (field->has_inner) {
@@ -546,7 +548,7 @@ size_t type_size(struct ast_ty *ty) {
       return size;
     } break;
     case AST_TYPE_MATRIX:
-      return ty->matrix.cols * ty->matrix.rows * 4;
+      return ty->oneof.matrix.cols * ty->oneof.matrix.rows * 4;
       break;
 
     case AST_TYPE_CUSTOM:
@@ -582,12 +584,13 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
       break;
 
     case AST_TYPE_ARRAY:
-      new_type->array.element_ty = type_repository_lookup_ty(repo, ty->array.element_ty);
+      new_type->oneof.array.element_ty =
+          type_repository_lookup_ty(repo, ty->oneof.array.element_ty);
       break;
 
     case AST_TYPE_STRUCT: {
-      new_type->structty.fields = NULL;
-      struct ast_struct_field *field = ty->structty.fields;
+      new_type->oneof.structty.fields = NULL;
+      struct ast_struct_field *field = ty->oneof.structty.fields;
       struct ast_struct_field *last = NULL;
       while (field) {
         struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
@@ -596,7 +599,7 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
         field = field->next;
 
         if (last == NULL) {
-          new_type->structty.fields = new_field;
+          new_type->oneof.structty.fields = new_field;
         } else {
           last->next = new_field;
         }
@@ -606,7 +609,7 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
     } break;
 
     case AST_TYPE_ENUM: {
-      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *field = ty->oneof.enumty.fields;
       struct ast_enum_field *last = NULL;
       while (field) {
         struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
@@ -618,7 +621,7 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
         field = field->next;
 
         if (last == NULL) {
-          new_type->enumty.fields = new_field;
+          new_type->oneof.enumty.fields = new_field;
         } else {
           last->next = new_field;
         }
@@ -626,7 +629,7 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
         last = new_field;
       }
 
-      struct ast_template_ty *template = ty->enumty.templates;
+      struct ast_template_ty *template = ty->oneof.enumty.templates;
       struct ast_template_ty *last_template = NULL;
       while (template) {
         struct ast_template_ty *new_template = calloc(1, sizeof(struct ast_template_ty));
@@ -637,7 +640,7 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
         template = template->next;
 
         if (last_template == NULL) {
-          new_type->enumty.templates = new_template;
+          new_type->oneof.enumty.templates = new_template;
         } else {
           last_template->next = new_template;
         }
@@ -647,9 +650,9 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
     } break;
 
     case AST_TYPE_TEMPLATE: {
-      new_type->tmpl.outer = type_repository_lookup_ty(repo, ty->tmpl.outer);
+      new_type->oneof.tmpl.outer = type_repository_lookup_ty(repo, ty->oneof.tmpl.outer);
 
-      struct ast_template_ty *inner = ty->tmpl.inners;
+      struct ast_template_ty *inner = ty->oneof.tmpl.inners;
       struct ast_template_ty *last_inner = NULL;
       while (inner) {
         struct ast_template_ty *new_inner = calloc(1, sizeof(struct ast_template_ty));
@@ -660,7 +663,7 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
         inner = inner->next;
 
         if (last_inner == NULL) {
-          new_type->tmpl.inners = new_inner;
+          new_type->oneof.tmpl.inners = new_inner;
         } else {
           last_inner->next = new_inner;
         }
@@ -670,24 +673,25 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
     } break;
 
     case AST_TYPE_FUNCTION: {
-      new_type->function.param_types = calloc(ty->function.num_params, sizeof(struct ast_ty));
-      for (size_t i = 0; i < ty->function.num_params; i++) {
-        new_type->function.param_types[i] =
-            type_repository_lookup_ty(repo, ty->function.param_types[i]);
+      new_type->oneof.function.param_types =
+          calloc(ty->oneof.function.num_params, sizeof(struct ast_ty));
+      for (size_t i = 0; i < ty->oneof.function.num_params; i++) {
+        new_type->oneof.function.param_types[i] =
+            type_repository_lookup_ty(repo, ty->oneof.function.param_types[i]);
       }
 
-      new_type->function.retty = type_repository_lookup_ty(repo, ty->function.retty);
+      new_type->oneof.function.retty = type_repository_lookup_ty(repo, ty->oneof.function.retty);
     } break;
 
     case AST_TYPE_POINTER:
     case AST_TYPE_BOX: {
-      new_type->pointer.pointee = type_repository_lookup_ty(repo, ty->pointer.pointee);
-      if (!new_type->pointer.pointee) {
+      new_type->oneof.pointer.pointee = type_repository_lookup_ty(repo, ty->oneof.pointer.pointee);
+      if (!new_type->oneof.pointer.pointee) {
         // make it a custom instead and let it get resolved later
         struct ast_ty custom;
         custom.ty = AST_TYPE_CUSTOM;
-        strncpy(custom.name, ty->pointer.pointee->name, sizeof(custom.name));
-        new_type->pointer.pointee = type_repository_lookup_ty(repo, &custom);
+        strncpy(custom.name, ty->oneof.pointer.pointee->name, sizeof(custom.name));
+        new_type->oneof.pointer.pointee = type_repository_lookup_ty(repo, &custom);
       }
     } break;
   }
@@ -711,12 +715,12 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       return offset;
 
     case AST_TYPE_INTEGER:
-      if (ty->integer.is_signed) {
+      if (ty->oneof.integer.is_signed) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "i");
       } else {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "u");
       }
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%zd", ty->integer.width);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%zd", ty->oneof.integer.width);
       break;
 
     case AST_TYPE_STRING:
@@ -728,7 +732,7 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       break;
 
     case AST_TYPE_FVEC:
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->fvec.width);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->oneof.fvec.width);
       break;
 
     case AST_TYPE_VOID:
@@ -737,9 +741,9 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
 
     case AST_TYPE_ARRAY: {
       char element_ty[256];
-      type_name_into_as_code(ty->array.element_ty, element_ty, 256);
-      offset +=
-          snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty, ty->array.width);
+      type_name_into_as_code(ty->oneof.array.element_ty, element_ty, 256);
+      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty,
+                         ty->oneof.array.width);
     } break;
 
     case AST_TYPE_CUSTOM:
@@ -747,9 +751,9 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       break;
 
     case AST_TYPE_STRUCT: {
-      offset += snprintf(buf, maxlen, "%s %s%s{ ", ty->structty.is_union ? "union" : "struct",
+      offset += snprintf(buf, maxlen, "%s %s%s{ ", ty->oneof.structty.is_union ? "union" : "struct",
                          ty->name, ty->name[0] ? " " : "");
-      struct ast_struct_field *field = ty->structty.fields;
+      struct ast_struct_field *field = ty->oneof.structty.fields;
       while (field) {
         struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
         char field_tyname[256];
@@ -771,7 +775,7 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
 
     case AST_TYPE_ENUM:
       offset += snprintf(buf, maxlen, "enum {\n");
-      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *field = ty->oneof.enumty.fields;
       while (field) {
         offset += snprintf(buf + offset, maxlen - (size_t)offset, "  %s", field->name);
         if (field->has_inner) {
@@ -791,7 +795,8 @@ int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
       break;
 
     case AST_TYPE_POINTER:
-      offset += type_name_into_as_code(ty->pointer.pointee, buf + offset, maxlen - (size_t)offset);
+      offset +=
+          type_name_into_as_code(ty->oneof.pointer.pointee, buf + offset, maxlen - (size_t)offset);
       offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
       break;
 
@@ -821,7 +826,7 @@ void mangle_type(struct ast_ty *ty, char *buf, size_t len, const char *prefix) {
 
   switch (ty->ty) {
     case AST_TYPE_INTEGER:
-      snprintf(buf, len, "i%zd", ty->integer.width);
+      snprintf(buf, len, "i%zd", ty->oneof.integer.width);
       break;
 
     case AST_TYPE_STRING:
@@ -833,7 +838,7 @@ void mangle_type(struct ast_ty *ty, char *buf, size_t len, const char *prefix) {
       break;
 
     case AST_TYPE_FVEC:
-      snprintf(buf, len, "F32V%zd", ty->fvec.width);
+      snprintf(buf, len, "F32V%zd", ty->oneof.fvec.width);
       break;
 
     case AST_TYPE_VOID:
@@ -841,11 +846,11 @@ void mangle_type(struct ast_ty *ty, char *buf, size_t len, const char *prefix) {
       break;
 
     case AST_TYPE_ARRAY:
-      snprintf(buf, len, "A%zd", ty->array.width);
+      snprintf(buf, len, "A%zd", ty->oneof.array.width);
       break;
 
     case AST_TYPE_MATRIX:
-      snprintf(buf, len, "M%zdx%zd", ty->matrix.rows, ty->matrix.cols);
+      snprintf(buf, len, "M%zdx%zd", ty->oneof.matrix.rows, ty->oneof.matrix.cols);
       break;
 
     case AST_TYPE_STRUCT:
@@ -878,9 +883,9 @@ void mangle_type(struct ast_ty *ty, char *buf, size_t len, const char *prefix) {
 
     case AST_TYPE_TEMPLATE:
       strcat(buf, "T");
-      strcat(buf, ty->tmpl.outer->name);
+      strcat(buf, ty->oneof.tmpl.outer->name);
       strcat(buf, "_");
-      struct ast_template_ty *inner = ty->tmpl.inners;
+      struct ast_template_ty *inner = ty->oneof.tmpl.inners;
       while (inner) {
         char inner_buf[256];
         mangle_type(&inner->parsed_ty, inner_buf, 256, NULL);

@@ -11,8 +11,8 @@ struct ast_range parse_range(struct parser *parser) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(struct ast_ty));
   ty.ty = AST_TYPE_INTEGER;
-  ty.integer.is_signed = 1;
-  ty.integer.width = 64;
+  ty.oneof.integer.is_signed = 1;
+  ty.oneof.integer.width = 64;
 
   result.start = wrap_cast(parser, parse_expression(parser), &ty);
   if (parser_consume(parser, NULL, TOKEN_COLON) < 0) {

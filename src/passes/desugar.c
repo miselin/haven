@@ -107,7 +107,7 @@ static int desugar_tydecl(struct desugar *desugar, struct ast_toplevel *ast) {
 
   switch (tydecl->parsed_ty.ty) {
     case AST_TYPE_ENUM: {
-      if (!tydecl->parsed_ty.enumty.templates) {
+      if (!tydecl->parsed_ty.oneof.enumty.templates) {
         return 0;
       }
 
@@ -146,7 +146,7 @@ static struct ast_template_ty *template_for_name(struct ast_template_ty *decl_tm
 }
 
 static int desugar_fdecl(struct desugar *desugar, struct ast_fdecl *ast) {
-  return maybe_desugar_type(desugar, ast->parsed_function_ty.function.retty);
+  return maybe_desugar_type(desugar, ast->parsed_function_ty.oneof.function.retty);
 }
 
 static int maybe_desugar_type(struct desugar *desugar, struct ast_ty *ty) {
@@ -154,7 +154,7 @@ static int maybe_desugar_type(struct desugar *desugar, struct ast_ty *ty) {
     return 0;
   }
 
-  if (ty->tmpl.outer->ty != AST_TYPE_CUSTOM) {
+  if (ty->oneof.tmpl.outer->ty != AST_TYPE_CUSTOM) {
     return 0;
   }
 
@@ -179,7 +179,7 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
     return 0;
   }
 
-  if (ty->tmpl.outer->ty != AST_TYPE_CUSTOM) {
+  if (ty->oneof.tmpl.outer->ty != AST_TYPE_CUSTOM) {
     return 0;
   }
 
@@ -194,12 +194,12 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
 
   // do we know about the existence of this template yet?
   compiler_log(desugar->compiler, LogLevelDebug, "desugar", "checking for enum %s",
-               ty->tmpl.outer->name);
+               ty->oneof.tmpl.outer->name);
 
-  struct desugar_enum *desugar_enum = kv_lookup(desugar->enums, ty->tmpl.outer->name);
+  struct desugar_enum *desugar_enum = kv_lookup(desugar->enums, ty->oneof.tmpl.outer->name);
   if (!desugar_enum) {
     compiler_log(desugar->compiler, LogLevelError, "desugar", "unknown enum %s in template",
-                 ty->tmpl.outer->name);
+                 ty->oneof.tmpl.outer->name);
     return 0;
   }
 
@@ -212,10 +212,10 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
 
   strncpy(new_tydecl->ident.value.identv.ident, mangled, 256);
   new_tydecl->parsed_ty = *desugar_enum->decl;
-  new_tydecl->parsed_ty.enumty.templates = NULL;
+  new_tydecl->parsed_ty.oneof.enumty.templates = NULL;
   strncpy(new_tydecl->parsed_ty.name, mangled, 256);
 
-  struct ast_enum_field *field = desugar_enum->decl->enumty.fields;
+  struct ast_enum_field *field = desugar_enum->decl->oneof.enumty.fields;
   struct ast_enum_field *last = NULL;
   while (field) {
     struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
@@ -223,8 +223,9 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
 
     if (field->has_inner) {
       if (field->parser_inner.ty == AST_TYPE_CUSTOM) {
-        struct ast_template_ty *tmpl = template_for_name(desugar_enum->decl->enumty.templates,
-                                                         ty->tmpl.inners, field->parser_inner.name);
+        struct ast_template_ty *tmpl =
+            template_for_name(desugar_enum->decl->oneof.enumty.templates, ty->oneof.tmpl.inners,
+                              field->parser_inner.name);
 
         if (tmpl) {
           new_field->parser_inner = tmpl->parsed_ty;
@@ -233,7 +234,7 @@ static int desugar_enum(struct desugar *desugar, struct ast_ty *ty) {
     }
 
     if (last == NULL) {
-      new_tydecl->parsed_ty.enumty.fields = new_field;
+      new_tydecl->parsed_ty.oneof.enumty.fields = new_field;
     } else {
       last->next = new_field;
     }
@@ -277,8 +278,8 @@ static int desugar_expr(struct desugar *desugar, struct ast_expr *ast) {
       struct ast_ty tmpl;
       memset(&tmpl, 0, sizeof(struct ast_ty));
       tmpl.ty = AST_TYPE_TEMPLATE;
-      tmpl.tmpl.outer = &outer;
-      tmpl.tmpl.inners = ast->expr.enum_init.tmpls;
+      tmpl.oneof.tmpl.outer = &outer;
+      tmpl.oneof.tmpl.inners = ast->expr.enum_init.tmpls;
 
       desugar_enum(desugar, &tmpl);
 

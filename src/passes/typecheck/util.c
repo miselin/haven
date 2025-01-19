@@ -37,11 +37,12 @@ int check_matrix_binary_op(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
   if (lhs->ty == AST_TYPE_MATRIX && rhs->ty == AST_TYPE_MATRIX) {
     if (op == AST_BINARY_OP_MUL) {
       // # of columns in left must match # of rows in right for multiplication
-      return lhs->matrix.cols == rhs->matrix.rows;
+      return lhs->oneof.matrix.cols == rhs->oneof.matrix.rows;
     }
 
     // other ops require the same dimensions
-    if (lhs->matrix.cols != rhs->matrix.cols || lhs->matrix.rows != rhs->matrix.rows) {
+    if (lhs->oneof.matrix.cols != rhs->oneof.matrix.cols ||
+        lhs->oneof.matrix.rows != rhs->oneof.matrix.rows) {
       return 0;
     }
 
@@ -60,7 +61,7 @@ int check_matrix_binary_op(int op, struct ast_ty *lhs, struct ast_ty *rhs) {
     }
 
     // # of rows must match the width of the vector
-    return lhs->matrix.cols == rhs->fvec.width;
+    return lhs->oneof.matrix.cols == rhs->oneof.fvec.width;
   }
 
   if (lhs->ty != AST_TYPE_MATRIX || rhs->ty != AST_TYPE_MATRIX) {

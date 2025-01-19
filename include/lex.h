@@ -66,10 +66,10 @@ union token_value {
 
 struct token {
   enum token_id ident;
+  int is_keyword;
 
   union token_value value;
 
-  int is_keyword;
   struct lex_locator loc;
 };
 

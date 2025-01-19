@@ -82,7 +82,7 @@ static enum CXVisitorResult struct_field_visitor(CXCursor field_cursor, CXClient
 
   CXString loc_name = clang_getFileName(file);
 
-  struct ast_struct_field *last = ty->structty.fields;
+  struct ast_struct_field *last = ty->oneof.structty.fields;
   while (last && last->next) {
     last = last->next;
   }
@@ -113,12 +113,12 @@ static enum CXVisitorResult struct_field_visitor(CXCursor field_cursor, CXClient
   strncpy(field->name, *spelling_c ? spelling_c : "<unknown-spelling>", 256);
 
   if (!last) {
-    ty->structty.fields = field;
+    ty->oneof.structty.fields = field;
   } else {
     last->next = field;
   }
 
-  ty->structty.num_fields++;
+  ty->oneof.structty.num_fields++;
 
   clang_disposeString(spelling);
 
@@ -131,14 +131,14 @@ static void collect_struct_fields(CXType type, struct ast_ty *ty) {
   // C has forward-declared structs that don't require fields, as long as they are used as
   // pointers Haven requires at least one field for each struct. So just add an opaque field if
   // there are no other fields in the C type.
-  if (!ty->structty.num_fields) {
+  if (!ty->oneof.structty.num_fields) {
     struct ast_struct_field *field = calloc(1, sizeof(struct ast_struct_field));
     field->parsed_ty.ty = AST_TYPE_INTEGER;
-    field->parsed_ty.integer.is_signed = 1;
-    field->parsed_ty.integer.width = 8;
+    field->parsed_ty.oneof.integer.is_signed = 1;
+    field->parsed_ty.oneof.integer.width = 8;
     strncpy(field->name, "<opaque>", 256);
-    ty->structty.fields = field;
-    ty->structty.num_fields = 1;
+    ty->oneof.structty.fields = field;
+    ty->oneof.structty.num_fields = 1;
   }
 }
 
@@ -152,7 +152,7 @@ static enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCurso
     return CXChildVisit_Continue;
   }
 
-  struct ast_enum_field *last = ty->enumty.fields;
+  struct ast_enum_field *last = ty->oneof.enumty.fields;
   while (last && last->next) {
     last = last->next;
   }
@@ -166,12 +166,12 @@ static enum CXChildVisitResult enum_field_visitor(CXCursor field_cursor, CXCurso
   strncpy(field->name, *spelling_c ? spelling_c : "<unknown-spelling>", 256);
 
   if (!last) {
-    ty->enumty.fields = field;
+    ty->oneof.enumty.fields = field;
   } else {
     last->next = field;
   }
 
-  ty->enumty.num_fields++;
+  ty->oneof.enumty.num_fields++;
 
   clang_disposeString(spelling);
 
@@ -230,8 +230,8 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
     case CXType_ULongLong:
     case CXType_UInt128:
       into->ty = AST_TYPE_INTEGER;
-      into->integer.is_signed = 0;
-      into->integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
+      into->oneof.integer.is_signed = 0;
+      into->oneof.integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
       break;
 
     case CXType_Char_S:
@@ -242,8 +242,8 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
     case CXType_LongLong:
     case CXType_Int128:
       into->ty = AST_TYPE_INTEGER;
-      into->integer.is_signed = 1;
-      into->integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
+      into->oneof.integer.is_signed = 1;
+      into->oneof.integer.width = (size_t)clang_Type_getSizeOf(type) * 8;
       break;
 
     case CXType_Float:
@@ -273,19 +273,19 @@ static int parse_simple_type(CXType type, struct ast_ty *into) {
       } else {
         // true pointer type
         into->ty = AST_TYPE_POINTER;
-        into->pointer.pointee = parse_simple_type_or_custom(pointee);
+        into->oneof.pointer.pointee = parse_simple_type_or_custom(pointee);
       }
     } break;
 
     case CXType_ConstantArray:
       into->ty = AST_TYPE_ARRAY;
-      into->array.width = (size_t)clang_getArraySize(type);
-      into->array.element_ty = parse_simple_type_or_custom(clang_getArrayElementType(type));
+      into->oneof.array.width = (size_t)clang_getArraySize(type);
+      into->oneof.array.element_ty = parse_simple_type_or_custom(clang_getArrayElementType(type));
       break;
 
     case CXType_IncompleteArray:
       into->ty = AST_TYPE_POINTER;
-      into->pointer.pointee = parse_simple_type_or_custom(clang_getArrayElementType(type));
+      into->oneof.pointer.pointee = parse_simple_type_or_custom(clang_getArrayElementType(type));
       break;
 
     default:
@@ -342,12 +342,12 @@ static struct ast_ty *parse_type(CXType type) {
 
       // is it actually a union?
       CXCursor decl = clang_getTypeDeclaration(type);
-      result->structty.is_union = clang_getCursorKind(decl) == CXCursor_UnionDecl;
+      result->oneof.structty.is_union = clang_getCursorKind(decl) == CXCursor_UnionDecl;
     } break;
 
     case CXType_Enum: {
       result->ty = AST_TYPE_ENUM;
-      result->enumty.no_wrapped_fields = 1;
+      result->oneof.enumty.no_wrapped_fields = 1;
       collect_enum_fields(type, result);
     } break;
 
@@ -415,15 +415,16 @@ static void analyze_function_type(CXType type, struct ast_fdecl *fdecl) {
   fdecl->flags |= DECL_FLAG_EXTERN | DECL_FLAG_IMPURE;
 
   fdecl->parsed_function_ty.ty = AST_TYPE_FUNCTION;
-  fdecl->parsed_function_ty.function.retty = parse_simple_type_or_custom(return_type);
+  fdecl->parsed_function_ty.oneof.function.retty = parse_simple_type_or_custom(return_type);
 
   // Get the number of arguments
   size_t num_args = (size_t)clang_getNumArgTypes(type);
   fdecl->num_params = num_args;
-  fdecl->parsed_function_ty.function.num_params = num_args;
+  fdecl->parsed_function_ty.oneof.function.num_params = num_args;
   if (num_args > 0) {
     fdecl->params = calloc(num_args, sizeof(struct ast_fdecl_param_metadata));
-    fdecl->parsed_function_ty.function.param_types = calloc(num_args, sizeof(struct ast_ty *));
+    fdecl->parsed_function_ty.oneof.function.param_types =
+        calloc(num_args, sizeof(struct ast_ty *));
 
     // Get each parameter type
     for (size_t i = 0; i < num_args; i++) {
@@ -436,14 +437,15 @@ static void analyze_function_type(CXType type, struct ast_fdecl *fdecl) {
       snprintf(param_name, 256, "p%zd", i);
 
       fdecl->params[i].name = param_name;
-      fdecl->parsed_function_ty.function.param_types[i] = parse_simple_type_or_custom(param_type);
+      fdecl->parsed_function_ty.oneof.function.param_types[i] =
+          parse_simple_type_or_custom(param_type);
     }
   }
 
   // Check if the function is variadic
   if (clang_isFunctionTypeVariadic(type)) {
     fdecl->flags |= DECL_FLAG_VARARG;
-    fdecl->parsed_function_ty.function.vararg = 1;
+    fdecl->parsed_function_ty.oneof.function.vararg = 1;
   }
 }
 
@@ -560,7 +562,7 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
         decl->toplevel.tydecl.parsed_ty = *cursor_ty;
         free(cursor_ty);
 
-        decl->toplevel.tydecl.parsed_ty.structty.is_union = kind == CXCursor_UnionDecl;
+        decl->toplevel.tydecl.parsed_ty.oneof.structty.is_union = kind == CXCursor_UnionDecl;
 
         cimport_add_known_type(importer, type);
       } else {

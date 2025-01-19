@@ -66,15 +66,16 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
       break;
 
     case AST_TYPE_ARRAY:
-      resolved_ty->array.element_ty = resolve_parsed_type(typecheck, ty->array.element_ty);
+      resolved_ty->oneof.array.element_ty =
+          resolve_parsed_type(typecheck, ty->oneof.array.element_ty);
       compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
                    "resolved array element type for %p to %p", (void *)resolved_ty,
-                   (void *)resolved_ty->array.element_ty);
+                   (void *)resolved_ty->oneof.array.element_ty);
       break;
 
     case AST_TYPE_STRUCT: {
-      resolved_ty->structty.fields = NULL;
-      struct ast_struct_field *field = ty->structty.fields;
+      resolved_ty->oneof.structty.fields = NULL;
+      struct ast_struct_field *field = ty->oneof.structty.fields;
       struct ast_struct_field *last = NULL;
       while (field) {
         struct ast_struct_field *new_field = calloc(1, sizeof(struct ast_struct_field));
@@ -85,7 +86,7 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
         field = field->next;
 
         if (last == NULL) {
-          resolved_ty->structty.fields = new_field;
+          resolved_ty->oneof.structty.fields = new_field;
         } else {
           last->next = new_field;
         }
@@ -95,13 +96,13 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     } break;
 
     case AST_TYPE_ENUM: {
-      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *field = ty->oneof.enumty.fields;
       struct ast_enum_field *last = NULL;
       while (field) {
         struct ast_enum_field *new_field = calloc(1, sizeof(struct ast_enum_field));
         *new_field = *field;
         if (field->has_inner) {
-          resolve_template_type(typecheck, ty->enumty.templates, &field->parser_inner);
+          resolve_template_type(typecheck, ty->oneof.enumty.templates, &field->parser_inner);
           new_field->inner = resolve_parsed_type(typecheck, &field->parser_inner);
           compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
                        "resolved inner type for enum field %s to %p", field->name,
@@ -110,7 +111,7 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
         field = field->next;
 
         if (last == NULL) {
-          resolved_ty->enumty.fields = new_field;
+          resolved_ty->oneof.enumty.fields = new_field;
         } else {
           last->next = new_field;
         }
@@ -118,7 +119,7 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
         last = new_field;
       }
 
-      struct ast_template_ty *template = ty->enumty.templates;
+      struct ast_template_ty *template = ty->oneof.enumty.templates;
       while (template) {
         if (!template->resolved) {
           template->resolved = type_repository_tbd(typecheck->type_repo);
@@ -129,20 +130,21 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     } break;
 
     case AST_TYPE_TEMPLATE: {
-      resolved_ty->tmpl.outer = resolve_parsed_type(typecheck, ty->tmpl.outer);
-      if (resolved_ty->tmpl.outer->ty != AST_TYPE_ENUM) {
+      resolved_ty->oneof.tmpl.outer = resolve_parsed_type(typecheck, ty->oneof.tmpl.outer);
+      if (resolved_ty->oneof.tmpl.outer->ty != AST_TYPE_ENUM) {
         compiler_log(typecheck->compiler, LogLevelError, "typecheck",
-                     "template outer type must be an enum, got %d", resolved_ty->tmpl.outer->ty);
+                     "template outer type must be an enum, got %d",
+                     resolved_ty->oneof.tmpl.outer->ty);
         return type_repository_error(typecheck->type_repo);
       }
 
       // step 2: resolve the inner types into the specialized enum type
-      struct ast_enum_field *field = resolved_ty->tmpl.outer->enumty.fields;
+      struct ast_enum_field *field = resolved_ty->oneof.tmpl.outer->oneof.enumty.fields;
       while (field) {
         if (field->has_inner && field->inner->ty == AST_TYPE_CUSTOM) {
           // match to the template list
-          struct ast_template_ty *inner = resolved_ty->tmpl.outer->enumty.templates;
-          struct ast_template_ty *inner_specific = ty->tmpl.inners;
+          struct ast_template_ty *inner = resolved_ty->oneof.tmpl.outer->oneof.enumty.templates;
+          struct ast_template_ty *inner_specific = ty->oneof.tmpl.inners;
           while (inner) {
             if (strcmp(inner->name, field->inner->name) == 0) {
               break;
@@ -168,20 +170,22 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     } break;
 
     case AST_TYPE_FUNCTION: {
-      resolved_ty->function.param_types = calloc(ty->function.num_params, sizeof(struct ast_ty *));
-      for (size_t i = 0; i < ty->function.num_params; i++) {
-        resolved_ty->function.param_types[i] =
-            resolve_parsed_type(typecheck, ty->function.param_types[i]);
+      resolved_ty->oneof.function.param_types =
+          calloc(ty->oneof.function.num_params, sizeof(struct ast_ty *));
+      for (size_t i = 0; i < ty->oneof.function.num_params; i++) {
+        resolved_ty->oneof.function.param_types[i] =
+            resolve_parsed_type(typecheck, ty->oneof.function.param_types[i]);
       }
 
-      resolved_ty->function.retty = resolve_parsed_type(typecheck, ty->function.retty);
+      resolved_ty->oneof.function.retty = resolve_parsed_type(typecheck, ty->oneof.function.retty);
     } break;
 
     case AST_TYPE_POINTER:
     case AST_TYPE_BOX:
-      resolved_ty->pointer.pointee = resolve_parsed_type(typecheck, ty->pointer.pointee);
-      if (!resolved_ty->pointer.pointee) {
-        resolved_ty->pointer.pointee = type_repository_error(typecheck->type_repo);
+      resolved_ty->oneof.pointer.pointee =
+          resolve_parsed_type(typecheck, ty->oneof.pointer.pointee);
+      if (!resolved_ty->oneof.pointer.pointee) {
+        resolved_ty->oneof.pointer.pointee = type_repository_error(typecheck->type_repo);
       }
       break;
   }
@@ -227,17 +231,17 @@ void patch_type_tbds(struct typecheck *typecheck, struct ast_ty *ty, struct ast_
     case AST_TYPE_ARRAY:
       compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
                    "patching array element type for %p which is %p [%d]", (void *)ty,
-                   (void *)ty->array.element_ty, ty->array.element_ty->ty);
-      if (ty->array.element_ty->ty == AST_TYPE_CUSTOM) {
-        ty->array.element_ty =
-            type_repository_lookup(typecheck->type_repo, ty->array.element_ty->name);
+                   (void *)ty->oneof.array.element_ty, ty->oneof.array.element_ty->ty);
+      if (ty->oneof.array.element_ty->ty == AST_TYPE_CUSTOM) {
+        ty->oneof.array.element_ty =
+            type_repository_lookup(typecheck->type_repo, ty->oneof.array.element_ty->name);
       } else {
-        patch_type_tbds(typecheck, ty->array.element_ty, NULL);
+        patch_type_tbds(typecheck, ty->oneof.array.element_ty, NULL);
       }
       break;
 
     case AST_TYPE_STRUCT: {
-      struct ast_struct_field *field = ty->structty.fields;
+      struct ast_struct_field *field = ty->oneof.structty.fields;
       while (field) {
         if (field->ty->ty == AST_TYPE_CUSTOM) {
           field->ty = type_repository_lookup(typecheck->type_repo, field->ty->name);
@@ -250,7 +254,7 @@ void patch_type_tbds(struct typecheck *typecheck, struct ast_ty *ty, struct ast_
     } break;
 
     case AST_TYPE_ENUM: {
-      struct ast_enum_field *field = ty->enumty.fields;
+      struct ast_enum_field *field = ty->oneof.enumty.fields;
       while (field) {
         if (field->has_inner) {
           compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
@@ -274,27 +278,28 @@ void patch_type_tbds(struct typecheck *typecheck, struct ast_ty *ty, struct ast_
     } break;
 
     case AST_TYPE_FUNCTION: {
-      for (size_t i = 0; i < ty->function.num_params; i++) {
-        if (ty->function.param_types[i]->ty == AST_TYPE_CUSTOM) {
-          ty->function.param_types[i] =
-              type_repository_lookup(typecheck->type_repo, ty->function.param_types[i]->name);
+      for (size_t i = 0; i < ty->oneof.function.num_params; i++) {
+        if (ty->oneof.function.param_types[i]->ty == AST_TYPE_CUSTOM) {
+          ty->oneof.function.param_types[i] =
+              type_repository_lookup(typecheck->type_repo, ty->oneof.function.param_types[i]->name);
         } else {
-          patch_type_tbds(typecheck, ty->function.param_types[i], NULL);
+          patch_type_tbds(typecheck, ty->oneof.function.param_types[i], NULL);
         }
       }
 
-      if (ty->function.retty->ty == AST_TYPE_CUSTOM) {
-        ty->function.retty = type_repository_lookup(typecheck->type_repo, ty->function.retty->name);
+      if (ty->oneof.function.retty->ty == AST_TYPE_CUSTOM) {
+        ty->oneof.function.retty =
+            type_repository_lookup(typecheck->type_repo, ty->oneof.function.retty->name);
       } else {
-        patch_type_tbds(typecheck, ty->function.retty, NULL);
+        patch_type_tbds(typecheck, ty->oneof.function.retty, NULL);
       }
     } break;
 
     case AST_TYPE_POINTER:
     case AST_TYPE_BOX:
-      if (ty->pointer.pointee->ty == AST_TYPE_CUSTOM) {
-        ty->pointer.pointee =
-            type_repository_lookup(typecheck->type_repo, ty->pointer.pointee->name);
+      if (ty->oneof.pointer.pointee->ty == AST_TYPE_CUSTOM) {
+        ty->oneof.pointer.pointee =
+            type_repository_lookup(typecheck->type_repo, ty->oneof.pointer.pointee->name);
       }
       break;
   }
@@ -322,7 +327,7 @@ void resolve_template_type(struct typecheck *typecheck, struct ast_template_ty *
         // TODO
         // *ty = copy_type(&template->resolved);
       } else {
-        ty->custom.is_template = 1;
+        ty->oneof.custom.is_template = 1;
       }
 
       break;

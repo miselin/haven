@@ -148,15 +148,15 @@ int parse_braced_initializer(struct parser *parser, struct ast_expr *into) {
   }
   into->type = AST_EXPR_TYPE_CONSTANT;
   into->parsed_ty.ty = AST_TYPE_ARRAY;
-  into->parsed_ty.array.element_ty = calloc(1, sizeof(struct ast_ty));
-  *into->parsed_ty.array.element_ty = element_ty;
+  into->parsed_ty.oneof.array.element_ty = calloc(1, sizeof(struct ast_ty));
+  *into->parsed_ty.oneof.array.element_ty = element_ty;
   into->expr.list = parse_expression_list(parser, TOKEN_RBRACE, 0);
   if (!into->expr.list) {
     parser_diag(1, parser, &parser->peek, "braced initializer must have at least one element");
-    free(into->parsed_ty.array.element_ty);
+    free(into->parsed_ty.oneof.array.element_ty);
     return -1;
   }
-  into->parsed_ty.array.width = into->expr.list->num_elements;
+  into->parsed_ty.oneof.array.width = into->expr.list->num_elements;
   if (parser_consume(parser, NULL, TOKEN_RBRACE) < 0) {
     return -1;
   }

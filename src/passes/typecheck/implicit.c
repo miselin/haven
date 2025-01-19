@@ -26,17 +26,17 @@ int maybe_implicitly_convert(struct ast_ty **into_from, struct ast_ty **into_to)
   }
 
   if (from->ty == AST_TYPE_INTEGER && to->ty == AST_TYPE_INTEGER) {
-    if (from->integer.width == to->integer.width) {
+    if (from->oneof.integer.width == to->oneof.integer.width) {
       return 0;
     }
 
     if (from->flags & TYPE_FLAG_CONSTANT && to->flags & TYPE_FLAG_CONSTANT) {
-      int conversion = from->integer.width != to->integer.width;
+      int conversion = from->oneof.integer.width != to->oneof.integer.width;
 
       // TODO: there be some additional checks around signed/unsigned conversion
       // e.g. make sure the conversion doesn't change the sign
       // swap from/to so the result is the highest width
-      if (from->integer.width > to->integer.width) {
+      if (from->oneof.integer.width > to->oneof.integer.width) {
         *into_to = *into_from;
       } else {
         *into_from = *into_to;
@@ -54,7 +54,7 @@ int maybe_implicitly_convert(struct ast_ty **into_from, struct ast_ty **into_to)
     *into_from = *into_to;
     return 1;
   } else if (from->ty == AST_TYPE_ENUM && to->ty == AST_TYPE_ENUM) {
-    if (!(from->enumty.templates)) {
+    if (!(from->oneof.enumty.templates)) {
       // no implicit conversion, source must have templates
       return 0;
     }

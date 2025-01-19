@@ -78,7 +78,7 @@ LLVMValueRef emit_cast(struct codegen *codegen, LLVMValueRef value, struct ast_t
 
   if (narrower_type(from, to)) {
     compiler_log(codegen->compiler, LogLevelDebug, "codegen", "cast D.1");
-    if (from->ty == AST_TYPE_INTEGER && from->integer.is_signed) {
+    if (from->ty == AST_TYPE_INTEGER && from->oneof.integer.is_signed) {
       return LLVMBuildSExtOrBitCast(codegen->llvm_builder, value, dest_ty, "widening");
     }
     return LLVMBuildZExtOrBitCast(codegen->llvm_builder, value, dest_ty, "widening");
@@ -92,7 +92,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
 
   switch (ty->ty) {
     case AST_TYPE_INTEGER:
-      switch (ty->integer.width) {
+      switch (ty->oneof.integer.width) {
         case 1:
           inner = LLVMInt1TypeInContext(codegen->llvm_context);
           break;
@@ -109,7 +109,8 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
           inner = LLVMInt64TypeInContext(codegen->llvm_context);
           break;
         default:
-          inner = LLVMIntTypeInContext(codegen->llvm_context, (unsigned int)ty->integer.width);
+          inner =
+              LLVMIntTypeInContext(codegen->llvm_context, (unsigned int)ty->oneof.integer.width);
       }
       break;
     case AST_TYPE_STRING:
@@ -120,14 +121,14 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       break;
     case AST_TYPE_FVEC:
       inner = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
-                             (unsigned int)ty->fvec.width);
+                             (unsigned int)ty->oneof.fvec.width);
       break;
     case AST_TYPE_VOID:
       inner = LLVMVoidTypeInContext(codegen->llvm_context);
       break;
     case AST_TYPE_ARRAY:
-      inner = LLVMArrayType(ast_ty_to_llvm_ty(codegen, ty->array.element_ty),
-                            (unsigned int)ty->array.width);
+      inner = LLVMArrayType(ast_ty_to_llvm_ty(codegen, ty->oneof.array.element_ty),
+                            (unsigned int)ty->oneof.array.width);
       break;
     case AST_TYPE_STRUCT: {
       struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
@@ -144,7 +145,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
       inner = LLVMVoidTypeInContext(codegen->llvm_context);
       break;
     case AST_TYPE_ENUM: {
-      if (ty->enumty.no_wrapped_fields) {
+      if (ty->oneof.enumty.no_wrapped_fields) {
         inner = LLVMInt32TypeInContext(codegen->llvm_context);
       } else {
         inner = LLVMPointerTypeInContext(codegen->llvm_context, 0);
@@ -160,7 +161,7 @@ LLVMTypeRef ast_ty_to_llvm_ty(struct codegen *codegen, struct ast_ty *ty) {
     case AST_TYPE_MATRIX: {
       // matrix is actually a flat fvec (Rows * Cols)
       inner = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
-                             (unsigned int)(ty->matrix.cols * ty->matrix.rows));
+                             (unsigned int)(ty->oneof.matrix.cols * ty->oneof.matrix.rows));
     } break;
     case AST_TYPE_POINTER:
       return LLVMPointerTypeInContext(codegen->llvm_context, 0);
@@ -378,7 +379,7 @@ LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty) {
   }
 
   char name[1024];
-  mangle_type(ty->pointer.pointee, name, 1024, "boxed.");
+  mangle_type(ty->oneof.pointer.pointee, name, 1024, "boxed.");
   compiler_log(codegen->compiler, LogLevelDebug, "codegen", "mangled type %s for boxing", name);
 
   struct struct_entry *entry = kv_lookup(codegen->structs, name);
@@ -386,7 +387,7 @@ LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty) {
     return entry->type;
   }
 
-  LLVMTypeRef wrapped = ast_ty_to_llvm_ty(codegen, ty->pointer.pointee);
+  LLVMTypeRef wrapped = ast_ty_to_llvm_ty(codegen, ty->oneof.pointer.pointee);
   LLVMTypeRef result_ty = LLVMStructCreateNamed(codegen->llvm_context, name);
 
   // refcount, boxed value
@@ -482,9 +483,9 @@ LLVMTypeRef ast_llvm_function_ty(struct codegen *codegen, struct ast_ty *ty) {
     return NULL;
   }
 
-  LLVMTypeRef ret_ty = ast_underlying_ty_to_llvm_ty(codegen, ty->function.retty);
+  LLVMTypeRef ret_ty = ast_underlying_ty_to_llvm_ty(codegen, ty->oneof.function.retty);
 
-  int rc = type_is_complex(ty->function.retty);
+  int rc = type_is_complex(ty->oneof.function.retty);
   if (rc < 0) {
     compiler_log(codegen->compiler, LogLevelError, "codegen",
                  "type_is_complex returned a completely unexpected value %d", rc);
@@ -493,18 +494,18 @@ LLVMTypeRef ast_llvm_function_ty(struct codegen *codegen, struct ast_ty *ty) {
 
   size_t complex_return = (size_t)rc;
 
-  size_t num_params = ty->function.num_params + complex_return;
+  size_t num_params = ty->oneof.function.num_params + complex_return;
 
   LLVMTypeRef *param_types = malloc(sizeof(LLVMTypeRef) * num_params);
   if (complex_return) {
     param_types[0] = LLVMPointerTypeInContext(codegen->llvm_context, 0);
   }
-  for (size_t i = 0; i < ty->function.num_params; i++) {
+  for (size_t i = 0; i < ty->oneof.function.num_params; i++) {
     param_types[i + complex_return] =
-        ast_underlying_ty_to_llvm_ty(codegen, ty->function.param_types[i]);
+        ast_underlying_ty_to_llvm_ty(codegen, ty->oneof.function.param_types[i]);
   }
   LLVMTypeRef func_type =
-      LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params, ty->function.vararg);
+      LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params, ty->oneof.function.vararg);
   free(param_types);
   return func_type;
 }

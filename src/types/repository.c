@@ -41,27 +41,31 @@ struct type_repository *new_type_repository(struct compiler *compiler) {
 
   // i1 / u1
   repo->signed_integer_types[0] =
-      (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 1, .width = 1}};
+      (struct ast_ty){.ty = AST_TYPE_INTEGER, .oneof = {.integer = {.is_signed = 1, .width = 1}}};
   repo->unsigned_integer_types[0] =
-      (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 0, .width = 1}};
-  repo->signed_integer_types[5] = (struct ast_ty){
-      .ty = AST_TYPE_INTEGER, .integer = {.is_signed = 1, .width = 1}, .flags = TYPE_FLAG_CONSTANT};
-  repo->unsigned_integer_types[5] = (struct ast_ty){
-      .ty = AST_TYPE_INTEGER, .integer = {.is_signed = 0, .width = 1}, .flags = TYPE_FLAG_CONSTANT};
+      (struct ast_ty){.ty = AST_TYPE_INTEGER, .oneof = {.integer = {.is_signed = 0, .width = 1}}};
+  repo->signed_integer_types[5] =
+      (struct ast_ty){.ty = AST_TYPE_INTEGER,
+                      .oneof = {.integer = {.is_signed = 1, .width = 1}},
+                      .flags = TYPE_FLAG_CONSTANT};
+  repo->unsigned_integer_types[5] =
+      (struct ast_ty){.ty = AST_TYPE_INTEGER,
+                      .oneof = {.integer = {.is_signed = 0, .width = 1}},
+                      .flags = TYPE_FLAG_CONSTANT};
 
   // 8, 16, 32, 64 bit signed/unsigned
   for (size_t i = 0; i < 4; ++i) {
-    repo->signed_integer_types[i + 1] =
-        (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 1, .width = 8U << i}};
+    repo->signed_integer_types[i + 1] = (struct ast_ty){
+        .ty = AST_TYPE_INTEGER, .oneof = {.integer = {.is_signed = 1, .width = 8U << i}}};
     repo->signed_integer_types[i + 1 + 5] =
         (struct ast_ty){.ty = AST_TYPE_INTEGER,
-                        .integer = {.is_signed = 1, .width = 8U << i},
+                        .oneof = {.integer = {.is_signed = 1, .width = 8U << i}},
                         .flags = TYPE_FLAG_CONSTANT};
-    repo->unsigned_integer_types[i + 1] =
-        (struct ast_ty){.ty = AST_TYPE_INTEGER, .integer = {.is_signed = 0, .width = 8U << i}};
+    repo->unsigned_integer_types[i + 1] = (struct ast_ty){
+        .ty = AST_TYPE_INTEGER, .oneof = {.integer = {.is_signed = 0, .width = 8U << i}}};
     repo->unsigned_integer_types[i + 1 + 5] =
         (struct ast_ty){.ty = AST_TYPE_INTEGER,
-                        .integer = {.is_signed = 0, .width = 8U << i},
+                        .oneof = {.integer = {.is_signed = 0, .width = 8U << i}},
                         .flags = TYPE_FLAG_CONSTANT};
   }
 
@@ -81,18 +85,18 @@ struct ast_ty *type_repository_register(struct type_repository *repo, struct ast
     return NULL;
   }
 
-  if (ty->ty == AST_TYPE_CUSTOM && !ty->custom.is_template) {
+  if (ty->ty == AST_TYPE_CUSTOM && !ty->oneof.custom.is_template) {
     compiler_log(repo->compiler, LogLevelError, "typerepo",
                  "type %s is a custom type [%d], needs to be resolved first", ty->name,
-                 ty->custom.is_template);
+                 ty->oneof.custom.is_template);
     return NULL;
   }
 
   if (ty->ty == AST_TYPE_INTEGER) {
-    size_t index = integer_index(ty->integer.width, ty->flags & TYPE_FLAG_CONSTANT);
+    size_t index = integer_index(ty->oneof.integer.width, ty->flags & TYPE_FLAG_CONSTANT);
     if (index < 10) {
-      return ty->integer.is_signed ? &repo->signed_integer_types[index]
-                                   : &repo->unsigned_integer_types[index];
+      return ty->oneof.integer.is_signed ? &repo->signed_integer_types[index]
+                                         : &repo->unsigned_integer_types[index];
     }
   } else if (ty->ty == AST_TYPE_FLOAT) {
     return &repo->float_type;
@@ -214,10 +218,10 @@ struct ast_ty *type_repository_lookup_ty(struct type_repository *repo, struct as
   }
 
   if (ty->ty == AST_TYPE_INTEGER) {
-    size_t index = integer_index(ty->integer.width, ty->flags & TYPE_FLAG_CONSTANT);
+    size_t index = integer_index(ty->oneof.integer.width, ty->flags & TYPE_FLAG_CONSTANT);
     if (index < 10) {
-      return ty->integer.is_signed ? &repo->signed_integer_types[index]
-                                   : &repo->unsigned_integer_types[index];
+      return ty->oneof.integer.is_signed ? &repo->signed_integer_types[index]
+                                         : &repo->unsigned_integer_types[index];
     }
   } else if (ty->ty == AST_TYPE_FLOAT) {
     return &repo->float_type;

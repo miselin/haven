@@ -50,7 +50,7 @@ static enum VisitorResult tyverify_visitor(struct ast_visitor_node *node, void *
 
 static int typecheck_verify_toplevel(struct tyverify_state *state, struct ast_toplevel *ast) {
   if (ast->type == AST_DECL_TYPE_FDECL) {
-    if (is_bad_type(ast->toplevel.fdecl.function_ty->function.retty)) {
+    if (is_bad_type(ast->toplevel.fdecl.function_ty->oneof.function.retty)) {
       compiler_log(state->compiler, LogLevelError, "tyverify",
                    "function %s has unresolved return type",
                    ast->toplevel.fdecl.ident.value.identv.ident);
@@ -59,7 +59,7 @@ static int typecheck_verify_toplevel(struct tyverify_state *state, struct ast_to
     }
 
     for (size_t i = 0; i < ast->toplevel.fdecl.num_params; i++) {
-      struct ast_ty *param_ty = ast->toplevel.fdecl.function_ty->function.param_types[i];
+      struct ast_ty *param_ty = ast->toplevel.fdecl.function_ty->oneof.function.param_types[i];
       if (is_bad_type(param_ty)) {
         compiler_log(state->compiler, LogLevelError, "tyverify",
                      "function %s has unresolved parameter type for parameter %zd",
@@ -94,7 +94,7 @@ static int typecheck_verify_expr(struct tyverify_state *state, struct ast_expr *
 }
 
 static int typecheck_verify_struct_decl(struct tyverify_state *state, struct ast_ty *decl) {
-  struct ast_struct_field *field = decl->structty.fields;
+  struct ast_struct_field *field = decl->oneof.structty.fields;
   while (field) {
     if (is_bad_type(field->ty)) {
       compiler_log(state->compiler, LogLevelError, "tyverify",

@@ -50,7 +50,7 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
         LLVMValueRef indicies[2] = {
             LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
             LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context),
-                         ast->expr.deref.field_idx * ast->ty->matrix.rows, 0),
+                         ast->expr.deref.field_idx * ast->ty->oneof.matrix.rows, 0),
         };
 
         return LLVMBuildGEP2(codegen->llvm_builder, expr_ty, target, indicies, 2,
@@ -68,7 +68,7 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
       }
 
       // union -> read from first field, direct pointer access
-      if (target_ty->ty == AST_TYPE_STRUCT && target_ty->structty.is_union) {
+      if (target_ty->ty == AST_TYPE_STRUCT && target_ty->oneof.structty.is_union) {
         return target;
       }
 
@@ -76,7 +76,7 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
                    ast->expr.deref.field.value.identv.ident);
 
       // struct -> GEP the field
-      snprintf(name, 512, "deref.gep.%s", ast->expr.deref.field.value.identv.ident);
+      snprintf(name, 512, "lv.deref.gep.%s", ast->expr.deref.field.value.identv.ident);
       return LLVMBuildStructGEP2(codegen->llvm_builder, expr_ty, target,
                                  (unsigned int)ast->expr.deref.field_idx, name);
     }; break;
