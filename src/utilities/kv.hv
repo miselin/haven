@@ -19,9 +19,8 @@ type KVIterator = struct {
 };
 
 pub impure fn KV *new_kv() {
-    let KV *heap_kv = malloc(8);
-    let kv = struct KV { nil };
-    store heap_kv kv;
+    let mut heap_kv = as KV* malloc(as u64 sizeof KV);
+    heap_kv->head = nil;
     heap_kv
 }
 
@@ -30,22 +29,34 @@ pub impure fn void kv_insert(mut KV *kv, i8 *key, void *value) {
         ret;
     };
 
-    let KV *heap_new_node = malloc(32);
-    let new_node = struct KVNode { as i8* malloc(strlen(key) + 1), value, nil };
-    strcpy(new_node.key, key);
-    store heap_new_node new_node;
+    let mut node = as KVNode* malloc(as u64 sizeof KVNode);
+    node->key = malloc(strlen(key) + 1);
+    node->value = value;
+    node->next = nil;
 
-    let mut node = kv->head;
-    if node == nil {
-        kv->head = heap_new_node;
+    strcpy(node->key, key);
+
+    let mut last = kv->head;
+    let mut iternode = last;
+    if last == nil {
+        kv->head = node;
         ret;
     };
 
-    while node->next != nil {
-        node = node->next;
+    while iternode != nil {
+        last = iternode;
+
+        if strcmp(iternode->key, key) == 0 {
+            iternode->value = value;
+            free(node->key);
+            free(node);
+            ret;
+        };
+
+        iternode = iternode->next;
     };
 
-    node->next = heap_new_node;
+    last->next = node;
 }
 
 pub impure fn i8* kv_lookup(KV *kv, i8 *key) {

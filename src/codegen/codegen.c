@@ -251,8 +251,12 @@ static LLVMTypeRef emit_struct_type(struct codegen *codegen, struct ast_ty *ty) 
   char buf[256 + 8];
   snprintf(buf, 256 + 8, "%s.%s", ty->oneof.structty.is_union ? "union" : "struct", ty->name);
 
-  struct struct_entry *entry = calloc(1, sizeof(struct struct_entry));
-  kv_insert(codegen->structs, ty->name, entry);
+  struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
+  if (!entry) {
+    entry = calloc(1, sizeof(struct struct_entry));
+    kv_insert(codegen->structs, ty->name, entry);
+  }
+
   entry->type = LLVMStructCreateNamed(codegen->llvm_context, buf);
 
   unsigned int num_fields =

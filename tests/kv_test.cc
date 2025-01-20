@@ -30,9 +30,7 @@ TEST(KVTest, InsertOverwrite) {
   kv_insert(kv, "hello", (void *)1);
   kv_insert(kv, "hello", (void *)2);
 
-  // TODO: the compiler depends on this behavior, i.e. later inserts don't overwrite earlier ones
-  // but that's totally a bug and should be fixed.
-  EXPECT_EQ(kv_lookup(kv, "hello"), (void *)1);
+  EXPECT_EQ(kv_lookup(kv, "hello"), (void *)2);
 
   destroy_kv(kv);
 }

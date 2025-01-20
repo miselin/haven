@@ -42,14 +42,12 @@ void kv_insert(struct kv *kv, const char *key, void *value) {
   while (iternode) {
     last = iternode;
 
-#if 0
     if (!strcmp(iternode->key, key)) {
       iternode->value = value;
       free(node->key);
       free(node);
       return;
     }
-#endif
 
     iternode = iternode->next;
   }
