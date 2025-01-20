@@ -56,6 +56,8 @@ enum Pass {
 #define FLAG_ASAN (1U << 6)
 // Enable trace level debugging, which is immensely verbose.
 #define FLAG_TRACE (1U << 7)
+// Disable emission of frame pointers
+#define FLAG_NO_FRAME_POINTER (1U << 8)
 
 struct compiler;
 

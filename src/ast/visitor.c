@@ -38,7 +38,6 @@ static enum VisitorResult visitor_visit_toplevel(struct ast_visitor *visitor,
   compiler_log(visitor->compiler, LogLevelTrace, "ast_visitor", "visiting toplevel %d [depth=%zd]",
                ast->type, visitor->depth);
 
-  // TODO: vdecl init_exprs, fdecl bodies, etc
   struct ast_visitor_node node = {.toplevel = ast, .depth = visitor->depth++};
   enum VisitorResult result = visitor->visit(&node, visitor->user_data);
   --visitor->depth;

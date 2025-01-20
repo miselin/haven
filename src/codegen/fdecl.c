@@ -80,9 +80,13 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       }
       LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
                               codegen_enum_attribute(codegen, "nounwind", 0));
-      // TODO: frame pointer flag
+
+      const char *fp = "all";
+      if (compiler_get_flags(codegen->compiler) & FLAG_NO_FRAME_POINTER) {
+        fp = "none";
+      }
       LLVMAddAttributeAtIndex(func, (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
-                              codegen_string_attribute(codegen, "frame-pointer", "all"));
+                              codegen_string_attribute(codegen, "frame-pointer", fp));
 
       char *cpu_name = LLVMGetHostCPUName();
       LLVMAddTargetDependentFunctionAttr(func, "target-cpu", cpu_name);
