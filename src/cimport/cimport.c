@@ -803,6 +803,7 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
     compiler_log(importer->compiler, LogLevelError, "cimport",
                  "Unable to parse translation unit (error %d)", rc);
     clang_disposeIndex(importer->index);
+    importer->index = NULL;
     return -1;
   }
 
