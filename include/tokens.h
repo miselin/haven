@@ -85,6 +85,7 @@ enum token_id {
   TOKEN_KW_BOX,        // box
   TOKEN_KW_UNBOX,      // unbox
   TOKEN_KW_INTRINSIC,  // intrinsic
+  TOKEN_KW_UNTIL,      // until
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

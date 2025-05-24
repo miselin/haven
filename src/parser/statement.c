@@ -123,6 +123,26 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
       }
       break;
 
+    case TOKEN_KW_UNTIL: {
+      // until is basically sugar for a while loop, but with an inverted condition
+      parser_consume_peeked(parser, NULL);
+      result->type = AST_STMT_TYPE_WHILE;
+      struct ast_expr *inner = parse_expression(parser);
+      if (!inner) {
+        free(result);
+        return NULL;
+      }
+      result->stmt.while_stmt.cond = (struct ast_expr *)calloc(1, sizeof(struct ast_expr));
+      lexer_locate(parser->lexer, &result->stmt.while_stmt.cond->loc);
+      result->stmt.while_stmt.cond->type = AST_EXPR_TYPE_UNARY;
+      result->stmt.while_stmt.cond->expr.unary.op = AST_UNARY_OP_NOT;
+      result->stmt.while_stmt.cond->expr.unary.expr = inner;
+      if (parse_block(parser, &result->stmt.while_stmt.block) < 0) {
+        free(result);
+        return NULL;
+      }
+    } break;
+
     case TOKEN_KW_BREAK:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_BREAK;
@@ -143,8 +163,10 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
       }
   }
 
-  // must end in either semicolon or rbrace
+  // must end in semicolon, or rbrace
   enum token_id peek = parser_peek(parser);
+
+  // <stmt>;
   if (peek != TOKEN_RBRACE) {
     if (parser_consume(parser, &token, TOKEN_SEMI) < 0) {
       free(result);
