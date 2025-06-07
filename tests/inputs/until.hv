@@ -1,0 +1,7 @@
+pub fn i32 sut() {
+    let mut i = as i32 0;
+    until i == 10 {
+        i = i + 1;
+    };
+    i
+}
