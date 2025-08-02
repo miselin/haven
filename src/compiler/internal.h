@@ -26,6 +26,7 @@ enum Options {
   OnlyCompile,
   AddressSanitizer,
   TraceLogs,
+  FlagBootstrap,
 };
 
 enum Color {

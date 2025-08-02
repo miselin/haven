@@ -42,6 +42,7 @@ static void usage(void) {
   fprintf(stderr, "  --ld <pathh>   use <path> as the linker\n");
   fprintf(stderr, "  --no-color     disable color in diagnostics\n");
   fprintf(stderr, "  --asan         enable the Address Sanitizer\n");
+  fprintf(stderr, "  --bootstrap    enable bootstrap mode (for building Haven itself)\n");
 }
 
 int parse_flags(struct compiler *into, int argc, char *const argv[]) {
@@ -74,6 +75,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"ld", required_argument, 0, Linker},
                                   {"asan", no_argument, 0, AddressSanitizer},
                                   {"trace", no_argument, 0, TraceLogs},
+                                  {"bootstrap", no_argument, 0, FlagBootstrap},
                                   {0, 0, 0, 0}};
 
   int opt;
@@ -171,6 +173,9 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
       } break;
       case TraceLogs:
         into->flags[0] |= FLAG_TRACE;
+        break;
+      case FlagBootstrap:
+        into->flags[0] |= FLAG_BOOTSTRAP;
         break;
       default:
         usage();

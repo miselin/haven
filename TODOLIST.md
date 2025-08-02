@@ -1,5 +1,7 @@
 # High-Level TODOs
 
+## TODOs from early compiler development
+
 - [ ] UTF8 tokens, not chars
 - [x] sret setup for returning structs/enums from functions
 - [x] probably need a plan for passing structs/enums TO functions too
@@ -29,4 +31,15 @@
 - [ ] va args (`va_arg` IR instruction + intrinsics)
 - [ ] maybe emit C for easier bootstrapping?
 - [ ] contextual KWs from the lexer - e.g. `type` or `iter` could be a valid identifier, as `type` and `iter` have very specific contexts in which they are valid keywords
+
+## TODOs from later in development
+
 - [ ] there's a subtle bug in struct layout somewhere - specifically around alignment - that's affecting C ABI compatibility (seeing it a lot with AST data structures in particular)
+- [ ] use a GC strategy for AST nodes and types, the current structure is _so_ brittle
+- [ ] switch to interning for strings across the compiler
+- [ ] switch to interning for types
+- [ ] drop cimport, support some sort of FFI instead
+
+## Big TODOs for the future
+
+- [ ] self-hosting should look like writing a compiler in the language, _not simply porting the C code_.

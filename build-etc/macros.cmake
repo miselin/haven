@@ -4,7 +4,7 @@ macro(add_bootstrap_haven_library name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven_bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap --bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_bootstrap runtime ${ARGN}
         COMMENT "Building ${name} from ${source} [bootstrap]"
@@ -21,7 +21,7 @@ macro(add_bootstrap_haven_executable name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven_bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap --bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_bootstrap runtime ${ARGN}
         COMMENT "Building ${name} from ${source} [bootstrap]"

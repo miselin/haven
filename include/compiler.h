@@ -58,6 +58,8 @@ enum Pass {
 #define FLAG_TRACE (1U << 7)
 // Disable emission of frame pointers
 #define FLAG_NO_FRAME_POINTER (1U << 8)
+// Bootstrap mode, which enables cimport for bootstrapping the compiler to build itself
+#define FLAG_BOOTSTRAP (1U << 9)
 
 struct compiler;
 
