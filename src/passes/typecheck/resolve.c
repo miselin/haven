@@ -260,7 +260,9 @@ void patch_type_tbds(struct typecheck *typecheck, struct ast_ty *ty, struct ast_
           compiler_log(typecheck->compiler, LogLevelDebug, "typecheck",
                        "patching inner type for enum field %s which is %p", field->name,
                        (void *)field->inner);
-          if (field->inner->ty == AST_TYPE_CUSTOM) {
+          if (!field->inner) {
+            field->inner = type_repository_error(typecheck->type_repo);
+          } else if (field->inner->ty == AST_TYPE_CUSTOM) {
             field->inner = type_repository_lookup(typecheck->type_repo, field->inner->name);
           } else {
             patch_type_tbds(typecheck, field->inner, NULL);

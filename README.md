@@ -15,6 +15,16 @@ Math capabilities aside, it is also intended to support systems programming use 
 
 And, all else aside, I really just wanted to build a language that's optimized for me and the kind of things I want to write.
 
+## The Compilers
+
+This repository is split into two compilers:
+
+1. The initial compiler, built in C, in `src` and `include`, and
+2. The self-hosted compiler, written in Haven, currently in `src-new`.
+
+The initial compiler in C is hardly production quality, and I'm trying to minimize how much additional effort
+I invest into it outside of necessary additions or fixes to support the self-hosting effort.
+
 ## Fractal Example
 
 This example shows some of the Haven syntax and its native vector and matrix support.

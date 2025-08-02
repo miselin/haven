@@ -56,6 +56,7 @@ include_directories(include src)
 enable_testing()
 
 add_subdirectory(src)
+add_subdirectory(src-new)
 add_subdirectory(tests)
 add_subdirectory(bench)
 
