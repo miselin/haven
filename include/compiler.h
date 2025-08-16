@@ -89,6 +89,17 @@ int compiler_finalize_imports(struct compiler *compiler, struct ast_import *into
 struct ast_program *compiler_get_ast(struct compiler *compiler);
 struct type_repository *compiler_get_type_repository(struct compiler *compiler);
 
+// Serialize the AST into the given buffer. This can be used to save the AST for later use,
+// or to pass the AST to Haven code to be transformed into Haven structures for passes.
+int compiler_serialize_ast(struct compiler *compiler, char *buffer, size_t *len);
+
+// Deserialize the given buffer containing a serialized AST and codegen it using the
+// compiler object's flags (e.g. output file).  It's expected that the deserialized
+// AST is in a form that is fully ready for codegen, i.e. all passes have been run,
+// all types are resolved, and so on. The compiler is likely to crash if this is not
+// the case.
+int compiler_deserialize_and_codegen(struct compiler *compiler, char *buffer, size_t len);
+
 void destroy_compiler(struct compiler *compiler);
 
 __attribute__((__format__(__printf__, 3, 0))) int compiler_vdiag(struct compiler *compiler,

@@ -68,6 +68,8 @@ struct compiler {
   const char *input_file;
   const char *output_file;
 
+  FILE *out;
+
   enum OptLevel opt_level;
   enum OutputFormat output_format;
   enum RelocationsType relocations_type;

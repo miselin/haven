@@ -403,4 +403,7 @@ typedef enum VisitorResult (*ast_visitor_fn)(struct ast_visitor_node *node, void
 void ast_visit(struct compiler *compiler, struct ast_program *ast, ast_visitor_fn visit,
                void *user_data);
 
+int ast_serialize(struct ast_program *ast, char *buffer, size_t *len);
+int ast_deserialize(struct compiler *compiler, char *buffer, size_t len, struct ast_program **ast);
+
 #endif

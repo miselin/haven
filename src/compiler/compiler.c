@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "ast.h"
 #include "cfold.h"
 #include "cimport.h"
 #include "codegen.h"
@@ -15,8 +16,11 @@
 #include "semantic.h"
 #include "typecheck.h"
 #include "types.h"
+#include "utility.h"
 
 static int compiler_requires_linking(enum OutputFormat format);
+
+static int compiler_emit(struct compiler *compiler, struct codegen *codegen);
 
 struct compiler *new_compiler(int argc, const char *argv[]) {
   struct compiler *result = calloc(1, sizeof(struct compiler));
@@ -79,6 +83,10 @@ void destroy_compiler(struct compiler *compiler) {
     free(dir);
     dir = next;
   }
+  if (compiler->out) {
+    fclose(compiler->out);
+    compiler->out = NULL;
+  }
   free((void *)compiler->input_file);
   free((void *)compiler->output_file);
   if (compiler->parser) {
@@ -114,10 +122,10 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     output_file = "tmp.haven.o";
   }
 
-  FILE *out = stdout;
+  compiler->out = stdout;
   if (compiler->output_file) {
-    out = fopen(output_file, "w");
-    if (!out) {
+    compiler->out = fopen(output_file, "w");
+    if (!compiler->out) {
       perror("fopen");
       return 1;
     }
@@ -231,30 +239,12 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
     struct codegen *codegen = new_codegen(parser_get_ast(parser), compiler);
     rc = codegen_run(codegen);
     if (rc == 0) {
-      if (compiler->flags[0] & FLAG_DEBUG_IR) {
-        codegen_emit_ir(codegen, stderr);
-      }
-
-      switch (compiler->output_format) {
-        case OutputIR:
-          rc = codegen_emit_ir(codegen, out);
-          break;
-        case OutputASM:
-          rc = codegen_emit_asm(codegen, out);
-          break;
-        case OutputBitcode:
-          rc = codegen_emit_bitcode(codegen, out);
-          break;
-        case OutputObject:
-        case OutputLinkedBinary:
-        case OutputLinkedLibrary:
-          rc = codegen_emit_obj(codegen, out);
-          break;
-      }
+      rc = compiler_emit(compiler, codegen);
     }
 
-    if (out != stdout) {
-      fclose(out);
+    if (compiler->out != stdout) {
+      fclose(compiler->out);
+      compiler->out = NULL;
     }
 
     destroy_codegen(codegen);
@@ -266,8 +256,32 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
   }
 
 out:
-  if (compiler_requires_linking(compiler->output_format)) {
-    unlink(output_file);
+
+  return rc;
+}
+
+static int compiler_emit(struct compiler *compiler, struct codegen *codegen) {
+  int rc = 0;
+
+  if (compiler->flags[0] & FLAG_DEBUG_IR) {
+    codegen_emit_ir(codegen, stderr);
+  }
+
+  switch (compiler->output_format) {
+    case OutputIR:
+      rc = codegen_emit_ir(codegen, compiler->out);
+      break;
+    case OutputASM:
+      rc = codegen_emit_asm(codegen, compiler->out);
+      break;
+    case OutputBitcode:
+      rc = codegen_emit_bitcode(codegen, compiler->out);
+      break;
+    case OutputObject:
+    case OutputLinkedBinary:
+    case OutputLinkedLibrary:
+      rc = codegen_emit_obj(codegen, compiler->out);
+      break;
   }
 
   return rc;
@@ -294,6 +308,39 @@ const char *outext(struct compiler *compiler) {
 
 struct ast_program *compiler_get_ast(struct compiler *compiler) {
   return parser_get_ast(compiler->parser);
+}
+
+int compiler_serialize_ast(struct compiler *compiler, char *buffer, size_t *len) {
+  return ast_serialize(parser_get_ast(compiler->parser), buffer, len);
+}
+
+int compiler_deserialize_and_codegen(struct compiler *compiler, char *buffer, size_t len) {
+  struct ast_program *ast = NULL;
+
+  int rc = ast_deserialize(compiler, buffer, len, &ast);
+  if (rc < 0) {
+    compiler_log(compiler, LogLevelError, "compiler", "failed to deserialize AST: %d", rc);
+    return rc;
+  }
+
+  if (compiler->flags[0] & FLAG_DISPLAY_AST) {
+    fprintf(stderr, "== Pre-codegen AST ==\n");
+    dump_ast(ast);
+  }
+
+  struct codegen *codegen = new_codegen(ast, compiler);
+  rc = codegen_run(codegen);
+  if (rc == 0) {
+    rc = compiler_emit(compiler, codegen);
+  }
+
+  if (compiler->out != stdout) {
+    fclose(compiler->out);
+    compiler->out = NULL;
+  }
+
+  destroy_codegen(codegen);
+  return rc;
 }
 
 struct type_repository *compiler_get_type_repository(struct compiler *compiler) {

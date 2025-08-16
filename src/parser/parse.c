@@ -51,14 +51,21 @@ int parser_run(struct parser *parser, int root_tu) {
       return -1;
     }
 
-    import_decl->type = AST_DECL_TYPE_IMPORT;
-    import_decl->loc = parser->ast.loc;
-    import_decl->next = parser->ast.decls;
-    parser->ast.decls = import_decl;
+    // Only insert the import decl if there is in fact an AST there
+    if (import_decl->toplevel.import.ast != NULL) {
+      import_decl->type = AST_DECL_TYPE_IMPORT;
+      import_decl->loc = parser->ast.loc;
+      import_decl->next = parser->ast.decls;
+      parser->ast.decls = import_decl;
+    } else {
+      free(import_decl);
+    }
 
     // preamble must be added after the import; it must be the first decls as C imports depend on it
-    if (parser_add_preamble(parser) < 0) {
-      return -1;
+    if ((compiler_get_flags(parser->compiler) & FLAG_NO_PREAMBLE) == 0) {
+      if (parser_add_preamble(parser) < 0) {
+        return -1;
+      }
     }
   }
 
