@@ -1,0 +1,60 @@
+foreign "m" {
+    fn fabsf(float x) -> float;
+}
+
+foreign "c" {
+    fn printf(str format, *) -> i32;
+}
+
+type Result = {
+    float eigenvalue;
+    fvec3 eigenvector;
+};
+
+fn vec-mul-mat(fvec3 v, mat3x3 m) -> fvec3 {
+    v * m
+}
+
+fn vec-dot(fvec3 a, fvec3 b) -> float {
+    let mult = a * b;
+    mult.x + mult.y + mult.z
+}
+
+impure fn vec-norm(fvec3 v) -> fvec3 {
+    let denom = 1.0 / sqrtf(vec-dot(v, v));
+    v * denom
+}
+
+impure fn power_iter(mat3x3 m) -> Result {
+    let eigenvector = <1.0, 1.0, 1.0>;
+    let eigenvalue = 0.0;
+
+    while 1 {
+        let v = vec-mul-mat(eigenvector, m);
+        let new_eigenvalue = vec-dot(v, eigenvector);
+
+        if fabsf(new_eigenvalue - eigenvalue) < 0.000001 {
+            eigenvalue = new_eigenvalue;
+            break;
+        };
+
+        eigenvalue = new_eigenvalue;
+        eigenvector = vec-norm(v);
+    };
+
+    { eigenvalue, eigenvector }
+}
+
+pub impure fn main() -> i32 {
+    let m = <<2.0, -1.0, 0.0>,
+             <-1.0, 2.0, -1.0>,
+             <0.0, -1.0, 2.0>>;
+
+    let result = power_iter(m);
+
+    printf("eigenvalue: %f\n", result.eigenvalue);
+
+    let v = result.eigenvector;
+    printf("eigenvalues: %f %f %f\n", v.x, v.y, v.z);
+    0
+}
