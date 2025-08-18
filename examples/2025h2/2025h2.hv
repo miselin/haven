@@ -26,26 +26,29 @@ impure fn vec-norm(fvec3 v) -> fvec3 {
 }
 
 impure fn power_iter(mat3x3 m) -> Result {
-    let eigenvector = <1.0, 1.0, 1.0>;
-    let eigenvalue = 0.0;
+    // fvec3 inferred from vector initializer
+    // mutable value allowing reassignment later
+    let eigenvector = mutable <1.0, 1.0, 1.0>;
+    let eigenvalue = mutable 0.0;
 
     while 1 {
         let v = vec-mul-mat(eigenvector, m);
-        let new_eigenvalue = vec-dot(v, eigenvector);
+        let new-eigenvalue = vec-dot(v, eigenvector);
 
-        if fabsf(new_eigenvalue - eigenvalue) < 0.000001 {
-            eigenvalue = new_eigenvalue;
+        if fabsf(new-eigenvalue - eigenvalue) < 0.000001 {
+            eigenvalue := new-eigenvalue;
             break;
         };
 
-        eigenvalue = new_eigenvalue;
-        eigenvector = vec-norm(v);
+        eigenvalue := new-eigenvalue;
+        eigenvector := vec-norm(v);
     };
 
     { eigenvalue, eigenvector }
 }
 
 pub impure fn main() -> i32 {
+    // mat3x3 inferred from matrix initializer
     let m = <<2.0, -1.0, 0.0>,
              <-1.0, 2.0, -1.0>,
              <0.0, -1.0, 2.0>>;

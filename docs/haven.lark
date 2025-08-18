@@ -18,10 +18,12 @@ param: type IDENT
 
 block: "{" (stmt ";")* expr? "}"
 
-stmt: "let" IDENT (":" type)? "=" (expr | initializer) // variable declaration
+stmt: "let" IDENT (":" type)? "=" (initattr)* (expr | initializer) // variable declaration
     | "while" expr block // while loop
-    | IDENT "=" expr // assignment
+    | IDENT ":=" expr // modification of mutable
     | expr // expression with unused result
+
+initattr: "mutable"
 
 expr: if_expr
     | or_expr
@@ -62,3 +64,10 @@ STRING: /"([^"\\]|\\.)*"/
 
 %import common.WS
 %ignore WS
+
+COMMENT: "//" /[^\n]/*
+%ignore COMMENT
+
+ML_COMMENT: "/*" /.*\*\//
+%ignore ML_COMMENT
+
