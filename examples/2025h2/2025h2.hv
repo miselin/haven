@@ -11,7 +11,8 @@ type Result = {
     fvec3 eigenvector;
 };
 
-fn vec-mul-mat(fvec3 v, mat3x3 m) -> fvec3 {
+// pass-by-ref is unnecessary here, but showing the syntax anyway
+fn vec-mul-mat(Cell<fvec3> v, mat3x3 m) -> fvec3 {
     v * m
 }
 
@@ -27,12 +28,15 @@ impure fn vec-norm(fvec3 v) -> fvec3 {
 
 impure fn power_iter(mat3x3 m) -> Result {
     // fvec3 inferred from vector initializer
-    // mutable value allowing reassignment later
-    let eigenvector = mutable <1.0, 1.0, 1.0>;
-    let eigenvalue = mutable 0.0;
+    // mutable values allowing reassignment later, type Cell<fvec3> inferred
+    let eigenvector = cell <1.0, 1.0, 1.0>;
+    let eigenvalue = cell 0.0;
 
     while 1 {
-        let v = vec-mul-mat(eigenvector, m);
+        // rvalue of Cell<T> consumes the referenced value directly - pass by value
+        // use & to pass a Cell<T> directly e.g. &eigenvector == Cell<fvec3> - pass by reference
+        // function needs to take Cell<T> explicitly to use &...
+        let v = vec-mul-mat(&eigenvector, m);
         let new-eigenvalue = vec-dot(v, eigenvector);
 
         if fabsf(new-eigenvalue - eigenvalue) < 0.000001 {
@@ -40,10 +44,12 @@ impure fn power_iter(mat3x3 m) -> Result {
             break;
         };
 
+        // update of the mutable cell via := assignment
         eigenvalue := new-eigenvalue;
         eigenvector := vec-norm(v);
     };
 
+    // fn return type provides the context to understand the initializer
     { eigenvalue, eigenvector }
 }
 

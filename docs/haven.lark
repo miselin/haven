@@ -9,7 +9,9 @@ tydecl: "type" IDENT "=" (type | "{" (field_decl)* "}") ";"
 
 fnattr: "impure" | "pub"
 
-type: NUMERIC_TYPE | VEC_TYPE | MAT_TYPE | FLOAT_TYPE | VOID_TYPE | STR_TYPE | IDENT
+type: NUMERIC_TYPE | VEC_TYPE | MAT_TYPE | FLOAT_TYPE | VOID_TYPE | STR_TYPE | type_cell | IDENT
+
+type_cell: "Cell" "<" type ">"
 
 field_decl: type IDENT ";"
 
@@ -23,7 +25,7 @@ stmt: "let" IDENT (":" type)? "=" (initattr)* (expr | initializer) // variable d
     | IDENT ":=" expr // modification of mutable
     | expr // expression with unused result
 
-initattr: "mutable"
+initattr: "cell"
 
 expr: if_expr
     | or_expr
@@ -45,7 +47,7 @@ vec_initializer: "<" expr ("," expr)* ">"
 ?mul_expr: unary (("*"|"/"|"%") unary)*
 ?unary: ("!"|"-") unary | postfix
 ?postfix: primary ( "(" args? ")" | "." IDENT | "[" expr "]" )*
-?primary: IDENT | constant | "(" expr ")" | "cast" "<" type ">" "(" expr ")" | initializer | block
+?primary: "&" IDENT | IDENT | constant | "(" expr ")" | "as" "<" type ">" "(" expr ")" | initializer | block
 constant: INT | FLOAT | STRING
 args: expr ("," expr)*
 
