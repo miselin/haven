@@ -41,25 +41,25 @@ enum Pass {
 };
 
 // Display verbose output including compiler internal logging during compilation
-#define FLAG_VERBOSE (1U << 0)
+#define FLAG_VERBOSE (1UL << 0)
 // Display the parsed AST before emission (after all passes)
-#define FLAG_DISPLAY_AST (1U << 1)
+#define FLAG_DISPLAY_AST (1UL << 1)
 // Do not use color in diagnostics and other compiler messages
-#define FLAG_NO_COLOR (1U << 2)
+#define FLAG_NO_COLOR (1UL << 2)
 // Display the generated IR before emission
-#define FLAG_DEBUG_IR (1U << 3)
+#define FLAG_DEBUG_IR (1UL << 3)
 // Turn on debugging in LLVM
-#define FLAG_DEBUG_LLVM (1U << 4)
+#define FLAG_DEBUG_LLVM (1UL << 4)
 // Don't emit a preamble
-#define FLAG_NO_PREAMBLE (1U << 5)
+#define FLAG_NO_PREAMBLE (1UL << 5)
 // Enable the Address Sanitizer
-#define FLAG_ASAN (1U << 6)
+#define FLAG_ASAN (1UL << 6)
 // Enable trace level debugging, which is immensely verbose.
-#define FLAG_TRACE (1U << 7)
+#define FLAG_TRACE (1UL << 7)
 // Disable emission of frame pointers
-#define FLAG_NO_FRAME_POINTER (1U << 8)
+#define FLAG_NO_FRAME_POINTER (1UL << 8)
 // Bootstrap mode, which enables cimport for bootstrapping the compiler to build itself
-#define FLAG_BOOTSTRAP (1U << 9)
+#define FLAG_BOOTSTRAP (1UL << 9)
 
 struct compiler;
 
