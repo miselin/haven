@@ -116,8 +116,6 @@ struct ast_ty parse_type(struct parser *parser) {
 
     result.ty = AST_TYPE_FUNCTION;
 
-    result.oneof.function.retty = calloc(1, sizeof(struct ast_ty));
-    *result.oneof.function.retty = parse_type(parser);
     if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
       result.ty = AST_TYPE_ERROR;
       return result;
@@ -145,6 +143,14 @@ struct ast_ty parse_type(struct parser *parser) {
       result.ty = AST_TYPE_ERROR;
       return result;
     }
+
+    if (parser_consume(parser, NULL, TOKEN_DASHGT) < 0) {
+      result.ty = AST_TYPE_ERROR;
+      return result;
+    }
+
+    result.oneof.function.retty = calloc(1, sizeof(struct ast_ty));
+    *result.oneof.function.retty = parse_type(parser);
   } else {
     parser_diag(1, parser, &parser->peek, "unexpected token of type %s when parsing type\n",
                 token_id_to_string(peek));

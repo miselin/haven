@@ -1,4 +1,4 @@
-pub impure fn i32 sut() {
+pub impure fn sut() -> i32 {
     let mut boxed = box as i32 5;
     let inner = unbox boxed;
     boxed = nil;

@@ -1,5 +1,5 @@
 type int = i32;
 
-pub fn int sut() {
+pub fn sut() -> int {
     as int 0
 }

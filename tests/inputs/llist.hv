@@ -1,11 +1,11 @@
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
 type node = struct {
     i32 value;
     node *next;
 };
 
-pub impure fn i32 sut() {
+pub impure fn sut() -> i32 {
     let tail = struct node { as i32 1, nil };
     let head = struct node { as i32 0, ref tail };
 

@@ -4,7 +4,7 @@ type Wrapper = struct {
     i32 inner;
 };
 
-pub fn i32 sut() {
+pub fn sut() -> i32 {
     let i32 x = 5;
     (sizeof i32) + (sizeof x) + (sizeof Wrapper)
 }

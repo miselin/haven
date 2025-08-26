@@ -10,26 +10,26 @@ type PurityContext = struct {
     i32 errors;
 };
 
-impure fn VisitorResult purity_visitor(ast_visitor_node *node, void *user_data);
-impure fn i32 check_purity_expr(PurityContext *ctx, ast_expr *ast);
+impure fn purity_visitor(ast_visitor_node *node, void *user_data) -> VisitorResult;
+impure fn check_purity_expr(PurityContext *ctx, ast_expr *ast) -> i32;
 
-pub impure fn PurityContext *purity_new(ast_program *ast, compiler *comp) {
+pub impure fn purity_new(ast_program *ast, compiler *comp) -> PurityContext* {
     let mut result = as PurityContext *calloc(1, as u64 sizeof (PurityContext));
     result->ast = ast;
     result->comp = comp;
     result
 }
 
-pub impure fn i32 purity_run(PurityContext *ctx) {
+pub impure fn purity_run(PurityContext *ctx) -> i32 {
     ast_visit(ctx->comp, ctx->ast, purity_visitor, ctx);
     ctx->errors
 }
 
-pub impure fn void purity_destroy(PurityContext *ctx) {
+pub impure fn purity_destroy(PurityContext *ctx) -> void {
     free(ctx);
 }
 
-impure fn VisitorResult purity_visitor(ast_visitor_node *node, void *user_data) {
+impure fn purity_visitor(ast_visitor_node *node, void *user_data) -> VisitorResult {
     let mut ctx = as PurityContext* user_data;
 
     if node->toplevel != nil {
@@ -58,7 +58,7 @@ impure fn VisitorResult purity_visitor(ast_visitor_node *node, void *user_data) 
     }
 }
 
-impure fn i32 check_purity_expr(mut PurityContext *ctx, ast_expr *ast) {
+impure fn check_purity_expr(mut PurityContext *ctx, ast_expr *ast) -> i32 {
     ctx->errors = ctx->errors + match ast->type {
         // AST_EXPR_TYPE_DEREF
         7 => {

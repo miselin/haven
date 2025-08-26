@@ -6,18 +6,18 @@ type Scope = struct {
     Scope *parent;
 };
 
-pub impure fn KVNode *scope_iter(Scope *scope);
-pub impure fn i8 *scope_next(mut KVIterator *iter_node);
-pub impure fn i32 scope_end(KVNode *iter_node);
+pub impure fn scope_iter(Scope *scope) -> KVNode*;
+pub impure fn scope_next(mut KVIterator *iter_node) -> i8*;
+pub impure fn scope_end(KVNode *iter_node) -> i32;
 
-pub impure fn Scope *enter_scope(Scope *parent) {
+pub impure fn enter_scope(Scope *parent) -> Scope* {
     let mut result = as Scope* malloc(as u64 sizeof Scope);
     result->values = new_kv();
     result->parent = parent;
     result
 }
 
-pub impure fn Scope *exit_scope(Scope *scope) {
+pub impure fn exit_scope(Scope *scope) -> Scope* {
     let mut parent = scope->parent;
 
     let iter_node = scope_iter(scope);
@@ -32,12 +32,12 @@ pub impure fn Scope *exit_scope(Scope *scope) {
     parent
 }
 
-pub impure fn void scope_insert(Scope *scope, i8 *key, void *value) {
+pub impure fn scope_insert(Scope *scope, i8 *key, void *value) -> void {
     kv_delete(scope->values, key);
     kv_insert(scope->values, key, value);
 }
 
-pub impure fn void *scope_lookup(Scope *scope, i8 *key, i32 recurse) {
+pub impure fn scope_lookup(Scope *scope, i8 *key, i32 recurse) -> void* {
     let mut result = kv_lookup(scope->values, key);
     if result != nil {
         result
@@ -48,18 +48,18 @@ pub impure fn void *scope_lookup(Scope *scope, i8 *key, i32 recurse) {
     }
 }
 
-pub impure fn KVNode *scope_iter(Scope *scope) {
+pub impure fn scope_iter(Scope *scope) -> KVNode* {
     kv_iter(scope->values)
 }
 
-pub impure fn i8 *scope_next(mut KVIterator *iter_node) {
+pub impure fn scope_next(mut KVIterator *iter_node) -> i8* {
     kv_next(iter_node)
 }
 
-pub impure fn i32 scope_end(KVNode *iter_node) {
+pub impure fn scope_end(KVNode *iter_node) -> i32 {
     kv_end(iter_node)
 }
 
-pub impure fn Scope *scope_parent(Scope *scope) {
+pub impure fn scope_parent(Scope *scope) -> Scope* {
     scope->parent
 }

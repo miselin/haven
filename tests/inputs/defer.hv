@@ -1,6 +1,6 @@
-pub fn i32 sut_exit(i32 rc);
+pub fn sut_exit(i32 rc) -> i32;
 
-pub fn i32 sut() {
+pub fn sut() -> i32 {
     defer sut_exit(1);
 
     0

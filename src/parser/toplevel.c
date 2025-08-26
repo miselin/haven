@@ -143,13 +143,8 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     decl->type = AST_DECL_TYPE_VDECL;
   }
 
-  struct ast_ty ty = parse_type(parser);
-  if (decl->type == AST_DECL_TYPE_FDECL) {
-    fdecl->parsed_function_ty.ty = AST_TYPE_FUNCTION;
-    fdecl->parsed_function_ty.oneof.function.retty = calloc(1, sizeof(struct ast_ty));
-    *(fdecl->parsed_function_ty.oneof.function.retty) = ty;
-  } else {
-    vdecl->parser_ty = ty;
+  if (decl->type != AST_DECL_TYPE_FDECL) {
+    vdecl->parser_ty = parse_type(parser);
   }
 
   // mut?
@@ -228,6 +223,17 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       free(decl);
       return NULL;
     }
+  }
+
+  if (decl->type == AST_DECL_TYPE_FDECL) {
+    if (parser_consume(parser, NULL, TOKEN_DASHGT) < 0) {
+      free(decl);
+      return NULL;
+    }
+
+    fdecl->parsed_function_ty.ty = AST_TYPE_FUNCTION;
+    fdecl->parsed_function_ty.oneof.function.retty = calloc(1, sizeof(struct ast_ty));
+    *(fdecl->parsed_function_ty.oneof.function.retty) = parse_type(parser);
   }
 
   peek = parser_peek(parser);

@@ -40,11 +40,11 @@ type AffineTransform = struct {
     fvec2 translate;
 };
 
-fn fvec2 apply(fvec2 v, AffineTransform *xform) {
+fn apply(fvec2 v, AffineTransform *xform) -> fvec2 {
     (v * xform.transform) + xform.translate
 }
 
-fn fvec4 build_cdf(fvec4 probabilities) {
+fn build_cdf(fvec4 probabilities) -> fvec4 {
     <
         probabilities.x,
         (probabilities.x + probabilities.y),
@@ -53,7 +53,7 @@ fn fvec4 build_cdf(fvec4 probabilities) {
     >
 }
 
-impure fn i32 cdf_random(fvec4 cdf) {
+impure fn cdf_random(fvec4 cdf) -> i32 {
     let r = (as float rand()) / 2147483647.0;
     if r < cdf.x {
         0
@@ -66,7 +66,7 @@ impure fn i32 cdf_random(fvec4 cdf) {
     }
 }
 
-pub impure fn i32 main() {
+pub impure fn main() -> i32 {
     let stem = struct AffineTransform {
         mat2x2 {<0.0, 0.0>, <0.0, 0.16>},
         <0.0, 0.0>

@@ -4,7 +4,7 @@ type Thing = union {
     float b;
 };
 
-pub fn i32 sut() {
+pub fn sut() -> i32 {
     let t = union Thing::a(5);
     t.a
 }

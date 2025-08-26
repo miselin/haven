@@ -1,13 +1,13 @@
 
-impure fn void set_value(i32 *x) {
+impure fn set_value(i32 *x) -> void {
     store x as i32 5;
 }
 
-impure fn i32 load_value(i32 *x) {
+impure fn load_value(i32 *x) -> i32 {
     load x
 }
 
-pub impure fn i32 sut() {
+pub impure fn sut() -> i32 {
     let i32 x = as i32 0;
     set_value(ref x);
     load_value(ref x)

@@ -1,6 +1,6 @@
 /* block comment before declaration */
 
-pub fn /* block */ i32 sut(/* in param list */) { // after opening brace
+pub fn /* block */ sut(/* in param list */) -> i32 { // after opening brace
     // leading comment
     /* block comment before expression */ 0 // trailing comment
 }

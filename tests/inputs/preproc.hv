@@ -1,6 +1,6 @@
 #if token token token 0
 #line 1 "<stdin>"
 
-pub fn i32 sut() {
+pub fn sut() -> i32 {
     0
 }

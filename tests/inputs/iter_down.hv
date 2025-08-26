@@ -1,5 +1,5 @@
 
-pub fn i32 sut() {
+pub fn sut() -> i32 {
     let mut i32 x = 0;
     iter 5:0:-1 i {
         x = x + as i32 i;

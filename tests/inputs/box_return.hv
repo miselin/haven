@@ -2,11 +2,11 @@ type Thing = struct {
     i32^ boxed;
 };
 
-pub fn i32^ new_boxed() {
+pub fn new_boxed() -> i32^ {
     box as i32 5
 }
 
-pub impure fn i32 sut() {
+pub impure fn sut() -> i32 {
     let mut t = struct Thing { new_boxed() };
     let mut b = box t;
     unbox b->boxed

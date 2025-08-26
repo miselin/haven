@@ -1,8 +1,8 @@
 import "tokens.hv";
 
-pub impure fn i32 printf(str fmt, *);
+pub impure fn printf(str fmt, *) -> i32;
 
-pub impure fn i32 main(i32 argc, i8** argv) {
+pub impure fn main(i32 argc, i8** argv) -> i32{
     printf("Hello world\n");
     0
 }

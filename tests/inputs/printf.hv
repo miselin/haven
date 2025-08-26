@@ -1,5 +1,5 @@
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn i32 sut() {
+pub fn sut() -> i32 {
     printf("aaaa")
 }

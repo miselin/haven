@@ -1,9 +1,9 @@
 cimport "stdio.h";
 cimport "stdlib.h";
 
-pub impure fn u64 strlen(i8 *s);
-pub impure fn i8* strcpy(i8 *dest, i8 *src);
-pub impure fn i32 strcmp(i8 *s1, i8 *s2);
+pub impure fn strlen(i8 *s) -> u64;
+pub impure fn strcpy(i8 *dest, i8 *src) -> i8*;
+pub impure fn strcmp(i8 *s1, i8 *s2) -> i32;
 
 type TrieValue = enum {
     Value(i8*),
@@ -28,14 +28,14 @@ type LookupResult = enum {
     NotFound
 };
 
-impure fn i8* char_to_i8ptr(i8 c) {
+impure fn char_to_i8ptr(i8 c) -> i8* {
     let mut ptr = as i8* malloc(2);
     ptr[0] = c;
     ptr[1] = 0;
     ptr
 }
 
-pub impure fn Trie* new_trie() {
+pub impure fn new_trie() -> Trie* {
     let mut root_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
     root_node->id = 0;
     root_node->key[0] = 0;
@@ -51,7 +51,7 @@ pub impure fn Trie* new_trie() {
     heap_trie
 }
 
-impure fn i32 has_children(TrieNode *node) {
+impure fn has_children(TrieNode *node) -> i32 {
     iter 0:255 i {
         if node->children[i] != nil {
             ret 1;
@@ -61,13 +61,13 @@ impure fn i32 has_children(TrieNode *node) {
     0
 }
 
-impure fn i32 next_id(mut Trie *trie) {
+impure fn next_id(mut Trie *trie) -> i32 {
     let id = trie->next_id;
     trie->next_id = trie->next_id + 1;
     id
 }
 
-pub impure fn void trie_insert(mut Trie *trie, i8 *key, i8 *value) {
+pub impure fn trie_insert(mut Trie *trie, i8 *key, i8 *value) -> void {
     if key[0] == 0 {
         ret;
     };
@@ -164,7 +164,7 @@ pub impure fn void trie_insert(mut Trie *trie, i8 *key, i8 *value) {
     node->value = TrieValue::Value(value);
 }
 
-impure fn LookupResult node_for(Trie *trie, i8 *key) {
+impure fn node_for(Trie *trie, i8 *key) -> LookupResult {
     let mut node = trie->root;
     let mut i32 ikey = 0;
     let mut i32 i = 0;
@@ -189,7 +189,7 @@ impure fn LookupResult node_for(Trie *trie, i8 *key) {
     }
 }
 
-pub impure fn i8* trie_lookup(Trie *trie, i8 *key) {
+pub impure fn trie_lookup(Trie *trie, i8 *key) -> i8* {
     let node = node_for(trie, key);
     match node {
         LookupResult::Found(node) => {
@@ -208,7 +208,7 @@ pub impure fn i8* trie_lookup(Trie *trie, i8 *key) {
     }
 }
 
-pub impure fn void trie_remove(mut Trie* trie, i8* key) {
+pub impure fn trie_remove(mut Trie* trie, i8* key) -> void {
     let mut node = node_for(trie, key);
     match node {
         LookupResult::Found(node) => {
@@ -220,7 +220,7 @@ pub impure fn void trie_remove(mut Trie* trie, i8* key) {
     }
 }
 
-impure fn void destroy_trie_node(mut TrieNode *node) {
+impure fn destroy_trie_node(mut TrieNode *node) -> void {
     iter 0:255 i {
         if node->children[i] != nil {
             destroy_trie_node(node->children[i]);
@@ -230,12 +230,12 @@ impure fn void destroy_trie_node(mut TrieNode *node) {
     free(node);
 }
 
-pub impure fn void destroy_trie(Trie *trie) {
+pub impure fn destroy_trie(Trie *trie) -> void {
     destroy_trie_node(trie->root);
     free(trie);
 }
 
-impure fn void dump_trie_node(FILE* stream, TrieNode *node) {
+impure fn dump_trie_node(FILE* stream, TrieNode *node) -> void {
     if node == nil {
         ret;
     };
@@ -249,7 +249,7 @@ impure fn void dump_trie_node(FILE* stream, TrieNode *node) {
   };
 }
 
-pub impure fn void dump_trie(Trie *trie) {
+pub impure fn dump_trie(Trie *trie) -> void {
     let stream = fopen("trie.dot", "w");
     fprintf(stream, "digraph Trie {\n");
     fprintf(stream, "  node [shape=circle];\n");

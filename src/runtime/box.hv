@@ -1,12 +1,12 @@
 cimport "stdlib.h";
 
-pub impure fn i8* memcpy(i8* dest, i8* src, i32 size);
+pub impure fn memcpy(i8* dest, i8* src, i32 size) -> i8*;
 
 type Box = struct {
     i32 refcount;
 };
 
-pub impure fn Box* __haven_new_empty_box(i32 box_size) {
+pub impure fn __haven_new_empty_box(i32 box_size) -> Box* {
     // size includes the refcount
     let mut result = as Box* calloc(1, as u64 box_size);
     result->refcount = 1;
@@ -14,7 +14,7 @@ pub impure fn Box* __haven_new_empty_box(i32 box_size) {
     result
 }
 
-pub impure fn Box* __haven_new_box(i32* value, i32 box_size, i32 value_size) {
+pub impure fn __haven_new_box(i32* value, i32 box_size, i32 value_size) -> Box* {
     let result = __haven_new_empty_box(box_size);
     let p = as i8* result;
     // use the end of the box to find the alignment for the value
@@ -23,7 +23,7 @@ pub impure fn Box* __haven_new_box(i32* value, i32 box_size, i32 value_size) {
     result
 }
 
-pub impure fn void __haven_box_ref(mut Box* target) {
+pub impure fn __haven_box_ref(mut Box* target) -> void {
     if target == nil {
         ret;
     };
@@ -31,7 +31,7 @@ pub impure fn void __haven_box_ref(mut Box* target) {
     target->refcount = target->refcount + 1;
 }
 
-pub impure fn void __haven_box_unref(mut Box* target) {
+pub impure fn __haven_box_unref(mut Box* target) -> void {
     if target == nil {
         ret;
     };
