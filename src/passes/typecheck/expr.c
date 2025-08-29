@@ -77,6 +77,44 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
             node = node->next;
           }
 
+          if (ast->ty->ty == AST_TYPE_MATRIX && ast->ty->oneof.matrix.cols == 0) {
+            // now we know the type of the inner expressions
+            struct ast_expr *first_expr = ast->expr.list->expr;
+            if (first_expr->ty->ty != AST_TYPE_FVEC) {
+              typecheck_diag_expr(typecheck, first_expr,
+                                  "matrix initializer has non-fvec type for first element\n");
+              return NULL;
+            }
+
+            ast->ty->oneof.matrix.cols = first_expr->ty->oneof.fvec.width;
+
+            size_t element = 1;
+
+            struct ast_expr_list *check_node = ast->expr.list->next;
+            while (check_node) {
+              maybe_implicitly_convert(&check_node->expr->ty, &first_expr->ty);
+
+              if (check_node->expr->ty->ty != first_expr->ty->ty) {
+                typecheck_diag_expr(typecheck, check_node->expr,
+                                    "matrix initializer has non-fvec type for element %zu\n",
+                                    element);
+                return NULL;
+              }
+
+              if (check_node->expr->ty->oneof.fvec.width != first_expr->ty->oneof.fvec.width) {
+                typecheck_diag_expr(typecheck, check_node->expr,
+                                    "matrix initializer element %zu has type fvec%zu, "
+                                    "wanted fvec%zu\n",
+                                    element, check_node->expr->ty->oneof.fvec.width,
+                                    first_expr->ty->oneof.fvec.width);
+                return NULL;
+              }
+
+              check_node = check_node->next;
+              ++element;
+            }
+          }
+
           // convert from array to full matrix type
           if (ast->ty->ty == AST_TYPE_ARRAY) {
             if (ast->ty->oneof.array.element_ty->ty == AST_TYPE_MATRIX) {
