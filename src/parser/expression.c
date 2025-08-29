@@ -231,24 +231,59 @@ struct ast_expr *parse_factor(struct parser *parser) {
       }
     } break;
 
-    // vec literals
-    case TOKEN_LT: {
+    // vec/matrix literals
+    case TOKEN_LT:
+    case TOKEN_LSHIFT: {
       parser_consume_peeked(parser, NULL);
 
-      // < <expr>, <expr>, ... >
-
-      result->type = AST_EXPR_TYPE_CONSTANT;
-      result->parsed_ty.ty = AST_TYPE_FVEC;
-      result->expr.list = parse_expression_list(parser, TOKEN_GT, 1);
-      if (!result->expr.list) {
-        free(result);
-        parser_diag(1, parser, NULL, "failed to parse expression list for vector initializer");
-        return NULL;
+      // If we got an LSHIFT, parse as a matrix initializer - but we need to reinsert an LT for that
+      if (peek == TOKEN_LSHIFT) {
+        struct token fake_lt;
+        fake_lt.loc = parser->peek.loc;
+        fake_lt.ident = TOKEN_LT;
+        fake_lt.value = parser->peek.value;
+        parser_unconsume(parser, &fake_lt);
       }
-      result->parsed_ty.oneof.fvec.width = result->expr.list->num_elements;
-      if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
-        free(result);
-        return NULL;
+
+      // TODO: we handle the LSHIFT/LT thing above, but we need exactly the same for the RSHIFT/GT
+      // at the end... need to do better at lexing/parsing this syntax
+
+      peek = parser_peek(parser);
+      if (peek == TOKEN_LT) {
+        // comma-separated vector literals
+        result->type = AST_EXPR_TYPE_CONSTANT;
+        result->parsed_ty.ty = AST_TYPE_MATRIX;
+        result->parsed_ty.oneof.matrix.cols = 0;
+        result->parsed_ty.oneof.matrix.rows = 0;
+
+        struct ast_expr_list *rows = parse_expression_list(parser, TOKEN_GT, 1);
+        if (!rows) {
+          free(result);
+          parser_diag(1, parser, NULL, "failed to parse expression list for matrix initializer");
+          return NULL;
+        }
+
+        result->expr.list = rows;
+
+        // We can't know the number of columns until we resolve types
+        result->parsed_ty.oneof.matrix.rows = rows->num_elements;
+      } else {
+        // comma-separated factors to comprise a vector initializer
+        // < <expr>, <expr>, ... >
+
+        result->type = AST_EXPR_TYPE_CONSTANT;
+        result->parsed_ty.ty = AST_TYPE_FVEC;
+        result->expr.list = parse_expression_list(parser, TOKEN_GT, 1);
+        if (!result->expr.list) {
+          free(result);
+          parser_diag(1, parser, NULL, "failed to parse expression list for vector initializer");
+          return NULL;
+        }
+        result->parsed_ty.oneof.fvec.width = result->expr.list->num_elements;
+        if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+          free(result);
+          return NULL;
+        }
       }
     } break;
 

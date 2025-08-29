@@ -128,6 +128,19 @@ int parser_consume_peeked(struct parser *parser, struct token *token) {
   return parser_consume(parser, token, parser->peek.ident);
 }
 
+void parser_unconsume(struct parser *parser, struct token *token) {
+  if (!token) {
+    return;
+  }
+
+  if (parser->peek.ident != TOKEN_UNKNOWN) {
+    parser_diag(1, parser, NULL, "cannot unconsume token when a token is already pending consume");
+    return;
+  }
+
+  parser->peek = *token;
+}
+
 struct ast_expr *wrap_cast(struct parser *parser, struct ast_expr *expr, struct ast_ty *ty) {
   if (!expr) {
     return NULL;

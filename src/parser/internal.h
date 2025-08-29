@@ -57,6 +57,10 @@ __attribute__((warn_unused_result)) int parser_consume(struct parser *parser, st
 // for example due to a previous peek. Without a previous peek, this function is unsafe.
 int parser_consume_peeked(struct parser *parser, struct token *token);
 
+// Put a token back into the parser's stream. If a token was pending consume, this will error.
+// This should be used exceedingly rarely, as it can lead to confusion.
+void parser_unconsume(struct parser *parser, struct token *token);
+
 // Parse a top-level declaration.
 struct ast_toplevel *parser_parse_toplevel(struct parser *parser);
 

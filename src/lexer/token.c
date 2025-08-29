@@ -258,7 +258,7 @@ int lexer_token(struct lex_state *state, struct token *token) {
         return 0;
       }
 
-      while (isalpha(c) || isdigit(c) || c == '_') {
+      while (isalpha(c) || isdigit(c) || c == '_' || c == '-') {
         if (c < 0) {
           // EOF during identifier is OK
           break;
@@ -266,6 +266,12 @@ int lexer_token(struct lex_state *state, struct token *token) {
         token->value.identv.ident[i++] = c;
 
         c = lex_getc(state);
+      }
+
+      // Identifiers cannot end with a hyphen - it will be lexed as a TOKEN_MINUS
+      if (i && token->value.identv.ident[i - 1] == '-') {
+        lex_unget(state, '-');
+        --i;
       }
 
       lex_unget(state, c);
