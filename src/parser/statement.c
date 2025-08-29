@@ -168,11 +168,17 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
 
   // <stmt>;
   if (peek != TOKEN_RBRACE) {
-    if (parser_consume(parser, &token, TOKEN_SEMI) < 0) {
-      free(result);
-      return NULL;
+    if (result->type == AST_STMT_TYPE_EXPR && peek == TOKEN_COMMA) {
+      // This is actually probably part of an initializer, so we need to not consume the comma
+      // to allow the caller to discover that and switch parsing mode
+      *ended_semi = 0;
+    } else {
+      if (parser_consume(parser, &token, TOKEN_SEMI) < 0) {
+        free(result);
+        return NULL;
+      }
+      *ended_semi = 1;
     }
-    *ended_semi = 1;
   }
 
   tokenstream_commit(parser->stream);

@@ -4,6 +4,7 @@
 #include "internal.h"
 #include "lex.h"
 #include "parse.h"
+#include "tokens.h"
 
 int parse_block(struct parser *parser, struct ast_block *into) {
   struct ast_stmt *last = NULL;
@@ -40,6 +41,17 @@ int parse_block(struct parser *parser, struct ast_block *into) {
     }
 
     last = stmt;
+
+    if (!ended_semi) {
+      peek = parser_peek(parser);
+      if (peek == TOKEN_COMMA) {
+        // - If this isn't the first statement, it's a parser error
+        // - Otherwise, we need to swap to creating an initializer that will be typed by typecheck
+        // conversion
+        parser_diag(1, parser, NULL, "bare initializer syntax is a TODO right now");
+        return -1;
+      }
+    }
   }
   if (parser_consume(parser, &token, TOKEN_RBRACE) < 0) {
     return -1;
