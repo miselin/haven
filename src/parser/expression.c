@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "compiler.h"
 #include "internal.h"
 #include "lex.h"
 #include "parse.h"
@@ -9,13 +10,19 @@
 
 static struct ast_expr *parse_expression_inner(struct parser *parser, int min_prec);
 
-struct ast_expr_list *parse_expression_list(struct parser *parser, enum token_id terminator,
-                                            int factor_only) {
+struct ast_expr_list *parse_expression_list_alt(struct parser *parser, enum token_id terminator,
+                                                int factor_only, enum token_id alt_terminator) {
   struct ast_expr_list *result = NULL;
   size_t n = 0;
-  while (parser_peek(parser) != terminator) {
+  enum token_id peek = parser_peek(parser);
+  while (peek != terminator && peek != alt_terminator) {
     struct ast_expr_list *node = calloc(1, sizeof(struct ast_expr_list));
     node->expr = factor_only ? parse_factor(parser) : parse_expression(parser);
+    if (!node->expr) {
+      free(node);
+      free_expr_list(parser->compiler, result);
+      return NULL;
+    }
 
     if (!result) {
       result = node;
@@ -30,7 +37,8 @@ struct ast_expr_list *parse_expression_list(struct parser *parser, enum token_id
 
     ++n;
 
-    if (parser_peek(parser) == TOKEN_COMMA) {
+    peek = parser_peek(parser);
+    if (peek == TOKEN_COMMA) {
       parser_consume_peeked(parser, NULL);
     } else {
       break;
@@ -43,6 +51,11 @@ struct ast_expr_list *parse_expression_list(struct parser *parser, enum token_id
 
   result->num_elements = n;
   return result;
+}
+
+struct ast_expr_list *parse_expression_list(struct parser *parser, enum token_id terminator,
+                                            int factor_only) {
+  return parse_expression_list_alt(parser, terminator, factor_only, TOKEN_UNKNOWN);
 }
 
 struct ast_expr *parse_expression(struct parser *parser) {
@@ -245,9 +258,6 @@ struct ast_expr *parse_factor(struct parser *parser) {
         parser_unconsume(parser, &fake_lt);
       }
 
-      // TODO: we handle the LSHIFT/LT thing above, but we need exactly the same for the RSHIFT/GT
-      // at the end... need to do better at lexing/parsing this syntax
-
       peek = parser_peek(parser);
       if (peek == TOKEN_LT) {
         // comma-separated vector literals
@@ -267,20 +277,37 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
         // We can't know the number of columns until we resolve types
         result->parsed_ty.oneof.matrix.rows = rows->num_elements;
+
+        if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+          free(result);
+          return NULL;
+        }
+
+        compiler_log(parser->compiler, LogLevelDebug, "parser", "parsed matrix initializer");
       } else {
         // comma-separated factors to comprise a vector initializer
         // < <expr>, <expr>, ... >
 
         result->type = AST_EXPR_TYPE_CONSTANT;
         result->parsed_ty.ty = AST_TYPE_FVEC;
-        result->expr.list = parse_expression_list(parser, TOKEN_GT, 1);
+        // We could be inside a matrix initializer, so we also accept >> as a terminator
+        result->expr.list = parse_expression_list_alt(parser, TOKEN_GT, 1, TOKEN_RSHIFT);
         if (!result->expr.list) {
           free(result);
           parser_diag(1, parser, NULL, "failed to parse expression list for vector initializer");
           return NULL;
         }
         result->parsed_ty.oneof.fvec.width = result->expr.list->num_elements;
-        if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+
+        // Handle vector initializer ending in >> by "consuming" the first & turning it into a ">"
+        peek = parser_peek(parser);
+        if (peek == TOKEN_RSHIFT) {
+          parser_consume_peeked(parser, NULL);
+          struct token fake_tok;
+          fake_tok.loc = parser->peek.loc;
+          fake_tok.ident = TOKEN_GT;
+          parser_unconsume(parser, &fake_tok);
+        } else if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
           free(result);
           return NULL;
         }

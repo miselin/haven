@@ -82,6 +82,12 @@ struct ast_expr *parse_expression(struct parser *parser);
 // Parse a factor.
 struct ast_expr *parse_factor(struct parser *parser);
 
+// Parse comma-separated expressions that could end in an alternate terminator.
+// For example, "<<1,2,3>,<4,5,6>>" ends in a '>>' that needs to be split and a single '>'
+// reinserted to the parser to allow for the parse to succeed.
+struct ast_expr_list *parse_expression_list_alt(struct parser *parser, enum token_id terminator,
+                                                int factor_only, enum token_id alt_terminator);
+
 // Parse comma-separated expressions.
 struct ast_expr_list *parse_expression_list(struct parser *parser, enum token_id terminator,
                                             int factor_only);

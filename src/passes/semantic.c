@@ -266,6 +266,23 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
             }
             node = node->next;
           }
+
+          if (semantic->pass > 0) {
+            // Make sure vecs and matrices are fully formed
+            if (ast->ty->ty == AST_TYPE_FVEC) {
+              if (ast->ty->oneof.fvec.width == 0) {
+                semantic_diag_at(semantic, DiagError, &ast->loc,
+                                 "float vectors must have at least one element");
+                return -1;
+              }
+            } else if (ast->ty->ty == AST_TYPE_MATRIX) {
+              if (ast->ty->oneof.matrix.rows == 0 || ast->ty->oneof.matrix.cols == 0) {
+                semantic_diag_at(semantic, DiagError, &ast->loc,
+                                 "matrices must have at least one row and one column");
+                return -1;
+              }
+            }
+          }
         } break;
         default:
           break;
