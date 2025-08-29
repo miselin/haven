@@ -60,6 +60,11 @@ struct ast_toplevel *parser_parse_tydecl(struct parser *parser) {
             256);
   }
 
+  if (decl->toplevel.tydecl.parsed_ty.ty == AST_TYPE_ERROR) {
+    free(decl);
+    return NULL;
+  }
+
   if (parser_consume(parser, NULL, TOKEN_SEMI) < 0) {
     free(decl);
     return NULL;

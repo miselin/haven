@@ -152,3 +152,36 @@ TEST(Parser, MalformedHang1) {
   destroy_lexer(state);
   destroy_compiler(compiler);
 }
+
+TEST(Parser, InvalidIntegerWidth) {
+  struct compiler *compiler = new_compiler(0, NULL);
+  struct lex_state *state = new_lexer(NULL, "<stdin>", compiler);
+  struct parser *parser = new_parser(state, compiler);
+
+  push_lexer(state, "type mytype = i31;");
+
+  EXPECT_EQ(parser_run(parser, 0), -1);
+
+  struct parser_diag *diag = parser_pop_diag(parser);
+  EXPECT_NE(diag, nullptr);
+
+  EXPECT_STREQ(parser_diag_msg(diag), "invalid integer width 31");
+  EXPECT_EQ(parser_diag_severity(diag), Error);
+  struct lex_locator *loc = parser_diag_loc(diag);
+
+  EXPECT_EQ((int32_t)loc->line, 0);
+  EXPECT_EQ(loc->column, 12);
+
+  parser_free_diag(diag);
+
+  diag = parser_pop_diag(parser);
+  if (diag) {
+    EXPECT_STREQ(parser_diag_msg(diag), "error parsing type");
+    parser_free_diag(diag);
+  }
+  EXPECT_EQ(diag, nullptr);
+
+  destroy_parser(parser);
+  destroy_lexer(state);
+  destroy_compiler(compiler);
+}

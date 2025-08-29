@@ -22,6 +22,18 @@ struct ast_ty parse_type(struct parser *parser) {
     result.ty = AST_TYPE_INTEGER;
     result.oneof.integer.is_signed = peek == TOKEN_TY_SIGNED;
     result.oneof.integer.width = token.value.tyv.dimension;
+
+    switch (result.oneof.integer.width) {
+      case 8:
+      case 16:
+      case 32:
+      case 64:
+        break;
+      default:
+        parser_diag(1, parser, &token, "invalid integer width %zu", result.oneof.integer.width);
+        result.ty = AST_TYPE_ERROR;
+        return result;
+    }
   } else if (peek == TOKEN_TY_STR) {
     parser_consume_peeked(parser, &token);
 
