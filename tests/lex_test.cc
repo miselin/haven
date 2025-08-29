@@ -64,3 +64,28 @@ TEST(Lexer, MatIdentifier) {
   destroy_lexer(state);
   destroy_compiler(compiler);
 }
+
+TEST(Lexer, BlockComments) {
+  struct compiler *compiler = new_compiler(0, NULL);
+  struct lex_state *state = new_lexer(stdin, "<stdin>", compiler);
+
+  struct tokenstream *stream = new_tokenstream(state);
+
+  push_lexer(state, "identifier /* block comment * * * / still block comment */");
+
+  struct token token;
+
+  enum token_id expected[] = {TOKEN_IDENTIFIER, TOKEN_COMMENTLONG};
+
+  for (size_t i = 0; i < sizeof(expected) / sizeof(enum token_id); i++) {
+    int rc = tokenstream_next_token(stream, &token);
+    EXPECT_EQ(rc, 0);
+    EXPECT_EQ(token.ident, expected[i]);
+  }
+
+  tokenstream_commit(stream);
+
+  destroy_tokenstream(stream);
+  destroy_lexer(state);
+  destroy_compiler(compiler);
+}

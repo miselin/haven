@@ -13,24 +13,26 @@ int lex_block_comment(struct lex_state *state, struct token *token) {
 
   token->ident = TOKEN_COMMENTLONG;
 
-  char c = lex_getc(state);
-  while (c != '*') {
-    if (c < 0) {
-      // EOF in block comment
-      return -1;
+  while (1) {
+    char c = lex_getc(state);
+    while (c != '*') {
+      if (c < 0) {
+        // EOF in block comment
+        return -1;
+      }
+
+      c = lex_getc(state);
     }
 
     c = lex_getc(state);
-  }
+    if (c < 0) {
+      // EOF in block comment
+      break;
+    }
 
-  c = lex_getc(state);
-  if (c < 0) {
-    // EOF in block comment
-    return -1;
-  }
-
-  if (c == '/') {
-    return 0;
+    if (c == '/') {
+      return 0;
+    }
   }
 
   lex_error(state, "unexpected termination of block comment\n");
