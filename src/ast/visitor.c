@@ -338,7 +338,7 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
       }
       break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT: {
+    case AST_EXPR_TYPE_INITIALIZER: {
       if (ast->expr.list) {
         struct ast_expr_list *list_node = ast->expr.list;
         while (list_node) {

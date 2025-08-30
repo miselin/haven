@@ -445,23 +445,42 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       return emit_match_expr(codegen, ast->ty, &ast->expr.match);
     } break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT: {
-      if (codegen->current_function) {
-        LLVMTypeRef struct_type = ast_ty_to_llvm_ty(codegen, ast->ty);
-        LLVMValueRef dest = into ? into : new_alloca(codegen, struct_type, "struct");
-        struct ast_expr_list *node = ast->expr.list;
-        for (size_t i = 0; i < ast->expr.list->num_elements; i++) {
-          LLVMValueRef value = emit_expr(codegen, node->expr);
-          LLVMValueRef store = LLVMBuildStructGEP2(codegen->llvm_builder, struct_type, dest,
-                                                   (unsigned int)i, "struct_field");
-          emit_store(codegen, node->expr->ty, value, store);
-          node = node->next;
+    case AST_EXPR_TYPE_INITIALIZER: {
+      if (ast->ty->ty == AST_TYPE_STRUCT) {
+        if (codegen->current_function) {
+          LLVMTypeRef struct_type = ast_ty_to_llvm_ty(codegen, ast->ty);
+          LLVMValueRef dest = into ? into : new_alloca(codegen, struct_type, "struct");
+          struct ast_expr_list *node = ast->expr.list;
+          for (size_t i = 0; i < ast->expr.list->num_elements; i++) {
+            LLVMValueRef value = emit_expr(codegen, node->expr);
+            LLVMValueRef store = LLVMBuildStructGEP2(codegen->llvm_builder, struct_type, dest,
+                                                     (unsigned int)i, "struct_field");
+            emit_store(codegen, node->expr->ty, value, store);
+            node = node->next;
+          }
+
+          return dest;
         }
 
-        return dest;
-      }
+        // TODO: const initializer
+      } else if (ast->ty->ty == AST_TYPE_ARRAY) {
+        // TODO: this is identical to the AST_EXPR_TYPE_CONSTANT code above
+        LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(codegen, ast->ty->oneof.array.element_ty);
+        LLVMValueRef *values = malloc(sizeof(LLVMValueRef) * ast->expr.list->num_elements);
+        struct ast_expr_list *node = ast->expr.list;
+        for (size_t i = 0; i < ast->expr.list->num_elements; i++) {
+          values[i] = emit_expr(codegen, node->expr);
+          values[i] =
+              emit_cast(codegen, values[i], node->expr->ty, ast->ty->oneof.array.element_ty);
 
-      // TODO: const initializer
+          node = node->next;
+        }
+        LLVMValueRef array = LLVMConstArray2(inner_ty, values, ast->expr.list->num_elements);
+        free(values);
+        return array;
+      } else {
+        fprintf(stderr, "unhandled initializer type %d\n", ast->ty->ty);
+      }
     } break;
 
     case AST_EXPR_TYPE_NIL: {

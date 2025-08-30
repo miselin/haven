@@ -67,7 +67,7 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
         return NULL;
       }
       result->stmt.iter.index.ident = token;
-      if (parse_block(parser, &result->stmt.iter.block) < 0) {
+      if (parse_block(parser, &result->stmt.iter.block, NULL) < 0) {
         free(result);
         return NULL;
       }
@@ -117,7 +117,7 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
         free(result);
         return NULL;
       }
-      if (parse_block(parser, &result->stmt.while_stmt.block) < 0) {
+      if (parse_block(parser, &result->stmt.while_stmt.block, NULL) < 0) {
         free(result);
         return NULL;
       }
@@ -137,7 +137,7 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
       result->stmt.while_stmt.cond->type = AST_EXPR_TYPE_UNARY;
       result->stmt.while_stmt.cond->expr.unary.op = AST_UNARY_OP_NOT;
       result->stmt.while_stmt.cond->expr.unary.expr = inner;
-      if (parse_block(parser, &result->stmt.while_stmt.block) < 0) {
+      if (parse_block(parser, &result->stmt.while_stmt.block, NULL) < 0) {
         free(result);
         return NULL;
       }

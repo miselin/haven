@@ -70,8 +70,10 @@ struct ast_toplevel *parser_parse_preproc(struct parser *parser);
 // Parse an import top-level declaration.
 struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType type);
 
-// Parse a block.
-__attribute__((warn_unused_result)) int parse_block(struct parser *parser, struct ast_block *into);
+// Parse a block. Some blocks can become expressions (such as initializer lists, or
+// single-expression blocks), in which case *became_expr will be set to a valid expression.
+__attribute__((warn_unused_result)) int parse_block(struct parser *parser, struct ast_block *into,
+                                                    struct ast_expr *became_expr);
 
 // Parse a statement.
 struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi);

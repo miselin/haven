@@ -429,8 +429,9 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
       INDENTED(stream, indent, "}");
       break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT: {
-      fprintf(stream, "struct {");
+    case AST_EXPR_TYPE_INITIALIZER: {
+      // TODO
+      fprintf(stream, "todo-initializer {");
       struct ast_expr_list *node = ast->expr.list;
       while (node) {
         code_emit_expr(stream, node->expr, indent);

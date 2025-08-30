@@ -7,7 +7,7 @@ pub fn new_boxed() -> i32^ {
 }
 
 pub impure fn sut() -> i32 {
-    let mut t = struct Thing { new_boxed() };
+    let mut Thing t = { new_boxed(), };
     let mut b = box t;
     unbox b->boxed
 }

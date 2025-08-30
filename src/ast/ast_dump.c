@@ -273,8 +273,8 @@ void dump_expr(struct ast_expr *ast, int indent) {
       fprintf(stderr, "\n");
     } break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT:
-      INDENTED(indent, "StructInit -> ");
+    case AST_EXPR_TYPE_INITIALIZER:
+      INDENTED(indent, "Initializer -> ");
       dump_expr_ty(ast);
       fprintf(stderr, "\n");
 

@@ -21,7 +21,7 @@ type ShadowResult = enum {
     NoShadow(float)
 };
 
-i32[9] G = i32 {
+i32[9] G = {
     247570,
     280596,
     280600,

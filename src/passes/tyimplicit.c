@@ -189,7 +189,7 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
       }
     } break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT: {
+    case AST_EXPR_TYPE_INITIALIZER: {
       struct ast_expr_list *node = ast->expr.list;
       int total = 0;
       while (node) {

@@ -186,20 +186,6 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
       break;
 
-    // array literals <ty> { <expr>, <expr>, ... }
-    case TOKEN_TY_CHAR:
-    case TOKEN_TY_FLOAT:
-    case TOKEN_TY_FVEC:
-    case TOKEN_TY_SIGNED:
-    case TOKEN_TY_UNSIGNED:
-    case TOKEN_TY_STR:
-    case TOKEN_TY_VOID: {
-      if (parse_braced_initializer(parser, result) < 0) {
-        free(result);
-        return NULL;
-      }
-    } break;
-
     // struct literals struct <ty> { <expr>, ... }
     case TOKEN_KW_STRUCT: {
       parser_consume_peeked(parser, NULL);
@@ -209,7 +195,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
       }
 
       // swap type for future passes (braced initializers are arrays by default)
-      result->type = AST_EXPR_TYPE_STRUCT_INIT;
+      result->type = AST_EXPR_TYPE_INITIALIZER;
     } break;
 
     // vec/matrix literals
@@ -370,7 +356,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
       // sub-blocks
     case TOKEN_LBRACE:
       result->type = AST_EXPR_TYPE_BLOCK;
-      if (parse_block(parser, &result->expr.block) < 0) {
+      if (parse_block(parser, &result->expr.block, result) < 0) {
         free(result);
         return NULL;
       }
@@ -441,7 +427,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_IF;
       result->expr.if_expr.cond = parse_expression(parser);
-      if (parse_block(parser, &result->expr.if_expr.then_block) < 0) {
+      if (parse_block(parser, &result->expr.if_expr.then_block, NULL) < 0) {
         free(result);
         return NULL;
       }
@@ -454,7 +440,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
           struct ast_expr_elseif *elseif = calloc(1, sizeof(struct ast_expr_elseif));
           elseif->cond = parse_expression(parser);
-          if (parse_block(parser, &elseif->block) < 0) {
+          if (parse_block(parser, &elseif->block, NULL) < 0) {
             free(result);
             return NULL;
           }
@@ -468,7 +454,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
           prev_elseif = elseif;
         } else {
           result->expr.if_expr.has_else = 1;
-          if (parse_block(parser, &result->expr.if_expr.else_block) < 0) {
+          if (parse_block(parser, &result->expr.if_expr.else_block, NULL) < 0) {
             free(result);
             return NULL;
           }

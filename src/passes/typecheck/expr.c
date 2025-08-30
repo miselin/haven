@@ -10,6 +10,9 @@
 #include "typecheck.h"
 #include "types.h"
 
+static struct ast_ty *typecheck_initializer(struct typecheck *typecheck, struct ast_expr *ast,
+                                            struct ast_ty *expected_ty);
+
 struct ast_ty *typecheck_expr(struct typecheck *typecheck, struct ast_expr *ast,
                               struct ast_ty *expected_ty) {
   struct ast_ty *ty = typecheck_expr_with_tbds(typecheck, ast, expected_ty);
@@ -52,14 +55,28 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
       ast->ty = resolve_parsed_type(typecheck, &ast->parsed_ty);
+      if (!ast->ty) {
+        ast->ty = expected_ty;
+      }
 
       switch (ast->ty->ty) {
         case AST_TYPE_FVEC:
         case AST_TYPE_ARRAY:
         case AST_TYPE_MATRIX: {
           struct ast_expr_list *node = ast->expr.list;
+
+          struct ast_ty *expected_element_ty = NULL;
+          if (expected_ty) {
+            // help type inference by passing down an expected type, if we know it
+            if (expected_ty->ty == AST_TYPE_ARRAY) {
+              expected_element_ty = expected_ty->oneof.array.element_ty;
+            } else if (expected_ty->ty == AST_TYPE_FVEC) {
+              expected_element_ty = type_repository_lookup(typecheck->type_repo, "float");
+            }
+          }
+
           while (node) {
-            struct ast_ty *ty = typecheck_expr(typecheck, node->expr, expected_ty);
+            struct ast_ty *ty = typecheck_expr(typecheck, node->expr, expected_element_ty);
             if (!ty) {
               return NULL;
             }
@@ -117,41 +134,6 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
               ++element;
             }
           }
-
-          // convert from array to full matrix type
-          if (ast->ty->ty == AST_TYPE_ARRAY) {
-            if (ast->ty->oneof.array.element_ty->ty == AST_TYPE_MATRIX) {
-              size_t correct_cols = ast->ty->oneof.array.element_ty->oneof.matrix.cols;
-              size_t correct_rows = ast->ty->oneof.array.element_ty->oneof.matrix.rows;
-
-              size_t rows = ast->expr.list->num_elements;
-              size_t cols = ast->expr.list->expr->expr.list->num_elements;
-
-              struct ast_ty new_ty;
-              memset(&new_ty, 0, sizeof(new_ty));
-              new_ty.ty = AST_TYPE_MATRIX;
-              new_ty.oneof.matrix.cols = cols;
-              new_ty.oneof.matrix.rows = rows;
-
-              ast->ty = type_repository_lookup_ty(typecheck->type_repo, &new_ty);
-              if (!ast->ty) {
-                ast->ty = type_repository_register(typecheck->type_repo, &new_ty);
-              }
-
-              if (cols != correct_cols) {
-                typecheck_diag_expr(typecheck, ast,
-                                    "matrix initializer has %zu columns, expected %zu\n", cols,
-                                    correct_cols);
-                return NULL;
-              }
-              if (rows != correct_rows) {
-                typecheck_diag_expr(typecheck, ast,
-                                    "matrix initializer has %zu rows, expected %zu\n", rows,
-                                    correct_rows);
-                return NULL;
-              }
-            }
-          }
         } break;
         default:
           break;
@@ -159,56 +141,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       return ast->ty;
     } break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT: {
-      ast->ty = resolve_parsed_type(typecheck, ast->parsed_ty.oneof.array.element_ty);
-      if (type_is_tbd(ast->ty)) {
-        ast->ty = expected_ty;
-      }
-
-      // the element_ty was just a carrier for the struct type, we can free it now
-      free(ast->parsed_ty.oneof.array.element_ty);
-      ast->parsed_ty.oneof.array.element_ty = NULL;
-
-      struct ast_struct_field *field = ast->ty->oneof.structty.fields;
-      struct ast_expr_list *node = ast->expr.list;
-      while (node) {
-        // TODO: fuzzer found field to be null here, the AST doesn't make sense to cause that
-        // either way though, we should check that both node & field are non-null
-        if (!field) {
-          fprintf(stderr, "struct initializer has more fields than the struct type\n");
-          ++typecheck->errors;
-          break;
-        }
-
-        if (!field->ty) {
-          fprintf(stderr, "struct initializer field %s inexplicably has no type\n", field->name);
-          ++typecheck->errors;
-        }
-
-        {
-          struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr, field->ty);
-          if (!expr_ty) {
-            return NULL;
-          }
-        }
-
-        maybe_implicitly_convert(&node->expr->ty, &field->ty);
-
-        if (!same_type(node->expr->ty, field->ty)) {
-          char exprty[256];
-          char fieldty[256];
-          type_name_into(node->expr->ty, exprty, 256);
-          type_name_into(field->ty, fieldty, 256);
-
-          fprintf(stderr, "struct initializer field %s has type %s, expected %s\n", field->name,
-                  exprty, fieldty);
-          ++typecheck->errors;
-        }
-
-        node = node->next;
-        field = field->next;
-      }
-
+    case AST_EXPR_TYPE_INITIALIZER: {
+      ast->ty = typecheck_initializer(typecheck, ast, expected_ty);
       return ast->ty;
     } break;
 
@@ -1152,3 +1086,131 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
   // all expressions must resolve to a type
   return &typecheck->void_type;
 }
+
+static struct ast_ty *typecheck_initializer(struct typecheck *typecheck, struct ast_expr *ast,
+                                            struct ast_ty *expected_ty) {
+  if (ast->type != AST_EXPR_TYPE_INITIALIZER) {
+    return &typecheck->error_type;
+  }
+
+  struct ast_ty *result_ty = ast->ty ? ast->ty : expected_ty;
+  if (!result_ty) {
+    typecheck_diag_expr(typecheck, ast, "not enough information to infer type for initializer");
+    return &typecheck->error_type;
+  }
+
+  ast->ty = result_ty;
+
+  if (result_ty->ty == AST_TYPE_STRUCT) {
+    struct ast_expr_list *field_expr = ast->expr.list;
+    struct ast_struct_field *field = ast->ty->oneof.structty.fields;
+    while (field_expr) {
+      if (!field) {
+        typecheck_diag_expr(typecheck, ast, "initializer has more elements than struct has fields");
+        ++typecheck->errors;
+        break;
+      } else if (!field->ty) {
+        typecheck_diag_expr(typecheck, ast, "struct field somehow has no resolved type");
+        ++typecheck->errors;
+        break;
+      }
+
+      struct ast_ty *ty = typecheck_expr(typecheck, field_expr->expr, field->ty);
+      if (!ty) {
+        return NULL;
+      }
+
+      maybe_implicitly_convert(&field_expr->expr->ty, &field->ty);
+
+      if (!same_type(field_expr->expr->ty, field->ty)) {
+        char exprty[256];
+        char fieldty[256];
+        type_name_into(field_expr->expr->ty, exprty, 256);
+        type_name_into(field->ty, fieldty, 256);
+
+        fprintf(stderr, "struct initializer field %s has type %s, expected %s\n", field->name,
+                exprty, fieldty);
+        ++typecheck->errors;
+      }
+
+      field_expr = field_expr->next;
+      field = field->next;
+    }
+
+    return ast->ty;
+  } else if (result_ty->ty == AST_TYPE_ARRAY) {
+    struct ast_ty *element_expected_ty = result_ty->oneof.array.element_ty;
+    struct ast_expr_list *node = ast->expr.list;
+    while (node) {
+      struct ast_ty *ty = typecheck_expr(typecheck, node->expr, element_expected_ty);
+      if (!ty) {
+        return NULL;
+      }
+
+      maybe_implicitly_convert(&node->expr->ty, &ast->ty->oneof.array.element_ty);
+
+      node = node->next;
+    }
+
+    return ast->ty;
+  } else {
+    typecheck_diag_expr(typecheck, ast, "initializer provided for unknown type");
+    return &typecheck->error_type;
+  }
+}
+
+/*
+
+    case AST_EXPR_TYPE_STRUCT_INIT: {
+      ast->ty = resolve_parsed_type(typecheck, ast->parsed_ty.oneof.array.element_ty);
+      if (type_is_tbd(ast->ty)) {
+        ast->ty = expected_ty;
+      }
+
+      // the element_ty was just a carrier for the struct type, we can free it now
+      free(ast->parsed_ty.oneof.array.element_ty);
+      ast->parsed_ty.oneof.array.element_ty = NULL;
+
+      struct ast_struct_field *field = ast->ty->oneof.structty.fields;
+      struct ast_expr_list *node = ast->expr.list;
+      while (node) {
+        // TODO: fuzzer found field to be null here, the AST doesn't make sense to cause that
+        // either way though, we should check that both node & field are non-null
+        if (!field) {
+          fprintf(stderr, "struct initializer has more fields than the struct type\n");
+          ++typecheck->errors;
+          break;
+        }
+
+        if (!field->ty) {
+          fprintf(stderr, "struct initializer field %s inexplicably has no type\n", field->name);
+          ++typecheck->errors;
+        }
+
+        {
+          struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr, field->ty);
+          if (!expr_ty) {
+            return NULL;
+          }
+        }
+
+        maybe_implicitly_convert(&node->expr->ty, &field->ty);
+
+        if (!same_type(node->expr->ty, field->ty)) {
+          char exprty[256];
+          char fieldty[256];
+          type_name_into(node->expr->ty, exprty, 256);
+          type_name_into(field->ty, fieldty, 256);
+
+          fprintf(stderr, "struct initializer field %s has type %s, expected %s\n", field->name,
+                  exprty, fieldty);
+          ++typecheck->errors;
+        }
+
+        node = node->next;
+        field = field->next;
+      }
+
+      return ast->ty;
+    } break;
+     */

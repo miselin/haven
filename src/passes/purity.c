@@ -54,7 +54,8 @@ static int check_purity_expr(struct purity *purity, struct ast_expr *ast) {
     case AST_EXPR_TYPE_CONSTANT:
       break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT:
+      // TODO: should purity check the expressions inside the initializer
+    case AST_EXPR_TYPE_INITIALIZER:
       break;
 
     case AST_EXPR_TYPE_VARIABLE:

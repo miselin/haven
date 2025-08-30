@@ -246,7 +246,7 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     if (peek == TOKEN_LBRACE) {
       // full function definition
       fdecl->body = calloc(1, sizeof(struct ast_block));
-      if (parse_block(parser, fdecl->body) < 0) {
+      if (parse_block(parser, fdecl->body, NULL) < 0) {
         free(decl);
         return NULL;
       }

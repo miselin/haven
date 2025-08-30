@@ -289,7 +289,7 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       }
     } break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT: {
+    case AST_EXPR_TYPE_INITIALIZER: {
       struct ast_expr_list *node = ast->expr.list;
       while (node) {
         if (check_semantic_expr(semantic, node->expr) < 0) {

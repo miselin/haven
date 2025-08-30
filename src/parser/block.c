@@ -8,7 +8,7 @@
 #include "tokens.h"
 #include "types.h"
 
-int parse_block(struct parser *parser, struct ast_block *into) {
+int parse_block(struct parser *parser, struct ast_block *into, struct ast_expr *became_expr) {
   struct ast_stmt *last = NULL;
   lexer_locate(parser->lexer, &into->loc);
 
@@ -67,19 +67,19 @@ int parse_block(struct parser *parser, struct ast_block *into) {
   into->last_stmt = last;
 
   if (is_initializer) {
+    if (!became_expr) {
+      parser_diag(
+          1, parser, NULL,
+          "block needed to become an initializer, but that wasn't expected in this context");
+      return -1;
+    }
+
     struct ast_stmt *stmt = into->stmt;
 
-    into->stmt = calloc(1, sizeof(struct ast_stmt));
-    into->stmt->type = AST_STMT_TYPE_EXPR;
-    into->stmt->stmt.expr = calloc(1, sizeof(struct ast_expr));
-    into->stmt->stmt.expr->type = AST_EXPR_TYPE_STRUCT_INIT;
-    into->stmt->stmt.expr->parsed_ty.ty = AST_TYPE_TBD;
-    into->stmt->stmt.expr->parsed_ty.oneof.array.element_ty = calloc(1, sizeof(struct ast_ty));
-    into->stmt->stmt.expr->parsed_ty.oneof.array.element_ty->ty = AST_TYPE_TBD;
-
     // build expressions from statement list
-    struct ast_expr *expr = into->stmt->stmt.expr;
+    // NOTE: we can't yet modify became_expr as it could be the same union that into is part of!
     struct ast_expr_list *last_expr = NULL;
+    struct ast_expr_list *list = NULL;
     size_t n = 0;
     while (stmt) {
       if (stmt->type != AST_STMT_TYPE_EXPR) {
@@ -94,7 +94,7 @@ int parse_block(struct parser *parser, struct ast_block *into) {
       if (last_expr) {
         last_expr->next = node;
       } else {
-        expr->expr.list = node;
+        list = node;
       }
 
       last_expr = node;
@@ -105,6 +105,11 @@ int parse_block(struct parser *parser, struct ast_block *into) {
 
       ++n;
     }
+
+    struct ast_expr *expr = became_expr;
+    expr->type = AST_EXPR_TYPE_INITIALIZER;
+    expr->parsed_ty.ty = AST_TYPE_TBD;
+    expr->expr.list = list;
 
     if (expr->expr.list) {
       expr->expr.list->num_elements = n;

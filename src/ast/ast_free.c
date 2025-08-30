@@ -114,7 +114,8 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       }
       break;
 
-    case AST_EXPR_TYPE_STRUCT_INIT:
+    case AST_EXPR_TYPE_INITIALIZER:
+      free_parser_ty(compiler, &ast->parsed_ty);
       free_expr_list(compiler, ast->expr.list);
       break;
 
