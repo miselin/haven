@@ -67,20 +67,20 @@ impure fn cdf_random(fvec4 cdf) -> i32 {
 }
 
 pub impure fn main() -> i32 {
-    let stem = struct AffineTransform {
-        mat2x2 {<0.0, 0.0>, <0.0, 0.16>},
+    let AffineTransform stem = {
+        <<0.0, 0.0>, <0.0, 0.16>>,
         <0.0, 0.0>
     };
-    let large_leaf = struct AffineTransform {
-        mat2x2 {<0.85, 0.04>, <-0.04, 0.85>},
+    let AffineTransform large_leaf = {
+        <<0.85, 0.04>, <-0.04, 0.85>>,
         <0.0, 1.6>
     };
-    let small_leaf = struct AffineTransform {
-        mat2x2 {<0.2, -0.26>, <0.23, 0.22>},
+    let AffineTransform small_leaf = {
+        <<0.2, -0.26>, <0.23, 0.22>>,
         <0.0, 1.6>
     };
-    let right_leaf = struct AffineTransform {
-        mat2x2 {<-0.15, 0.28>, <0.26, 0.24>},
+    let AffineTransform right_leaf = {
+        <<-0.15, 0.28>, <0.26, 0.24>>,
         <0.0,  0.44>
     };
 

@@ -14,6 +14,29 @@ In Haven, mutability is opt-in, not opt-out. Variables that you expect to modify
 
 All functions are assumed "pure" (they do not read or write memory) unless explicitly annotated as `impure`.
 
+## Identifiers
+
+In Haven, identifiers:
+
+- Must start with either an `_` or a letter
+- Must end with a digit, letter, or `_`
+- Must only contain digits, letters, `_`, or `-`
+
+Hyphens (`-`) may be used within an identifier:
+
+```
+-istrue // invalid, cannot start with hyphen
+istrue- // invalid, cannot end with hyphen
+is-true // valid
+```
+
+Note that the `-` operator for arithmetic therefore requires spaces around it when used with two identifiers:
+
+```
+abc-def // identifier abc-def
+abc - def // subtract the value of def from abc
+```
+
 ## Types
 
 ### Integers
@@ -38,7 +61,7 @@ Vectors can be used with binary expressions and optimize to parallel arithmetic 
 For example, the following function returns a new vector with the result of element-wise addition of the two input vectors.
 
 ```
-pub fn fvec3 vector_add(fvec3 a, fvec3 b) {
+pub fn vector_add(fvec3 a, fvec3 b) -> fvec3 {
     a + b
 }
 ```
@@ -133,7 +156,7 @@ Boxing wraps a value in a heap-allocated structure. The underlying pointer
 can be retrieved with the `unbox` keyword.
 
 ```
-fn i32 example() {
+fn example() -> i32 {
     let val = box 5; // i4^
     let inner = unbox val; // i4*
     let result = load inner; // i4
@@ -146,7 +169,7 @@ Box types are written much like pointers, but using a caret (`^`) instead
 of an asterisk (`*`):
 
 ```
-fn i32 example(i32^ boxed);
+fn example(i32^ boxed) -> i32;
 ```
 
 ## Declarations
@@ -161,9 +184,12 @@ Import declarations may only appear at the file scope. An import loads the conte
 import vec // imports vec.hv
 ```
 
-#### C Imports (not yet implemented)
+#### C Imports
 
 A C import declaration parses a C header file and retains declarations for the purpose of C interopability.
+
+You need to pass `--bootstrap` to the compiler as C imports are currently primarily implemented for the
+compiler bootstrap phases. They may become more readily available once a few ergonomics issues are worked out.
 
 ```
 cimport "stdio.h" // imports declarations from stdio.h as Haven declarations
@@ -208,15 +234,19 @@ Variables at function scope must be initialized.
 Functions can be forward-declared without a body.
 
 ```
-[pub] [impure] <ret-ty> <ident>(<arg-list>);
-[pub] [impure] <ret-ty> <ident>(<arg-list>) { <body> }
+[pub] [impure] <ident>(<arg-list>) -> <ret-ty>;
+[pub] [impure] <ident>(<arg-list>) -> <ret-ty> { <body> }
 ```
 
 Specifying `pub` on declarations that have no definitions will create an external reference to the function.
 
 Specifying `impure` on declarations will mark the function as impure, which means it is allowed to read and write memory.
 
-An argument list can be ended with `*` to indicate that the function accepts a variable number of arguments.
+An argument list can be ended with `*` to indicate that the function accepts a variable number of arguments:
+
+```
+pub fn printf(str format, *);
+```
 
 > [!WARNING]
 > Pure functions cannot call impure functions.
@@ -343,7 +373,7 @@ let integer = 5;
 let number = 5.0;
 let text = "hello";
 let vec = <1.0, 2.0, 3.0>;
-let obj = struct s { 1, 2, 3 };
+let s obj = { 1, 2, 3 };
 let foo = Numbers::One;
 ```
 
@@ -463,8 +493,8 @@ if x >= 0 {
 To create a pointer to an existing variable or object, use the `ref` keyword:
 
 ```
-let tail = struct node { 1, nil };
-let head = struct node { 0, ref tail };
+let node tail = { 1, nil };
+let node head = { 0, ref tail };
 ```
 
 `nil` may be used in lieu of a reference to indicate `NULL`.
