@@ -69,6 +69,9 @@ static void dump_toplevel(struct ast_toplevel *ast, int indent) {
     } else {
       fputs("\n", stderr);
     }
+  } else if (ast->type == AST_DECL_TYPE_FOREIGN) {
+    INDENTED(indent, "Foreign %s", ast->toplevel.foreign.libname);
+    dump_toplevel(ast->toplevel.foreign.decls, indent + 1);
   } else {
     INDENTED(indent, "<unknown-toplevel>\n");
   }

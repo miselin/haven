@@ -379,6 +379,14 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
   if (ast->type == AST_DECL_TYPE_IMPORT && ast->toplevel.import.ast) {
     typecheck_ast(typecheck, ast->toplevel.import.ast);
   }
+
+  if (ast->type == AST_DECL_TYPE_FOREIGN && ast->toplevel.foreign.decls) {
+    struct ast_toplevel *decl = ast->toplevel.foreign.decls;
+    while (decl && !typecheck->errors) {
+      typecheck_toplevel(typecheck, decl);
+      decl = decl->next;
+    }
+  }
 }
 
 struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *ast,

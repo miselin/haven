@@ -19,6 +19,7 @@
 #define AST_DECL_TYPE_TYDECL 3
 #define AST_DECL_TYPE_PREPROC 4  // tracked in AST but not used after parse
 #define AST_DECL_TYPE_IMPORT 5   // fake AST node, import merges ASTs
+#define AST_DECL_TYPE_FOREIGN 6
 
 #define AST_STMT_TYPE_EXPR 1
 #define AST_STMT_TYPE_LET 2
@@ -129,6 +130,11 @@ struct ast_import {
   enum ImportType type;
 };
 
+struct ast_foreign {
+  char libname[256];
+  struct ast_toplevel *decls;
+};
+
 struct ast_toplevel {
   int type;
   struct lex_locator loc;
@@ -139,6 +145,7 @@ struct ast_toplevel {
     struct ast_fdecl fdecl;
     struct ast_tydecl tydecl;
     struct ast_import import;
+    struct ast_foreign foreign;
   } toplevel;
 };
 

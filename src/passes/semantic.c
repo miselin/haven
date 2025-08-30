@@ -97,6 +97,22 @@ static int check_semantic_toplevel(struct semantic *semantic, struct ast_topleve
     if (ast->toplevel.import.ast && check_semantic_ast(semantic, ast->toplevel.import.ast) < 0) {
       return -1;
     }
+  } else if (ast->type == AST_DECL_TYPE_FOREIGN) {
+    struct ast_toplevel *decl = ast->toplevel.foreign.decls;
+    while (decl) {
+      if (decl->type == AST_DECL_TYPE_FDECL) {
+        // foreign linkage is always impure & always public
+        decl->toplevel.fdecl.flags |= DECL_FLAG_PUB | DECL_FLAG_IMPURE;
+      } else if (decl->type == AST_DECL_TYPE_VDECL) {
+        decl->toplevel.vdecl.flags |= DECL_FLAG_PUB;
+      }
+
+      if (check_semantic_toplevel(semantic, decl) < 0) {
+        return -1;
+      }
+
+      decl = decl->next;
+    }
   }
 
   return 0;

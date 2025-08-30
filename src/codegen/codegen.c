@@ -391,6 +391,15 @@ static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast) {
     }
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // no-op in codegen
+  } else if (ast->type == AST_DECL_TYPE_FOREIGN) {
+    // TODO: if not full linking, we should store this in the object file somewhere as a dependency
+    compiler_add_link_library(codegen->compiler, ast->toplevel.foreign.libname);
+
+    struct ast_toplevel *decl = ast->toplevel.foreign.decls;
+    while (decl) {
+      emit_toplevel(codegen, decl);
+      decl = decl->next;
+    }
   } else {
     fprintf(stderr, "unhandled toplevel type %d\n", ast->type);
   }

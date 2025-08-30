@@ -28,6 +28,13 @@ void free_toplevel(struct compiler *compiler, struct ast_toplevel *ast) {
       free_ast(compiler, ast->toplevel.import.ast);
       free(ast->toplevel.import.ast);
     }
+  } else if (ast->type == AST_DECL_TYPE_FOREIGN) {
+    struct ast_toplevel *decl = ast->toplevel.foreign.decls;
+    while (decl) {
+      struct ast_toplevel *next = decl->next;
+      free_toplevel(compiler, decl);
+      decl = next;
+    }
   } else {
     fprintf(stderr, "unhandled free for toplevel type %d\n", ast->type);
   }

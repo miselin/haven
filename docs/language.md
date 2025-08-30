@@ -217,6 +217,26 @@ compiler bootstrap phases. They may become more readily available once a few erg
 cimport "stdio.h" // imports declarations from stdio.h as Haven declarations
 ```
 
+#### Foreign Interfaces
+
+When introducing dependencies on external libraries, you may opt to use the `--Xl -lm` style of command line
+flag to present the correct libraries for linking.
+
+Alternatively, Haven offers the `foreign` declaration to simplify this end-to-end:
+
+```
+foreign "m" {
+    fn fsqrtf(float x) -> float;
+}
+
+foreign "c" {
+    fn printf(str format, *) -> i32;
+}
+```
+
+A module with these `foreign` declarations will automatically add `-lm -lc` to the command line. The function
+declarations will also be automatically marked `pub` and `impure`, simplifying the declarations for import.
+
 ### Type Declarations
 
 Type declarations (`type X = ...`) may only appear at the file scope.

@@ -100,6 +100,10 @@ int compiler_serialize_ast(struct compiler *compiler, char *buffer, size_t *len)
 // the case.
 int compiler_deserialize_and_codegen(struct compiler *compiler, char *buffer, size_t len);
 
+// Add the given library to the link command line. It will be prefixed as needed for
+// the target platform, e.g. "c" -> "-lc"
+void compiler_add_link_library(struct compiler *compiler, const char *lib);
+
 void destroy_compiler(struct compiler *compiler);
 
 __attribute__((__format__(__printf__, 3, 0))) int compiler_vdiag(struct compiler *compiler,

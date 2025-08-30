@@ -2,6 +2,7 @@
 #include "compiler.h"
 
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "ast.h"
@@ -348,6 +349,15 @@ int compiler_deserialize_and_codegen(struct compiler *compiler, char *buffer, si
 
 struct type_repository *compiler_get_type_repository(struct compiler *compiler) {
   return compiler->type_repository;
+}
+
+void compiler_add_link_library(struct compiler *compiler, const char *lib) {
+  size_t liblen = strlen(lib) + 2;  // -l$lib
+  struct linker_option *lo = calloc(1, sizeof(struct linker_option));
+  lo->option = calloc(1, liblen + 1);
+  snprintf((char *)lo->option, liblen + 1, "-l%s", lib);
+  lo->next = compiler->linker_options;
+  compiler->linker_options = lo;
 }
 
 static int compiler_requires_linking(enum OutputFormat format) {

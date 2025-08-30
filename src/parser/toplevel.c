@@ -1,9 +1,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ast.h"
 #include "internal.h"
+#include "lex.h"
 #include "parse.h"
+#include "tokens.h"
 #include "types.h"
+
+static struct ast_toplevel *parser_parse_foreign(struct parser *parser);
 
 /**
  * Parse a variable declaration - for use in function parameter lists
@@ -109,6 +114,14 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     if (parser_consume(parser, NULL, TOKEN_SEMI) < 0) {
       return NULL;
     }
+    return result;
+  } else if (peek == TOKEN_KW_FOREIGN) {
+    parser_consume_peeked(parser, NULL);
+    struct ast_toplevel *result = parser_parse_foreign(parser);
+    if (!result) {
+      return NULL;
+    }
+    result->loc = loc;
     return result;
   }
 
@@ -398,6 +411,49 @@ struct ast_toplevel *parser_parse_import(struct parser *parser, enum ImportType 
 
   if (compiler_parse_import(parser->compiler, type, token.value.strv.s, &result->toplevel.import) <
       0) {
+    free(result);
+    return NULL;
+  }
+
+  return result;
+}
+
+static struct ast_toplevel *parser_parse_foreign(struct parser *parser) {
+  struct lex_locator loc;
+  lexer_locate(parser->lexer, &loc);
+
+  struct token token;
+  if (parser_consume(parser, &token, TOKEN_STRING) < 0) {
+    return NULL;
+  }
+
+  if (parser_consume(parser, NULL, TOKEN_LBRACE) < 0) {
+    return NULL;
+  }
+
+  struct ast_toplevel *result = calloc(1, sizeof(struct ast_toplevel));
+  result->type = AST_DECL_TYPE_FOREIGN;
+  result->loc = loc;
+  strncpy(result->toplevel.foreign.libname, token.value.strv.s, 256);
+
+  struct ast_toplevel *last = NULL;
+  while (parser_peek(parser) != TOKEN_RBRACE && parser_peek(parser) != TOKEN_EOF) {
+    struct ast_toplevel *decl = parser_parse_toplevel(parser);
+    if (!decl) {
+      free(result);
+      return NULL;
+    }
+
+    if (last) {
+      last->next = decl;
+    } else {
+      result->toplevel.foreign.decls = decl;
+    }
+
+    last = decl;
+  }
+
+  if (parser_consume(parser, NULL, TOKEN_RBRACE) < 0) {
     free(result);
     return NULL;
   }

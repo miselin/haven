@@ -179,6 +179,8 @@ const char *token_id_to_string(enum token_id token) {
       return "intrinsic";
     case TOKEN_KW_UNTIL:
       return "until";
+    case TOKEN_KW_FOREIGN:
+      return "foreign";
     case TOKEN_EOF:
       return "<EOF>";
   }

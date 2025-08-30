@@ -1,2 +1,6 @@
 CompileFlags:
   CompilationDatabase: build/
+If:
+  PathMatch: (^(build|examples|tests/inputs)/.*)
+Index:
+  Background: Skip
