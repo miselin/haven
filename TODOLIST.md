@@ -43,3 +43,5 @@
 ## Big TODOs for the future
 
 - [ ] self-hosting should look like writing a compiler in the language, _not simply porting the C code_.
+
+- [ ] vector init < <expr>, ... > requires brackets because otherwise we parse the trailing ">" as "greater than" and get confused

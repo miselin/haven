@@ -80,6 +80,7 @@ int parse_block(struct parser *parser, struct ast_block *into) {
     // build expressions from statement list
     struct ast_expr *expr = into->stmt->stmt.expr;
     struct ast_expr_list *last_expr = NULL;
+    size_t n = 0;
     while (stmt) {
       if (stmt->type != AST_STMT_TYPE_EXPR) {
         parser_diag(1, parser, NULL,
@@ -101,6 +102,12 @@ int parse_block(struct parser *parser, struct ast_block *into) {
       stmt = stmt->next;
 
       free(old);
+
+      ++n;
+    }
+
+    if (expr->expr.list) {
+      expr->expr.list->num_elements = n;
     }
 
     return 0;
