@@ -188,9 +188,6 @@ int compiler_run(struct compiler *compiler, enum Pass until) {
 
   compiler_log(compiler, LogLevelDebug, "driver", "result from cfold: %d", rc);
 
-  fprintf(stderr, "== Partial AST after failure ==\n");
-  dump_ast(parser_get_ast(parser));
-
   if (rc == 0) {
     struct typecheck *typecheck = new_typecheck(parser_get_ast(parser), compiler);
     rc = typecheck_run(typecheck);

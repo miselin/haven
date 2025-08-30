@@ -1,0 +1,55 @@
+cimport "stdio.h";
+cimport "math.h";
+
+type Result = struct {
+    float eigenvalue;
+    fvec3 eigenvector;
+};
+
+fn vecmulmat(fvec3 v, mat3x3 m) -> fvec3 {
+    v * m
+}
+
+fn vdot(fvec3 a, fvec3 b) -> float {
+    let mult = a * b;
+    mult.x + mult.y + mult.z
+}
+
+impure fn vnorm(fvec3 v) -> fvec3 {
+    let denom = 1.0 / sqrtf(vdot(v, v));
+    v * denom
+}
+
+impure fn power_iter(mat3x3 m) -> Result {
+    let mut eigenvector = <1.0, 1.0, 1.0>;
+    let mut eigenvalue = 0.0;
+
+    while 1 {
+        let v = vecmulmat(eigenvector, m);
+        let new_eigenvalue = vdot(v, eigenvector);
+
+        if fabsf(new_eigenvalue - eigenvalue) < 0.000001 {
+            eigenvalue = new_eigenvalue;
+            break;
+        };
+
+        eigenvalue = new_eigenvalue;
+        eigenvector = vnorm(v);
+    };
+
+    { eigenvalue, eigenvector }
+}
+
+pub impure fn main() -> i32 {
+    let m = <<2.0, -1.0, 0.0>,
+             <-1.0, 2.0, -1.0>,
+             <0.0, -1.0, 2.0>>;
+
+    let result = power_iter(m);
+
+    printf("eigenvalue: %f\n", result.eigenvalue);
+
+    let v = result.eigenvector;
+    printf("eigenvalues: %f %f %f\n", v.x, v.y, v.z);
+    0
+}

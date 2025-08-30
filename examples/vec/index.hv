@@ -1,26 +1,26 @@
-pub fn float __builtin_sqrtf(float x) intrinsic "llvm.sqrt" float;
+pub fn __builtin_sqrtf(float x) -> float intrinsic "llvm.sqrt" float;
 
-fn fvec3 vadd(fvec3 a, fvec3 b) {
+fn vadd(fvec3 a, fvec3 b) -> fvec3 {
     a + b
 }
 
-fn fvec3 vscale(fvec3 a, float b) {
+fn vscale(fvec3 a, float b) -> fvec3 {
     a * b
 }
 
-fn float vdot(fvec3 a, fvec3 b) {
+fn vdot(fvec3 a, fvec3 b) -> float {
     let mult = a * b;
     mult.x + mult.y + mult.z
 }
 
-fn fvec3 vcross(fvec3 a, fvec3 b) {
+fn vcross(fvec3 a, fvec3 b) -> fvec3 {
     let x = a.y * b.z - a.z * b.y;
     let y = a.z * b.x - a.x * b.z;
     let z = a.x * b.y - a.y * b.x;
     <x, y, z>
 }
 
-impure fn fvec3 vnorm(fvec3 v) {
+impure fn vnorm(fvec3 v) -> fvec3 {
     let denom = 1.0 / __builtin_sqrtf(vdot(v, v));
     v * denom
 }
