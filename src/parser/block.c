@@ -1,10 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ast.h"
 #include "internal.h"
 #include "lex.h"
 #include "parse.h"
 #include "tokens.h"
+#include "types.h"
 
 int parse_block(struct parser *parser, struct ast_block *into) {
   struct ast_stmt *last = NULL;
@@ -19,6 +21,7 @@ int parse_block(struct parser *parser, struct ast_block *into) {
     return -1;
   }
   int ended_semi = 0;
+  int is_initializer = 0;
   while (1) {
     enum token_id peek = parser_peek(parser);
     if (peek == TOKEN_RBRACE) {
@@ -40,21 +43,67 @@ int parse_block(struct parser *parser, struct ast_block *into) {
       into->stmt = stmt;
     }
 
-    last = stmt;
-
     if (!ended_semi) {
       peek = parser_peek(parser);
       if (peek == TOKEN_COMMA) {
-        // - If this isn't the first statement, it's a parser error
-        // - Otherwise, we need to swap to creating an initializer that will be typed by typecheck
-        // conversion
-        parser_diag(1, parser, NULL, "bare initializer syntax is a TODO right now");
-        return -1;
+        if (last && !is_initializer) {
+          parser_diag(1, parser, NULL,
+                      "unexpected comma in block (this block is not an initializer)");
+          return -1;
+        }
+
+        parser_consume_peeked(parser, NULL);
+
+        is_initializer = 1;
       }
     }
+
+    last = stmt;
   }
   if (parser_consume(parser, &token, TOKEN_RBRACE) < 0) {
     return -1;
+  }
+
+  into->last_stmt = last;
+
+  if (is_initializer) {
+    struct ast_stmt *stmt = into->stmt;
+
+    into->stmt = calloc(1, sizeof(struct ast_stmt));
+    into->stmt->type = AST_STMT_TYPE_EXPR;
+    into->stmt->stmt.expr = calloc(1, sizeof(struct ast_expr));
+    into->stmt->stmt.expr->type = AST_EXPR_TYPE_STRUCT_INIT;
+    into->stmt->stmt.expr->parsed_ty.ty = AST_TYPE_TBD;
+    into->stmt->stmt.expr->parsed_ty.oneof.array.element_ty = calloc(1, sizeof(struct ast_ty));
+    into->stmt->stmt.expr->parsed_ty.oneof.array.element_ty->ty = AST_TYPE_TBD;
+
+    // build expressions from statement list
+    struct ast_expr *expr = into->stmt->stmt.expr;
+    struct ast_expr_list *last_expr = NULL;
+    while (stmt) {
+      if (stmt->type != AST_STMT_TYPE_EXPR) {
+        parser_diag(1, parser, NULL,
+                    "only expressions are allowed in comma-separated initializer blocks");
+        return -1;
+      }
+
+      struct ast_expr_list *node = calloc(1, sizeof(struct ast_expr_list));
+      node->expr = stmt->stmt.expr;
+
+      if (last_expr) {
+        last_expr->next = node;
+      } else {
+        expr->expr.list = node;
+      }
+
+      last_expr = node;
+      struct ast_stmt *old = stmt;
+      stmt = stmt->next;
+
+      free(old);
+    }
+
+    return 0;
   }
 
   if (ended_semi || !last || last->type != AST_STMT_TYPE_EXPR) {

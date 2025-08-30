@@ -10,8 +10,9 @@
 #include "typecheck.h"
 #include "types.h"
 
-struct ast_ty *typecheck_expr(struct typecheck *typecheck, struct ast_expr *ast) {
-  struct ast_ty *ty = typecheck_expr_with_tbds(typecheck, ast);
+struct ast_ty *typecheck_expr(struct typecheck *typecheck, struct ast_expr *ast,
+                              struct ast_ty *expected_ty) {
+  struct ast_ty *ty = typecheck_expr_with_tbds(typecheck, ast, expected_ty);
   if (!ty) {
     return ty;
   }
@@ -29,8 +30,9 @@ struct ast_ty *typecheck_expr(struct typecheck *typecheck, struct ast_expr *ast)
   return ty;
 }
 
-struct ast_ty *typecheck_expr_with_tbds(struct typecheck *typecheck, struct ast_expr *ast) {
-  struct ast_ty *ty = typecheck_expr_inner(typecheck, ast);
+struct ast_ty *typecheck_expr_with_tbds(struct typecheck *typecheck, struct ast_expr *ast,
+                                        struct ast_ty *expected_ty) {
+  struct ast_ty *ty = typecheck_expr_inner(typecheck, ast, expected_ty);
   if (!ty) {
     return ty;
   }
@@ -43,7 +45,8 @@ struct ast_ty *typecheck_expr_with_tbds(struct typecheck *typecheck, struct ast_
   return ty;
 }
 
-struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr *ast) {
+struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr *ast,
+                                    struct ast_ty *expected_ty) {
   compiler_log(typecheck->compiler, LogLevelDebug, "typecheck", "typecheck expr %d @ %s:%zd:%zd",
                ast->type, ast->loc.file, ast->loc.line, ast->loc.column);
   switch (ast->type) {
@@ -56,7 +59,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         case AST_TYPE_MATRIX: {
           struct ast_expr_list *node = ast->expr.list;
           while (node) {
-            struct ast_ty *ty = typecheck_expr(typecheck, node->expr);
+            struct ast_ty *ty = typecheck_expr(typecheck, node->expr, expected_ty);
             if (!ty) {
               return NULL;
             }
@@ -158,6 +161,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_STRUCT_INIT: {
       ast->ty = resolve_parsed_type(typecheck, ast->parsed_ty.oneof.array.element_ty);
+      if (type_is_tbd(ast->ty)) {
+        ast->ty = expected_ty;
+      }
 
       // the element_ty was just a carrier for the struct type, we can free it now
       free(ast->parsed_ty.oneof.array.element_ty);
@@ -180,7 +186,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
 
         {
-          struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr);
+          struct ast_ty *expr_ty = typecheck_expr(typecheck, node->expr, field->ty);
           if (!expr_ty) {
             return NULL;
           }
@@ -230,7 +236,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         return &typecheck->error_type;
       }
 
-      struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.union_init.inner);
+      struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.union_init.inner, field->ty);
       if (!expr_ty) {
         return NULL;
       }
@@ -271,7 +277,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_ARRAY_INDEX: {
-      struct ast_ty *target_ty = typecheck_expr(typecheck, ast->expr.array_index.target);
+      struct ast_ty *target_ty =
+          typecheck_expr(typecheck, ast->expr.array_index.target, expected_ty);
       if (!target_ty) {
         return NULL;
       }
@@ -287,7 +294,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       // try to coerce the index to a 32-bit integer
-      struct ast_ty *index_ty = typecheck_expr(typecheck, ast->expr.array_index.index);
+      struct ast_ty *index_ty = typecheck_expr(typecheck, ast->expr.array_index.index, NULL);
       if (!index_ty) {
         return NULL;
       }
@@ -322,8 +329,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_BINARY: {
       {
-        struct ast_ty *lhs = typecheck_expr(typecheck, ast->expr.binary.lhs);
-        struct ast_ty *rhs = typecheck_expr(typecheck, ast->expr.binary.rhs);
+        struct ast_ty *lhs = typecheck_expr(typecheck, ast->expr.binary.lhs, NULL);
+        struct ast_ty *rhs = typecheck_expr(typecheck, ast->expr.binary.rhs, NULL);
 
         if (!lhs || !rhs) {
           return NULL;
@@ -365,7 +372,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      struct ast_ty *ty = typecheck_block(typecheck, &ast->expr.block);
+      struct ast_ty *ty = typecheck_block(typecheck, &ast->expr.block, ast->ty);
       if (!ty) {
         return NULL;
       }
@@ -426,7 +433,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       size_t i = 0;
       while (args) {
         {
-          struct ast_ty *arg_ty = typecheck_expr(typecheck, args->expr);
+          struct ast_ty *arg_ty =
+              typecheck_expr(typecheck, args->expr, function_ty->oneof.function.param_types[i]);
           if (!arg_ty) {
             return NULL;
           }
@@ -457,7 +465,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_DEREF: {
       {
-        struct ast_ty *target_ty = typecheck_expr(typecheck, ast->expr.deref.target);
+        struct ast_ty *target_ty = typecheck_expr(typecheck, ast->expr.deref.target, expected_ty);
         if (!target_ty) {
           return NULL;
         }
@@ -580,7 +588,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       }
 
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.cast.expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.cast.expr, NULL);
         if (!expr_ty) {
           return NULL;
         }
@@ -602,12 +610,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_IF: {
       {
-        struct ast_ty *cond = typecheck_expr(typecheck, ast->expr.if_expr.cond);
+        struct ast_ty *cond = typecheck_expr(typecheck, ast->expr.if_expr.cond, NULL);
         if (!cond) {
           return NULL;
         }
 
-        struct ast_ty *then_ty = typecheck_block(typecheck, &ast->expr.if_expr.then_block);
+        struct ast_ty *then_ty = typecheck_block(typecheck, &ast->expr.if_expr.then_block, NULL);
         if (!then_ty) {
           return NULL;
         }
@@ -617,12 +625,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         struct ast_expr_elseif *elseif = ast->expr.if_expr.elseifs;
         while (elseif) {
           {
-            struct ast_ty *cond_ty = typecheck_expr(typecheck, elseif->cond);
+            struct ast_ty *cond_ty = typecheck_expr(typecheck, elseif->cond, NULL);
             if (!cond_ty) {
               return NULL;
             }
 
-            struct ast_ty *block_ty = typecheck_block(typecheck, &elseif->block);
+            struct ast_ty *block_ty = typecheck_block(typecheck, &elseif->block, NULL);
             if (!block_ty) {
               return NULL;
             }
@@ -646,7 +654,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
       if (ast->expr.if_expr.has_else) {
         {
-          struct ast_ty *else_ty = typecheck_block(typecheck, &ast->expr.if_expr.else_block);
+          struct ast_ty *else_ty = typecheck_block(typecheck, &ast->expr.if_expr.else_block, NULL);
           if (!else_ty) {
             return NULL;
           }
@@ -678,12 +686,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_ASSIGN: {
       {
-        struct ast_ty *lhs_ty = typecheck_expr(typecheck, ast->expr.assign.lhs);
+        struct ast_ty *lhs_ty = typecheck_expr(typecheck, ast->expr.assign.lhs, NULL);
         if (!lhs_ty) {
           return NULL;
         }
 
-        struct ast_ty *expr_ty = typecheck_expr_with_tbds(typecheck, ast->expr.assign.expr);
+        struct ast_ty *expr_ty = typecheck_expr_with_tbds(typecheck, ast->expr.assign.expr, lhs_ty);
         if (!expr_ty) {
           return NULL;
         }
@@ -789,7 +797,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_expr *expr = ast->expr.ref.expr;
 
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, expr, NULL);
         if (!expr_ty) {
           return NULL;
         }
@@ -825,7 +833,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_expr *expr = ast->expr.load.expr;
 
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, expr, expected_ty);
         if (!expr_ty) {
           return NULL;
         }
@@ -843,7 +851,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_UNARY: {
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.unary.expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.unary.expr, expected_ty);
         if (!expr_ty) {
           return NULL;
         }
@@ -894,7 +902,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_MATCH: {
       {
-        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.match.expr);
+        struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.match.expr, NULL);
         if (!expr_ty) {
           return NULL;
         }
@@ -904,8 +912,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       struct ast_expr_match_arm *arm = ast->expr.match.arms;
       while (arm) {
         {
-          struct ast_ty *pattern_ty = typecheck_pattern_match(
-              typecheck, arm->pattern, &arm->pattern->expr.pattern_match, ast->expr.match.expr->ty);
+          struct ast_ty *pattern_ty =
+              typecheck_pattern_match(typecheck, arm->pattern, &arm->pattern->expr.pattern_match,
+                                      ast->expr.match.expr->ty, NULL);
           if (!pattern_ty) {
             return NULL;
           }
@@ -942,7 +951,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           inner_var = entry;
         }
 
-        struct ast_ty *arm_ty = typecheck_expr(typecheck, arm->expr);
+        struct ast_ty *arm_ty = typecheck_expr(typecheck, arm->expr, expected_ty);
 
         if (inner_var) {
           typecheck->scope = exit_scope(typecheck->scope);
@@ -961,7 +970,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         return &typecheck->error_type;
       }
 
-      struct ast_ty *otherwise_ty = typecheck_expr(typecheck, ast->expr.match.otherwise->expr);
+      struct ast_ty *otherwise_ty =
+          typecheck_expr(typecheck, ast->expr.match.otherwise->expr, expected_ty);
       if (!otherwise_ty) {
         return NULL;
       }
@@ -1048,7 +1058,8 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
         // includes an inner, ensure it matches the enum field's type
         {
-          struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->expr.enum_init.inner);
+          struct ast_ty *inner_ty =
+              typecheck_expr(typecheck, ast->expr.enum_init.inner, field->inner);
           if (!inner_ty) {
             return NULL;
           }
@@ -1100,7 +1111,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
 
         if (!swapped_type) {
-          inner_ty = typecheck_expr(typecheck, ast->expr.sizeof_expr.expr);
+          inner_ty = typecheck_expr(typecheck, ast->expr.sizeof_expr.expr, NULL);
           if (!inner_ty) {
             return NULL;
           }
@@ -1140,7 +1151,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
 
         if (!swapped_type) {
-          inner_ty = typecheck_expr(typecheck, ast->expr.box_expr.expr);
+          inner_ty = typecheck_expr(typecheck, ast->expr.box_expr.expr, NULL);
           if (!inner_ty) {
             return NULL;
           }
@@ -1164,7 +1175,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
 
     case AST_EXPR_TYPE_UNBOX: {
       {
-        struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->expr.box_expr.expr);
+        struct ast_ty *inner_ty = typecheck_expr(typecheck, ast->expr.box_expr.expr, expected_ty);
         if (!inner_ty) {
           return NULL;
         }

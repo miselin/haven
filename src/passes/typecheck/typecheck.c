@@ -15,7 +15,8 @@ int typecheck_implicit_ast(struct ast_program *ast);
 
 static void typecheck_ast(struct typecheck *typecheck, struct ast_program *ast);
 static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel *ast);
-static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast);
+static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast,
+                                     struct ast_ty *expected_ty);
 
 struct typecheck *new_typecheck(struct ast_program *ast, struct compiler *compiler) {
   struct typecheck *result = calloc(1, sizeof(struct typecheck));
@@ -297,7 +298,9 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
       }
 
       {
-        struct ast_ty *result = typecheck_block(typecheck, ast->toplevel.fdecl.body);
+        struct ast_ty *result =
+            typecheck_block(typecheck, ast->toplevel.fdecl.body,
+                            ast->toplevel.fdecl.function_ty->oneof.function.retty);
         if (!result) {
           return;
         }
@@ -350,7 +353,8 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
 
     if (ast->toplevel.vdecl.init_expr) {
       {
-        struct ast_ty *result = typecheck_expr(typecheck, ast->toplevel.vdecl.init_expr);
+        struct ast_ty *result =
+            typecheck_expr(typecheck, ast->toplevel.vdecl.init_expr, ast->toplevel.vdecl.ty);
         if (!result) {
           return;
         }
@@ -377,14 +381,18 @@ static void typecheck_toplevel(struct typecheck *typecheck, struct ast_toplevel 
   }
 }
 
-struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *ast) {
+struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *ast,
+                               struct ast_ty *expected_ty) {
   typecheck->scope = enter_scope(typecheck->scope);
 
   struct ast_stmt *stmt = ast->stmt;
   struct ast_ty *last_ty = NULL;
 
   while (stmt) {
-    struct ast_ty *ty = typecheck_stmt(typecheck, stmt);
+    // Only pass in expected type for the result expression of the block!
+    struct ast_ty *ty = typecheck_stmt(
+        typecheck, stmt,
+        stmt->type == AST_STMT_TYPE_EXPR && stmt == ast->last_stmt ? expected_ty : NULL);
     if (!ty) {
       return NULL;
     }
@@ -403,10 +411,11 @@ struct ast_ty *typecheck_block(struct typecheck *typecheck, struct ast_block *as
   return ast->ty;
 }
 
-static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast) {
+static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stmt *ast,
+                                     struct ast_ty *expected_ty) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      return typecheck_expr(typecheck, ast->stmt.expr);
+      return typecheck_expr(typecheck, ast->stmt.expr, expected_ty);
 
     case AST_STMT_TYPE_LET: {
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
@@ -423,7 +432,8 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
       // insert before checking the initializer to allow recursive references
       scope_insert(typecheck->scope, ast->stmt.let.ident.value.identv.ident, entry);
       {
-        struct ast_ty *init_ty = typecheck_expr(typecheck, ast->stmt.let.init_expr);
+        struct ast_ty *init_ty =
+            typecheck_expr(typecheck, ast->stmt.let.init_expr, ast->stmt.let.ty);
         if (!init_ty) {
           return NULL;
         }
@@ -460,11 +470,11 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
     } break;
 
     case AST_STMT_TYPE_ITER: {
-      struct ast_ty *start = typecheck_expr(typecheck, ast->stmt.iter.range.start);
-      struct ast_ty *end = typecheck_expr(typecheck, ast->stmt.iter.range.end);
+      struct ast_ty *start = typecheck_expr(typecheck, ast->stmt.iter.range.start, NULL);
+      struct ast_ty *end = typecheck_expr(typecheck, ast->stmt.iter.range.end, start);
       struct ast_ty *step, step_ty;
       if (ast->stmt.iter.range.step) {
-        step = typecheck_expr(typecheck, ast->stmt.iter.range.step);
+        step = typecheck_expr(typecheck, ast->stmt.iter.range.step, start);
       } else {
         step_ty.ty = AST_TYPE_INTEGER;
         step_ty.oneof.integer.is_signed = 1;
@@ -504,7 +514,7 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
       // insert before checking the initializer to allow recursive references
       scope_insert(typecheck->scope, ast->stmt.iter.index.ident.value.identv.ident, entry);
 
-      if (!typecheck_block(typecheck, &ast->stmt.iter.block)) {
+      if (!typecheck_block(typecheck, &ast->stmt.iter.block, NULL)) {
         return NULL;
       }
 
@@ -512,8 +522,8 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
     } break;
 
     case AST_STMT_TYPE_STORE: {
-      struct ast_ty *lhs = typecheck_expr(typecheck, ast->stmt.store.lhs);
-      struct ast_ty *rhs = typecheck_expr(typecheck, ast->stmt.store.rhs);
+      struct ast_ty *lhs = typecheck_expr(typecheck, ast->stmt.store.lhs, NULL);
+      struct ast_ty *rhs = typecheck_expr(typecheck, ast->stmt.store.rhs, NULL);
 
       if (!lhs || !rhs) {
         return NULL;
@@ -540,28 +550,28 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
     case AST_STMT_TYPE_RETURN: {
       // TODO: make sure this expr type matches the function's return type
       if (ast->stmt.expr) {
-        return typecheck_expr(typecheck, ast->stmt.expr);
+        return typecheck_expr(typecheck, ast->stmt.expr, expected_ty);
       } else {
         return &typecheck->void_type;
       }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
-      if (!typecheck_expr(typecheck, ast->stmt.expr)) {
+      if (!typecheck_expr(typecheck, ast->stmt.expr, NULL)) {
         return NULL;
       }
       // expression type is irrelevant; defer is a void statement
     } break;
 
     case AST_STMT_TYPE_WHILE: {
-      struct ast_ty *cond = typecheck_expr(typecheck, ast->stmt.while_stmt.cond);
+      struct ast_ty *cond = typecheck_expr(typecheck, ast->stmt.while_stmt.cond, NULL);
       if (!cond) {
         return NULL;
       }
 
       // TODO: needs to be an integer condition
 
-      if (!typecheck_block(typecheck, &ast->stmt.while_stmt.block)) {
+      if (!typecheck_block(typecheck, &ast->stmt.while_stmt.block, NULL)) {
         return NULL;
       }
     } break;
@@ -581,9 +591,9 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
 
 struct ast_ty *typecheck_pattern_match(struct typecheck *typecheck, struct ast_expr *ast,
                                        struct ast_expr_pattern_match *pattern,
-                                       struct ast_ty *match_ty) {
+                                       struct ast_ty *match_ty, struct ast_ty *expected_ty) {
   if (ast->type != AST_EXPR_TYPE_PATTERN_MATCH) {
-    return typecheck_expr(typecheck, ast);
+    return typecheck_expr(typecheck, ast, expected_ty);
   }
 
   if (match_ty->ty != AST_TYPE_ENUM) {

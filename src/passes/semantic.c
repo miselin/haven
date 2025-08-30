@@ -318,7 +318,23 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
     } break;
 
     case AST_EXPR_TYPE_BLOCK: {
-      return check_semantic_block(semantic, &ast->expr.block);
+      int rc = check_semantic_block(semantic, &ast->expr.block);
+      if (rc < 0) {
+        return 1;
+      }
+
+      // Is there just one expression in the block? If so, elide the block
+      // TODO: this probably belongs in a post-parse tidyup pass, not in semantic analysis
+      if (ast->expr.block.stmt && ast->expr.block.stmt->type == AST_STMT_TYPE_EXPR &&
+          !ast->expr.block.stmt->next) {
+        struct ast_expr *expr = ast->expr.block.stmt->stmt.expr;
+        struct ast_stmt *stmt = ast->expr.block.stmt;
+
+        *ast = *expr;
+
+        free(expr);
+        free(stmt);
+      }
     } break;
 
     case AST_EXPR_TYPE_CALL: {
