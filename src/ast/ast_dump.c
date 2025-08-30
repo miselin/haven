@@ -462,14 +462,6 @@ void dump_expr(struct ast_expr *ast, int indent) {
       }
     } break;
 
-    case AST_EXPR_TYPE_UNION_INIT:
-      INDENTED(indent, "UnionInit %s -> ", ast->expr.union_init.field.value.identv.ident);
-      dump_ty(&ast->expr.union_init.parsed_ty);
-      fprintf(stderr, "\n");
-
-      dump_expr(ast->expr.union_init.inner, indent + 1);
-      break;
-
     case AST_EXPR_TYPE_SIZEOF: {
       INDENTED(indent, "Sizeof -> ");
       dump_expr_ty(ast);

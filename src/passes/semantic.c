@@ -478,12 +478,6 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
       }
     } break;
 
-    case AST_EXPR_TYPE_UNION_INIT: {
-      if (check_semantic_expr(semantic, ast->expr.union_init.inner) < 0) {
-        return -1;
-      }
-    } break;
-
     case AST_EXPR_TYPE_SIZEOF: {
       if (ast->expr.sizeof_expr.expr) {
         return check_semantic_expr(semantic, ast->expr.sizeof_expr.expr);

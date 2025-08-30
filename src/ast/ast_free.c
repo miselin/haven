@@ -216,11 +216,6 @@ void free_expr(struct compiler *compiler, struct ast_expr *ast) {
       free_expr(compiler, ast->expr.enum_init.inner);
       break;
 
-    case AST_EXPR_TYPE_UNION_INIT:
-      free_parser_ty(compiler, &ast->expr.union_init.parsed_ty);
-      free_expr(compiler, ast->expr.union_init.inner);
-      break;
-
     case AST_EXPR_TYPE_SIZEOF:
       if (ast->expr.sizeof_expr.expr) {
         free_expr(compiler, ast->expr.sizeof_expr.expr);

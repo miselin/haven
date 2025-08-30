@@ -468,16 +468,6 @@ static int code_emit_expr(FILE *stream, struct ast_expr *ast, int indent) {
       }
       break;
 
-    case AST_EXPR_TYPE_UNION_INIT:
-      fprintf(stream, "union %s::%s", ast->expr.union_init.field.value.identv.ident,
-              ast->expr.union_init.parsed_ty.name);
-      if (ast->expr.union_init.inner) {
-        fprintf(stream, "(");
-        code_emit_expr(stream, ast->expr.union_init.inner, indent);
-        fprintf(stream, ")");
-      }
-      break;
-
     case AST_EXPR_TYPE_SIZEOF:
       fprintf(stream, "sizeof (");
       if (ast->expr.sizeof_expr.expr) {

@@ -4,13 +4,12 @@
 #include "internal.h"
 #include "parse.h"
 
-int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into, int is_union) {
+int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into) {
   if (parser_consume(parser, NULL, TOKEN_LBRACE) < 0) {
     return -1;
   }
 
   into->ty = AST_TYPE_STRUCT;
-  into->oneof.structty.is_union = is_union;
 
   struct ast_struct_field *last = into->oneof.structty.fields;
 

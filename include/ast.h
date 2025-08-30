@@ -49,7 +49,6 @@
 #define AST_EXPR_TYPE_NIL 20
 #define AST_EXPR_TYPE_PATTERN_MATCH 21
 #define AST_EXPR_TYPE_ENUM_INIT 22
-#define AST_EXPR_TYPE_UNION_INIT 23
 #define AST_EXPR_TYPE_SIZEOF 24
 #define AST_EXPR_TYPE_BOX 25
 #define AST_EXPR_TYPE_UNBOX 26
@@ -258,12 +257,6 @@ struct ast_expr_enum_init {
   struct ast_template_ty *tmpls;
 };
 
-struct ast_expr_union_init {
-  struct ast_ty parsed_ty;
-  struct token field;
-  struct ast_expr *inner;
-};
-
 struct ast_expr_sizeof {
   struct ast_ty parsed_ty;  // only filled if expr is NULL
   struct ast_ty *resolved;
@@ -293,7 +286,6 @@ union ast_expr_union {
   struct ast_expr_match match;
   struct ast_expr_pattern_match pattern_match;
   struct ast_expr_enum_init enum_init;
-  struct ast_expr_union_init union_init;
   struct ast_expr_sizeof sizeof_expr;
   struct ast_expr_box box_expr;
 };

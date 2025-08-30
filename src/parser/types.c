@@ -103,10 +103,10 @@ struct ast_ty parse_type(struct parser *parser) {
       memcpy(&result, tmplty, sizeof(struct ast_ty));
       free(tmplty);
     }
-  } else if (peek == TOKEN_KW_STRUCT || peek == TOKEN_KW_UNION) {
+  } else if (peek == TOKEN_KW_STRUCT) {
     parser_consume_peeked(parser, NULL);
 
-    if (parser_parse_struct_decl(parser, &result, peek == TOKEN_KW_UNION) < 0) {
+    if (parser_parse_struct_decl(parser, &result) < 0) {
       result.ty = AST_TYPE_ERROR;
       return result;
     }

@@ -362,12 +362,6 @@ static enum VisitorResult visitor_visit_expr(struct ast_visitor *visitor, struct
       }
       break;
 
-    case AST_EXPR_TYPE_UNION_INIT:
-      if (visitor_visit_expr(visitor, ast->expr.union_init.inner) == VisitorStop) {
-        return VisitorStop;
-      }
-      break;
-
     case AST_EXPR_TYPE_SIZEOF:
       if (ast->expr.sizeof_expr.expr &&
           visitor_visit_expr(visitor, ast->expr.sizeof_expr.expr) == VisitorStop) {

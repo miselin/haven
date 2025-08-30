@@ -105,7 +105,7 @@ struct ast_range parse_range(struct parser *parser);
 int parse_braced_initializer(struct parser *parser, struct ast_expr *into);
 
 // Parse a struct or union declaration.
-int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into, int is_union);
+int parser_parse_struct_decl(struct parser *parser, struct ast_ty *into);
 
 // Parse an enum declaration.
 int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into);

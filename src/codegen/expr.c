@@ -527,16 +527,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       return storage;
     } break;
 
-    case AST_EXPR_TYPE_UNION_INIT: {
-      LLVMTypeRef ty = ast_ty_to_llvm_ty(codegen, ast->ty);
-      LLVMValueRef result = into ? into : new_alloca(codegen, ty, "union");
-
-      LLVMValueRef inner = emit_expr(codegen, ast->expr.union_init.inner);
-
-      emit_store(codegen, ast->expr.union_init.inner->ty, inner, result);
-      return result;
-    } break;
-
     case AST_EXPR_TYPE_SIZEOF: {
       LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, ast->expr.sizeof_expr.resolved);
       return const_i32(codegen, (int32_t)LLVMABISizeOfType(codegen->llvm_data_layout, result_ty));

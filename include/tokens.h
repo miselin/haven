@@ -80,7 +80,6 @@ enum token_id {
   TOKEN_KW_ENUM,       // enum
   TOKEN_KW_IMPORT,     // import
   TOKEN_KW_CIMPORT,    // cimport
-  TOKEN_KW_UNION,      // union
   TOKEN_KW_SIZEOF,     // sizeof
   TOKEN_KW_BOX,        // box
   TOKEN_KW_UNBOX,      // unbox

@@ -193,8 +193,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
     case TOKEN_TY_SIGNED:
     case TOKEN_TY_UNSIGNED:
     case TOKEN_TY_STR:
-    case TOKEN_TY_VOID:
-    case TOKEN_TY_MAT: {
+    case TOKEN_TY_VOID: {
       if (parse_braced_initializer(parser, result) < 0) {
         free(result);
         return NULL;
@@ -211,37 +210,6 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
       // swap type for future passes (braced initializers are arrays by default)
       result->type = AST_EXPR_TYPE_STRUCT_INIT;
-    } break;
-
-    // struct literals union <ty>::<field>(<expr>)
-    case TOKEN_KW_UNION: {
-      parser_consume_peeked(parser, NULL);
-
-      result->type = AST_EXPR_TYPE_UNION_INIT;
-      result->expr.union_init.parsed_ty = parse_type(parser);
-      if (parser_consume(parser, NULL, TOKEN_COLONCOLON) < 0) {
-        free(result);
-        return NULL;
-      }
-
-      if (parser_consume(parser, &result->expr.union_init.field, TOKEN_IDENTIFIER) < 0) {
-        free(result);
-        return NULL;
-      }
-
-      if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
-        free(result);
-        return NULL;
-      }
-      result->expr.union_init.inner = parse_expression(parser);
-      if (!result->expr.union_init.inner) {
-        free(result);
-        return NULL;
-      }
-      if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
-        free(result);
-        return NULL;
-      }
     } break;
 
     // vec/matrix literals

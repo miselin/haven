@@ -127,9 +127,6 @@ static int check_purity_expr(struct purity *purity, struct ast_expr *ast) {
     case AST_EXPR_TYPE_PATTERN_MATCH:
       break;
 
-    case AST_EXPR_TYPE_UNION_INIT:
-      break;
-
     case AST_EXPR_TYPE_SIZEOF:
       break;
 

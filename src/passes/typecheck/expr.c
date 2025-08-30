@@ -212,52 +212,6 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       return ast->ty;
     } break;
 
-    case AST_EXPR_TYPE_UNION_INIT: {
-      // unions are a simplified variant of structs - they initialize one field, and that's it
-      struct ast_ty *union_ty = resolve_type(typecheck, &ast->expr.union_init.parsed_ty);
-
-      if (type_is_error(union_ty)) {
-        typecheck_diag_expr(typecheck, ast, "union type could not be resolved\n");
-        return &typecheck->error_type;
-      }
-
-      // find the field
-      struct ast_struct_field *field = union_ty->oneof.structty.fields;
-      while (field) {
-        if (strcmp(field->name, ast->expr.union_init.field.value.identv.ident) == 0) {
-          break;
-        }
-        field = field->next;
-      }
-
-      if (!field) {
-        typecheck_diag_expr(typecheck, ast, "union field %s not found\n",
-                            ast->expr.union_init.field.value.identv.ident);
-        return &typecheck->error_type;
-      }
-
-      struct ast_ty *expr_ty = typecheck_expr(typecheck, ast->expr.union_init.inner, field->ty);
-      if (!expr_ty) {
-        return NULL;
-      }
-
-      maybe_implicitly_convert(&ast->expr.union_init.inner->ty, &field->ty);
-
-      if (!same_type(ast->expr.union_init.inner->ty, field->ty)) {
-        char exprty[256];
-        char fieldty[256];
-        type_name_into(ast->expr.union_init.inner->ty, exprty, 256);
-        type_name_into(field->ty, fieldty, 256);
-
-        fprintf(stderr, "union initializer field %s has type %s, expected %s\n",
-                ast->expr.union_init.field.value.identv.ident, exprty, fieldty);
-        ++typecheck->errors;
-      }
-
-      ast->ty = resolve_type(typecheck, union_ty);
-      return ast->ty;
-    } break;
-
     case AST_EXPR_TYPE_VARIABLE: {
       struct scope_entry *entry =
           scope_lookup(typecheck->scope, ast->expr.variable.ident.value.identv.ident, 1);
