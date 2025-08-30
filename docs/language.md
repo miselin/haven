@@ -104,6 +104,20 @@ type Node = struct {
 };
 ```
 
+Initializing a structure in a variable declaration requires an explicit type annotation:
+
+```
+let Node node = { 1234, nil };
+```
+
+In contexts where the type is known (e.g. a function return), the type will be inferred automatically.
+
+Single-element structs require a trailing comma to initialize:
+
+```
+let Thing thing = { 1234, };
+```
+
 ### Enums
 
 You may define an enum type using two forms.
@@ -137,12 +151,20 @@ match x {
 
 ### Arrays
 
-Arrays can be defined by adding a dimension to a type. The initializer must include the element type.
+Arrays can be defined by adding a dimension to a type.
 
 ```
-i32[2] arr = i32 {
+i32[2] arr = {
     0,
     1
+};
+```
+
+A single-element array requires a trailing `,`:
+
+```
+i32[1] arr = {
+    0,
 };
 ```
 
