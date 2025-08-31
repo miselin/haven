@@ -54,7 +54,6 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
   switch (ty->ty) {
     case AST_TYPE_ERROR:
     case AST_TYPE_TBD:
-    case AST_TYPE_INTEGER:
     case AST_TYPE_STRING:
     case AST_TYPE_FLOAT:
     case AST_TYPE_FVEC:
@@ -63,6 +62,24 @@ struct ast_ty *resolve_parsed_type(struct typecheck *typecheck, struct ast_ty *t
     case AST_TYPE_NIL:
     case AST_TYPE_MATRIX:
       // no complex data to copy
+      break;
+
+    case AST_TYPE_INTEGER:
+      // convert constants to simpler integer types
+      if (resolved_ty->flags & TYPE_FLAG_CONSTANT) {
+        if (resolved_ty->oneof.integer.width > 64) {
+          // TODO: diagnostic
+          return NULL;
+        } else if (resolved_ty->oneof.integer.width > 32) {
+          resolved_ty->oneof.integer.width = 64;
+        } else if (resolved_ty->oneof.integer.width > 16) {
+          resolved_ty->oneof.integer.width = 32;
+        } else if (resolved_ty->oneof.integer.width > 8) {
+          resolved_ty->oneof.integer.width = 16;
+        } else if (resolved_ty->oneof.integer.width > 1) {
+          resolved_ty->oneof.integer.width = 8;
+        }
+      }
       break;
 
     case AST_TYPE_ARRAY:
