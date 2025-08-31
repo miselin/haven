@@ -391,9 +391,11 @@ LLVMTypeRef codegen_box_type(struct codegen *codegen, struct ast_ty *ty) {
   LLVMTypeRef result_ty = LLVMStructCreateNamed(codegen->llvm_context, name);
 
   // refcount, boxed value
-  LLVMTypeRef fields[] = {LLVMInt32TypeInContext(codegen->llvm_context), wrapped};
-  LLVMStructSetBody(result_ty, fields, 2,
-                    1);  // TODO: make not packed, it's just easier to debug for now
+  // we must ensure the wrapped value is aligned on a 16-byte boundary so we pad the refcount
+  // this allows us to box floating point types without unaligned reads/writes
+  LLVMTypeRef pad_opaque = LLVMArrayType2(LLVMInt32TypeInContext(codegen->llvm_context), 4);
+  LLVMTypeRef fields[] = {pad_opaque, wrapped};
+  LLVMStructSetBody(result_ty, fields, 2, 1);
 
   entry = calloc(1, sizeof(struct struct_entry));
   entry->type = result_ty;

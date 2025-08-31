@@ -537,14 +537,17 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
         return NULL;
       }
 
-      if (lhs->ty != AST_TYPE_POINTER) {
-        fprintf(stderr, "store lhs is not a pointer\n");
+      struct ast_ty *pointee = NULL;
+      if (lhs->ty == AST_TYPE_POINTER) {
+        pointee = ptr_pointee_type(lhs);
+      } else if (lhs->ty == AST_TYPE_BOX) {
+        pointee = box_pointee_type(lhs);
+      } else {
+        fprintf(stderr, "store lhs is not a pointer or box\n");
         ++typecheck->errors;
       }
 
-      struct ast_ty *pointee = ptr_pointee_type(lhs);
-
-      if (!same_type(pointee, rhs)) {
+      if (pointee && !same_type(pointee, rhs)) {
         char lhsstr[256], rhsstr[256];
         type_name_into(pointee, lhsstr, 256);
         type_name_into(rhs, rhsstr, 256);

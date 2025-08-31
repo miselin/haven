@@ -90,6 +90,8 @@ const char *token_id_to_string(enum token_id token) {
       return ">>";
     case TOKEN_POUND:
       return "#";
+    case TOKEN_COLONEQ:
+      return ":=";
     case TOKEN_KW_PUB:
       return "pub";
     case TOKEN_KW_FN:

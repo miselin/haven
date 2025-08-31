@@ -174,15 +174,14 @@ i32[1] arr = {
 > Boxed types are very much under construction. Their definition may yet change, and they tend to
 > have rough edges that lead to bugs at runtime in their current form.
 
-Boxing wraps a value in a heap-allocated structure. The underlying pointer
+Boxing wraps a value in a heap-allocated structure. The underlying value
 can be retrieved with the `unbox` keyword.
 
 ```
 fn example() -> i32 {
-    let val = box 5; // i4^
-    let inner = unbox val; // i4*
-    let result = load inner; // i4
-    val = nil;
+    let mut val = box 5; // i4^
+    let result = unbox val; // i4
+    val = nil; // box is freed
     result
 }
 ```
@@ -193,6 +192,18 @@ of an asterisk (`*`):
 ```
 fn example(i32^ boxed) -> i32;
 ```
+
+To directly mutate the value of a box without using `load` or `store`, you can use the `:=` assignment
+operator:
+
+```
+let val = box 5;
+val := 6;
+let result = unbox val; // 6
+```
+
+Note that `val` does not need to be mutable in this case. The box itself is a mutable cell, and `val` is not
+reassigned when using the `:=` operator.
 
 ## Declarations
 

@@ -52,6 +52,7 @@ enum token_id {
   TOKEN_COMMENTLINE,  // //
   TOKEN_NEWLINE,      // \n
   TOKEN_DASHGT,       // ->
+  TOKEN_COLONEQ,      // :=
 
   // keywords
   TOKEN_KW_PUB = 100,  // pub

@@ -1,0 +1,8 @@
+pub impure fn sut() -> i32 {
+    let mut boxed = box as i32 5;
+    // TODO: this should be implicitly converting to the type of the store
+    boxed := as i32 10;
+    let inner = unbox boxed;
+    boxed = nil;
+    inner
+}

@@ -600,7 +600,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
           return &typecheck->error_type;
         }
 
-        if (!(entry->decl_flags & DECL_FLAG_MUT)) {
+        if ((entry->decl_flags & DECL_FLAG_MUT) == 0) {
           fprintf(stderr, "%s is not mutable\n", ident);
           ++typecheck->errors;
           return &typecheck->error_type;
@@ -727,13 +727,18 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         }
       }
 
-      if (expr->ty->ty != AST_TYPE_POINTER) {
+      if (expr->ty->ty == AST_TYPE_POINTER) {
+        ast->ty = type_repository_lookup_ty(typecheck->type_repo, ptr_pointee_type(expr->ty));
+      } else if (expr->ty->ty == AST_TYPE_BOX) {
+        fprintf(stderr, "use unbox instead of load to retrieve the interior value of a box\n");
+        ++typecheck->errors;
+        return &typecheck->error_type;
+      } else {
         fprintf(stderr, "load expression must resolve to a pointer\n");
         ++typecheck->errors;
         return &typecheck->error_type;
       }
 
-      ast->ty = type_repository_lookup_ty(typecheck->type_repo, ptr_pointee_type(expr->ty));
       return ast->ty;
     } break;
 

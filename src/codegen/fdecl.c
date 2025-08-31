@@ -199,13 +199,8 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
 
     if (param_entry->ty->ty == AST_TYPE_BOX) {
       compiler_log(codegen->compiler, LogLevelDebug, "codegen", "param %s is a box", param_ident);
-      // need to store this param on the stack
-      LLVMValueRef param = new_alloca(codegen, codegen_pointer_type(codegen), param_ident);
-      LLVMBuildStore(codegen->llvm_builder, param_entry->ref, param);
-      param_entry->ref = param;
-
       struct box_entry *box = calloc(1, sizeof(struct box_entry));
-      box->box = param;
+      box->box = param_entry->ref;
       box->next = codegen->boxes;
       codegen->boxes = box;
     }
@@ -253,7 +248,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   // run box derefs, if any
   struct box_entry *box = codegen->boxes;
   while (box) {
-    codegen_box_unref(codegen, box->box, 0);
+    codegen_box_unref(codegen, box->box, 1);
 
     struct box_entry *next = box->next;
     free(box);

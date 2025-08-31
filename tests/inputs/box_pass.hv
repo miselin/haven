@@ -1,0 +1,8 @@
+pub fn unwrap(i32 ^b) -> i32 {
+    unbox b
+}
+
+pub impure fn sut() -> i32 {
+    let b = box 5;
+    unwrap(b)
+}

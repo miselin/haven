@@ -217,9 +217,19 @@ int lexer_token(struct lex_state *state, struct token *token) {
     case ',':
       token->ident = TOKEN_COMMA;
       break;
-    case ':':
-      return lex_check_either(state, token, ':', TOKEN_COLONCOLON, TOKEN_COLON);
-      break;
+    case ':': {
+      char next = lex_getc(state);
+      if (next == ':') {
+        token->ident = TOKEN_COLONCOLON;
+      } else if (next == '=') {
+        token->ident = TOKEN_COLONEQ;
+      } else {
+        token->ident = TOKEN_COLON;
+        lex_unget(state, next);
+      }
+
+      return 0;
+    } break;
     case '.':
       return lex_check_either(state, token, '.', TOKEN_DOTDOT, TOKEN_PERIOD);
       break;

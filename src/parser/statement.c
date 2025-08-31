@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ast.h"
 #include "internal.h"
 #include "parse.h"
 #include "tokenstream.h"
@@ -153,14 +154,30 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
       result->type = AST_STMT_TYPE_CONTINUE;
       break;
 
-    default:
-      // it's actually an expression
+    default: {
       result->stmt.expr = parse_expression(parser);
       result->type = AST_STMT_TYPE_EXPR;
       if (!result->stmt.expr) {
         free(result);
         return NULL;
       }
+
+      // := <expr> - mutate stored value rather than reassign
+      if (parser_peek(parser) == TOKEN_COLONEQ) {
+        parser_consume_peeked(parser, NULL);
+        struct ast_expr *rhs = parse_expression(parser);
+        if (!rhs) {
+          free(result);
+          return NULL;
+        }
+
+        struct ast_expr *lhs = result->stmt.expr;
+
+        result->type = AST_STMT_TYPE_STORE;
+        result->stmt.store.lhs = lhs;
+        result->stmt.store.rhs = rhs;
+      }
+    }
   }
 
   // must end in semicolon, or rbrace
