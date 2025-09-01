@@ -202,8 +202,8 @@ val := 6;
 let result = unbox val; // 6
 ```
 
-Note that `val` does not need to be mutable in this case. The box itself is a mutable cell, and `val` is not
-reassigned when using the `:=` operator.
+Note that `val` does not need to be mutable in this case. `let mut` permits reassignment of `val` but does not
+control the mutability of the stored value. In the example above, `:=` would be very similar to `*val = 6` in C.
 
 ## Declarations
 
@@ -275,10 +275,10 @@ File-scope variable declarations include:
 Inside function definitions, variable declarations take a different form:
 
 ```
-let [<ty>] <ident> = <init-expr>;
+let [mut] [<ty>] <ident> = <init-expr>;
 ```
 
-A type need not be specified. If unspecified, the type of the variable will be inferred from the initialization expression.
+A type need not be specified. If unspecified, the type of the variable will be inferred from the initialization expression. Specifying `mut` will allow reassignment of the variable.
 
 Variables at function scope must be initialized.
 
