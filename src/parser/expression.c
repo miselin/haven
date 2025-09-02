@@ -309,6 +309,12 @@ struct ast_expr *parse_factor(struct parser *parser) {
             }
 
             last = tmpl;
+
+            if (parser_peek(parser) == TOKEN_COMMA) {
+              parser_consume_peeked(parser, NULL);
+            } else {
+              break;
+            }
           }
 
           if (parser_consume(parser, NULL, TOKEN_GT) < 0) {

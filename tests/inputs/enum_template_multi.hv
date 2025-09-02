@@ -1,0 +1,22 @@
+foreign "c" {
+    fn strcmp(str a, str b) -> i32;
+}
+
+type Result = enum <T, E> {
+    Ok(T),
+    Error(E)
+};
+
+fn nope() -> Result<i32, str> {
+    Result::<i32, str>::Error("oh no!")
+}
+
+pub impure fn sut() -> i32 {
+    match nope() {
+        Ok(x) => x
+        Error(s) => {
+            strcmp(s, "oh no!")
+        }
+        _ => 123
+    }
+}

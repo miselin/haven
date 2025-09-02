@@ -235,7 +235,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
       size_t is_complex = (size_t)type_is_complex(ast->expr.call.function_ty->oneof.function.retty);
 
       LLVMTypeRef ret_ty =
-          ast_ty_to_llvm_ty(codegen, ast->expr.call.function_ty->oneof.function.retty);
+          ast_underlying_ty_to_llvm_ty(codegen, ast->expr.call.function_ty->oneof.function.retty);
 
       LLVMValueRef *args = NULL;
       unsigned int num_args = 0;

@@ -1,0 +1,24 @@
+foreign "c" {
+    fn printf(str format, *) -> i32;
+    fn strcmp(str a, str b) -> i32;
+}
+
+type Result = enum <T, E> {
+    Ok(T),
+    Error(E)
+};
+
+fn nope() -> Result<i32, str> {
+    Result::<i32, str>::Error("oh no!")
+}
+
+pub impure fn main() -> i32 {
+    match nope() {
+        Ok(x) => x
+        Error(s) => {
+            printf("got '%s'\n", s);
+            strcmp(s, "oh no!")
+        }
+        _ => 123
+    }
+}

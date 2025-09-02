@@ -1,6 +1,7 @@
 #include "types.h"
 
 #include <inttypes.h>
+#include <llvm-c-18/llvm-c/Target.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -511,6 +512,9 @@ size_t type_size(struct ast_ty *ty) {
       return ty->oneof.fvec.width * 4;
     case AST_TYPE_ARRAY:
       return ty->oneof.array.width * type_size(ty->oneof.array.element_ty);
+    case AST_TYPE_STRING:
+      // TODO: LLVMPointerSize (but need the codegen object in this function)
+      return 8;
     case AST_TYPE_STRUCT: {
       size_t size = 0;
       size_t largest_field = 0;

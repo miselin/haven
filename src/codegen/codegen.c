@@ -132,32 +132,21 @@ int codegen_run(struct codegen *codegen) {
   }
   LLVMDisposeMessage(error);
 
+  if (codegen->compiler->flags[0] & FLAG_DEBUG_IR) {
+    fprintf(stderr, "Pre-optimization IR:\n");
+    codegen_emit_ir(codegen, stderr);
+    fprintf(stderr, "\n\n(end pre-optimization IR)\n\n");
+  }
+
   if (rc == 0) {
     // verification completed, run unconditional optimizations that tidy up the IR ready for further
     // optimizations and emission
 
     LLVMPassBuilderOptionsRef pass_options = LLVMCreatePassBuilderOptions();
 
-    // run function passes
-    LLVMErrorRef result = LLVMRunPasses(codegen->llvm_module, "mem2reg,sccp,simplifycfg,dce",
-                                        codegen->llvm_target_machine, pass_options);
-    if (result != NULL) {
-      char *msg = LLVMGetErrorMessage(result);
-      fprintf(stderr, "Error running function passes: %s\n", msg);
-      LLVMDisposeErrorMessage(msg);
-    }
+    LLVMErrorRef result = NULL;
 
-    // run module passes now
-    result = LLVMRunPasses(codegen->llvm_module, "globaldce,strip-dead-prototypes",
-                           codegen->llvm_target_machine, pass_options);
-    if (result != NULL) {
-      char *msg = LLVMGetErrorMessage(result);
-      fprintf(stderr, "Error running module passes: %s\n", msg);
-      LLVMDisposeErrorMessage(msg);
-    }
-
-    // after the normal defaults, run opt level optimizations based on opt flags passed to the
-    // compiler
+    // run builtin opt level optimizations based on opt flags passed to the compiler
     const char *opts = "default<Os>";
     switch (compiler_get_opt_level(codegen->compiler)) {
       case OptNone:

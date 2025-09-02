@@ -149,6 +149,21 @@ match x {
 }
 ```
 
+#### Generic Enums
+
+There is _limited_ support for templating enum types in Haven:
+
+```
+type Result = enum <T> {
+    Ok(T),
+    Error
+};
+
+fn thing() -> Result<i32> {
+    Result::<i32>::Ok(5)
+}
+```
+
 ### Arrays
 
 Arrays can be defined by adding a dimension to a type.
