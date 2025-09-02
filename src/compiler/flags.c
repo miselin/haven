@@ -62,6 +62,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {"O1", no_argument, 0, O1},
                                   {"O2", no_argument, 0, O2},
                                   {"O3", no_argument, 0, O3},
+                                  {"Os", no_argument, 0, Os},
                                   {"debug-ast", no_argument, 0, DebugAst},
                                   {"emit-ir", no_argument, 0, EmitIR},
                                   {"emit-bitcode", no_argument, 0, EmitBitcode},
@@ -118,6 +119,9 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         break;
       case O3:
         into->opt_level = OptAggressive;
+        break;
+      case Os:
+        into->opt_level = OptSize;
         break;
       case DebugAst:
         into->flags[0] |= FLAG_DISPLAY_AST;

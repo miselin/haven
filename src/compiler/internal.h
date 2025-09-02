@@ -12,6 +12,7 @@ enum Options {
   O1,
   O2,
   O3,
+  Os,
   DebugAst,
   EmitIR,
   EmitBitcode,

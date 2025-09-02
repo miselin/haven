@@ -10,7 +10,7 @@
 
 struct ast_import;
 
-enum OptLevel { OptNone, OptLight, OptNormal, OptAggressive };
+enum OptLevel { OptNone, OptLight, OptNormal, OptAggressive, OptSize };
 
 enum OutputFormat {
   OutputIR,

@@ -52,11 +52,13 @@ target_link_libraries(string_builder_test haven_compiler_options_no_warnings com
 gtest_discover_tests(string_builder_test)
 
 macro(add_functional_test name expectedrc)
-    add_executable(${name}_test rc_test.cc)
-    add_haven_library(${name}_sut inputs/${name}.hv)
-    target_link_libraries(${name}_test haven_compiler_options_no_warnings ${name}_sut runtime GTest::gtest_main)
-    target_compile_definitions(${name}_test PRIVATE EXPECTED_RC=${expectedrc} TESTNAME=${name})
-    gtest_discover_tests(${name}_test)
+    foreach(optlevel s 0 1 2 3)
+        add_executable(${name}_O${optlevel}_test rc_test.cc)
+        add_haven_test_library(${name}_O${optlevel}_sut inputs/${name}.hv ${optlevel})
+        target_link_libraries(${name}_O${optlevel}_test haven_compiler_options_no_warnings ${name}_O${optlevel}_sut runtime GTest::gtest_main)
+        target_compile_definitions(${name}_O${optlevel}_test PRIVATE EXPECTED_RC=${expectedrc} TESTNAME=${name})
+        gtest_discover_tests(${name}_O${optlevel}_test)
+    endforeach()
 endmacro()
 
 add_functional_test(simplest 0)

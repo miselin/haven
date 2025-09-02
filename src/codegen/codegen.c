@@ -21,8 +21,19 @@
 #include "scope.h"
 #include "types.h"
 
+struct LLVMDiagnosticState {
+  struct codegen *codegen;
+  int num_diagnostics;
+  int num_errors;
+  int num_warnings;
+  int num_remarks;
+  int num_notes;
+};
+
 static void emit_ast(struct codegen *codegen, struct ast_program *ast);
 static void emit_toplevel(struct codegen *codegen, struct ast_toplevel *ast);
+
+static void codegen_llvm_diag_handler(LLVMDiagnosticInfoRef DI, void *opaque);
 
 struct codegen *new_codegen(struct ast_program *ast, struct compiler *compiler) {
   if (initialize_llvm() != 0) {
@@ -132,49 +143,78 @@ int codegen_run(struct codegen *codegen) {
   }
   LLVMDisposeMessage(error);
 
-  if (codegen->compiler->flags[0] & FLAG_DEBUG_IR) {
-    fprintf(stderr, "Pre-optimization IR:\n");
-    codegen_emit_ir(codegen, stderr);
-    fprintf(stderr, "\n\n(end pre-optimization IR)\n\n");
-  }
-
   if (rc == 0) {
     // verification completed, run unconditional optimizations that tidy up the IR ready for further
     // optimizations and emission
+
+    if (compiler_get_flags(codegen->compiler) & FLAG_DEBUG_IR) {
+      fprintf(stderr, "Pre-passes IR:\n");
+      codegen_emit_ir(codegen, stderr);
+      fprintf(stderr, "\n\n(end pre-passes IR)\n\n");
+    }
+
+    struct LLVMDiagnosticState state = {0};
+    state.codegen = codegen;
+
+    LLVMContextSetDiagnosticHandler(codegen->llvm_context, codegen_llvm_diag_handler, &state);
 
     LLVMPassBuilderOptionsRef pass_options = LLVMCreatePassBuilderOptions();
 
     LLVMErrorRef result = NULL;
 
+    char *passes = calloc(1, 256);
+
+    if (compiler_get_flags(codegen->compiler) & FLAG_DEBUG_IR) {
+      strcat(passes, "verify,lint,");
+      LLVMPassBuilderOptionsSetVerifyEach(pass_options, 1);
+    }
+
     // run builtin opt level optimizations based on opt flags passed to the compiler
-    const char *opts = "default<Os>";
     switch (compiler_get_opt_level(codegen->compiler)) {
       case OptNone:
-        opts = "default<O0>";
+        strcat(passes, "default<O0>");
         break;
       case OptLight:
-        opts = "default<O1>";
+        strcat(passes, "default<O1>");
         break;
       case OptNormal:
-        opts = "default<O2>";
+        strcat(passes, "default<O2>");
         break;
       case OptAggressive:
-        opts = "default<O3>";
+        strcat(passes, "default<O3>");
         LLVMPassBuilderOptionsSetLoopInterleaving(pass_options, 1);
         LLVMPassBuilderOptionsSetLoopVectorization(pass_options, 1);
         LLVMPassBuilderOptionsSetLoopUnrolling(pass_options, 1);
         LLVMPassBuilderOptionsSetMergeFunctions(pass_options, 1);
         break;
+      case OptSize:
       default:
+        strcat(passes, "default<Os>");
         break;
     }
 
-    result = LLVMRunPasses(codegen->llvm_module, opts, codegen->llvm_target_machine, pass_options);
+    if (compiler_get_flags(codegen->compiler) & FLAG_DEBUG_IR) {
+      strcat(passes, ",verify");
+    }
+
+    result =
+        LLVMRunPasses(codegen->llvm_module, passes, codegen->llvm_target_machine, pass_options);
     if (result != NULL) {
       char *msg = LLVMGetErrorMessage(result);
       fprintf(stderr, "Error running module passes: %s\n", msg);
       LLVMDisposeErrorMessage(msg);
+
+      rc = 1;
+    } else if (state.num_errors > 0) {
+      rc = 1;
+    } else if ((compiler_get_flags(codegen->compiler) & FLAG_DEBUG_IR) &&
+               (state.num_errors + state.num_warnings) > 0) {
+      rc = 1;
     }
+
+    free(passes);
+
+    LLVMContextSetDiagnosticHandler(codegen->llvm_context, NULL, NULL);
 
     LLVMDisposePassBuilderOptions(pass_options);
   }
@@ -435,4 +475,42 @@ void codegen_internal_leave_scope(struct codegen *codegen, int lexical_block) {
   struct codegen_block *block = codegen->current_block;
   codegen->current_block = codegen->current_block->parent;
   free(block);
+}
+
+static void codegen_llvm_diag_handler(LLVMDiagnosticInfoRef DI, void *opaque) {
+  struct LLVMDiagnosticState *state = (struct LLVMDiagnosticState *)opaque;
+
+  LLVMDiagnosticSeverity sev = LLVMGetDiagInfoSeverity(DI);
+  char *msg = LLVMGetDiagInfoDescription(DI);
+
+  ++(state->num_diagnostics);
+
+  const char *sev_name;
+  enum DiagLevel level = DiagDebug;
+  switch (sev) {
+    case LLVMDSError:
+      sev_name = "error";
+      level = DiagError;
+      ++(state->num_errors);
+      break;
+    case LLVMDSWarning:
+      sev_name = "warning";
+      level = DiagWarning;
+      ++(state->num_warnings);
+      break;
+    case LLVMDSRemark:
+      sev_name = "remark";
+      level = DiagNote;
+      ++(state->num_remarks);
+      break;
+    case LLVMDSNote:
+      sev_name = "note";
+      ++(state->num_notes);
+      break;
+  }
+
+  compiler_diag(state->codegen->compiler, level, "LLVM %s: %s\n", sev_name,
+                msg ? msg : "<no message>");
+
+  LLVMDisposeMessage(msg);
 }
