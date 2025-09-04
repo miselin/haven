@@ -1,0 +1,12 @@
+pub fn sut() -> i32 {
+    let x = 5;
+    let mut i32 result = 0;
+    // statements do not require otherwise arms
+    match x {
+        5 => {
+            result = 5;
+        }
+    };
+
+    result
+}

@@ -364,11 +364,13 @@ static int typecheck_implicit_expr(struct ast_expr *ast) {
         arm = arm->next;
       }
 
-      total += maybe_implicitly_convert(&ast->expr.match.otherwise->expr->ty, &ast->ty);
-      // total += maybe_implicitly_convert(&ast->ty, &ast->expr.match.otherwise->expr->ty);
-      rc = typecheck_implicit_expr(ast->expr.match.otherwise->expr);
-      if (rc < 0) {
-        return -1;
+      if (ast->expr.match.otherwise) {
+        total += maybe_implicitly_convert(&ast->expr.match.otherwise->expr->ty, &ast->ty);
+        // total += maybe_implicitly_convert(&ast->ty, &ast->expr.match.otherwise->expr->ty);
+        rc = typecheck_implicit_expr(ast->expr.match.otherwise->expr);
+        if (rc < 0) {
+          return -1;
+        }
       }
 
       return total + rc;

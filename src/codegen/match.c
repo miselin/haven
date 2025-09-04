@@ -66,10 +66,14 @@ LLVMValueRef emit_match_expr(struct codegen *codegen, struct ast_ty *ty,
     LLVMAppendExistingBasicBlock(codegen->current_function, otherwise_block);
     LLVMPositionBuilderAtEnd(codegen->llvm_builder, otherwise_block);
 
-    otherwise_value = emit_expr(codegen, match->otherwise->expr);
+    if (match->otherwise) {
+      otherwise_value = emit_expr(codegen, match->otherwise->expr);
+    } else {
+      otherwise_value = NULL;
+    }
     current_block = LLVMGetInsertBlock(codegen->llvm_builder);
     if (!LLVMGetBasicBlockTerminator(current_block)) {
-      if (phi) {
+      if (phi && otherwise_value) {
         LLVMAddIncoming(phi, &otherwise_value, &current_block, 1);
       }
       LLVMBuildBr(codegen->llvm_builder, end_block);

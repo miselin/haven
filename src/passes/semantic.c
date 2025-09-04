@@ -27,6 +27,7 @@ static int check_semantic_toplevel(struct semantic *semantic, struct ast_topleve
 static int check_semantic_block(struct semantic *semantic, struct ast_block *ast);
 static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast);
 static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast);
+static int check_semantic_expr2(struct semantic *semantic, struct ast_expr *ast, int is_stmt);
 static int check_semantic_tydecl(struct semantic *semantic, struct ast_tydecl *ast);
 
 __attribute__((format(printf, 4, 5))) static void semantic_diag_at(struct semantic *semantic,
@@ -133,7 +134,7 @@ static int check_semantic_block(struct semantic *semantic, struct ast_block *ast
 static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) {
   switch (ast->type) {
     case AST_STMT_TYPE_EXPR:
-      return check_semantic_expr(semantic, ast->stmt.expr);
+      return check_semantic_expr2(semantic, ast->stmt.expr, 1);
 
     case AST_STMT_TYPE_LET: {
       return check_semantic_expr(semantic, ast->stmt.let.init_expr);
@@ -269,6 +270,10 @@ static int check_semantic_stmt(struct semantic *semantic, struct ast_stmt *ast) 
 }
 
 static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) {
+  return check_semantic_expr2(semantic, ast, 0);
+}
+
+static int check_semantic_expr2(struct semantic *semantic, struct ast_expr *ast, int is_stmt) {
   switch (ast->type) {
     case AST_EXPR_TYPE_CONSTANT: {
       switch (ast->parsed_ty.ty) {
@@ -424,7 +429,8 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
         return -1;
       }
 
-      if (!ast->expr.match.otherwise) {
+      // statement form is allowed to skip the otherwise arm (not returning a value)
+      if (!ast->expr.match.otherwise && !is_stmt) {
         semantic_diag_at(semantic, DiagError, &ast->loc,
                          "match expression must have an otherwise arm");
         return -1;
@@ -450,7 +456,8 @@ static int check_semantic_expr(struct semantic *semantic, struct ast_expr *ast) 
         arm = arm->next;
       }
 
-      if (check_semantic_expr(semantic, ast->expr.match.otherwise->expr) < 0) {
+      if (ast->expr.match.otherwise &&
+          check_semantic_expr(semantic, ast->expr.match.otherwise->expr) < 0) {
         return -1;
       }
     } break;

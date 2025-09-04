@@ -857,16 +857,12 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         arm = arm->next;
       }
 
-      if (!ast->expr.match.otherwise) {
-        typecheck_diag_expr(typecheck, ast, "match expression has no otherwise arm\n");
-        ++typecheck->errors;
-        return &typecheck->error_type;
-      }
-
-      struct ast_ty *otherwise_ty =
-          typecheck_expr(typecheck, ast->expr.match.otherwise->expr, expected_ty);
-      if (!otherwise_ty) {
-        return NULL;
+      struct ast_ty *otherwise_ty = NULL;
+      if (ast->expr.match.otherwise) {
+        otherwise_ty = typecheck_expr(typecheck, ast->expr.match.otherwise->expr, expected_ty);
+        if (!otherwise_ty) {
+          return NULL;
+        }
       }
 
       struct ast_ty *largest_ty = otherwise_ty;
@@ -893,7 +889,9 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
             ;
           }
 
-          if (wider_type(arm->expr->ty, largest_ty)) {
+          if (!largest_ty) {
+            largest_ty = arm->expr->ty;
+          } else if (wider_type(arm->expr->ty, largest_ty)) {
             largest_ty = arm->expr->ty;
           }
         }
@@ -901,7 +899,7 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
         arm = arm->next;
       }
 
-      ast->ty = largest_ty;
+      ast->ty = largest_ty ? largest_ty : type_repository_void(typecheck->type_repo);
       return ast->ty;
     } break;
 
