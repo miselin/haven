@@ -1,5 +1,5 @@
 cimport "stdlib.h";
-cimport "stdio.h";
+cimport "string.h";
 
 type KeyValue = struct {
     str key;
@@ -7,8 +7,8 @@ type KeyValue = struct {
 };
 
 type HashMapEntry = enum {
+    Entry(KeyValue),
     Empty,
-    Entry(KeyValue)
 };
 
 type HashMap = struct {
@@ -19,6 +19,9 @@ type HashMap = struct {
 pub impure fn new_hash_map(u64 capacity) -> HashMap* {
     let mut HashMap* result = calloc(1, as u64 sizeof(HashMap));
     result->entries = calloc(capacity, as u64 sizeof(HashMapEntry));
+    iter 0:(capacity - 1) i {
+        result->entries[i] = HashMapEntry::Empty;
+    };
     result->capacity = capacity;
     result
 }

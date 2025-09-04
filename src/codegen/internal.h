@@ -40,6 +40,8 @@ struct defer_entry {
 struct box_entry {
   LLVMValueRef box;
   struct box_entry *next;
+  // 1 if already loaded (i.e. don't need to load to get to the box itself)
+  int is_loaded;
 };
 
 struct codegen_block {

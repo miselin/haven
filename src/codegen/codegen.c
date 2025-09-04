@@ -169,6 +169,9 @@ int codegen_run(struct codegen *codegen) {
       LLVMPassBuilderOptionsSetVerifyEach(pass_options, 1);
     }
 
+    // eliminate unused declarations/functions before optimization passes
+    strcat(passes, "globaldce,");
+
     // run builtin opt level optimizations based on opt flags passed to the compiler
     switch (compiler_get_opt_level(codegen->compiler)) {
       case OptNone:
@@ -191,6 +194,10 @@ int codegen_run(struct codegen *codegen) {
       default:
         strcat(passes, "default<Os>");
         break;
+    }
+
+    if (compiler_get_flags(codegen->compiler) & FLAG_ASAN) {
+      strcat(passes, ",asan");
     }
 
     if (compiler_get_flags(codegen->compiler) & FLAG_DEBUG_IR) {

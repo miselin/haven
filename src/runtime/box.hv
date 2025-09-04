@@ -23,6 +23,8 @@ pub impure fn __haven_new_box(i32* value, i32 box_size, i32 value_size) -> Box* 
     // box header is 16 bytes, then the value
     memcpy(p + 16, value, value_size);
 
+    printf("new box %p\n", result);
+
     result
 }
 
@@ -31,7 +33,9 @@ pub impure fn __haven_box_ref(mut Box* target) -> void {
         ret;
     };
 
+    printf("ref box %p rc %d -> ", target, target->refcount);
     target->refcount = target->refcount + 1;
+    printf("%d\n", target->refcount);
 }
 
 pub impure fn __haven_box_unref(mut Box* target) -> void {
@@ -39,7 +43,9 @@ pub impure fn __haven_box_unref(mut Box* target) -> void {
         ret;
     };
 
+    printf("unref box %p rc %d -> ", target, target->refcount);
     target->refcount = target->refcount - 1;
+    printf("%d\n", target->refcount);
     if target->refcount == 0 {
         free(target);
     };

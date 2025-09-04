@@ -120,7 +120,13 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
   // pointers can be converted to each other
   if (ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_POINTER) {
     // TODO: only if underlying types are the same
-    return 1;
+    return compatible_types(ptr_pointee_type(ty1), ptr_pointee_type(ty2));
+  }
+
+  // boxes can be converted to each other
+  if (ty1->ty == AST_TYPE_BOX && ty2->ty == AST_TYPE_BOX) {
+    // TODO: only if underlying types are the same
+    return compatible_types(box_pointee_type(ty1), box_pointee_type(ty2));
   }
 
   // strings are pointers
@@ -194,6 +200,8 @@ int same_type_masked(struct ast_ty *ty1, struct ast_ty *ty2, uint64_t flagmask) 
     case AST_TYPE_ARRAY:
       return ty1->oneof.array.width == ty2->oneof.array.width &&
              same_type_masked(ty1->oneof.array.element_ty, ty2->oneof.array.element_ty, flagmask);
+    case AST_TYPE_BOX:
+      return same_type_masked(box_pointee_type(ty1), box_pointee_type(ty2), flagmask);
     default:
       return 1;
   }

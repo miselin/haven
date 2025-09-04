@@ -2,7 +2,7 @@ type Thing = struct {
     i32^ boxed;
 };
 
-pub fn new_boxed() -> i32^ {
+fn new_boxed() -> i32^ {
     box as i32 5
 }
 

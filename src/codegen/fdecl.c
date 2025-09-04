@@ -201,6 +201,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
       compiler_log(codegen->compiler, LogLevelDebug, "codegen", "param %s is a box", param_ident);
       struct box_entry *box = calloc(1, sizeof(struct box_entry));
       box->box = param_entry->ref;
+      box->is_loaded = 1;
       box->next = codegen->boxes;
       codegen->boxes = box;
     }
@@ -210,11 +211,11 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   if (fdecl->function_ty->oneof.function.retty->ty == AST_TYPE_BOX) {
     // ref the box we're returning
     compiler_log(codegen->compiler, LogLevelDebug, "codegen", "box ref due to return");
-    codegen_box_ref(codegen, block_result, 0);
 
-    // load the box out of the return value
     block_result = LLVMBuildLoad2(codegen->llvm_builder, codegen_pointer_type(codegen),
                                   block_result, "box.into.retval");
+
+    codegen_box_ref(codegen, block_result, 1);
   }
 
   if (fdecl->function_ty->oneof.function.retty->ty != AST_TYPE_VOID) {
@@ -248,7 +249,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
   // run box derefs, if any
   struct box_entry *box = codegen->boxes;
   while (box) {
-    codegen_box_unref(codegen, box->box, 1);
+    codegen_box_unref(codegen, box->box, box->is_loaded);
 
     struct box_entry *next = box->next;
     free(box);

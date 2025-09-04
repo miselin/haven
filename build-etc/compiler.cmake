@@ -134,16 +134,20 @@ target_link_libraries(haven_compiler_options_no_warnings INTERFACE cmake_base_co
 
 if (ASAN)
     target_link_libraries(haven_compiler_options INTERFACE with_asan)
+    target_link_libraries(haven_compiler_options_no_warnings INTERFACE with_asan)
 endif ()
 
 if (UBSAN)
     target_link_libraries(haven_compiler_options INTERFACE with_ubsan)
+    target_link_libraries(haven_compiler_options_no_warnings INTERFACE with_ubsan)
 endif ()
 
 if (TSAN)
     target_link_libraries(haven_compiler_options INTERFACE with_tsan)
+    target_link_libraries(haven_compiler_options_no_warnings INTERFACE with_tsan)
 endif ()
 
 if (MSAN)
     target_link_libraries(haven_compiler_options INTERFACE with_msan)
+    target_link_libraries(haven_compiler_options_no_warnings INTERFACE with_msan)
 endif ()
