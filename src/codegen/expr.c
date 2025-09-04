@@ -371,7 +371,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         codegen_box_unref(codegen, lhs, 0);
       }
 
-      LLVMValueRef expr = emit_expr(codegen, ast->expr.assign.expr);
+      LLVMValueRef expr = emit_expr_into(codegen, ast->expr.assign.expr, lhs);
 
       if (ast->expr.assign.expr->ty->ty == AST_TYPE_BOX) {
         // need to ref the box in flight
@@ -380,7 +380,9 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         codegen_box_ref(codegen, expr, 1);
       }
 
-      emit_store(codegen, ast->ty, expr, lhs);
+      if (expr != lhs) {
+        emit_store(codegen, ast->ty, expr, lhs);
+      }
 
       return lhs;
     } break;
@@ -437,8 +439,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
         return val;
       }
 
-      return LLVMBuildLoad2(codegen->llvm_builder, ast_ty_to_llvm_ty(codegen, ast->ty), val,
-                            "array.index.load");
+      return LLVMBuildLoad2(codegen->llvm_builder, ast_underlying_ty_to_llvm_ty(codegen, ast->ty),
+                            val, "array.index.load");
     } break;
 
     case AST_EXPR_TYPE_MATCH: {
@@ -535,10 +537,14 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
       LLVMValueRef storage = into ? into : new_alloca(codegen, enum_type, "enum");
       LLVMValueRef tag = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 0, "tag");
+      LLVMValueRef buf = NULL;
+
+      if (inner) {
+        buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 1, "buf");
+      }
 
       LLVMBuildStore(codegen->llvm_builder, tag_value, tag);
-      if (inner) {
-        LLVMValueRef buf = LLVMBuildStructGEP2(codegen->llvm_builder, enum_type, storage, 1, "buf");
+      if (buf) {
         emit_store(codegen, ast->expr.enum_init.inner->ty, inner, buf);
         // LLVMBuildStore(codegen->llvm_builder, inner, buf);
       }

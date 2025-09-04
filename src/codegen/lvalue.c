@@ -85,7 +85,7 @@ LLVMValueRef emit_lvalue(struct codegen *codegen, struct ast_expr *ast) {
       struct ast_ty *lhs_ty = ast->expr.array_index.target->ty;
       LLVMValueRef index = emit_expr(codegen, ast->expr.array_index.index);
 
-      LLVMTypeRef result_ty = ast_ty_to_llvm_ty(codegen, ast->ty);
+      LLVMTypeRef result_ty = ast_underlying_ty_to_llvm_ty(codegen, ast->ty);
 
       if (lhs_ty->ty == AST_TYPE_POINTER) {
         LLVMValueRef lhs = emit_expr(codegen, ast->expr.array_index.target);

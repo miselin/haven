@@ -58,7 +58,7 @@ void emit_fdecl(struct codegen *codegen, struct ast_fdecl *fdecl, struct lex_loc
     }
     for (size_t i = 0; i < fdecl->num_params; i++) {
       param_types[i + complex_return] =
-          ast_underlying_ty_to_llvm_ty(codegen, fdecl->function_ty->oneof.function.param_types[i]);
+          ast_ty_to_llvm_ty(codegen, fdecl->function_ty->oneof.function.param_types[i]);
     }
     LLVMTypeRef func_type = LLVMFunctionType(ret_ty, param_types, (unsigned int)num_params,
                                              fdecl->flags & DECL_FLAG_VARARG);

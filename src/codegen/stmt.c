@@ -175,8 +175,10 @@ LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueR
         LLVMTypeRef box_type = codegen_box_type(codegen, ast->stmt.store.lhs->ty);
         lhs = LLVMBuildStructGEP2(codegen->llvm_builder, box_type, lhs, 1, "box.value");
       }
-      LLVMValueRef rhs = emit_expr(codegen, ast->stmt.store.rhs);
-      emit_store(codegen, ast->stmt.store.rhs->ty, rhs, lhs);
+      LLVMValueRef rhs = emit_expr_into(codegen, ast->stmt.store.rhs, lhs);
+      if (rhs != lhs) {
+        emit_store(codegen, ast->stmt.store.rhs->ty, rhs, lhs);
+      }
     } break;
 
     case AST_STMT_TYPE_DEFER: {
