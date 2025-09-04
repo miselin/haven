@@ -1,0 +1,54 @@
+import "hashmap.hv";
+cimport "stdlib.h";
+cimport "string.h";
+
+type StringEntry = struct {
+    str string;
+    StringEntry *next;
+};
+
+type InternTable = struct {
+    HashMap* map;
+    StringEntry *head;
+};
+
+pub impure fn new_intern_table(u64 max_strings) -> InternTable* {
+    let mut InternTable* table = malloc(as u64 sizeof(InternTable));
+    table->map = new_hash_map(max_strings);
+    table->head = nil;
+    table
+}
+
+pub impure fn destroy_intern_table(mut InternTable* table) -> void {
+    destroy_hash_map(table->map);
+
+    let mut entry = table->head;
+    while entry != nil {
+        let mut next = entry->next;
+        free(as void* entry->string);
+        free(entry);
+        entry = next;
+    };
+
+    free(table);
+}
+
+pub impure fn intern(mut InternTable* table, str string) -> StringEntry* {
+    let existing = hash_map_lookup(table->map, string);
+    if existing != nil {
+        existing
+    } else {
+        let mut StringEntry* entry = malloc(as u64 sizeof(StringEntry));
+        entry->string = strdup(string);
+        entry->next = table->head;
+        table->head = entry;
+
+        hash_map_insert(table->map, string, entry);
+
+        entry
+    }
+}
+
+pub impure fn interned_string(StringEntry* entry) -> str {
+    entry->string
+}

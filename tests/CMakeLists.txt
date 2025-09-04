@@ -31,6 +31,14 @@ add_executable(kv_haven_test kv_test.cc)
 target_link_libraries(kv_haven_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(kv_haven_test)
 
+add_executable(hashmap_haven_test hashmap_test.cc)
+target_link_libraries(hashmap_haven_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
+gtest_discover_tests(hashmap_haven_test)
+
+add_executable(intern_haven_test intern_test.cc)
+target_link_libraries(intern_haven_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
+gtest_discover_tests(intern_haven_test)
+
 add_executable(kw_test kw_test.cc)
 target_link_libraries(kw_test haven_compiler_options_no_warnings compiler GTest::gtest_main)
 gtest_discover_tests(kw_test)

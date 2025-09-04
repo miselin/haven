@@ -1,0 +1,86 @@
+cimport "stdlib.h";
+cimport "stdio.h";
+
+type KeyValue = struct {
+    str key;
+    void *value;
+};
+
+type HashMapEntry = enum {
+    Empty,
+    Entry(KeyValue)
+};
+
+type HashMap = struct {
+    HashMapEntry *entries;
+    u64 capacity;
+};
+
+pub impure fn new_hash_map(u64 capacity) -> HashMap* {
+    let mut HashMap* result = calloc(1, as u64 sizeof(HashMap));
+    result->entries = calloc(capacity, as u64 sizeof(HashMapEntry));
+    result->capacity = capacity;
+    result
+}
+
+pub impure fn destroy_hash_map(HashMap *map) -> void {
+    free(map->entries);
+    free(map);
+}
+
+// djb2
+impure fn hash(i8 *key) -> u64 {
+    let mut u64 hash = 5381;
+    let mut u64 i = 0;
+    while key[i] != 0 {
+        hash = ((hash << 5) + hash) + as u64 key[i];
+        i = i + 1;
+    };
+    hash
+}
+
+pub impure fn hash_map_insert(mut HashMap *map, str key, void *value) -> i32 {
+    let mut index = hash(key) % map->capacity;
+    let orig = index;
+    while 1 {
+        match map->entries[index] {
+            Entry(kv) => {
+                if (!strcmp(kv.key, key)) {
+                    kv.value = value;
+                    ret 0;
+                }
+            }
+            _ => {
+                break;
+            }
+        };
+
+        index = (index + 1) % map->capacity;
+        if index == orig {
+            // full map - fail insertion
+            ret 1;
+        };
+    };
+    map->entries[index] = HashMapEntry::Entry(struct KeyValue {key, value});
+    0
+}
+
+pub impure fn hash_map_lookup(mut HashMap *map, str key) -> void* {
+    let mut index = hash(key) % map->capacity;
+    let orig = index;
+    while 1 {
+        match map->entries[index] {
+            Entry(kv) => {
+                if (!strcmp(kv.key, key)) {
+                    ret kv.value;
+                };
+            }
+        };
+        index = (index + 1) % map->capacity;
+        if index == orig {
+            // failed lookup, no entry found
+            break;
+        };
+    };
+    nil
+}

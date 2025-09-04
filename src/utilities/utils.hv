@@ -1,3 +1,5 @@
 import "trie.hv";
 import "kv.hv";
 import "scope.hv";
+import "intern.hv";
+import "hashmap.hv";

@@ -1,9 +1,6 @@
 cimport "stdio.h";
 cimport "stdlib.h";
-
-pub impure fn strlen(i8 *s) -> u64;
-pub impure fn strcpy(i8 *dest, i8 *src) -> i8*;
-pub impure fn strcmp(i8 *s1, i8 *s2) -> i32;
+cimport "string.h";
 
 type TrieValue = enum {
     Value(i8*),

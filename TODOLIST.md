@@ -31,6 +31,7 @@
 - [ ] va args (`va_arg` IR instruction + intrinsics)
 - [ ] maybe emit C for easier bootstrapping?
 - [ ] contextual KWs from the lexer - e.g. `type` or `iter` could be a valid identifier, as `type` and `iter` have very specific contexts in which they are valid keywords
+- [ ] match doesn't have a way to have a no-op arm (need to put a dummy value there, not nice)
 
 ## TODOs from later in development
 

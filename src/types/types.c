@@ -123,6 +123,12 @@ int compatible_types(struct ast_ty *ty1, struct ast_ty *ty2) {
     return 1;
   }
 
+  // strings are pointers
+  if ((ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_STRING) ||
+      (ty1->ty == AST_TYPE_STRING && ty2->ty == AST_TYPE_POINTER)) {
+    return 1;
+  }
+
   // arrays can be pointers
   if ((ty1->ty == AST_TYPE_POINTER && ty2->ty == AST_TYPE_ARRAY) ||
       (ty1->ty == AST_TYPE_ARRAY && ty2->ty == AST_TYPE_POINTER)) {
