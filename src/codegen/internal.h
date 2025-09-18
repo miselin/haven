@@ -112,6 +112,8 @@ struct codegen {
   struct box_entry *boxes;
 };
 
+struct lvalue_spill;
+
 LLVMValueRef emit_block(struct codegen *codegen, struct ast_block *ast);
 LLVMValueRef emit_stmt(struct codegen *codegen, struct ast_stmt *ast, LLVMValueRef into);
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast);

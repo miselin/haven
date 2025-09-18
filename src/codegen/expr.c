@@ -394,7 +394,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_LOAD: {
-      LLVMValueRef expr = emit_expr(codegen, ast->expr.load.expr);
+      LLVMValueRef expr = emit_lvalue(codegen, ast->expr.load.expr);
       LLVMTypeRef expr_type = ast_ty_to_llvm_ty(codegen, ast->ty);
 
       if (type_is_complex(ast->ty)) {
@@ -433,7 +433,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     case AST_EXPR_TYPE_ARRAY_INDEX: {
       LLVMValueRef val = emit_lvalue(codegen, ast);
 
-      // certain types need to stay pointers
+      // certain types need to stay as-is and don't need an extra load
       if (ast->ty->ty == AST_TYPE_ENUM && !ast->ty->oneof.enumty.no_wrapped_fields) {
         return val;
       } else if (ast->ty->ty == AST_TYPE_STRUCT) {

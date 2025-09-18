@@ -29,6 +29,10 @@ pub fn vnorm(fvec3 v) -> fvec3 {
     v * denom
 }
 
+pub fn velement(fvec3 v, i32 idx) -> float {
+    v[idx]
+}
+
 fn put_result(fvec3 result) -> void {
     x = result.x;
     y = result.y;

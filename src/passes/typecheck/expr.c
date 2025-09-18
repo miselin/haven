@@ -206,6 +206,19 @@ struct ast_ty *typecheck_expr_inner(struct typecheck *typecheck, struct ast_expr
       } else if (target_expr->ty->ty == AST_TYPE_BOX) {
         // type of expression is the type pointed to by the box
         ast->ty = resolve_type(typecheck, box_pointee_type(target_expr->ty));
+      } else if (target_expr->ty->ty == AST_TYPE_FVEC) {
+        // indexing a vector gets you floats
+        struct ast_ty float_ty;
+        memset(&float_ty, 0, sizeof(float_ty));
+        float_ty.ty = AST_TYPE_FLOAT;
+        ast->ty = type_repository_lookup_ty(typecheck->type_repo, &float_ty);
+      } else if (target_expr->ty->ty == AST_TYPE_MATRIX) {
+        // indexing a matrix gets you an fvec (row lookup)
+        struct ast_ty fvec_ty;
+        memset(&fvec_ty, 0, sizeof(fvec_ty));
+        fvec_ty.ty = AST_TYPE_FVEC;
+        fvec_ty.oneof.fvec.width = target_expr->ty->oneof.matrix.cols;
+        ast->ty = type_repository_lookup_ty(typecheck->type_repo, &fvec_ty);
       } else {
         typecheck_diag_expr(typecheck, ast->expr.array_index.target,
                             "indexable type has an unimplemented type resolve\n");

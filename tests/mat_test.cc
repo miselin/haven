@@ -14,6 +14,7 @@ extern "C" void msub(float3x3 *out, float3x3 *a, float3x3 *b);
 extern "C" void mmult(float3x3 *out, float3x3 *a, float3x3 *b);
 extern "C" void mscale(float3x3 *out, float3x3 *a, float factor);
 extern "C" void vec_mult_mat(float3 *out, float3 *a, float3x3 *b);
+extern "C" void mat_row(float3x3 *m, float3 *out, int row);
 
 extern "C" void dump_mat(float3x3 m);
 
@@ -121,5 +122,24 @@ TEST(MatTest, MultiplyVec) {
 
   for (int i = 0; i < 3; i++) {
     EXPECT_EQ(result[i], c[i]);
+  }
+}
+
+TEST(MatTest, Row) {
+  glm::mat3 a = glm::mat3(glm::vec3(1.0f, 2.0f, 3.0f), glm::vec3(4.0f, 5.0f, 6.0f),
+                          glm::vec3(7.0f, 8.0f, 9.0f));
+
+  float3x3 a_mat;
+  glm2mat(a, &a_mat);
+
+  for (int row = 0; row < 3; row++) {
+    const glm::vec3 &expected = a[row];
+
+    float3 result;
+    mat_row(&a_mat, &result, row);
+
+    for (int i = 0; i < 3; i++) {
+      EXPECT_EQ(result[i], expected[i]);
+    }
   }
 }

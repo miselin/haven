@@ -10,6 +10,7 @@ extern "C" float3 vcross(float3 a, float3 b);
 extern "C" float vdot(float3 a, float3 b);
 extern "C" float3 vnorm(float3 a);
 extern "C" float3 vscale(float3 a, float s);
+extern "C" float velement(float3 v, int idx);
 
 static float3 glm2vec(glm::vec3 v) {
   float3 result = {v.x, v.y, v.z, 0.0f};
@@ -93,4 +94,18 @@ TEST(VecTest, Scale) {
   EXPECT_FLOAT_EQ(result[0], 2.0f);
   EXPECT_FLOAT_EQ(result[1], 4.0f);
   EXPECT_FLOAT_EQ(result[2], 6.0f);
+}
+
+TEST(VecTest, Element) {
+  glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
+
+  EXPECT_FLOAT_EQ(a[0], 1.0f);
+  EXPECT_FLOAT_EQ(a[1], 2.0f);
+  EXPECT_FLOAT_EQ(a[2], 3.0f);
+
+  float3 vec = glm2vec(a);
+
+  EXPECT_FLOAT_EQ(velement(vec, 0), 1.0f);
+  EXPECT_FLOAT_EQ(velement(vec, 1), 2.0f);
+  EXPECT_FLOAT_EQ(velement(vec, 2), 3.0f);
 }

@@ -28,3 +28,9 @@ pub impure fn vec_mult_mat(fvec3 *out, fvec3 *a, mat3x3 *b) -> void {
     let b_ = load b;
     store out a_ * b_;
 }
+
+pub impure fn mat_row(mat3x3 *m, fvec3 *out, i32 row) -> void {
+    let m_ = load m;
+    let vec = m_[row];
+    store out vec;
+}
