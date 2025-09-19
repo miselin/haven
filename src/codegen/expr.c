@@ -394,15 +394,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
     } break;
 
     case AST_EXPR_TYPE_LOAD: {
-      LLVMValueRef expr = emit_lvalue(codegen, ast->expr.load.expr);
+      LLVMValueRef expr = emit_expr(codegen, ast->expr.load.expr);
       LLVMTypeRef expr_type = ast_ty_to_llvm_ty(codegen, ast->ty);
-
-      if (type_is_complex(ast->ty)) {
-        // put the result into a temporary and return that instead of the underlying value
-        LLVMValueRef temp = into ? into : new_alloca(codegen, expr_type, "load");
-        emit_store(codegen, ast->ty, expr, temp);
-        return temp;
-      }
 
       return LLVMBuildLoad2(codegen->llvm_builder, expr_type, expr, "load");
     } break;
