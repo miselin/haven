@@ -14,6 +14,9 @@
 #include "types.h"
 #include "utility.h"
 
+static LLVMValueRef emit_array_init(struct codegen *codegen, struct ast_expr_list *exprs,
+                                    struct ast_ty *element_ty);
+
 LLVMValueRef emit_expr(struct codegen *codegen, struct ast_expr *ast) {
   compiler_log(codegen->compiler, LogLevelDebug, "codegen", "emit expr %d", ast->type);
 
@@ -90,58 +93,18 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
               (unsigned int)ast->expr.constant.constant.value.floatv.length);
 
         case AST_TYPE_ARRAY: {
-          LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(codegen, ast->ty->oneof.array.element_ty);
-          LLVMValueRef *values = malloc(sizeof(LLVMValueRef) * ast->expr.list->num_elements);
-          struct ast_expr_list *node = ast->expr.list;
-          for (size_t i = 0; i < ast->expr.list->num_elements; i++) {
-            values[i] = emit_expr(codegen, node->expr);
-            values[i] =
-                emit_cast(codegen, values[i], node->expr->ty, ast->ty->oneof.array.element_ty);
-
-            node = node->next;
-          }
-          LLVMValueRef array = LLVMConstArray2(inner_ty, values, ast->expr.list->num_elements);
-          free(values);
-          return array;
+          return emit_array_init(codegen, ast->expr.list, ast->ty->oneof.array.element_ty);
         } break;
 
         case AST_TYPE_MATRIX: {
-          // size_t total_elements = ast->ty->oneof.matrix.cols * ast->ty->oneof.matrix.rows;
-          //  LLVMValueRef zero = LLVMConstNull(LLVMVectorType(
-          //  LLVMFloatTypeInContext(codegen->llvm_context), (unsigned int)total_elements));
-
-          // declare void @llvm.matrix.column.major.store.*(vectorty %In, ptrty %Ptr, i64 %Stride,
-          // i1 <IsVolatile>, i32 <Rows>, i32 <Cols>)
-
           LLVMTypeRef vec_ty = ast_ty_to_llvm_ty(codegen, ast->ty);
           LLVMValueRef vec_stack = new_alloca(codegen, vec_ty, "vec");
-          // LLVMBuildStore(codegen->llvm_builder, zero, vec_stack);
-          // LLVMValueRef vec = LLVMBuildLoad2(codegen->llvm_builder,
-          //                                 ast_ty_to_llvm_ty(codegen, ast->ty), vec_stack,
-          //                                 "vec");
-
           LLVMValueRef vec = LLVMBuildLoad2(codegen->llvm_builder,
                                             ast_ty_to_llvm_ty(codegen, ast->ty), vec_stack, "vec");
-
-          // LLVMTypeRef row_ty = LLVMVectorType(LLVMFloatTypeInContext(codegen->llvm_context),
-          // (unsigned int)ast->ty->oneof.matrix.cols);
 
           struct ast_expr_list *node = ast->expr.list;
           for (size_t j = 0; j < ast->expr.list->num_elements; j++) {
             LLVMValueRef expr = emit_expr(codegen, node->expr);
-
-            /*
-
-            LLVMValueRef indicies[2] = {
-                LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), 0, 0),
-                LLVMConstInt(LLVMInt32TypeInContext(codegen->llvm_context), j *
-            ast->ty->oneof.matrix.cols, 0),
-            };
-
-            LLVMValueRef row = LLVMBuildGEP2(codegen->llvm_builder, row_ty, vec_stack, indicies, 2,
-                                             "matrix.create.row");
-            emit_store(codegen, &node->expr->ty, expr, row);
-            */
 
             for (size_t col = 0; col < ast->ty->oneof.matrix.cols; col++) {
               LLVMValueRef col_idx =
@@ -157,7 +120,6 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
             node = node->next;
           }
 
-          // LLVMBuildStore(codegen->llvm_builder, vec, vec_stack);
           return vec;
         } break;
 
@@ -460,20 +422,7 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
 
         // TODO: const initializer
       } else if (ast->ty->ty == AST_TYPE_ARRAY) {
-        // TODO: this is identical to the AST_EXPR_TYPE_CONSTANT code above
-        LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(codegen, ast->ty->oneof.array.element_ty);
-        LLVMValueRef *values = malloc(sizeof(LLVMValueRef) * ast->expr.list->num_elements);
-        struct ast_expr_list *node = ast->expr.list;
-        for (size_t i = 0; i < ast->expr.list->num_elements; i++) {
-          values[i] = emit_expr(codegen, node->expr);
-          values[i] =
-              emit_cast(codegen, values[i], node->expr->ty, ast->ty->oneof.array.element_ty);
-
-          node = node->next;
-        }
-        LLVMValueRef array = LLVMConstArray2(inner_ty, values, ast->expr.list->num_elements);
-        free(values);
-        return array;
+        return emit_array_init(codegen, ast->expr.list, ast->ty->oneof.array.element_ty);
       } else {
         fprintf(stderr, "unhandled initializer type %d\n", ast->ty->ty);
       }
@@ -607,4 +556,40 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
   }
 
   return NULL;
+}
+
+static LLVMValueRef emit_array_init(struct codegen *codegen, struct ast_expr_list *exprs,
+                                    struct ast_ty *element_ty) {
+  LLVMTypeRef inner_ty = ast_ty_to_llvm_ty(codegen, element_ty);
+  LLVMValueRef *values = malloc(sizeof(LLVMValueRef) * exprs->num_elements);
+  struct ast_expr_list *node = exprs;
+  int non_const_elements = 0;
+  for (size_t i = 0; i < exprs->num_elements; i++) {
+    values[i] = emit_expr(codegen, node->expr);
+    values[i] = emit_cast(codegen, values[i], node->expr->ty, element_ty);
+
+    if (node->expr->type != AST_EXPR_TYPE_CONSTANT) {
+      non_const_elements++;
+    }
+
+    node = node->next;
+  }
+
+  LLVMValueRef array = NULL;
+  if (non_const_elements || 1) {
+    LLVMTypeRef array_ty = LLVMArrayType(inner_ty, (unsigned int)exprs->num_elements);
+
+    // can't do LLVMConstArray - need to do insertvalue instead to build the array initializer
+    LLVMValueRef initial = LLVMGetPoison(array_ty);
+    for (size_t i = 0; i < exprs->num_elements; i++) {
+      initial = LLVMBuildInsertValue(codegen->llvm_builder, initial, values[i], (unsigned int)i,
+                                     "insert");
+    }
+
+    array = initial;
+  } else {
+    array = LLVMConstArray2(inner_ty, values, exprs->num_elements);
+  }
+  free(values);
+  return array;
 }
