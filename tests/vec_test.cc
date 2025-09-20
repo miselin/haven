@@ -11,6 +11,8 @@ extern "C" float vdot(float3 a, float3 b);
 extern "C" float3 vnorm(float3 a);
 extern "C" float3 vscale(float3 a, float s);
 extern "C" float velement(float3 v, int idx);
+extern "C" float3 make_fvec3(float x, float y, float z);
+extern "C" float3 make_const_fvec3();
 
 static float3 glm2vec(glm::vec3 v) {
   float3 result = {v.x, v.y, v.z, 0.0f};
@@ -108,4 +110,20 @@ TEST(VecTest, Element) {
   EXPECT_FLOAT_EQ(velement(vec, 0), 1.0f);
   EXPECT_FLOAT_EQ(velement(vec, 1), 2.0f);
   EXPECT_FLOAT_EQ(velement(vec, 2), 3.0f);
+}
+
+TEST(VecTest, MakeFVec3) {
+  float3 vec = make_fvec3(7.0f, 8.0f, 9.0f);
+
+  EXPECT_FLOAT_EQ(vec[0], 7.0f);
+  EXPECT_FLOAT_EQ(vec[1], 8.0f);
+  EXPECT_FLOAT_EQ(vec[2], 9.0f);
+}
+
+TEST(VecTest, MakeConstFVec3) {
+  float3 vec = make_const_fvec3();
+
+  EXPECT_FLOAT_EQ(vec[0], 1.0f);
+  EXPECT_FLOAT_EQ(vec[1], 2.0f);
+  EXPECT_FLOAT_EQ(vec[2], 3.0f);
 }

@@ -38,3 +38,11 @@ fn put_result(fvec3 result) -> void {
     y = result.y;
     z = result.z;
 }
+
+pub fn make_fvec3(float x, float y, float z) -> fvec3 {
+    <x, y, z>
+}
+
+pub fn make_const_fvec3() -> fvec3 {
+    <1.0, 2.0, 3.0>
+}
