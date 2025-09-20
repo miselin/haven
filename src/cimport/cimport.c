@@ -782,9 +782,17 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
     }
   }
 
-  FILE *fp = fopen(".haven.merged.c", "w");
+  char merged_filename[] = ".haven.merged.XXXXXX.c";
+  int fd = mkstemps(merged_filename, 2);
+  if (fd < 0) {
+    perror("mkstemps");
+    return -1;
+  }
+
+  FILE *fp = fdopen(fd, "w");
   if (!fp) {
     perror("fopen");
+    close(fd);
     return -1;
   }
 
@@ -792,11 +800,10 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
   fclose(fp);
 
   CXTranslationUnit unit;
-  enum CXErrorCode rc =
-      clang_parseTranslationUnit2(importer->index, ".haven.merged.c", NULL, 0, NULL, 0,
-                                  CXTranslationUnit_SkipFunctionBodies, &unit);
+  enum CXErrorCode rc = clang_parseTranslationUnit2(importer->index, merged_filename, NULL, 0, NULL,
+                                                    0, CXTranslationUnit_SkipFunctionBodies, &unit);
 
-  unlink(".haven.merged.c");
+  unlink(merged_filename);
 
   if (rc != CXError_Success) {
     // TODO: get the errors, print em
