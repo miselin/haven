@@ -426,6 +426,15 @@ static struct ast_ty *typecheck_stmt(struct typecheck *typecheck, struct ast_stm
       return typecheck_expr(typecheck, ast->stmt.expr, expected_ty);
 
     case AST_STMT_TYPE_LET: {
+      struct scope_entry *existing =
+          scope_lookup(typecheck->scope, ast->stmt.let.ident.value.identv.ident, 0);
+      if (existing) {
+        fprintf(stderr, "typecheck: multiple definitions of variable %s\n",
+                ast->stmt.let.ident.value.identv.ident);
+        ++typecheck->errors;
+        return NULL;
+      }
+
       struct scope_entry *entry = calloc(1, sizeof(struct scope_entry));
       entry->ty = ast->stmt.let.ty;
       entry->decl_flags = ast->stmt.let.flags;
