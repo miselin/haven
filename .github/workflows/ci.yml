@@ -12,77 +12,13 @@ jobs:
       matrix:
         asan: [ON, OFF]
         build_type: [Debug, Release]
+        os:
+          - ubuntu-latest
+          # - windows-latest
+          # - macos-latest
 
     steps:
-      - name: Install LLVM
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${LLVM_VERSION}
-
-      - name: Install other dependencies
-        run: sudo apt-get install -y ninja-build libbenchmark-dev googletest libglm-dev doxygen libgtest-dev libzstd-dev libzstd1 libclang-${LLVM_VERSION}-dev
-
-      - uses: lukka/get-cmake@latest
-
       - uses: actions/checkout@v4
-
-      - run: cmake -E make_directory build
-
-      - name: Configure
-        working-directory: build
-        run: cmake ${{ github.workspace }} -DASAN=${{ matrix.asan }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm -DClang_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/clang -DCOVERAGE=ON
-
-      - name: Build
-        working-directory: build
-        run: cmake --build .
-
-      - name: Test
-        working-directory: build
-        run: ctest --output-on-failure -T Test -T Coverage
-
-      - name: Upload coverage data (if any) to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  build-osx:
-    if: 0
-    runs-on: macos-latest
-
-    steps:
-      - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
-
-      - name: Install LLVM
-        run: brew install llvm@${LLVM_VERSION}
-
-      - uses: lukka/get-cmake@latest
-
-      - uses: actions/checkout@v4
-
-      - run: cmake -E make_directory build
-
-      - name: Configure
-        working-directory: build
-        run: |
-          cmake -E env LDFLAGS="-L${HOMEBREW_PREFIX}/opt/llvm@${LLVM_VERSION}/lib" \
-            cmake ${{ github.workspace }} -DCMAKE_BUILD_TYPE=Debug \
-              -DLLVM_DIR=${HOMEBREW_PREFIX}/opt/llvm@${LLVM_VERSION}/lib/cmake/llvm \
-              -DClang_DIR=${HOMEBREW_PREFIX}/opt/llvm@${LLVM_VERSION}/lib/cmake/clang \
-              -DHAVEN_BOOTSTRAP_COMPILE_FLAGS="--O2 -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" \
-              -DHAVEN_COMPILE_FLAGS="--O2 -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" \
-              -DCOVERAGE=ON
-
-      - name: Build
-        working-directory: build
-        run: cmake --build .
-
-      - name: Test
-        working-directory: build
-        run: ctest --output-on-failure -T Test -T Coverage
-
-      - name: Upload coverage data (if any) to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+      - uses: cachix/install-nix-action@v27
+      - run: nix build
+      - run: nix flake check

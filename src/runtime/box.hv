@@ -1,6 +1,6 @@
-cimport "stdlib.h";
-
 foreign "c" {
+    fn calloc(u64 nmemb, u64 size) -> void*;
+    fn free(void* ptr) -> void;
     fn printf(str format, *) -> i32;
     fn memcpy(i8* dest, i8* src, i32 size) -> i8*;
 }

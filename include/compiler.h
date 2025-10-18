@@ -104,6 +104,10 @@ int compiler_deserialize_and_codegen(struct compiler *compiler, char *buffer, si
 // the target platform, e.g. "c" -> "-lc"
 void compiler_add_link_library(struct compiler *compiler, const char *lib);
 
+// Convert compiler flags into a form useful for cimport
+// Caller must free entries and the result pointer here.
+const char *const *compiler_get_cimport_compiler_flags(struct compiler *compiler, size_t *count);
+
 void destroy_compiler(struct compiler *compiler);
 
 __attribute__((__format__(__printf__, 3, 0))) int compiler_vdiag(struct compiler *compiler,

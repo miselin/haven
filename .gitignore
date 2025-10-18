@@ -77,3 +77,11 @@ build-afl/
 *.s
 *.ll
 *.bc
+
+# Output directories
+result/
+build-*/
+!build-etc/
+
+# Fuzz stuff
+fuzz/findings/

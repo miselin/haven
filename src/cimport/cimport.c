@@ -724,7 +724,7 @@ IndexerCallbacks cbs = {
 
 struct cimport *cimport_create(struct compiler *compiler) {
   struct cimport *importer = calloc(1, sizeof(struct cimport));
-  importer->index = clang_createIndex(0, 0);
+  importer->index = clang_createIndex(0, 1);
   importer->action = clang_IndexAction_create(importer->index);
   importer->compiler = compiler;
   return importer;
@@ -782,6 +782,12 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
     }
   }
 
+  // no content to import
+  if (!string_builder_len(builder)) {
+    free_string_builder(builder);
+    return 0;
+  }
+
   char merged_filename[] = ".haven.merged.XXXXXX.c";
   int fd = mkstemps(merged_filename, 2);
   if (fd < 0) {
@@ -796,12 +802,25 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
     return -1;
   }
 
+  compiler_log(importer->compiler, LogLevelTrace, "cimport", "merged import file:\n%s",
+               string_builder_get(builder));
+
   fwrite(string_builder_get(builder), 1, string_builder_len(builder), fp);
   fclose(fp);
 
+  size_t command_line_args_count = 0;
+  const char *const *command_line_args =
+      compiler_get_cimport_compiler_flags(importer->compiler, &command_line_args_count);
+
   CXTranslationUnit unit;
-  enum CXErrorCode rc = clang_parseTranslationUnit2(importer->index, merged_filename, NULL, 0, NULL,
-                                                    0, CXTranslationUnit_SkipFunctionBodies, &unit);
+  enum CXErrorCode rc = clang_parseTranslationUnit2(
+      importer->index, merged_filename, command_line_args, (int)command_line_args_count, NULL, 0,
+      CXTranslationUnit_SkipFunctionBodies, &unit);
+
+  for (size_t i = 0; i < command_line_args_count; i++) {
+    free((void *)command_line_args[i]);
+  }
+  free((void *)command_line_args);
 
   unlink(merged_filename);
 

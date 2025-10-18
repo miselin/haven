@@ -69,3 +69,33 @@ void add_search_dir(struct compiler *compiler, const char *path) {
     compiler->search_dirs = new_dir;
   }
 }
+
+const char *const *compiler_get_cimport_compiler_flags(struct compiler *compiler, size_t *count) {
+  size_t num_search_dirs = 0;
+  struct search_dir *dir = compiler->search_dirs;
+  while (dir) {
+    num_search_dirs++;
+    dir = dir->next;
+  }
+
+  char **result = (char **)malloc(sizeof(char *) * ((num_search_dirs * 2) + 1));
+  if (!result) {
+    return NULL;
+  }
+
+  size_t i = 0;
+  dir = compiler->search_dirs;
+  while (dir) {
+    result[i++] = strdup("-I");
+    result[i++] = strdup(dir->path);
+    compiler_log(compiler, LogLevelTrace, "cimport", "adding -I %s for cimport", dir->path);
+    dir = dir->next;
+  }
+  result[i] = NULL;
+
+  if (count) {
+    *count = num_search_dirs * 2;
+  }
+
+  return (const char *const *)result;
+}

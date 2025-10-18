@@ -11,7 +11,7 @@ macro(add_bootstrap_haven_library name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} --debug-ir --bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} --trace --debug-ir --bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_bootstrap runtime ${ARGN}
         COMMENT "Building ${name} from ${source} [bootstrap]"
@@ -28,7 +28,7 @@ macro(add_bootstrap_haven_executable name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} --bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} --trace --bootstrap -c ${HAVEN_BOOTSTRAP_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_bootstrap runtime ${ARGN}
         COMMENT "Building ${name} from ${source} [bootstrap]"
@@ -45,7 +45,7 @@ macro(add_haven_library name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven ${HAVEN_SANITIZER_FLAGS} --debug-ir -c ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven ${HAVEN_SANITIZER_FLAGS} --trace --debug-ir -c ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven ${ARGN}
         COMMENT "Building ${name} from ${source}"
@@ -64,7 +64,7 @@ macro(add_haven_test_library name source optlevel)
     # --O${optlevel} -> set the optimization level - tests should pass at all major optimization levels
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven ${HAVEN_SANITIZER_FLAGS} --debug-ir --O${optlevel} -c ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven ${HAVEN_SANITIZER_FLAGS} --trace --debug-ir --O${optlevel} -c ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven ${ARGN}
         COMMENT "Building ${name} from ${source}"
@@ -81,7 +81,7 @@ macro(add_haven_runtime_library name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} -c --no-preamble ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} --trace -c --no-preamble ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_bootstrap ${ARGN}
         COMMENT "Building ${name} from ${source}"

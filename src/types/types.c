@@ -1,7 +1,7 @@
 #include "types.h"
 
 #include <inttypes.h>
-#include <llvm-c-18/llvm-c/Target.h>
+#include <llvm-c/Target.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

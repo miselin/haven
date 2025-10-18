@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(haven C CXX ASM)
 
 include("CMakeDependentOption")
+include(CheckCCompilerFlag)
 
 include(build-etc/config.cmake)
 include(build-etc/macros.cmake)
@@ -10,6 +11,8 @@ find_library(MALLOC NAMES jemalloc tcmalloc)
 
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
+find_package(GTest REQUIRED)
+find_package(benchmark REQUIRED)
 find_package(Doxygen)
 
 include_directories(${LLVM_INCLUDE_DIRS})
@@ -39,9 +42,13 @@ option(OTHER_MALLOC "use jemalloc or tcmalloc if present" ON)
 # Enable LTO?
 option(LTO "enable link-time optimization" OFF)
 
+# C header path for Haven to use
+set(HAVEN_C_FLAGS "-I /usr/include" CACHE STRING "C flags to pass to Haven (e.g. for header directories)")
+string(REPLACE ";" " " HAVEN_C_FLAGS "${HAVEN_C_FLAGS}")
+
 # Flags for compiling Haven code
-set(HAVEN_BOOTSTRAP_COMPILE_FLAGS "-I /usr/include --O2" CACHE STRING "flags to use when compiling Haven code with the bootstrap compiler")
-set(HAVEN_COMPILE_FLAGS "-I /usr/include --O2" CACHE STRING "flags to use when compiling Haven code with the main compiler")
+set(HAVEN_BOOTSTRAP_COMPILE_FLAGS "${HAVEN_C_FLAGS} --O2" CACHE STRING "flags to use when compiling Haven code with the bootstrap compiler")
+set(HAVEN_COMPILE_FLAGS "${HAVEN_C_FLAGS} --O2" CACHE STRING "flags to use when compiling Haven code with the main compiler")
 
 include(build-etc/compiler.cmake)
 
@@ -64,7 +71,10 @@ if (DOXYGEN_FOUND)
     doxygen_add_docs(doxygen src include)
 endif ()
 
-# Import third-party dependencies last, so they don't interfere with our settings
-add_subdirectory(third_party)
-
 include(CTest)
+
+install(TARGETS haven havenfmt runtime
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        INCLUDES DESTINATION include)
