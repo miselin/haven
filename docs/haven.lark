@@ -1,84 +1,203 @@
 start: module
 
-module: (foreign | fndecl | tydecl | cimport | import)+
+module: top_decl+
 
-foreign: "foreign" STRING "{" (fndecl)* "}"
+top_decl: import
+        | cimport
+        | foreign_block
+        | fn_decl
+        | tydecl
+        | global_decl
 
-fndecl: (fnattr)* "fn" IDENT "(" params? ")" ("->" type)? (fnintrinsic)? (block | ";")
-tydecl: "type" IDENT "=" (type | ("struct" | "enum") "{" decl_field_list "}") ";"
-cimport: "cimport" STRING ";"
 import: "import" STRING ";"
+cimport: "cimport" STRING ";"
 
-fnattr: "impure" | "pub"
-fnintrinsic: "intrinsic" STRING type ("," type)*
+foreign_block: "foreign" STRING "{" foreign_fn_decl* "}"
+foreign_fn_decl: fn_header fn_intrinsic? ";"
 
-type: NUMERIC_TYPE | VEC_TYPE | MAT_TYPE | FLOAT_TYPE | VOID_TYPE | STR_TYPE | type_cell | IDENT
+fn_decl: fn_header fn_intrinsic? fn_body
+fn_body: block | ";"
+
+fn_header: fn_attrs "fn" (fn_return_first | fn_name_first)
+fn_attrs: ("pub" | "impure")*
+
+fn_return_first: type IDENT "(" params? ")"
+fn_name_first: IDENT "(" params? ")" return_type?
+return_type: "->" type
+
+fn_intrinsic: "intrinsic" STRING intrinsic_type_list
+intrinsic_type_list: type ("," type)*
+
+params: param ("," param)* ("," "*")?
+      | "*"
+param: type IDENT
+
+tydecl: "type" IDENT "=" type_body ";"
+type_body: type
+         | struct_decl
+         | enum_decl
+         | union_decl
+
+struct_decl: "struct" "{" struct_field+ "}"
+struct_field: type IDENT ";"
+
+enum_decl: "enum" enum_generics? "{" enum_variant_list? "}"
+enum_generics: "<" IDENT ("," IDENT)* ">"
+enum_variant_list: enum_variant ("," enum_variant)* (",")?
+enum_variant: IDENT ("(" type ")")?
+
+union_decl: "union" "{" union_field+ "}"
+union_field: type IDENT ";"
+
+global_decl: visibility? mutability? type IDENT ("=" expr)? ";"
+visibility: "pub"
+mutability: "mut"
+
+block: "{" stmt* expr? "}"
+
+stmt: let_stmt
+    | ret_stmt
+    | defer_stmt
+    | iter_stmt
+    | while_stmt
+    | break_stmt
+    | continue_stmt
+    | ";"            -> empty_stmt
+    | expr_stmt
+
+let_stmt: "let" "mut"? let_binding "=" expr ";"
+let_binding: typed_binding | IDENT
+typed_binding: type IDENT
+
+ret_stmt: "ret" expr? ";"
+defer_stmt: "defer" expr ";"
+iter_stmt: "iter" iter_range IDENT block ";"?
+iter_range: expr ":" expr (":" expr)?
+while_stmt: "while" expr block ";"?
+break_stmt: "break" ";"
+continue_stmt: "continue" ";"
+expr_stmt: expr ";"
+
+?expr: assignment
+?assignment: logic_or (("=" | ":=") assignment)?
+?logic_or: logic_and ("||" logic_and)*
+?logic_and: bit_or ("&&" bit_or)*
+?bit_or: bit_xor ("|" bit_xor)*
+?bit_xor: bit_and ("^" bit_and)*
+?bit_and: equality ("&" equality)*
+?equality: relational (("==" | "!=") relational)*
+?relational: shift (("<" | "<=" | ">" | ">=") shift)*
+?shift: additive (("<<" | ">>") additive)*
+?additive: multiplicative (("+" | "-") multiplicative)*
+?multiplicative: unary (("*" | "/" | "%") unary)*
+
+?unary: ("!" | "-" | "~") unary
+      | "load" unary
+      | "unbox" unary
+      | "ref" unary
+      | "box" unary
+      | "store" expr expr
+      | "sizeof" "(" (type | expr) ")"
+      | "as" type unary
+      | postfix
+
+?postfix: primary postfix_part*
+postfix_part: "(" args? ")"
+            | "[" expr "]"
+            | "." IDENT
+            | "->" IDENT
+
+args: expr ("," expr)* (",")?
+
+?primary: literal
+        | struct_literal
+        | union_literal
+        | path_ident
+        | block
+        | "(" expr ")"
+        | initializer
+        | if_expr
+        | match_expr
+        | "nil"
+
+literal: float_literal
+       | INT
+       | STRING
+       | vec_literal
+       | mat_literal
+
+float_literal: INT "." FRACTION
+
+vec_literal: "<" expr ("," expr)* (",")? ">"
+mat_literal: "<" vec_literal ("," vec_literal)* ">"
+initializer: "{" (expr ("," expr)* (",")?)? "}"
+
+struct_literal: "struct" path_ident? "{" struct_literal_args? "}"
+struct_literal_args: expr ("," expr)* (",")?
+
+union_literal: "union" path_ident "::" IDENT "(" expr? ")"
+
+if_expr: "if" expr expr_body ("else" expr_body)?
+expr_body: block | expr
+
+match_expr: "match" expr "{" match_arm+ "}"
+match_arm: pattern "=>" expr
+
+pattern: "_"
+       | literal
+       | path_ident pattern_payload?
+pattern_payload: "(" pattern_binding ("," pattern_binding)* ")"
+pattern_binding: IDENT | "_"
+
+path_ident: IDENT type_arguments? path_ident_segment*
+path_ident_segment: "::" IDENT type_arguments?
+                  | "::" type_arguments
+type_arguments: "<" type ("," type)* (",")? ">"
+
+?type: type_primary type_suffix*
+?type_primary: builtin_type
+             | path_ident
+             | type_cell
+             | type_function
+
+builtin_type: NUMERIC_TYPE
+            | VEC_TYPE
+            | MAT_TYPE
+            | FLOAT_TYPE
+            | VOID_TYPE
+            | STR_TYPE
 
 type_cell: "Cell" "<" type ">"
 
-decl_field_list: struct_field_list | enum_field_list
+type_function: "fn" type "(" function_type_params? ")"
+             | "fn" "(" function_type_params? ")" return_type?
 
-struct_field_list: (struct_field_decl ";")+
-struct_field_decl: type IDENT
+function_type_params: type ("," type)* ("," "*")?
+                    | "*"
 
-enum_field_list: (enum_field_decl ",")* enum_field_decl (",")?
-enum_field_decl: IDENT | IDENT "(" type ")"
+type_suffix: "*"
+           | "^"
+           | array_suffix
 
-params: param ("," param)* ("," "*")?
-param: type IDENT
+array_suffix: "[" INT "]"
 
-block: "{" (stmt ";")* expr? "}"
-
-stmt: "let" IDENT (":" type)? "=" (initattr)* (expr | initializer) // variable declaration
-    | "while" expr block // while loop
-    | IDENT ":=" expr // modification of mutable
-    | expr // expression with unused result
-
-initattr: "cell"
-
-expr: if_expr
-    | or_expr
-
-if_expr: "if" expr block ("else" block)?
-
-initializer: mat_initializer // matrix
-    | vec_initializer // vector
-    | "{" (expr ("," expr)*)? "}"
-
-mat_initializer: "<" vec_initializer ("," vec_initializer)* ">"
-
-vec_initializer: "<" expr ("," expr)* ">"
-
-?or_expr: and_expr ("||" and_expr)*
-?and_expr: cmp_expr ("&&" cmp_expr)*
-?cmp_expr: add_expr (("=="|"!="|"<"|"<="|">"|">=") add_expr)*
-?add_expr: mul_expr (("+"|"-") mul_expr)*
-?mul_expr: unary (("*"|"/"|"%") unary)*
-?unary: ("!"|"-") unary | postfix
-?postfix: primary ( "(" args? ")" | "." IDENT | "[" expr "]" )*
-?primary: "&" IDENT | IDENT | constant | "(" expr ")" | "as" "<" type ">" "(" expr ")" | initializer | block
-constant: INT | FLOAT | STRING
-args: expr ("," expr)*
-
-NUMERIC_TYPE: /(?:i|u)(?:8|16|32|64)/
-VEC_TYPE:     /fvec[1-9][0-9]*/
-MAT_TYPE:     /fmat[1-9][0-9]*x[1-9][0-9]*/
-FLOAT_TYPE:   "float"
-VOID_TYPE:    "void"
-STR_TYPE:     "str"
+NUMERIC_TYPE: /(i|u)[1-9][0-9]*/
+VEC_TYPE: /fvec[1-9][0-9]*/
+MAT_TYPE: /(fmat|mat)[1-9][0-9]*x[1-9][0-9]*/
+FLOAT_TYPE: "float"
+VOID_TYPE: "void"
+STR_TYPE: "str"
 
 IDENT: /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
-
 INT: /0|[1-9][0-9]*/
-FLOAT: /[0-9]+\.([0-9]+)?/
+FRACTION: /[0-9]+/
 STRING: /"([^"\\]|\\.)*"/
 
 %import common.WS
 %ignore WS
 
-COMMENT: "//" /[^\n]/*
+COMMENT: "//" /[^\n]*/
 %ignore COMMENT
 
-ML_COMMENT: "/*" /.*\*\//
+ML_COMMENT: /\/\*[\s\S]*?\*\//
 %ignore ML_COMMENT
-
