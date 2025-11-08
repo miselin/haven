@@ -22,7 +22,7 @@ In Haven, identifiers:
 - Must end with a digit, letter, or `_`
 - Must only contain digits, letters, `_`, or `-`
 
-Hyphens (`-`) may be used within an identifier:
+Hyphens (`-`) may be used only within an identifier:
 
 ```
 -istrue // invalid, cannot start with hyphen
@@ -30,7 +30,7 @@ istrue- // invalid, cannot end with hyphen
 is-true // valid
 ```
 
-Note that the `-` operator for arithmetic therefore requires spaces around it when used with two identifiers:
+Note that the `-` operator for arithmetic requires spaces around it when used with two identifiers:
 
 ```
 abc-def // identifier abc-def
@@ -419,9 +419,9 @@ The `defer` statement defers the execution of an expression to run right before 
 In this example, the string "hello from defer" is printed after the string "Hello, world!". `defer` can be used anywhere within a function and can be very useful for memory and error management.
 
 ```
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     defer printf("hello from defer\n");
 
     printf("Hello, world!\n");
