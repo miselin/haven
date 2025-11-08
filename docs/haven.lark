@@ -1,19 +1,28 @@
 start: module
 
-module: (foreign | fndecl | tydecl)+
+module: (foreign | fndecl | tydecl | cimport | import)+
 
 foreign: "foreign" STRING "{" (fndecl)* "}"
 
-fndecl: (fnattr)* "fn" IDENT "(" params? ")" ("->" type)? (block | ";")
-tydecl: "type" IDENT "=" (type | "{" (field_decl)* "}") ";"
+fndecl: (fnattr)* "fn" IDENT "(" params? ")" ("->" type)? (fnintrinsic)? (block | ";")
+tydecl: "type" IDENT "=" (type | ("struct" | "enum") "{" decl_field_list "}") ";"
+cimport: "cimport" STRING ";"
+import: "import" STRING ";"
 
 fnattr: "impure" | "pub"
+fnintrinsic: "intrinsic" STRING type ("," type)*
 
 type: NUMERIC_TYPE | VEC_TYPE | MAT_TYPE | FLOAT_TYPE | VOID_TYPE | STR_TYPE | type_cell | IDENT
 
 type_cell: "Cell" "<" type ">"
 
-field_decl: type IDENT ";"
+decl_field_list: struct_field_list | enum_field_list
+
+struct_field_list: (struct_field_decl ";")+
+struct_field_decl: type IDENT
+
+enum_field_list: (enum_field_decl ",")* enum_field_decl (",")?
+enum_field_decl: IDENT | IDENT "(" type ")"
 
 params: param ("," param)* ("," "*")?
 param: type IDENT
@@ -58,7 +67,7 @@ FLOAT_TYPE:   "float"
 VOID_TYPE:    "void"
 STR_TYPE:     "str"
 
-IDENT: /[A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
+IDENT: /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
 
 INT: /0|[1-9][0-9]*/
 FLOAT: /[0-9]+\.([0-9]+)?/
