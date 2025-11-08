@@ -1,5 +1,5 @@
 type int = i32;
 
-pub fn int main() {
+pub fn main() -> int {
     as int 0
 }

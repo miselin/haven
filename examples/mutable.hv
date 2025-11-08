@@ -1,5 +1,5 @@
-pub fn i32 main() {
+pub fn main() -> i32 {
     let mut x = as i32 0;
     x = as i32 5;
-    + x as i32 7
+    x + as i32 7
 }

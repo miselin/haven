@@ -1,11 +1,11 @@
-pub fn i8* malloc(i32 size);
-pub fn i32 printf(str fmt, *);
+pub impure fn malloc(i32 size) -> i8*;
+pub impure fn printf(str fmt, *) -> i32;
 
 type Thing = struct {
     i8[5] name;
 };
 
-pub fn i32 main() {
+pub impure fn main() -> i32 {
     let mut thing = as Thing* malloc(sizeof Thing);
     thing->name[0] = 'H';
     thing->name[1] = 'i';

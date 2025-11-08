@@ -1,6 +1,6 @@
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     defer printf("hello from defer\n");
 
     as i32 0

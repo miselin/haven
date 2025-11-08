@@ -1,11 +1,11 @@
-pub fn i32 and() {
+pub fn and() -> i32 {
     as i32 (0 && (1 / 0))
 }
 
-pub fn i32 or() {
+pub fn or() -> i32 {
     as i32 (1 || (1 / 0))
 }
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     and() + or()
 }

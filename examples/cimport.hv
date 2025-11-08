@@ -1,7 +1,7 @@
 cimport "stdio.h";
 cimport "cimport.h";
 
-pub fn i32 main() {
+pub impure fn main() -> i32 {
     printf("Hello, world!\n");
     0
 }

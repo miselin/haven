@@ -341,7 +341,14 @@ LLVMTypeRef emit_enum_type(struct codegen *codegen, struct ast_ty *ty) {
   char buf[256 + 8];
   snprintf(buf, 256 + 8, "enum.%s", ty->name);
 
-  struct struct_entry *entry = calloc(1, sizeof(struct struct_entry));
+  struct struct_entry *entry = kv_lookup(codegen->structs, ty->name);
+  if (entry != NULL) {
+    compiler_diag(codegen->compiler, DiagError,
+                  "cannot emit enum type '%s' as it already exists in codegen\n", ty->name);
+    return NULL;
+  }
+
+  entry = calloc(1, sizeof(struct struct_entry));
   kv_insert(codegen->structs, ty->name, entry);
 
   if (ty->oneof.enumty.no_wrapped_fields) {

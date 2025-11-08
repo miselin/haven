@@ -1,5 +1,5 @@
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     let i32 x = 5;
     (sizeof i32) + (sizeof x)
 }

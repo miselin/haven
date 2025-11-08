@@ -1,6 +1,6 @@
 pub i32 v = 5;
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     if v == 1 {
         1
     } else if v == 3 {

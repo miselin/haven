@@ -1,6 +1,6 @@
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     iter 0:4 i {
         printf("%d\n", i);
     };

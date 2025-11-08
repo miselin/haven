@@ -1,8 +1,8 @@
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn float fabs(float x) intrinsic "llvm.fabs" float;
+pub fn fabs(float x) -> float intrinsic "llvm.fabs" float;
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     printf("intrinsic example: %f\n", fabs(-5.0));
     0
 }

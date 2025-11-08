@@ -8,8 +8,8 @@ type Wrapped = enum {
     Error
 };
 
-pub fn i32 main() {
-    let inner = struct Inner { as i32 5 };
+pub fn main() -> i32 {
+    let Inner inner = { as i32 5, };
     let foo = Wrapped::Inner(inner);
     match foo {
         Inner(x) => x.x

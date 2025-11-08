@@ -13,21 +13,21 @@ pub fvec3 yay2 = <2.0, 4.0, 5.0>;
 pub str msg = "Hello, world!";
 pub char chartest = 'a';
 
-pub fn i64 printf(str format, *);
+pub fn printf(str format, *) -> i64;
 
-pub fn fvec3 vadd(fvec3 a, fvec3 b) {
-    + a b
+pub fn vadd(fvec3 a, fvec3 b) -> fvec3 {
+    a + b
 }
 
-pub fn fvec3 vscale(fvec3 a, float b) {
-    * a b
+pub fn vscale(fvec3 a, float b) -> fvec3 {
+    a * b
 }
 
-pub fn float add3(float a, float b, float c) {
-    + + a b c
+pub fn add3(float a, float b, float c) -> float {
+    a + b + c
 }
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     let foo = vscale(yay, 2.0);
     let whee = add3(foo.x, foo.y, foo.z);
     printf("result: %.2f, %.2f, %.2f\n", foo.x, foo.y, foo.z);

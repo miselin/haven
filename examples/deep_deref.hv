@@ -7,9 +7,9 @@ type Outer = struct {
     Inner inner;
 };
 
-pub fn i32 main() {
-    let inner = struct Inner { 5 };
-    let outer = struct Outer { inner };
+pub fn main() -> i32 {
+    let Inner inner = { 5, };
+    let Outer outer = { inner, };
 
     (outer.inner).x
 }

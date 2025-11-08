@@ -2,7 +2,7 @@ type Thing = struct {
     i32 x;
 };
 
-pub impure fn i32 main() {
+pub impure fn main() -> i32 {
     let mut boxed = box Thing;
     boxed->x = 5;
     boxed->x

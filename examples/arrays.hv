@@ -1,10 +1,10 @@
 
-pub impure fn i8* malloc(i32 size);
-pub impure fn i32 free(i8 *ptr);
-pub impure fn i32 printf(str fmt, *);
-pub impure fn i8* strcpy(i8 *dest, i8 *src);
+pub impure fn malloc(i32 size) -> i8*;
+pub impure fn free(i8 *ptr) -> i32;
+pub impure fn printf(str fmt, *) -> i32;
+pub impure fn strcpy(i8 *dest, i8 *src) -> i8*;
 
-pub impure fn i32 main() {
+pub impure fn main() -> i32 {
     let mut s = as i8* malloc(256);
     defer { if s != nil { free(s); }; };
 

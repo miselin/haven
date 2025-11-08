@@ -6,7 +6,7 @@ type Numbers = enum {
     Error
 };
 
-fn Numbers number(i32 x) {
+fn number(i32 x) -> Numbers {
     match x {
         1 => Numbers::One
         2 => Numbers::Two
@@ -15,9 +15,9 @@ fn Numbers number(i32 x) {
     }
 }
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     match number(2) {
-        enum Numbers::Two => 0
+        Numbers::Two => 0
         _ => 1
     }
 }

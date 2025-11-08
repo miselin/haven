@@ -9,8 +9,8 @@ type Wrapped = enum {
     Error
 };
 
-pub fn i32 main() {
-    let inner = struct Inner { <1.0, 2.0, 3.0> };
+pub impure fn main() -> i32 {
+    let Inner inner = { <1.0, 2.0, 3.0>, };
     let foo = Wrapped::Inner(inner);
     match foo {
         Inner(x) => {

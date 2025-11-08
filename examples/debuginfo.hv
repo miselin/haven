@@ -1,4 +1,4 @@
-pub fn i32 main() {
+pub fn main() -> i32 {
     let mut boom = as i8* 0;
     boom[10] = 64;
     0

@@ -4,11 +4,11 @@ type Result = enum <T> {
     Error
 };
 
-fn Result<i32> thing() {
+fn thing() -> Result<i32> {
     Result::<i32>::Ok(5)
 }
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     match thing() {
         Ok(x) => x
         _ => 1

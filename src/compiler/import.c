@@ -16,9 +16,9 @@ extern int haven_cimport_process(const char *filename) __attribute__((weak));
 int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name,
                           struct ast_import *into) {
   if (type == ImportTypeC && ((compiler->flags[0] & FLAG_BOOTSTRAP) == 0)) {
-    compiler_diag(
-        compiler, DiagError,
-        "C imports are only available in bootstrap mode as they have very poor ergonomics\n");
+    compiler_diag(compiler, DiagWarning,
+                  "C imports are recommended for use only in bootstrap mode as they have very poor "
+                  "ergonomics\n");
   }
 
   const char *fullpath = NULL;

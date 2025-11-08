@@ -1,14 +1,12 @@
-
-
-fn i32 add(i32 x, i32 y) {
+fn add(i32 x, i32 y) -> i32 {
     x + y
 }
 
-impure fn void add2(i32 x, i32 y, i32 *out) {
+impure fn add2(i32 x, i32 y, i32 *out) -> void {
     store out x + y
 }
 
-pub impure fn i32 main() {
+pub impure fn main() -> i32 {
     let mut i32 result = 0;
     add2(5, 6, ref result);
     add(result, 4)
