@@ -271,19 +271,22 @@ Type declarations (`type X = ...`) may only appear at the file scope.
 
 #### File Scope
 
-At the file scope, only the following declaration form is supported:
+File scope variables are split into two categories:
+
+- `data`, for constant, immutable data used by the program without modification, and
+- `state`, for data with a compile-time default value, but mutable at runtime
 
 ```
-[pub] [mut] <ty> <ident> [= <init-expr>];
+data i32 x = 1234; // constant, local
+pub data i32 y = 5678; // constant, with global linkage (visible outside the translation unit)
 ```
 
-File-scope variable declarations include:
+```
+state i32 x = 1234; // mutable, local
+pub state i32 y = 5678; // mutable, global linkage
+```
 
-- an optional visibility modifier (`pub`) which determines whether the variable is accessible outside of the translation unit
-- an optional mutability modifier (`mut`) which determines whether Haven code is permitted to modify the variable
-- a required type
-- a name
-- an initialization expression, which is optional for public variables (creates an external reference) and required otherwise
+For `pub` data and state, an initializer may be ommitted to create a reference to be resolved by the linker.
 
 #### Function Scope
 

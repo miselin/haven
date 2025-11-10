@@ -87,6 +87,8 @@ enum token_id {
   TOKEN_KW_INTRINSIC,  // intrinsic
   TOKEN_KW_UNTIL,      // until
   TOKEN_KW_FOREIGN,    // foreign
+  TOKEN_KW_DATA,       // data
+  TOKEN_KW_STATE,      // state
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

@@ -44,6 +44,8 @@ struct lookup {
     {"intrinsic", TOKEN_KW_INTRINSIC},
     {"until", TOKEN_KW_UNTIL},
     {"foreign", TOKEN_KW_FOREIGN},
+    {"data", TOKEN_KW_DATA},
+    {"state", TOKEN_KW_STATE},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {

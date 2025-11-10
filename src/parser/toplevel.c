@@ -134,7 +134,6 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
 
   /**
    * [vis] <ty> [mut] <name> [= <init-expr>];
-   * [vis] fn <ret-ty> <name>([<decl>]*) [block]
    */
 
   if (parser_peek(parser) == TOKEN_KW_PUB) {
@@ -142,53 +141,65 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     flags |= DECL_FLAG_PUB;
   }
 
-  // impure
-  if (parser_peek(parser) == TOKEN_KW_IMPURE) {
+  peek = parser_peek(parser);
+  if (peek == TOKEN_KW_DATA || peek == TOKEN_KW_STATE) {
     parser_consume_peeked(parser, NULL);
-    flags |= DECL_FLAG_IMPURE;
-  }
 
-  // fn or type
-  if (parser_peek(parser) == TOKEN_KW_FN) {
-    parser_consume_peeked(parser, NULL);
-    decl->type = AST_DECL_TYPE_FDECL;
-  } else {
-    if (flags & DECL_FLAG_IMPURE) {
-      parser_diag(1, parser, NULL, "only functions can be impure");
+    // vdecl
+    // [vis] [data|state] <ty> <name> [= <init-expr>];
+    decl->type = AST_DECL_TYPE_VDECL;
+
+    if (peek == TOKEN_KW_STATE) {
+      flags |= DECL_FLAG_MUT;
+    }
+
+    vdecl->parser_ty = parse_type(parser);
+
+    if (parser_consume(parser, &vdecl->ident, TOKEN_IDENTIFIER) < 0) {
       free(decl);
       return NULL;
     }
-    decl->type = AST_DECL_TYPE_VDECL;
-  }
 
-  if (decl->type != AST_DECL_TYPE_FDECL) {
-    vdecl->parser_ty = parse_type(parser);
-  }
-
-  // mut?
-  if (decl->type != AST_DECL_TYPE_FDECL) {
-    if (parser_peek(parser) == TOKEN_KW_MUT) {
-      parser_consume_peeked(parser, NULL);
-      vdecl->flags |= DECL_FLAG_MUT;
+    if (parser_peek(parser) == TOKEN_ASSIGN) {
+      parser_consume_peeked(parser, &token);
+      vdecl->init_expr = parse_expression(parser);
     }
-  }
 
-  // name
-  if (parser_consume(parser, &token, TOKEN_IDENTIFIER) < 0) {
-    free(decl);
-    return NULL;
-  }
-  if (decl->type == AST_DECL_TYPE_FDECL) {
-    fdecl->ident = token;
+    vdecl->flags |= flags;
+
+    if (parser_consume(parser, &token, TOKEN_SEMI) < 0) {
+      free(decl);
+      return NULL;
+    }
   } else {
-    vdecl->ident = token;
-  }
+    // fdecl
+    // [vis] fn<ret - ty><name>([<decl>] *)[block]
+    decl->type = AST_DECL_TYPE_FDECL;
 
-  if (decl->type == AST_DECL_TYPE_FDECL) {
+    // impure
+    if (parser_peek(parser) == TOKEN_KW_IMPURE) {
+      parser_consume_peeked(parser, NULL);
+      flags |= DECL_FLAG_IMPURE;
+    }
+
+    // fn
+    if (parser_consume(parser, NULL, TOKEN_KW_FN) < 0) {
+      free(decl);
+      return NULL;
+    }
+
+    // name
+    if (parser_consume(parser, &fdecl->ident, TOKEN_IDENTIFIER) < 0) {
+      free(decl);
+      return NULL;
+    }
+
+    // param list
     if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
       free(decl);
       return NULL;
     }
+
     peek = parser_peek(parser);
     while (peek != TOKEN_RPAREN && peek != TOKEN_EOF && peek != TOKEN_UNKNOWN) {
       if (peek == TOKEN_ASTERISK) {
@@ -241,9 +252,8 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       free(decl);
       return NULL;
     }
-  }
 
-  if (decl->type == AST_DECL_TYPE_FDECL) {
+    // return type
     if (parser_consume(parser, NULL, TOKEN_DASHGT) < 0) {
       free(decl);
       return NULL;
@@ -252,10 +262,9 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
     fdecl->parsed_function_ty.ty = AST_TYPE_FUNCTION;
     fdecl->parsed_function_ty.oneof.function.retty = calloc(1, sizeof(struct ast_ty));
     *(fdecl->parsed_function_ty.oneof.function.retty) = parse_type(parser);
-  }
 
-  peek = parser_peek(parser);
-  if (decl->type == AST_DECL_TYPE_FDECL) {
+    peek = parser_peek(parser);
+
     if (peek == TOKEN_LBRACE) {
       // full function definition
       fdecl->body = calloc(1, sizeof(struct ast_block));
@@ -265,6 +274,7 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       }
     } else {
       if (peek == TOKEN_KW_INTRINSIC) {
+        // intrinsic declaration
         parser_consume_peeked(parser, NULL);
         if (parser_consume(parser, &token, TOKEN_STRING) < 0) {
           free(decl);
@@ -308,22 +318,8 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
         return NULL;
       }
     }
-  } else {
-    if (peek == TOKEN_ASSIGN) {
-      parser_consume_peeked(parser, &token);
-      vdecl->init_expr = parse_expression(parser);
-    }
 
-    if (parser_consume(parser, &token, TOKEN_SEMI) < 0) {
-      free(decl);
-      return NULL;
-    }
-  }
-
-  if (decl->type == AST_DECL_TYPE_FDECL) {
     fdecl->flags |= flags;
-  } else {
-    vdecl->flags |= flags;
   }
 
   return decl;

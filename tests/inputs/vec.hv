@@ -1,6 +1,6 @@
-pub float mut x = 0.0;
-pub float mut y = 0.0;
-pub float mut z = 0.0;
+pub state float x = 0.0;
+pub state float y = 0.0;
+pub state float z = 0.0;
 
 pub fn sqrtf(float v) -> float;
 

@@ -21,7 +21,7 @@ type ShadowResult = enum {
     NoShadow(float)
 };
 
-i32[9] G = {
+data i32[9] G = {
     247570,
     280596,
     280600,
@@ -33,7 +33,7 @@ i32[9] G = {
     16
 };
 
-float RAND_MAX = 2147483647.0;
+data float RAND_MAX = 2147483647.0;
 
 impure fn S(fvec3 o, fvec3 d) -> fvec3;
 impure fn T(fvec3 o, fvec3 d) -> TraceResult;
@@ -139,10 +139,10 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
         Sky => {
             <0.7, 0.6, 1.0> * __builtin_ipow(1.0 - d.z, 4)
         }
-        Ground(data) => {
-            let h = o + (d * data.t);
+        Ground(dat) => {
+            let h = o + (d * dat.t);
             let l = vnorm(<(R() + 9.0), (R() + 9.0), 16.0> - h);
-            let sr = shadow_ray(h, l, data.n, data.t);
+            let sr = shadow_ray(h, l, dat.n, dat.t);
             let b = match sr {
                 _ => 0.0
                 ShadowResult::NoShadow(x) => x
@@ -158,17 +158,17 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
             };
             floorsquare * mul
         }
-        Ball(data) => {
-            let h = o + (d * data.t);
+        Ball(dat) => {
+            let h = o + (d * dat.t);
             let l = vnorm(<(R() + 9.0), (R() + 9.0), 16.0> - h);
-            let sr = shadow_ray(h, l, data.n, data.t);
+            let sr = shadow_ray(h, l, dat.n, dat.t);
             let b = match sr {
                 _ => 0.0
                 ShadowResult::NoShadow(x) => x
             };
             let r = {
-                let inner = vdot(data.n, d) * -2.0;
-                d + (data.n * inner)
+                let inner = vdot(dat.n, d) * -2.0;
+                d + (dat.n * inner)
             };
 
             let LdR = vdot(l, r);

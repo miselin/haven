@@ -46,7 +46,11 @@ enum_variant: IDENT ("(" type ")")?
 union_decl: "union" "{" union_field+ "}"
 union_field: type IDENT ";"
 
-global_decl: visibility? mutability? type IDENT ("=" expr)? ";"
+global_decl: visibility? (global_data | global_state) ";"
+global_data: "data" global_binding
+global_state: "state" global_binding
+global_binding: type IDENT ("=" expr)?
+
 visibility: "pub"
 mutability: "mut"
 
@@ -62,7 +66,7 @@ stmt: let_stmt
     | ";"            -> empty_stmt
     | expr_stmt
 
-let_stmt: "let" "mut"? binding ";"
+let_stmt: "let" mutability? binding ";"
 binding: inferred_binding | typed_binding
 
 inferred_binding: IDENT "=" expr
@@ -81,35 +85,25 @@ expr_stmt: expr ";"
 ?assignment: logic_or
            | logic_or ("=" | ":=") assignment
 
-?logic_or: logic_or "||" logic_and
-         | logic_and
+?logic_or: logic_and ("||" logic_and)*
 
-?logic_and: logic_and "&&" bit_or
-          | bit_or
+?logic_and: bit_or ("&&" bit_or)*
 
-?bit_or: bit_or "|" bit_xor
-       | bit_xor
+?bit_or: bit_xor ("|" bit_xor)*
 
-?bit_xor: bit_xor "^" bit_and
-        | bit_and
+?bit_xor: bit_and ("^" bit_and)*
 
-?bit_and: bit_and "&" equality
-        | equality
+?bit_and: equality ("&" equality)*
 
-?equality: equality ("==" | "!=") relational
-         | relational
+?equality: relational (("==" | "!=") relational)*
 
-?relational: relational ("<" | "<=" | ">" | ">=") shift
-           | shift
+?relational: shift (("<" | "<=" | ">" | ">=") shift)*
 
-?shift: shift ("<<" | ">>") additive
-      | additive
+?shift: additive (("<<" | ">>") additive)*
 
-?additive: additive ("+" | "-") multiplicative
-         | multiplicative
+?additive: multiplicative (("+" | "-") multiplicative)*
 
-?multiplicative: multiplicative ("*" | "/" | "%") unary
-               | unary
+?multiplicative: unary (("*" | "/" | "%") unary)*
 
 ?unary: ("!" | "-" | "~") unary
       | "load" unary
@@ -127,7 +121,9 @@ size: "size" size_param
 size_param: "<" type ">"
             | "(" expr ")"
 
-?postfix: primary postfix_part*
+?postfix: postfix postfix_part
+        | primary
+
 postfix_part: "(" args? ")"
             | "[" expr "]"
             | "." IDENT
@@ -138,7 +134,7 @@ args: expr ("," expr)* (",")?
 ?primary: literal
         | struct_literal
         | union_literal
-        | path_ident
+        | expr_path
         | block
         | "(" expr ")"
         | initializer
@@ -167,10 +163,10 @@ initializer: "{" expr "," initializer_tail
 initializer_tail: "}"
                 | expr ("," expr)* (",")? "}"
 
-struct_literal: "struct" path_ident? "{" struct_literal_args? "}"
+struct_literal: "struct" type_path? "{" struct_literal_args? "}"
 struct_literal_args: expr ("," expr)* (",")?
 
-union_literal: "union" path_ident "::" IDENT "(" expr? ")"
+union_literal: "union" type_path "::" IDENT "(" expr? ")"
 
 if_expr: "if" expr expr ("else" expr)?
 
@@ -179,18 +175,23 @@ match_arm: pattern "=>" expr
 
 pattern: "_"
        | literal
-       | path_ident pattern_payload?
+       | type_path pattern_payload?
 pattern_payload: "(" pattern_binding ("," pattern_binding)* ")"
 pattern_binding: IDENT | "_"
 
-path_ident: IDENT type_arguments? path_ident_segment*
-path_ident_segment: "::" IDENT type_arguments?
-                  | "::" type_arguments
+expr_path: IDENT expr_path_segment*
+expr_path_segment: "::" IDENT expr_path_generic?
+                 | "::" expr_path_generic
+expr_path_generic: type_arguments
+
+type_path: IDENT type_arguments? type_path_segment*
+type_path_segment: "::" IDENT type_arguments?
+
 type_arguments: "<" type ("," type)* (",")? ">"
 
 ?type: type_primary type_suffix*
 ?type_primary: builtin_type
-             | path_ident
+             | type_path
              | type_cell
              | type_function
 

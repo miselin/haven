@@ -183,6 +183,10 @@ const char *token_id_to_string(enum token_id token) {
       return "until";
     case TOKEN_KW_FOREIGN:
       return "foreign";
+    case TOKEN_KW_DATA:
+      return "data";
+    case TOKEN_KW_STATE:
+      return "state";
     case TOKEN_EOF:
       return "<EOF>";
   }

@@ -1,4 +1,4 @@
-pub i32 v = 5;
+pub data i32 v = 5;
 
 pub fn main() -> i32 {
     if v == 1 {
