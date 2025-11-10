@@ -29,7 +29,7 @@ params: param ("," param)* ("," "*")?
       | "*"
 param: type IDENT
 
-tydecl: "type" IDENT "=" type_body ";"
+tydecl: "type" IDENT ("=" type_body)? ";"
 type_body: type
          | struct_decl
          | enum_decl
