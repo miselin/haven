@@ -614,3 +614,40 @@ let v = match numeric(0) {
     _ => 10
 };
 ```
+
+## Builtins & Low-Level Interfaces
+
+### Builtins
+
+#### size
+
+This builtin offers the size of types and expressions as a constant. It will always resolve to a
+size that is constant at compile-time, and will emit error diagnostics if this size cannot be determined.
+
+To use the size of a type as a constant, use the `size<T>` syntax variant:
+
+```
+let sz = size<i32>; // 4
+```
+
+To use the sixe of an expression's result as a constant, use the `size(...)` syntax variant:
+
+```
+let i32 x = 1234;
+let sz = size(x);
+```
+
+## Intrinsics
+
+Haven compiles to LLVM IR, allowing use of a wide range of LLVM instrinsics.
+
+To declare a function that maps to an intrinsic, use the `intrinsic` keyword in the declaration after the
+return type annotation. Following the keyword, add the name of the intrinsic as a string. A comma-separated
+list of parameter types follows to help LLVM identify the correct intrinsic variant to use.
+
+For example, the following declarations declare the LLVM `sqrt` and `powi` intrinsics for the program:
+
+```
+pub fn __builtin_ipow(float x, i32 power) -> float intrinsic "llvm.powi" float, i32;
+pub fn __builtin_sqrtf(float x) -> float intrinsic "llvm.sqrt" float;
+```

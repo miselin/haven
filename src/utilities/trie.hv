@@ -33,7 +33,7 @@ impure fn char_to_i8ptr(i8 c) -> i8* {
 }
 
 pub impure fn new_trie() -> Trie* {
-    let mut root_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
+    let mut root_node = as TrieNode* calloc(1, as u64 size<TrieNode>);
     root_node->id = 0;
     root_node->key[0] = 0;
     root_node->value = TrieValue::NoValue;
@@ -41,7 +41,7 @@ pub impure fn new_trie() -> Trie* {
         root_node->children[i] = nil
     };
 
-    let mut Trie* heap_trie = as Trie* malloc(as u64 sizeof Trie);
+    let mut Trie* heap_trie = as Trie* malloc(as u64 size<Trie>);
     heap_trie->root = root_node;
     heap_trie->next_id = 1;
 
@@ -72,7 +72,7 @@ pub impure fn trie_insert(mut Trie *trie, i8 *key, i8 *value) -> void {
     let mut node = trie->root;
     let mut root_child = node->children[key[0]];
     node = if root_child == nil {
-        let mut new_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
+        let mut new_node = as TrieNode* calloc(1, as u64 size<TrieNode>);
         new_node->id = next_id(trie);
         new_node->key[0] = key[0];
         new_node->key[1] = 0;
@@ -102,7 +102,7 @@ pub impure fn trie_insert(mut Trie *trie, i8 *key, i8 *value) -> void {
 
         if nk > 0 {
             // split the node
-            let mut split_node = as TrieNode* calloc(1, as u64 sizeof TrieNode);
+            let mut split_node = as TrieNode* calloc(1, as u64 size<TrieNode>);
             split_node->id = next_id(trie);
 
             strcpy(split_node->key, (as i8* node->key) + inode);
@@ -138,7 +138,7 @@ pub impure fn trie_insert(mut Trie *trie, i8 *key, i8 *value) -> void {
         };
 
         node = if node->children[k] == nil {
-            let mut new_child = as TrieNode* calloc(1, as u64 sizeof TrieNode);
+            let mut new_child = as TrieNode* calloc(1, as u64 size<TrieNode>);
             new_child->id = next_id(trie);
             strcpy(new_child->key, key + ikey);
             new_child->value = TrieValue::NoValue;

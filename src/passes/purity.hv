@@ -14,7 +14,7 @@ impure fn purity_visitor(ast_visitor_node *node, void *user_data) -> VisitorResu
 impure fn check_purity_expr(PurityContext *ctx, ast_expr *ast) -> i32;
 
 pub impure fn purity_new(ast_program *ast, compiler *comp) -> PurityContext* {
-    let mut result = as PurityContext *calloc(1, as u64 sizeof (PurityContext));
+    let mut result = as PurityContext *calloc(1, as u64 size<PurityContext>);
     result->ast = ast;
     result->comp = comp;
     result

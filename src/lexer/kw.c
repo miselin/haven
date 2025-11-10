@@ -38,7 +38,7 @@ struct lookup {
     {"enum", TOKEN_KW_ENUM},
     {"import", TOKEN_KW_IMPORT},
     {"cimport", TOKEN_KW_CIMPORT},
-    {"sizeof", TOKEN_KW_SIZEOF},
+    {"size", TOKEN_KW_SIZE},
     {"box", TOKEN_KW_BOX},
     {"unbox", TOKEN_KW_UNBOX},
     {"intrinsic", TOKEN_KW_INTRINSIC},

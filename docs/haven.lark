@@ -94,9 +94,13 @@ expr_stmt: expr ";"
       | "ref" unary
       | "box" unary
       | "store" expr expr
-      | "sizeof" "(" (type | expr) ")"
       | "as" type unary
+      | size
       | postfix
+
+size: "size" size_param
+size_param: "<" type ">"
+            | "(" expr ")"
 
 ?postfix: primary postfix_part*
 postfix_part: "(" args? ")"

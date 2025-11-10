@@ -169,8 +169,8 @@ const char *token_id_to_string(enum token_id token) {
       return "cimport";
     case TOKEN_TY_MAT:
       return "matCxR";
-    case TOKEN_KW_SIZEOF:
-      return "sizeof";
+    case TOKEN_KW_SIZE:
+      return "size";
     case TOKEN_DASHGT:
       return "->";
     case TOKEN_KW_BOX:

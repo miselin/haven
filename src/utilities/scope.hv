@@ -11,7 +11,7 @@ pub impure fn scope_next(mut KVIterator *iter_node) -> i8*;
 pub impure fn scope_end(KVNode *iter_node) -> i32;
 
 pub impure fn enter_scope(Scope *parent) -> Scope* {
-    let mut result = as Scope* malloc(as u64 sizeof Scope);
+    let mut result = as Scope* malloc(as u64 size<Scope>);
     result->values = new_kv();
     result->parent = parent;
     result

@@ -542,28 +542,42 @@ struct ast_expr *parse_factor(struct parser *parser) {
       result->type = AST_EXPR_TYPE_NIL;
       break;
 
-    case TOKEN_KW_SIZEOF: {
+    case TOKEN_KW_SIZE: {
       parser_consume_peeked(parser, NULL);
 
       result->type = AST_EXPR_TYPE_SIZEOF;
 
-      parser->mute_diags = 1;
-      parser_mark(parser);
-      result->expr.sizeof_expr.parsed_ty = type_void();
-      result->expr.sizeof_expr.expr = parse_expression(parser);
-      if (!result->expr.sizeof_expr.expr) {
-        parser_rewind(parser);
-        parser->mute_diags = 0;
+      peek = parser_peek(parser);
+      if (peek == TOKEN_LT) {
+        // size<T>
+        parser_consume_peeked(parser, NULL);
+
         result->expr.sizeof_expr.parsed_ty = parse_type(parser);
         if (type_is_error(&result->expr.sizeof_expr.parsed_ty)) {
           parser_diag(1, parser, &parser->peek, "expected expression or type after sizeof");
           free(result);
           return NULL;
         }
+
+        if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+          free(result);
+          return NULL;
+        }
       } else {
-        parser_commit(parser);
+        // size(<expr>)
+        if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
+          free(result);
+          return NULL;
+        }
+
+        result->expr.sizeof_expr.parsed_ty = type_void();
+        result->expr.sizeof_expr.expr = parse_expression(parser);
+
+        if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
+          free(result);
+          return NULL;
+        }
       }
-      parser->mute_diags = 0;
     } break;
 
     default:

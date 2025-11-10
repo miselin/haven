@@ -6,5 +6,5 @@ type Wrapper = struct {
 
 pub fn sut() -> i32 {
     let i32 x = 5;
-    (sizeof i32) + (sizeof x) + (sizeof Wrapper)
+    size<i32> + size(x) + size<Wrapper>
 }

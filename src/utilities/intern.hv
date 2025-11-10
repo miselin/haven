@@ -13,7 +13,7 @@ type InternTable = struct {
 };
 
 pub impure fn new_intern_table(u64 max_strings) -> InternTable* {
-    let mut InternTable* table = malloc(as u64 sizeof(InternTable));
+    let mut InternTable* table = malloc(as u64 size<InternTable>);
     table->map = new_hash_map(max_strings);
     table->head = nil;
     table
@@ -38,7 +38,7 @@ pub impure fn intern(mut InternTable* table, str string) -> StringEntry* {
     if existing != nil {
         existing
     } else {
-        let mut StringEntry* entry = malloc(as u64 sizeof(StringEntry));
+        let mut StringEntry* entry = malloc(as u64 size<StringEntry>);
         entry->string = strdup(string);
         entry->next = table->head;
         table->head = entry;

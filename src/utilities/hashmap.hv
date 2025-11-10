@@ -17,8 +17,8 @@ type HashMap = struct {
 };
 
 pub impure fn new_hash_map(u64 capacity) -> HashMap* {
-    let mut HashMap* result = calloc(1, as u64 sizeof(HashMap));
-    result->entries = calloc(capacity, as u64 sizeof(HashMapEntry));
+    let mut HashMap* result = calloc(1, as u64 size<HashMap>);
+    result->entries = calloc(capacity, as u64 size<HashMapEntry>);
     iter 0:(capacity - 1) i {
         result->entries[i] = HashMapEntry::Empty;
     };
