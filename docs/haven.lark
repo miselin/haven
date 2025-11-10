@@ -62,9 +62,11 @@ stmt: let_stmt
     | ";"            -> empty_stmt
     | expr_stmt
 
-let_stmt: "let" "mut"? let_binding "=" expr ";"
-let_binding: typed_binding | IDENT
-typed_binding: type IDENT
+let_stmt: "let" "mut"? binding ";"
+binding: inferred_binding | typed_binding
+
+inferred_binding: IDENT "=" expr
+typed_binding: type IDENT "=" expr
 
 ret_stmt: "ret" expr? ";"
 defer_stmt: "defer" expr ";"
@@ -76,17 +78,38 @@ continue_stmt: "continue" ";"
 expr_stmt: expr ";"
 
 ?expr: assignment
-?assignment: logic_or (("=" | ":=") assignment)?
-?logic_or: logic_and ("||" logic_and)*
-?logic_and: bit_or ("&&" bit_or)*
-?bit_or: bit_xor ("|" bit_xor)*
-?bit_xor: bit_and ("^" bit_and)*
-?bit_and: equality ("&" equality)*
-?equality: relational (("==" | "!=") relational)*
-?relational: shift (("<" | "<=" | ">" | ">=") shift)*
-?shift: additive (("<<" | ">>") additive)*
-?additive: multiplicative (("+" | "-") multiplicative)*
-?multiplicative: unary (("*" | "/" | "%") unary)*
+?assignment: logic_or
+           | logic_or ("=" | ":=") assignment
+
+?logic_or: logic_or "||" logic_and
+         | logic_and
+
+?logic_and: logic_and "&&" bit_or
+          | bit_or
+
+?bit_or: bit_or "|" bit_xor
+       | bit_xor
+
+?bit_xor: bit_xor "^" bit_and
+        | bit_and
+
+?bit_and: bit_and "&" equality
+        | equality
+
+?equality: equality ("==" | "!=") relational
+         | relational
+
+?relational: relational ("<" | "<=" | ">" | ">=") shift
+           | shift
+
+?shift: shift ("<<" | ">>") additive
+      | additive
+
+?additive: additive ("+" | "-") multiplicative
+         | multiplicative
+
+?multiplicative: multiplicative ("*" | "/" | "%") unary
+               | unary
 
 ?unary: ("!" | "-" | "~") unary
       | "load" unary
@@ -136,7 +159,7 @@ hex_literal: "0x" HEX
 octal_literal: "0o" OCT
 binary_literal: "0b" BIN
 
-vec_literal: "<" expr ("," expr)* (",")? ">"
+vec_literal: "<" expr ("," expr)* ">"
 mat_literal: "<" vec_literal ("," vec_literal)* ">"
 initializer: "{" expr "," initializer_tail
 initializer_tail: "}"

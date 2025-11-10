@@ -12,6 +12,7 @@ logger.setLevel(logging.DEBUG)
 
 
 PARSER = "earley"
+# PARSER = "lalr"
 
 lark_grammar = sys.argv[1]
 
