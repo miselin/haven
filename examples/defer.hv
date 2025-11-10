@@ -3,5 +3,5 @@ pub fn printf(str fmt, *) -> i32;
 pub fn main() -> i32 {
     defer printf("hello from defer\n");
 
-    as i32 0
+    as<i32>(0)
 }

@@ -3,6 +3,6 @@ fn unwrap(i32 ^b) -> i32 {
 }
 
 pub impure fn sut() -> i32 {
-    let b = box (as i32 5);
+    let b = box as<i32>(5);
     unwrap(b)
 }

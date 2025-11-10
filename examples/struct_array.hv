@@ -6,7 +6,7 @@ type Thing = struct {
 };
 
 pub impure fn main() -> i32 {
-    let mut thing = as Thing* malloc(size<Thing>);
+    let mut thing = as<Thing*>(malloc(size<Thing>));
     thing->name[0] = 'H';
     thing->name[1] = 'i';
     thing->name[2] = 0;

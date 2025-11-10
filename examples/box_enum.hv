@@ -17,7 +17,7 @@ pub fn print(Wrapped value) -> void {
 }
 
 pub fn main() -> i32 {
-    let inner = box as i32 5;
+    let inner = box as<i32>(5);
     let wrapped = Wrapped::Wrapped(inner);
     print(wrapped);
 

@@ -4,5 +4,5 @@ pub fn main() -> i32 {
     iter 0:4 i {
         x = x + i;
     };
-    as i32 x
+    as<i32>(x)
 }

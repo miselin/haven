@@ -3,7 +3,7 @@ cimport "../../../include/compiler.h";
 pub impure fn main(i32 argc, i8** argv) -> i32 {
     let compiler = new_compiler(argc, argv);
     if compiler == nil {
-        as i32 1
+        as<i32>(1)
     } else {
         defer destroy_compiler(compiler);
         compiler_run(compiler, Pass::AllPasses)

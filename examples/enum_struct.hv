@@ -9,7 +9,7 @@ type Wrapped = enum {
 };
 
 pub fn main() -> i32 {
-    let Inner inner = { as i32 5, };
+    let Inner inner = { as<i32>(5), };
     let foo = Wrapped::Inner(inner);
     match foo {
         Inner(x) => x.x

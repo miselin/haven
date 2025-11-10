@@ -16,7 +16,7 @@ type KVIterator = struct {
 };
 
 pub impure fn new_kv() -> KV* {
-    let mut heap_kv = as KV* malloc(as u64 size<KV>);
+    let mut heap_kv = as<KV*>(malloc(as<u64>(size<KV>)));
     heap_kv->head = nil;
     heap_kv
 }
@@ -26,7 +26,7 @@ pub impure fn kv_insert(mut KV *kv, i8 *key, void *value) -> void {
         ret;
     };
 
-    let mut node = as KVNode* malloc(as u64 size<KVNode>);
+    let mut node = as<KVNode*>(malloc(as<u64>(size<KVNode>)));
     node->key = malloc(strlen(key) + 1);
     node->value = value;
     node->next = nil;
@@ -66,7 +66,7 @@ pub impure fn kv_lookup(KV *kv, i8 *key) -> i8* {
         node = node->next;
     };
 
-    as i8* 0
+    as<i8*>(0)
 }
 
 pub impure fn kv_delete(mut KV *kv, i8 *key) -> void {
@@ -109,7 +109,7 @@ pub impure fn kv_iter(KV *kv) -> KVNode* {
 pub impure fn kv_next(mut KVIterator *kviter) -> i8* {
     let mut node = kviter->node;
     if node == nil {
-        as i8* 0
+        as<i8*>(0)
     } else {
         kviter->node = node->next;
 

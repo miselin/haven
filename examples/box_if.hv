@@ -1,6 +1,6 @@
 
 pub impure fn main() -> i32 {
-    let mut boxed = box as i32 5;
+    let mut boxed = box as<i32>(5);
     boxed = nil; // frees the memory
     if boxed == nil {
         0

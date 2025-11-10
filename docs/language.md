@@ -517,10 +517,10 @@ let result = my_function(1, 2, 3);
 
 ### Casts
 
-The `as` keyword provides the ability to cast types. In general, casting is quite restricted and its use may indicate a bug in the compiler's type inference passes.
+Use the `as` syntax to cast between types:
 
 ```
-let x = as i32 5;
+let x = as<i32>(5);
 ```
 
 ### Unary Expressions

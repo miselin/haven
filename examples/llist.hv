@@ -4,8 +4,8 @@ type node = struct {
 };
 
 pub impure fn main() -> i32 {
-    let node tail = { as i32 1, nil };
-    let node head = { as i32 0, ref tail };
+    let node tail = { as<i32>(1), nil };
+    let node head = { as<i32>(0), ref tail };
 
     let p = load (head.next);
     p.value

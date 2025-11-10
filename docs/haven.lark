@@ -117,9 +117,11 @@ expr_stmt: expr ";"
       | "ref" unary
       | "box" unary
       | "store" expr expr
-      | "as" type unary
+      | as
       | size
       | postfix
+
+as: "as" "<" type ">" "(" expr ")"
 
 size: "size" size_param
 size_param: "<" type ">"

@@ -1,6 +1,6 @@
 
 impure fn set_value(i32 *x) -> void {
-    store x as i32 5;
+    store x as<i32>(5);
 }
 
 impure fn load_value(i32 *x) -> i32 {
@@ -8,7 +8,7 @@ impure fn load_value(i32 *x) -> i32 {
 }
 
 pub impure fn sut() -> i32 {
-    let i32 x = as i32 0;
+    let i32 x = as<i32>(0);
     set_value(ref x);
     load_value(ref x)
 }

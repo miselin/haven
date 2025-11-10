@@ -370,11 +370,27 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
       // type casts
     case TOKEN_KW_AS:
-      // as <ty> <expr>
+      // as<T>(<expr>)
       parser_consume_peeked(parser, NULL);
       result->type = AST_EXPR_TYPE_CAST;
+      if (parser_consume(parser, NULL, TOKEN_LT) < 0) {
+        free(result);
+        return NULL;
+      }
       result->expr.cast.parsed_ty = parse_type(parser);
-      result->expr.cast.expr = parse_factor(parser);
+      if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+        free(result);
+        return NULL;
+      }
+      if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
+        free(result);
+        return NULL;
+      }
+      result->expr.cast.expr = parse_expression(parser);
+      if (parser_consume(parser, NULL, TOKEN_RPAREN) < 0) {
+        free(result);
+        return NULL;
+      }
       break;
 
       // ptr to value
@@ -400,7 +416,7 @@ struct ast_expr *parse_factor(struct parser *parser) {
         parser->mute_diags = 0;
         struct ast_ty ty = parse_type(parser);
         if (type_is_error(&ty)) {
-          parser_diag(1, parser, &parser->peek, "expected expression or type after sizeof");
+          parser_diag(1, parser, &parser->peek, "expected expression or type after box");
           free(result);
           return NULL;
         }

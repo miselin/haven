@@ -11,7 +11,7 @@ type Box = struct {
 
 pub impure fn __haven_new_empty_box(i32 box_size) -> Box* {
     // size includes the refcount
-    let mut result = as Box* calloc(1, as u64 box_size);
+    let mut result = as<Box*>(calloc(1, as<u64>(box_size)));
     result->refcount = 1;
 
     result
@@ -19,7 +19,7 @@ pub impure fn __haven_new_empty_box(i32 box_size) -> Box* {
 
 pub impure fn __haven_new_box(i32* value, i32 box_size, i32 value_size) -> Box* {
     let result = __haven_new_empty_box(box_size);
-    let p = as i8* result;
+    let p = as<i8*>(result);
     // box header is 16 bytes, then the value
     memcpy(p + 16, value, value_size);
 

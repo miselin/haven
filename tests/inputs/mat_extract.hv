@@ -10,5 +10,5 @@ pub fn sut() -> i32 {
     let m = m1 * m2;
     let row = m[0];
 
-    as i32 row[2]
+    as<i32>(row[2])
 }

@@ -5,7 +5,7 @@ pub impure fn printf(str fmt, *) -> i32;
 pub impure fn strcpy(i8 *dest, i8 *src) -> i8*;
 
 pub impure fn main() -> i32 {
-    let mut s = as i8* malloc(256);
+    let mut s = as<i8*>(malloc(256));
     defer { if s != nil { free(s); }; };
 
     strcpy(s, "hello, World!");
