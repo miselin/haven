@@ -18,11 +18,8 @@ foreign_fn_decl: fn_header fn_intrinsic? ";"
 fn_decl: fn_header fn_intrinsic? fn_body
 fn_body: block | ";"
 
-fn_header: fn_attrs "fn" (fn_return_first | fn_name_first)
-fn_attrs: ("pub" | "impure")*
-
-fn_return_first: type IDENT "(" params? ")"
-fn_name_first: IDENT "(" params? ")" return_type?
+fn_header: visibility? fn_purity "fn" IDENT "(" params? ")" return_type?
+fn_purity: "impure"?
 return_type: "->" type
 
 fn_intrinsic: "intrinsic" STRING intrinsic_type_list
@@ -121,24 +118,32 @@ args: expr ("," expr)* (",")?
         | "nil"
 
 literal: float_literal
+       | hex_literal
+       | octal_literal
+       | binary_literal
        | INT
        | STRING
+       | CHAR
        | vec_literal
        | mat_literal
 
 float_literal: INT "." FRACTION
+hex_literal: "0x" HEX
+octal_literal: "0o" OCT
+binary_literal: "0b" BIN
 
 vec_literal: "<" expr ("," expr)* (",")? ">"
 mat_literal: "<" vec_literal ("," vec_literal)* ">"
-initializer: "{" (expr ("," expr)* (",")?)? "}"
+initializer: "{" expr "," initializer_tail
+initializer_tail: "}"
+                | expr ("," expr)* (",")? "}"
 
 struct_literal: "struct" path_ident? "{" struct_literal_args? "}"
 struct_literal_args: expr ("," expr)* (",")?
 
 union_literal: "union" path_ident "::" IDENT "(" expr? ")"
 
-if_expr: "if" expr expr_body ("else" expr_body)?
-expr_body: block | expr
+if_expr: "if" expr expr ("else" expr)?
 
 match_expr: "match" expr "{" match_arm+ "}"
 match_arm: pattern "=>" expr
@@ -169,8 +174,7 @@ builtin_type: NUMERIC_TYPE
 
 type_cell: "Cell" "<" type ">"
 
-type_function: "fn" type "(" function_type_params? ")"
-             | "fn" "(" function_type_params? ")" return_type?
+type_function: "fn" "(" function_type_params? ")" return_type?
 
 function_type_params: type ("," type)* ("," "*")?
                     | "*"
@@ -190,8 +194,12 @@ STR_TYPE: "str"
 
 IDENT: /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
 INT: /0|[1-9][0-9]*/
+HEX: /[a-fA-F0-9]+/
+OCT: /[0-7]+/
+BIN: /[0-1]+/
 FRACTION: /[0-9]+/
 STRING: /"([^"\\]|\\.)*"/
+CHAR: /'(.|\\.)'/
 
 %import common.WS
 %ignore WS

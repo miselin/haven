@@ -4,7 +4,7 @@ type Inner = struct {
 };
 
 type Wrapped = enum {
-    Inner(Inner)
+    Inner(Inner),
     Error
 };
 

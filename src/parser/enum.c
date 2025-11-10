@@ -87,9 +87,18 @@ int parser_parse_enum_decl(struct parser *parser, struct ast_ty *into) {
     }
 
     peek = parser_peek(parser);
-    if (peek == TOKEN_COMMA) {
-      parser_consume_peeked(parser, NULL);
-      peek = parser_peek(parser);
+    if (peek == TOKEN_RBRACE) {
+      break;
+    }
+
+    if (parser_consume(parser, NULL, TOKEN_COMMA) < 0) {
+      return -1;
+    }
+
+    // handle { x, y, z, } trailing comma syntax
+    peek = parser_peek(parser);
+    if (peek == TOKEN_RBRACE) {
+      break;
     }
   }
 
