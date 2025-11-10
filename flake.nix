@@ -12,7 +12,7 @@
       pkgs = import nixpkgs { inherit system; };
       llvmPkgs = pkgs.llvmPackages_18;
       llvmCmakeDir = "${llvmPkgs.libllvm.dev}/lib/cmake/llvm";
-      haven = pkgs.callPackage ./default.nix { inherit llvmPkgs llvmCmakeDir; stdenv = llvmPkgs.stdenv; };
+      haven = pkgs.callPackage ./default.nix { inherit llvmPkgs llvmCmakeDir self; stdenv = llvmPkgs.stdenv; };
     in {
       apps.default = {
         type = "app";

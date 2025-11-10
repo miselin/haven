@@ -1,18 +1,21 @@
 #!/bin/bash
 
+# Usage: verify-examples-grammar.sh <path-to-haven.lark>
+
 set -euo pipefail
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 REPO_DIR=$(dirname "${SCRIPT_DIR}")
 
 FAILURES=()
+EXPECTED_FAILURES="${REPO_DIR}/examples/badlex.hv ${REPO_DIR}/examples/missing_expr.hv"
+
+ls -la ${1}
 
 for f in "${REPO_DIR}"/examples/*.hv; do
-    # Only git-tracked examples
-    git ls-files --error-unmatch "${f}" >/dev/null 2>&1 || continue
+    echo "${EXPECTED_FAILURES}" | grep "${f}" >/dev/null && continue
 
-    # TODO: validate.py should live in the scripts/ dir
-    if ! python3 docs/validate.py "${f}" >/dev/null; then
+    if ! python3 "${SCRIPT_DIR}"/validate-lark.py "${1}" "${f}" >/dev/null; then
         FAILURES+=("${f}")
     fi
 done
@@ -20,4 +23,5 @@ done
 if [ ${#FAILURES[@]} -gt 0 ]; then
     echo "These examples failed to parse with the Lark grammar:"
     echo ${FAILURES[@]}
+    exit 1
 fi
