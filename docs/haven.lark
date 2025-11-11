@@ -12,7 +12,7 @@ top_decl: import
 import: "import" STRING ";"
 cimport: "cimport" STRING ";"
 
-foreign_block: FOREIGN STRING "{" foreign_fn_decl* "}"
+foreign_block: "foreign" STRING "{" foreign_fn_decl* "}"
 foreign_fn_decl: fn_header fn_intrinsic? ";"
 
 fn_decl: fn_definition
@@ -23,9 +23,9 @@ fn_intrinsic_decl: fn_header fn_intrinsic ";"
 fn_forward_decl: fn_header ";"
 fn_definition: fn_header block
 
-fn_header: visibility? fn_purity FN IDENT "(" params? ")" return_type?
+fn_header: visibility? fn_purity "fn" IDENT "(" params? ")" return_type?
 fn_purity: "impure"?
-return_type: DASHGT type
+return_type: "->" type
 
 fn_intrinsic: "intrinsic" STRING intrinsic_type_list
 intrinsic_type_list: type ("," type)*
@@ -34,7 +34,7 @@ params: param ("," param)* ("," "*")?
       | "*"
 param: type IDENT
 
-tydecl: TYPE IDENT ("=" type_body)? ";"
+tydecl: "type" IDENT ("=" type_body)? ";"
 type_body: type
          | struct_decl
          | enum_decl
@@ -42,14 +42,14 @@ type_body: type
 struct_decl: STRUCT "{" struct_field+ "}"
 struct_field: type IDENT ";"
 
-enum_decl: ENUM enum_generics? "{" enum_variant_list? "}"
+enum_decl: "enum" enum_generics? "{" enum_variant_list? "}"
 enum_generics: "<" IDENT ("," IDENT)* ">"
 enum_variant_list: enum_variant ("," enum_variant)* (",")?
 enum_variant: IDENT ("(" type ")")?
 
 global_decl: visibility? (global_data | global_state) ";"
-global_data: DATA global_binding
-global_state: STATE global_binding
+global_data: "data" global_binding
+global_state: "state" global_binding
 global_binding: type IDENT ("=" expr)?
 
 visibility: "pub"
@@ -67,35 +67,35 @@ stmt: stmt_inner? ";"
            | continue_stmt
            | expr_stmt
 
-let_stmt: LET mutability? binding
+let_stmt: "let" mutability? binding
 binding: inferred_binding | typed_binding
 
 inferred_binding: IDENT "=" expr
 typed_binding: type IDENT "=" expr
 
-ret_stmt: RET expr?
-defer_stmt: DEFER expr
-iter_stmt: ITER iter_range IDENT block
+ret_stmt: "ret" expr?
+defer_stmt: "defer" expr
+iter_stmt: "iter" iter_range IDENT block
 iter_range: expr ":" expr (":" expr)?
-while_stmt: WHILE expr block
-break_stmt: BREAK
-continue_stmt: CONTINUE
+while_stmt: "while" expr block
+break_stmt: "break"
+continue_stmt: "continue"
 expr_stmt: expr
 
 ?expr: assignment
 ?assignment: logic_or
-           | logic_or (ASSIGN | MUTATE) assignment
+           | logic_or ("=" | ":=") assignment
 
-?multiplicative.50: unary ((MULTIPLY | DIVIDE | MODULO) unary)*
-?additive.45: multiplicative ((PLUS | MINUS) multiplicative)*
-?shift.40: additive ((LSHIFT | RSHIFT) additive)*
-?relational.35: shift ((LESSTHAN | LESSTHANEQ | GREATERTHAN | GREATERTHANEQ) shift)*
-?equality.30: relational ((ISEQUAL | NOTEQUAL) relational)*
-?bit_and.25: equality (BITWISE_AND equality)*
-?bit_xor.20: bit_and (BITWISE_XOR bit_and)*
-?bit_or.15: bit_xor (BITWISE_OR bit_xor)*
-?logic_and.10: bit_or (LOGIC_AND bit_or)*
-?logic_or.5: logic_and (LOGIC_OR logic_and)*
+?multiplicative.50: unary (("*" | "/" | "%") unary)*
+?additive.45: multiplicative (("+" | "-") multiplicative)*
+?shift.40: additive (("<<" | ">>") additive)*
+?relational.35: shift (("<" | "<=" | ">" | ">=") shift)*
+?equality.30: relational (("==" | "!=") relational)*
+?bit_and.25: equality ("&" equality)*
+?bit_xor.20: bit_and ("^" bit_and)*
+?bit_or.15: bit_xor ("|" bit_xor)*
+?logic_and.10: bit_or ("&&" bit_or)*
+?logic_or.5: logic_and ("||" logic_and)*
 
 ?unary: ("!" | "-" | "~") unary
       | "load" unary
@@ -115,7 +115,7 @@ size_param: "<" type ">"
 postfix_part: "(" args? ")"
             | "[" expr "]"
             | "." IDENT
-            | DASHGT IDENT
+            | "->" IDENT
 
 args: expr ("," expr)*
 
@@ -139,9 +139,9 @@ literal: hex_literal
        | mat_literal
        | vec_literal
 
-hex_literal: HEX_PREFIX HEX
-octal_literal: OCT_PREFIX OCT
-binary_literal: BIN_PREFIX BIN
+hex_literal: "0x" HEX
+octal_literal: "0o" OCT
+binary_literal: "0b" BIN
 
 mat_literal: "Mat" "<" mat_inner ">"
 mat_inner: mat_row+ | mat_col+
@@ -159,9 +159,9 @@ initializer: "{" initializer_list "}"
 initializer_list: (expr ",")
                 | expr ("," expr)+ ","?
 
-if_expr: IF expr block (ELSE (if_expr | block))?
+if_expr: "if" expr block ("else" (if_expr | block))?
 
-match_expr: MATCH expr "{" match_arm+ "}"
+match_expr: "match" expr "{" match_arm+ "}"
 match_arm: pattern "=>" expr
 
 pattern: "_"
@@ -170,10 +170,10 @@ pattern: "_"
 pattern_payload: "(" pattern_binding ("," pattern_binding)* ")"
 pattern_binding: IDENT | "_"
 
-enum_variant_literal: IDENT TURBO enum_variant_literal_typed? IDENT
-enum_variant_literal_typed: type_arguments TURBO
+enum_variant_literal: IDENT "::" enum_variant_literal_typed? IDENT
+enum_variant_literal_typed: type_arguments "::"
 
-type_path: IDENT TURBO (type_arguments TURBO)? IDENT
+type_path: IDENT "::" (type_arguments "::")? IDENT
 
 type_arguments: "<" type ("," type)* (",")? ">"
 
@@ -188,15 +188,15 @@ type_arguments: "<" type ("," type)* (",")? ">"
 builtin_type: NUMERIC_TYPE
             | VEC_TYPE
             | MAT_TYPE
-            | FLOAT_TYPE
-            | VOID_TYPE
-            | STR_TYPE
+            | "float"
+            | "void"
+            | "str"
 
-type_cell: CELL "<" type ">"
+type_cell: "Cell" "<" type ">"
 
 type_function: "Function" type_function_meta
 type_vararg_function: "VAFunction" type_function_meta
-type_function_meta: "<" "(" (function_type_params | "_") ")" DASHGT type ">"
+type_function_meta: "<" "(" (function_type_params | "_") ")" "->" type ">"
 
 function_type_params: type ("," type)*
 
@@ -207,14 +207,15 @@ type_suffix: "*"
 array_suffix: "[" INT "]"
 
 // Priorities selected to ensure these take precedence over IDENT
-NUMERIC_TYPE.100: /(i|u)[1-9][0-9]*/
-VEC_TYPE.100: /fvec[1-9][0-9]*/
-MAT_TYPE.100: /(fmat|mat)[1-9][0-9]*x[1-9][0-9]*/
-FLOAT_TYPE.100: "float"
-VOID_TYPE.100: "void"
-STR_TYPE.100: "str"
+NUMERIC_TYPE.1: /(i|u)[1-9][0-9]*/
+VEC_TYPE.1: /fvec[1-9][0-9]*/
+MAT_TYPE.1: /(fmat|mat)[1-9][0-9]*x[1-9][0-9]*/
+FLOAT_TYPE.1: "float"
+VOID_TYPE.1: "void"
+STR_TYPE.1: "str"
+STRUCT.2: "struct" // ensure struct is lexed greedily
 
-IDENT: /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
+IDENT.0: /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
 INT: /0|[1-9][0-9]*/
 FLOAT: /(?:0|[1-9][0-9]*)\.[0-9]+/
 HEX: /[a-fA-F0-9]+/
@@ -231,52 +232,3 @@ COMMENT: "//" /[^\n]*/
 
 ML_COMMENT: /\/\*[\s\S]*?\*\//
 %ignore ML_COMMENT
-
-
-ASSIGN: "="
-MUTATE: ":="
-
-LOGIC_OR: "||"
-LOGIC_AND: "&&"
-BITWISE_OR: "|"
-BITWISE_AND: "&"
-BITWISE_XOR: "^"
-ISEQUAL: "=="
-NOTEQUAL: "!="
-LESSTHAN: "<"
-LESSTHANEQ: "<="
-GREATERTHAN: ">"
-GREATERTHANEQ: ">="
-LSHIFT: "<<"
-RSHIFT: ">>"
-PLUS: "+"
-MINUS: "-"
-MULTIPLY: "*"
-DIVIDE: "/"
-MODULO: "%"
-
-IF: "if"
-ENUM: "enum"
-STRUCT.101: "struct" // higher priority than STR
-FN: "fn"
-FOREIGN: "foreign"
-DATA: "data"
-STATE: "state"
-TYPE: "type"
-ELSE: "else"
-MATCH: "match"
-CELL: "Cell"
-RET: "ret"
-DEFER: "defer"
-ITER: "iter"
-WHILE: "while"
-BREAK: "break"
-CONTINUE: "continue"
-LET: "let"
-
-TURBO: "::"
-DASHGT: "->"
-
-HEX_PREFIX: "0x"
-OCT_PREFIX: "0o"
-BIN_PREFIX: "0b"
