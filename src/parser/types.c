@@ -64,7 +64,15 @@ struct ast_ty parse_type(struct parser *parser) {
     strncpy(result.name, token.value.identv.ident, 256);
 
     peek = parser_peek(parser);
-    if (peek == TOKEN_LT) {
+    if (peek == TOKEN_COLONCOLON) {
+      parser_consume_peeked(parser, NULL);
+
+      // Ident::<ty...>
+      if (parser_consume(parser, NULL, TOKEN_LT) < 0) {
+        result.ty = AST_TYPE_ERROR;
+        return result;
+      }
+
       struct ast_ty *tmplty = calloc(1, sizeof(struct ast_ty));
       tmplty->ty = AST_TYPE_TEMPLATE;
       tmplty->oneof.tmpl.outer = calloc(1, sizeof(struct ast_ty));
@@ -72,7 +80,6 @@ struct ast_ty parse_type(struct parser *parser) {
 
       struct ast_template_ty *inner_prev = NULL;
 
-      parser_consume_peeked(parser, NULL);
       while (parser_peek(parser) != TOKEN_GT) {
         struct ast_template_ty *inner_ty = calloc(1, sizeof(struct ast_template_ty));
         inner_ty->parsed_ty = parse_type(parser);
@@ -123,15 +130,23 @@ struct ast_ty parse_type(struct parser *parser) {
     result.ty = AST_TYPE_MATRIX;
     result.oneof.matrix.cols = token.value.matv.x;
     result.oneof.matrix.rows = token.value.matv.y;
-  } else if (peek == TOKEN_KW_FN) {
+  } else if (peek == TOKEN_KW_FUNCTION || peek == TOKEN_KW_VAFUNCTION) {
     parser_consume_peeked(parser, NULL);
 
     result.ty = AST_TYPE_FUNCTION;
 
+    if (parser_consume(parser, NULL, TOKEN_LT) < 0) {
+      result.ty = AST_TYPE_ERROR;
+      return result;
+    }
+
+    // param list
     if (parser_consume(parser, NULL, TOKEN_LPAREN) < 0) {
       result.ty = AST_TYPE_ERROR;
       return result;
     }
+
+    result.oneof.function.vararg = (peek == TOKEN_KW_VAFUNCTION) ? 1 : 0;
 
     peek = parser_peek(parser);
     while (peek != TOKEN_RPAREN) {
@@ -156,6 +171,7 @@ struct ast_ty parse_type(struct parser *parser) {
       return result;
     }
 
+    // return type
     if (parser_consume(parser, NULL, TOKEN_DASHGT) < 0) {
       result.ty = AST_TYPE_ERROR;
       return result;
@@ -163,6 +179,11 @@ struct ast_ty parse_type(struct parser *parser) {
 
     result.oneof.function.retty = calloc(1, sizeof(struct ast_ty));
     *result.oneof.function.retty = parse_type(parser);
+
+    if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+      result.ty = AST_TYPE_ERROR;
+      return result;
+    }
   } else {
     parser_diag(1, parser, &parser->peek, "unexpected token of type %s when parsing type\n",
                 token_id_to_string(peek));

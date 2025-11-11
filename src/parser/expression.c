@@ -40,6 +40,7 @@ struct ast_expr_list *parse_expression_list_alt(struct parser *parser, enum toke
     peek = parser_peek(parser);
     if (peek == TOKEN_COMMA) {
       parser_consume_peeked(parser, NULL);
+      peek = parser_peek(parser);
     } else {
       break;
     }
@@ -199,21 +200,19 @@ struct ast_expr *parse_factor(struct parser *parser) {
     } break;
 
     // vec/matrix literals
-    case TOKEN_LT:
-    case TOKEN_LSHIFT: {
+    case TOKEN_KW_VEC:
+    case TOKEN_KW_MAT: {
       parser_consume_peeked(parser, NULL);
 
-      // If we got an LSHIFT, parse as a matrix initializer - but we need to reinsert an LT for that
-      if (peek == TOKEN_LSHIFT) {
-        struct token fake_lt;
-        fake_lt.loc = parser->peek.loc;
-        fake_lt.ident = TOKEN_LT;
-        fake_lt.value = parser->peek.value;
-        parser_unconsume(parser, &fake_lt);
+      // lexer hint to avoid yielding an LSHIFT here in the matrix path
+      lexer_set_expected(parser->lexer, TOKEN_LT);
+
+      if (parser_consume(parser, NULL, TOKEN_LT) < 0) {
+        free(result);
+        return NULL;
       }
 
-      peek = parser_peek(parser);
-      if (peek == TOKEN_LT) {
+      if (peek == TOKEN_KW_MAT) {
         // comma-separated vector literals
         result->type = AST_EXPR_TYPE_CONSTANT;
         result->parsed_ty.ty = AST_TYPE_MATRIX;
@@ -231,40 +230,25 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
         // We can't know the number of columns until we resolve types
         result->parsed_ty.oneof.matrix.rows = rows->num_elements;
-
-        if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
-          free(result);
-          return NULL;
-        }
-
-        compiler_log(parser->compiler, LogLevelDebug, "parser", "parsed matrix initializer");
       } else {
         // comma-separated factors to comprise a vector initializer
         // < <expr>, <expr>, ... >
 
         result->type = AST_EXPR_TYPE_CONSTANT;
         result->parsed_ty.ty = AST_TYPE_FVEC;
-        // We could be inside a matrix initializer, so we also accept >> as a terminator
-        result->expr.list = parse_expression_list_alt(parser, TOKEN_GT, 1, TOKEN_RSHIFT);
+        result->expr.list = parse_expression_list(parser, TOKEN_GT, 1);
         if (!result->expr.list) {
           free(result);
           parser_diag(1, parser, NULL, "failed to parse expression list for vector initializer");
           return NULL;
         }
         result->parsed_ty.oneof.fvec.width = result->expr.list->num_elements;
+      }
 
-        // Handle vector initializer ending in >> by "consuming" the first & turning it into a ">"
-        peek = parser_peek(parser);
-        if (peek == TOKEN_RSHIFT) {
-          parser_consume_peeked(parser, NULL);
-          struct token fake_tok;
-          fake_tok.loc = parser->peek.loc;
-          fake_tok.ident = TOKEN_GT;
-          parser_unconsume(parser, &fake_tok);
-        } else if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
-          free(result);
-          return NULL;
-        }
+      lexer_set_expected(parser->lexer, TOKEN_GT);
+      if (parser_consume(parser, NULL, TOKEN_GT) < 0) {
+        free(result);
+        return NULL;
       }
     } break;
 

@@ -15,6 +15,7 @@ struct lex_state *new_lexer(FILE *stream, const char *filename, struct compiler 
   strncpy(result->loc.file, filename, 256);
   initialize_keyword_trie(result);
   result->compiler = compiler;
+  result->expected = TOKEN_UNKNOWN;
   return result;
 }
 
@@ -32,6 +33,10 @@ void lexer_locate_str(struct lex_state *state, char *buf, size_t len) {
 
 void lexer_update_loc(struct lex_state *state, struct lex_locator *loc) {
   memcpy(&state->loc, loc, sizeof(struct lex_locator));
+}
+
+void lexer_set_expected(struct lex_state *state, enum token_id expected) {
+  state->expected = expected;
 }
 
 void destroy_lexer(struct lex_state *state) {

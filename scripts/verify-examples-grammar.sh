@@ -10,8 +10,6 @@ REPO_DIR=$(dirname "${SCRIPT_DIR}")
 FAILURES=()
 EXPECTED_FAILURES="${REPO_DIR}/examples/badlex.hv ${REPO_DIR}/examples/missing_expr.hv"
 
-ls -la ${1}
-
 for f in "${REPO_DIR}"/examples/*.hv; do
     echo "${EXPECTED_FAILURES}" | grep "${f}" >/dev/null && continue
 

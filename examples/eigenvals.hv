@@ -21,7 +21,7 @@ impure fn vnorm(fvec3 v) -> fvec3 {
 }
 
 impure fn power_iter(mat3x3 m) -> Result {
-    let mut eigenvector = <1.0, 1.0, 1.0>;
+    let mut eigenvector = Vec<1.0, 1.0, 1.0>;
     let mut eigenvalue = 0.0;
 
     while 1 {
@@ -41,9 +41,9 @@ impure fn power_iter(mat3x3 m) -> Result {
 }
 
 pub impure fn main() -> i32 {
-    let m = <<2.0, -1.0, 0.0>,
-             <-1.0, 2.0, -1.0>,
-             <0.0, -1.0, 2.0>>;
+    let m = Mat<Vec<2.0, -1.0, 0.0>,
+                Vec<-1.0, 2.0, -1.0>,
+                Vec<0.0, -1.0, 2.0>,>;
 
     let result = power_iter(m);
 

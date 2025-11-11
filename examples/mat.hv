@@ -24,11 +24,11 @@ pub fn vec_mult_mat(fvec3 a, mat3x3 b) -> fvec3 {
 // TODO: transpose
 
 pub impure fn main() -> i32 {
-    let x = <<1.0, 0.0, 0.0>,
-             <0.0, 1.0, 0.0>,
-             <0.0, 0.0, 1.0>>;
+    let x = Mat<Vec<1.0, 0.0, 0.0>,
+                Vec<0.0, 1.0, 0.0>,
+                Vec<0.0, 0.0, 1.0>,>;
 
-    let y = <1.0, 2.0, 3.0>;
+    let y = Vec<1.0, 2.0, 3.0>;
 
     let test = vec_mult_mat(y, x);
 

@@ -86,6 +86,12 @@ void destroy_lexer(struct lex_state *);
 
 void lexer_update_loc(struct lex_state *, struct lex_locator *);
 
+// Informs the lexer of the next expected token in the current parser context.
+// Each returned token will reset the expected state. Use this to hint the lexer towards the
+// correct token in ambiguous cases like '<<' vs '<' '<' where either is a valid lex, but
+// the correct token depends on parser state.
+void lexer_set_expected(struct lex_state *, enum token_id);
+
 void print_token(struct token *);
 
 #ifdef __cplusplus

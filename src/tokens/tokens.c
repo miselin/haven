@@ -187,6 +187,14 @@ const char *token_id_to_string(enum token_id token) {
       return "data";
     case TOKEN_KW_STATE:
       return "state";
+    case TOKEN_KW_VEC:
+      return "Vec";
+    case TOKEN_KW_MAT:
+      return "Mat";
+    case TOKEN_KW_FUNCTION:
+      return "Function";
+    case TOKEN_KW_VAFUNCTION:
+      return "VAFunction";
     case TOKEN_EOF:
       return "<EOF>";
   }

@@ -102,15 +102,7 @@ expr_stmt: expr
       | "unbox" unary
       | "ref" unary
       | "box" unary
-      | as
-      | size
       | primary postfix_part*
-
-as: "as" "<" type ">" "(" expr ")"
-
-size: "size" size_param
-size_param: "<" type ">"
-          | "(" expr ")"
 
 postfix_part: "(" args? ")"
             | "[" expr "]"
@@ -126,12 +118,20 @@ args: expr ("," expr)*
         | initializer
         | if_expr
         | match_expr
+        | as
+        | size
         | "nil"
         | IDENT
 
-literal: hex_literal
-       | octal_literal
-       | binary_literal
+as: "as" "<" type ">" "(" expr ")"
+
+size: "size" size_param
+size_param: "<" type ">"
+          | "(" expr ")"
+
+literal: HEX
+       | OCT
+       | BIN
        | INT
        | FLOAT
        | STRING
@@ -139,18 +139,10 @@ literal: hex_literal
        | mat_literal
        | vec_literal
 
-hex_literal: "0x" HEX
-octal_literal: "0o" OCT
-binary_literal: "0b" BIN
-
 mat_literal: "Mat" "<" mat_inner ">"
-mat_inner: mat_row+ | mat_col+
+mat_inner: mat_row+
 
-mat_row: "Row" "<" unary mat_row_tail? ">" ","
-mat_row_tail: "," unary ("," unary)*
-
-mat_col: "Col" "<" unary mat_col_tail? ">" ","
-mat_col_tail: "," unary ("," unary)*
+mat_row: vec_literal ","
 
 vec_literal: "Vec" "<" unary vec_literal_tail? ">"
 vec_literal_tail: "," unary ("," unary)*
@@ -166,16 +158,19 @@ match_arm: pattern "=>" expr
 
 pattern: "_"
        | literal
-       | IDENT pattern_payload?
+       | pattern_enum pattern_payload?
+pattern_enum: IDENT ("::" IDENT)?
 pattern_payload: "(" pattern_binding ("," pattern_binding)* ")"
 pattern_binding: IDENT | "_"
 
+// EnumName :: [<ty, ty, ty> ::] EnumVariant
+// e.g. Result::<i32>::Ok, Result::Ok
 enum_variant_literal: IDENT "::" enum_variant_literal_typed? IDENT
 enum_variant_literal_typed: type_arguments "::"
 
-type_path: IDENT "::" (type_arguments "::")? IDENT
-
-type_arguments: "<" type ("," type)* (",")? ">"
+// TypeName::<ty, ty, ty>
+type_path: IDENT "::" type_arguments
+type_arguments: "<" type ("," type)* ">"
 
 ?type: type_primary type_suffix*
 ?type_primary: builtin_type
@@ -194,6 +189,8 @@ builtin_type: NUMERIC_TYPE
 
 type_cell: "Cell" "<" type ">"
 
+// Function<(ty1, ty2) -> ty> - no varargs
+// VAFunction<(ty1, ty2) -> ty> - expects varargs
 type_function: "Function" type_function_meta
 type_vararg_function: "VAFunction" type_function_meta
 type_function_meta: "<" "(" (function_type_params | "_") ")" "->" type ">"
@@ -215,14 +212,14 @@ VOID_TYPE.1: "void"
 STR_TYPE.1: "str"
 STRUCT.2: "struct" // ensure struct is lexed greedily
 
-IDENT.0: /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
 INT: /0|[1-9][0-9]*/
 FLOAT: /(?:0|[1-9][0-9]*)\.[0-9]+/
-HEX: /[a-fA-F0-9]+/
-OCT: /[0-7]+/
-BIN: /[0-1]+/
+HEX.1: /0x[a-fA-F0-9]+/
+OCT.1: /0o[0-7]+/
+BIN.1: /0b[0-1]+/
 STRING: /"([^"\\]|\\.)*"/
 CHAR: /'(.|\\.)'/
+IDENT: /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/
 
 %import common.WS
 %ignore WS

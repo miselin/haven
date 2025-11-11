@@ -29,6 +29,9 @@ static int lex_check_either(struct lex_state *state, struct token *token, char e
 }
 
 int lexer_token(struct lex_state *state, struct token *token) {
+  enum token_id expected = state->expected;
+  state->expected = TOKEN_UNKNOWN;
+
   // load an initial locator in case of EOF or other error
   lexer_locate(state, &token->loc);
 
@@ -176,6 +179,11 @@ int lexer_token(struct lex_state *state, struct token *token) {
       return lex_check_either(state, token, '=', TOKEN_NE, TOKEN_NOT);
       break;
     case '<': {
+      if (expected == TOKEN_LT) {
+        token->ident = TOKEN_LT;
+        return 0;
+      }
+
       char next = lex_getc(state);
       if (next < 0) {
         token->ident = TOKEN_LT;
@@ -194,6 +202,11 @@ int lexer_token(struct lex_state *state, struct token *token) {
       return 0;
     } break;
     case '>': {
+      if (expected == TOKEN_GT) {
+        token->ident = TOKEN_GT;
+        return 0;
+      }
+
       char next = lex_getc(state);
       if (next < 0) {
         token->ident = TOKEN_GT;

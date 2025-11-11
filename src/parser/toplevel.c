@@ -269,6 +269,8 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       // full function definition
       fdecl->body = calloc(1, sizeof(struct ast_block));
       if (parse_block(parser, fdecl->body, NULL) < 0) {
+        free(fdecl->body);
+        free(fdecl->parsed_function_ty.oneof.function.retty);
         free(decl);
         return NULL;
       }
@@ -277,6 +279,7 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
         // intrinsic declaration
         parser_consume_peeked(parser, NULL);
         if (parser_consume(parser, &token, TOKEN_STRING) < 0) {
+          free(fdecl->parsed_function_ty.oneof.function.retty);
           free(decl);
           return NULL;
         }
@@ -290,6 +293,7 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
           if (type_is_error(&intrinsic_ty) || type_is_tbd(&intrinsic_ty)) {
             parser_diag(1, parser, NULL,
                         "expected concrete, resolved type in intrinsic declaration");
+            free(fdecl->parsed_function_ty.oneof.function.retty);
             free(decl);
             return NULL;
           }
@@ -314,6 +318,7 @@ struct ast_toplevel *parser_parse_toplevel(struct parser *parser) {
       }
 
       if (parser_consume(parser, &token, TOKEN_SEMI) < 0) {
+        free(fdecl->parsed_function_ty.oneof.function.retty);
         free(decl);
         return NULL;
       }

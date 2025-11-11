@@ -17,7 +17,7 @@ fn vcross(fvec3 a, fvec3 b) -> fvec3 {
     let x = a.y * b.z - a.z * b.y;
     let y = a.z * b.x - a.x * b.z;
     let z = a.x * b.y - a.y * b.x;
-    <x, y, z>
+    Vec<x, y, z>
 }
 
 impure fn vnorm(fvec3 v) -> fvec3 {

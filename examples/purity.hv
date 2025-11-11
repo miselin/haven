@@ -3,7 +3,7 @@ fn add(i32 x, i32 y) -> i32 {
 }
 
 impure fn add2(i32 x, i32 y, i32 *out) -> void {
-    store out x + y
+    out := x + y
 }
 
 pub impure fn main() -> i32 {

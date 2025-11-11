@@ -22,6 +22,8 @@ struct lex_state {
   char *filename;
 
   struct compiler *compiler;
+
+  enum token_id expected;
 };
 
 #ifdef __cplusplus

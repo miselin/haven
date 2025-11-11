@@ -4,7 +4,7 @@ type Result = enum <T> {
     Error
 };
 
-fn thing() -> Result<i32> {
+fn thing() -> Result::<i32> {
     Result::<i32>::Ok(5)
 }
 

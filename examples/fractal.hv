@@ -38,19 +38,19 @@ impure fn cdf_random(fvec4 cdf) -> i32 {
 
 pub impure fn main() -> i32 {
     let AffineTransform stem = {
-        Mat<Row<0.0, 0.0>, Row<0.0, 0.16>,>,
+        Mat<Vec<0.0, 0.0>, Vec<0.0, 0.16>,>,
         Vec<0.0, 0.0>
     };
     let AffineTransform large_leaf = {
-        Mat<Row<0.85, 0.04>, Row<-0.04, 0.85>,>,
+        Mat<Vec<0.85, 0.04>, Vec<-0.04, 0.85>,>,
         Vec<0.0, 1.6>
     };
     let AffineTransform small_leaf = {
-        Mat<Row<0.2, -0.26>, Row<0.23, 0.22>,>,
+        Mat<Vec<0.2, -0.26>, Vec<0.23, 0.22>,>,
         Vec<0.0, 1.6>
     };
     let AffineTransform right_leaf = {
-        Mat<Row<-0.15, 0.28>, Row<0.26, 0.24>,>,
+        Mat<Vec<-0.15, 0.28>, Vec<0.26, 0.24>,>,
         Vec<0.0,  0.44>
     };
 

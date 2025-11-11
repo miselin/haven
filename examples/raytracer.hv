@@ -52,7 +52,7 @@ pub impure fn main() -> i32 {
 
     printf("P6 %d %d 255 ", xdim + 1, ydim + 1);
     let g = {
-        let vec = Vec<(-6.0), (-16.0), 0.0>;
+        let vec = Vec<-6.0, -16.0, 0.0>;
         vnorm(vec)
     };
     let a = {

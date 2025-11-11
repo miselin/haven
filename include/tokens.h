@@ -55,40 +55,44 @@ enum token_id {
   TOKEN_COLONEQ,      // :=
 
   // keywords
-  TOKEN_KW_PUB = 100,  // pub
-  TOKEN_KW_FN,         // fn
-  TOKEN_KW_MUT,        // mut
-  TOKEN_KW_IF,         // if
-  TOKEN_KW_ELSE,       // else
-  TOKEN_KW_LET,        // let
-  TOKEN_KW_FOR,        // for
-  TOKEN_KW_WHILE,      // while
-  TOKEN_KW_BREAK,      // break
-  TOKEN_KW_CONTINUE,   // continue
-  TOKEN_KW_MATCH,      // match
-  TOKEN_KW_AS,         // as
-  TOKEN_KW_NEG,        // neg
-  TOKEN_KW_ITER,       // iter
-  TOKEN_KW_REF,        // ref
-  TOKEN_KW_STORE,      // store
-  TOKEN_KW_LOAD,       // load
-  TOKEN_KW_RETURN,     // ret
-  TOKEN_KW_STRUCT,     // struct
-  TOKEN_KW_TYPE,       // type
-  TOKEN_KW_NIL,        // nil
-  TOKEN_KW_DEFER,      // defer
-  TOKEN_KW_IMPURE,     // impure
-  TOKEN_KW_ENUM,       // enum
-  TOKEN_KW_IMPORT,     // import
-  TOKEN_KW_CIMPORT,    // cimport
-  TOKEN_KW_SIZE,       // size
-  TOKEN_KW_BOX,        // box
-  TOKEN_KW_UNBOX,      // unbox
-  TOKEN_KW_INTRINSIC,  // intrinsic
-  TOKEN_KW_UNTIL,      // until
-  TOKEN_KW_FOREIGN,    // foreign
-  TOKEN_KW_DATA,       // data
-  TOKEN_KW_STATE,      // state
+  TOKEN_KW_PUB = 100,   // pub
+  TOKEN_KW_FN,          // fn
+  TOKEN_KW_MUT,         // mut
+  TOKEN_KW_IF,          // if
+  TOKEN_KW_ELSE,        // else
+  TOKEN_KW_LET,         // let
+  TOKEN_KW_FOR,         // for
+  TOKEN_KW_WHILE,       // while
+  TOKEN_KW_BREAK,       // break
+  TOKEN_KW_CONTINUE,    // continue
+  TOKEN_KW_MATCH,       // match
+  TOKEN_KW_AS,          // as
+  TOKEN_KW_NEG,         // neg
+  TOKEN_KW_ITER,        // iter
+  TOKEN_KW_REF,         // ref
+  TOKEN_KW_STORE,       // store
+  TOKEN_KW_LOAD,        // load
+  TOKEN_KW_RETURN,      // ret
+  TOKEN_KW_STRUCT,      // struct
+  TOKEN_KW_TYPE,        // type
+  TOKEN_KW_NIL,         // nil
+  TOKEN_KW_DEFER,       // defer
+  TOKEN_KW_IMPURE,      // impure
+  TOKEN_KW_ENUM,        // enum
+  TOKEN_KW_IMPORT,      // import
+  TOKEN_KW_CIMPORT,     // cimport
+  TOKEN_KW_SIZE,        // size
+  TOKEN_KW_BOX,         // box
+  TOKEN_KW_UNBOX,       // unbox
+  TOKEN_KW_INTRINSIC,   // intrinsic
+  TOKEN_KW_UNTIL,       // until
+  TOKEN_KW_FOREIGN,     // foreign
+  TOKEN_KW_DATA,        // data
+  TOKEN_KW_STATE,       // state
+  TOKEN_KW_VEC,         // Vec
+  TOKEN_KW_MAT,         // Mat
+  TOKEN_KW_FUNCTION,    // Function
+  TOKEN_KW_VAFUNCTION,  // VAFunction
 
   // types
   TOKEN_TY_SIGNED = 200,  // i[0-9]+

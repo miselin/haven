@@ -2,7 +2,7 @@ fn callback(i32 x) -> i32 {
     x
 }
 
-impure fn call_callback(i32 x, fn (i32) -> i32 func) -> i32 {
+impure fn call_callback(i32 x, Function<(i32) -> i32> func) -> i32 {
     func(x)
 }
 

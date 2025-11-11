@@ -40,12 +40,16 @@ type AffineTransform = struct {
     fvec2 translate;
 };
 
-fn apply(fvec2 v, AffineTransform *xform) -> fvec2 {
-    (v * xform.transform) + xform.translate
+type Image = struct {
+    i8[640000] pixels;
+};
+
+impure fn apply(fvec2 v, AffineTransform *xform) -> fvec2 {
+    (v * xform->transform) + xform->translate
 }
 
 fn build_cdf(fvec4 probabilities) -> fvec4 {
-    <
+    Vec<
         probabilities.x,
         (probabilities.x + probabilities.y),
         (probabilities.x + probabilities.y + probabilities.z),
@@ -54,7 +58,7 @@ fn build_cdf(fvec4 probabilities) -> fvec4 {
 }
 
 impure fn cdf_random(fvec4 cdf) -> i32 {
-    let r = (as float rand()) / 2147483647.0;
+    let r = as<float>(rand()) / 2147483647.0;
     if r < cdf.x {
         0
     } else if r < cdf.y {
@@ -68,28 +72,27 @@ impure fn cdf_random(fvec4 cdf) -> i32 {
 
 pub impure fn main() -> i32 {
     let AffineTransform stem = {
-        <<0.0, 0.0>, <0.0, 0.16>>,
-        <0.0, 0.0>
+        Mat<Vec<0.0, 0.0>, Vec<0.0, 0.16>,>,
+        Vec<0.0, 0.0>
     };
     let AffineTransform large_leaf = {
-        <<0.85, 0.04>, <-0.04, 0.85>>,
-        <0.0, 1.6>
+        Mat<Vec<0.85, 0.04>, Vec<-0.04, 0.85>,>,
+        Vec<0.0, 1.6>
     };
     let AffineTransform small_leaf = {
-        <<0.2, -0.26>, <0.23, 0.22>>,
-        <0.0, 1.6>
+        Mat<Vec<0.2, -0.26>, Vec<0.23, 0.22>,>,
+        Vec<0.0, 1.6>
     };
     let AffineTransform right_leaf = {
-        <<-0.15, 0.28>, <0.26, 0.24>>,
-        <0.0,  0.44>
+        Mat<Vec<-0.15, 0.28>, Vec<0.26, 0.24>,>,
+        Vec<0.0,  0.44>
     };
 
-    let cdf = build_cdf(<0.01, 0.85, 0.07, 0.07>);
+    let cdf = build_cdf(Vec<0.01, 0.85, 0.07, 0.07>);
 
-    let mut point = <0.0, 0.0>;
+    let mut point = Vec<0.0, 0.0>;
 
-    let mut i8* points = calloc(1, 800 * 800);
-    defer { free(points); };
+    let mut points = box Image;
 
     iter 0:100000000 i {
         let choice = cdf_random(cdf);
@@ -103,10 +106,10 @@ pub impure fn main() -> i32 {
 
         point = apply(point, xform);
 
-        let sx = as i32 ((800.0 / 2.0) + (point.x * 100.0));
-        let sy = as i32 (800.0 - (point.y * 100.0));
+        let sx = as<i32>((800.0 / 2.0) + (point.x * 100.0));
+        let sy = as<i32>(800.0 - (point.y * 100.0));
         if sx >= 0 && sy >= 0 && sx < 800 && sy < 800 {
-            store (points + (sx + (sy * 800))) as i8 1;
+            points->pixels[sx + (sy * 800)] = 1;
         };
     };
 
@@ -114,7 +117,7 @@ pub impure fn main() -> i32 {
     iter 0:799 y {
         iter 0:799 x {
             let idx = x + (y * 800);
-            if (load (points + idx)) == 1 {
+            if points->pixels[idx] == 1 {
                 printf("%c%c%c", 0, 255, 0);
             } else {
                 printf("%c%c%c", 0, 0, 0);

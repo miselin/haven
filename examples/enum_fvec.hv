@@ -10,7 +10,7 @@ type Wrapped = enum {
 };
 
 pub impure fn main() -> i32 {
-    let Inner inner = { <1.0, 2.0, 3.0>, };
+    let Inner inner = { Vec<1.0, 2.0, 3.0>, };
     let foo = Wrapped::Inner(inner);
     match foo {
         Inner(x) => {

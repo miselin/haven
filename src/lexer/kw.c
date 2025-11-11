@@ -46,6 +46,10 @@ struct lookup {
     {"foreign", TOKEN_KW_FOREIGN},
     {"data", TOKEN_KW_DATA},
     {"state", TOKEN_KW_STATE},
+    {"Vec", TOKEN_KW_VEC},
+    {"Mat", TOKEN_KW_MAT},
+    {"Function", TOKEN_KW_FUNCTION},
+    {"VAFunction", TOKEN_KW_VAFUNCTION},
 };
 
 int initialize_keyword_trie(struct lex_state *state) {

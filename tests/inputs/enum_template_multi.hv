@@ -7,7 +7,7 @@ type Result = enum <T, E> {
     Error(E)
 };
 
-fn nope() -> Result<i32, str> {
+fn nope() -> Result::<i32, str> {
     Result::<i32, str>::Error("oh no!")
 }
 
