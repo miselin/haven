@@ -52,11 +52,11 @@ pub impure fn main() -> i32 {
 
     printf("P6 %d %d 255 ", xdim + 1, ydim + 1);
     let g = {
-        let vec = <-6.0, -16.0, 0.0>;
+        let vec = Vec<(-6.0), (-16.0), 0.0>;
         vnorm(vec)
     };
     let a = {
-        let cross = vcross(<0.0, 0.0, 1.0>, g);
+        let cross = vcross(Vec<0.0, 0.0, 1.0>, g);
         vnorm(cross) * 0.002
     };
     let b = {
@@ -71,7 +71,7 @@ pub impure fn main() -> i32 {
 
     iter ydim:0:-1 y {
         iter xdim:0:-1 x {
-            let mut p = <13.0, 13.0, 13.0>;
+            let mut p = Vec<13.0, 13.0, 13.0>;
 
             iter 0:63 r {
                 let t = {
@@ -88,7 +88,7 @@ pub impure fn main() -> i32 {
                 };
 
                 let contrib = {
-                    let origin = <17.0, 16.0, 8.0> + t;
+                    let origin = Vec<17.0, 16.0, 8.0> + t;
                     let dir = {
                         let negt = t * -1.0;
 
@@ -121,15 +121,13 @@ pub impure fn main() -> i32 {
 impure fn shadow_ray(fvec3 h, fvec3 l, fvec3 n, float t) -> ShadowResult {
     let LdN = vdot(l, n);
     if LdN < 0.0 {
-        ret ShadowResult::Shadow;
-    };
-
-    let shadow = T(h, l);
-
-    // illumination factor only provided if there's no shadow
-    match shadow {
-        Sky => ShadowResult::NoShadow(LdN)
-        _ => ShadowResult::Shadow
+        ShadowResult::Shadow
+    } else {
+        // illumination factor only provided if there's no shadow
+        match T(h, l) {
+            Sky => ShadowResult::NoShadow(LdN)
+            _ => ShadowResult::Shadow
+        }
     }
 }
 
@@ -137,34 +135,34 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
     let m = T(o, d);
     match m {
         Sky => {
-            <0.7, 0.6, 1.0> * __builtin_ipow(1.0 - d.z, 4)
+            Vec<0.7, 0.6, 1.0> * __builtin_ipow(1.0 - d.z, 4)
         }
         Ground(dat) => {
             let h = o + (d * dat.t);
-            let l = vnorm(<(R() + 9.0), (R() + 9.0), 16.0> - h);
+            let l = vnorm(Vec<(R() + 9.0), (R() + 9.0), 16.0> - h);
             let sr = shadow_ray(h, l, dat.n, dat.t);
             let b = match sr {
                 _ => 0.0
-                ShadowResult::NoShadow(x) => x
+                NoShadow(x) => x
             };
             let hfifth = h * 0.2;
             let mul = b * 0.2 + 0.1;
             let ceils = __builtin_ceilf(hfifth.x) + __builtin_ceilf(hfifth.y);
             let iceils = as<i32>(ceils);
             let floorsquare = if (iceils & 1) == 1 {
-                <3.0, 1.0, 1.0>
+                Vec<3.0, 1.0, 1.0>
             } else {
-                <3.0, 3.0, 3.0>
+                Vec<3.0, 3.0, 3.0>
             };
             floorsquare * mul
         }
         Ball(dat) => {
             let h = o + (d * dat.t);
-            let l = vnorm(<(R() + 9.0), (R() + 9.0), 16.0> - h);
+            let l = vnorm(Vec<(R() + 9.0), (R() + 9.0), 16.0> - h);
             let sr = shadow_ray(h, l, dat.n, dat.t);
             let b = match sr {
                 _ => 0.0
-                ShadowResult::NoShadow(x) => x
+                NoShadow(x) => x
             };
             let r = {
                 let inner = vdot(dat.n, d) * -2.0;
@@ -173,12 +171,12 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
 
             let LdR = vdot(l, r);
             let p = if (b > 0.0) { __builtin_ipow(LdR, 99) } else { 0.0 };
-            let base = <p, p, p>;
+            let base = Vec<p, p, p>;
             let bounce = S(h, r) * 0.5;
             let contrib = base + bounce;
             contrib
         }
-        _ => <0.0, 0.0, 0.0>
+        _ => Vec<0.0, 0.0, 0.0>
     }
 }
 
@@ -187,7 +185,7 @@ impure fn T(fvec3 o, fvec3 d) -> TraceResult {
     let mut t = 1000000000.0;
     let p = -(o.z) / (d.z);
     if 0.01 < p {
-        let TraceData inner = {p, <0.0, 0.0, 1.0>};
+        let TraceData inner = {p, Vec<0.0, 0.0, 1.0>};
         let n = inner.n;
         t = p;
         result = TraceResult::Ground(inner);
@@ -198,7 +196,7 @@ impure fn T(fvec3 o, fvec3 d) -> TraceResult {
             let bit = 1 << k;
             let lookup = as<i64>(G[j]);
             if (lookup & bit) != 0 {
-                let p = o + <(as<float>(-k)), 0.0, (as<float>(-j) - 4.0)>;
+                let p = o + Vec<(as<float>(-k)), 0.0, (as<float>(-j) - 4.0)>;
                 let b = vdot(p, d);
                 let c = vdot(p, p) - 1.0;
                 let b2 = b * b;

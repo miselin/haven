@@ -15,7 +15,7 @@ impure fn apply(fvec2 v, AffineTransform *xform) -> fvec2 {
 }
 
 fn build_cdf(fvec4 probabilities) -> fvec4 {
-    <
+    Vec<
         probabilities.x,
         (probabilities.x + probabilities.y),
         (probabilities.x + probabilities.y + probabilities.z),
@@ -38,25 +38,25 @@ impure fn cdf_random(fvec4 cdf) -> i32 {
 
 pub impure fn main() -> i32 {
     let AffineTransform stem = {
-        <<0.0, 0.0>, <0.0, 0.16>>,
-        <0.0, 0.0>
+        Mat<Row<0.0, 0.0>, Row<0.0, 0.16>,>,
+        Vec<0.0, 0.0>
     };
     let AffineTransform large_leaf = {
-        <<0.85, 0.04>, <-0.04, 0.85>>,
-        <0.0, 1.6>
+        Mat<Row<0.85, 0.04>, Row<-0.04, 0.85>,>,
+        Vec<0.0, 1.6>
     };
     let AffineTransform small_leaf = {
-        <<0.2, -0.26>, <0.23, 0.22>>,
-        <0.0, 1.6>
+        Mat<Row<0.2, -0.26>, Row<0.23, 0.22>,>,
+        Vec<0.0, 1.6>
     };
     let AffineTransform right_leaf = {
-        <<-0.15, 0.28>, <0.26, 0.24>>,
-        <0.0,  0.44>
+        Mat<Row<-0.15, 0.28>, Row<0.26, 0.24>,>,
+        Vec<0.0,  0.44>
     };
 
-    let cdf = build_cdf(<0.01, 0.85, 0.07, 0.07>);
+    let cdf = build_cdf(Vec<0.01, 0.85, 0.07, 0.07>);
 
-    let mut point = <0.0, 0.0>;
+    let mut point = Vec<0.0, 0.0>;
 
     let mut points = box Image;
 

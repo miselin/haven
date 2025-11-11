@@ -11,8 +11,8 @@ logging.basicConfig(level=logging.DEBUG)
 logger.setLevel(logging.DEBUG)
 
 
-PARSER = "earley"
-# PARSER = "lalr"
+# PARSER = "earley"
+PARSER = "lalr"
 
 lark_grammar = sys.argv[1]
 
