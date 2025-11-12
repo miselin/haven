@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.28)
 project(haven C CXX ASM)
 
+cmake_policy(SET CMP0171 NEW)
+
 include("CMakeDependentOption")
 include(CheckCCompilerFlag)
 

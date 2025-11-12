@@ -32,9 +32,13 @@ int find_file_path(struct compiler *compiler, const char *filename, const char *
 
     struct stat st;
     if (stat(path, &st) == 0) {
+      compiler_log(compiler, LogLevelTrace, "search", "successfully found %s at %s", filename,
+                   path);
       *discovered_path = path;
       return 0;
     }
+
+    compiler_log(compiler, LogLevelTrace, "search", "failed to find %s at %s", filename, path);
 
     free(path);
     dir = dir->next;

@@ -77,18 +77,25 @@ macro(add_haven_test_library name source optlevel)
 endmacro()
 
 macro(add_haven_runtime_library name source)
+    set(options)
+    set(oneValueArgs)
+    set(multiValueArgs LIBRARY_DEPENDS ADDITIONAL_FILES)
+    cmake_parse_arguments(arg_add_haven_runtime_library
+        "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN}
+    )
+
     separate_arguments(HAVEN_COMPILE_FLAGS_LIST NATIVE_COMMAND ${HAVEN_COMPILE_FLAGS})
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} --trace -c --no-preamble ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND haven_bootstrap ${HAVEN_SANITIZER_FLAGS} --trace -c --no-preamble ${HAVEN_RUNTIME_CODEGEN_FLAGS} ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
-        DEPENDS haven_bootstrap ${ARGN}
+        DEPENDS haven_bootstrap ${arg_add_haven_runtime_library_ADDITIONAL_FILES}
         COMMENT "Building ${name} from ${source}"
     )
 
     add_library(${name} STATIC ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
+    target_link_libraries(${name} PUBLIC ${arg_add_haven_runtime_library_LIBRARY_DEPENDS})
     # set link language to C
     set_target_properties(${name} PROPERTIES LINKER_LANGUAGE C)
 endmacro()
-

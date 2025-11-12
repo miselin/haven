@@ -1,0 +1,8 @@
+// ./build/bin/haven examples/syscall.hv --asan --Xl -lruntime --Xl -Lbuild/lib
+
+pub impure fn SYS_write(u32 fd, i8* buf, u64 count) -> i64;
+
+pub impure fn main() -> i32 {
+    SYS_write(1, "hello, world\n", 13);
+    0
+}

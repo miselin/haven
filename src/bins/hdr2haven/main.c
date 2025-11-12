@@ -97,11 +97,16 @@ int main(int argc, char *argv[]) {
   }
 
   compiler_set_input_file(compiler, merged_filename);
+  const char *output_file = compiler_get_output_file(compiler);
+
+  FILE *out = fopen(output_file, "w");
 
   int rc = compiler_run(compiler, PassTypecheck);
   if (rc == 0) {
-    emit_ast_as_code_expanded(compiler_get_ast(compiler), stdout);
+    emit_ast_as_code_expanded(compiler_get_ast(compiler), out);
   }
+
+  fclose(out);
 
   destroy_compiler(compiler);
 
