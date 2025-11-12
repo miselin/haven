@@ -62,13 +62,13 @@ int main(int argc, char *argv[]) {
     char buf[256];
 
     size_t u64 = 0;
-    float f = 0.0f;
+    double f = 0.0;
     if (sscanf(linebuf, "#define %[a-zA-Z_0-9] %zd", name, &u64) == 2) {
       if (kv_lookup(already_defined, name) == NULL) {
         kv_insert(already_defined, name, (void *)1);
         fprintf(fp, "pub data i64 %s = %zd;\n", name, u64);
       }
-    } else if (sscanf(linebuf, "#define %[a-zA-Z_0-9] %f", name, &f) == 2) {
+    } else if (sscanf(linebuf, "#define %[a-zA-Z_0-9] %lf", name, &f) == 2) {
       if (kv_lookup(already_defined, name) == NULL) {
         kv_insert(already_defined, name, (void *)1);
         fprintf(fp, "pub data float %s = %f;\n", name, f);
