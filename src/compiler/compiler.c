@@ -61,6 +61,11 @@ const char *compiler_get_output_file(struct compiler *compiler) {
   return compiler->output_file;
 }
 
+void compiler_set_input_file(struct compiler *compiler, const char *input_file) {
+  free((void *)compiler->input_file);
+  compiler->input_file = strdup(input_file);
+}
+
 void destroy_compiler(struct compiler *compiler) {
   struct imported_file *cursor = compiler->imported_files;
   while (cursor) {

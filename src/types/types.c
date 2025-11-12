@@ -17,6 +17,9 @@ struct type_name_context {
 static int type_name_into_ctx(struct ast_ty *ty, struct string_builder *builder,
                               struct type_name_context *ctx);
 
+static int type_name_into_as_code_ctx(struct ast_ty *ty, struct string_builder *builder,
+                                      struct type_name_context *ctx);
+
 struct ast_ty type_tbd(void) {
   struct ast_ty ty;
   memset(&ty, 0, sizeof(ty));
@@ -718,112 +721,138 @@ struct ast_ty *copy_type(struct type_repository *repo, struct ast_ty *ty) {
 }
 
 int type_name_into_as_code(struct ast_ty *ty, char *buf, size_t maxlen) {
+  struct string_builder *builder = new_string_builder_for(buf, maxlen);
+  type_name_into_as_code_ctx(ty, builder, NULL);
+
+  size_t len = string_builder_len(builder);
+  int wanted_resize = string_builder_needs_resize(builder);
+  free_string_builder(builder);
+
+  buf[len] = 0;
+  return wanted_resize ? -1 : 0;
+}
+
+static int type_name_into_as_code_ctx(struct ast_ty *ty, struct string_builder *builder,
+                                      struct type_name_context *ctx) {
   if (!ty) {
-    return snprintf(buf, maxlen, "<null-type-ptr>");
+    string_builder_append(builder, "<null-type-ptr>");
+    return 0;
   }
 
   int offset = 0;
   switch (ty->ty) {
     case AST_TYPE_ERROR:
-      offset += snprintf(buf, maxlen, "error");
+      string_builder_append(builder, "error");
       return offset;
 
     case AST_TYPE_TBD:
-      offset += snprintf(buf, maxlen, "tbd");
+      string_builder_append(builder, "tbd");
       return offset;
 
     case AST_TYPE_INTEGER:
-      if (ty->oneof.integer.is_signed) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "i");
-      } else {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "u");
-      }
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%zd", ty->oneof.integer.width);
+      string_builder_appendf(builder, "%c%zd", ty->oneof.integer.is_signed ? 'i' : 'u',
+                             ty->oneof.integer.width);
       break;
 
     case AST_TYPE_STRING:
-      offset += snprintf(buf, maxlen, "str");
+      string_builder_append(builder, "str");
       break;
 
     case AST_TYPE_FLOAT:
-      offset += snprintf(buf, maxlen, "float");
+      string_builder_append(builder, "float");
       break;
 
     case AST_TYPE_FVEC:
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "fvec%zd", ty->oneof.fvec.width);
+      string_builder_appendf(builder, "fvec%zd", ty->oneof.fvec.width);
       break;
 
     case AST_TYPE_VOID:
-      offset += snprintf(buf, maxlen, "void");
+      string_builder_append(builder, "void");
       break;
 
     case AST_TYPE_ARRAY: {
-      char element_ty[256];
-      type_name_into_as_code(ty->oneof.array.element_ty, element_ty, 256);
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "%s[%zu]", element_ty,
-                         ty->oneof.array.width);
+      string_builder_appendf(builder, "%s[%zu]", ty->oneof.array.element_ty->name,
+                             ty->oneof.array.width);
     } break;
 
     case AST_TYPE_CUSTOM:
-      offset += snprintf(buf, maxlen, "%s", ty->name);
+      string_builder_append(builder, ty->name);
       break;
 
     case AST_TYPE_STRUCT: {
-      offset += snprintf(buf, maxlen, "%s %s%s{ ", ty->oneof.structty.is_union ? "union" : "struct",
-                         ty->name, ty->name[0] ? " " : "");
-      struct ast_struct_field *field = ty->oneof.structty.fields;
-      while (field) {
-        struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
-        char field_tyname[256];
-        type_name_into_as_code(field_ty, field_tyname, 256);
-        offset +=
-            snprintf(buf + offset, maxlen - (size_t)offset, "%s %s; ", field_tyname, field->name);
-        field = field->next;
+      // did we already see this struct earlier in the chain?
+      struct type_name_context *seen = ctx;
+      while (seen) {
+        if (!strcmp(ty->name, seen->ty->name)) {
+          break;
+        } else if (seen->ty == ty) {
+          break;
+        }
+        seen = seen->next;
       }
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+
+      if (seen) {
+        string_builder_append(builder, ty->name);
+      } else {
+        struct type_name_context *new_ctx = malloc(sizeof(struct type_name_context));
+        new_ctx->ty = ty;
+        new_ctx->next = ctx;
+
+        string_builder_append(builder, "struct {\n");
+        struct ast_struct_field *field = ty->oneof.structty.fields;
+        while (field) {
+          string_builder_appendf(builder, "  ");
+          struct ast_ty *field_ty = field->ty ? field->ty : &field->parsed_ty;
+          type_name_into_as_code_ctx(field_ty, builder, new_ctx);
+          string_builder_appendf(builder, " %s;\n", field->name);
+          field = field->next;
+        }
+        string_builder_append(builder, "}");
+
+        free(new_ctx);
+      }
     } break;
 
     case AST_TYPE_NIL:
-      offset += snprintf(buf, maxlen, "nil");
+      string_builder_append(builder, "nil");
       break;
 
     case AST_TYPE_TEMPLATE:
-      offset += snprintf(buf, maxlen, "template %s", ty->name);
+      // TODO
+      string_builder_appendf(builder, "<unimpl type_name_into_as_code: template %s>", ty->name);
       break;
 
     case AST_TYPE_ENUM:
-      offset += snprintf(buf, maxlen, "enum {\n");
-      struct ast_enum_field *field = ty->oneof.enumty.fields;
-      while (field) {
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "  %s", field->name);
-        if (field->has_inner) {
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, "(");
-          offset += type_name_into_as_code(field->inner ? field->inner : &field->parser_inner,
-                                           buf + offset, maxlen - (size_t)offset);
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, ")");
-        }
-        if (field->next) {
-          offset += snprintf(buf + offset, maxlen - (size_t)offset, ",");
-        }
-        offset += snprintf(buf + offset, maxlen - (size_t)offset, "\n");
-        field = field->next;
-      }
+      // TODO: define the fields etc
+      string_builder_appendf(builder, "<unimpl type_name_into_as_code: enum %s>", ty->name);
+      break;
 
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "}");
+    case AST_TYPE_FUNCTION:
+      string_builder_append(builder, ty->oneof.function.vararg ? "VAFunction" : "Function");
+      string_builder_append(builder, "<(");
+      for (size_t i = 0; i < ty->oneof.function.num_params; ++i) {
+        if (i) {
+          string_builder_append(builder, ", ");
+        }
+        type_name_into_as_code_ctx(ty->oneof.function.param_types[i], builder, ctx);
+      }
+      string_builder_append(builder, ") -> ");
+      type_name_into_as_code_ctx(ty->oneof.function.retty, builder, ctx);
+      string_builder_append(builder, ">");
       break;
 
     case AST_TYPE_POINTER:
-      offset +=
-          type_name_into_as_code(ty->oneof.pointer.pointee, buf + offset, maxlen - (size_t)offset);
-      offset += snprintf(buf + offset, maxlen - (size_t)offset, "*");
+      string_builder_appendf(builder, "%s*", ty->oneof.pointer.pointee->name);
+      break;
+
+    case AST_TYPE_BOX:
+      string_builder_appendf(builder, "%s^", ty->oneof.pointer.pointee->name);
       break;
 
     default:
-      offset += snprintf(buf, maxlen, "<unknown-type %d>", ty->ty);
-      return offset;
+      string_builder_appendf(builder, "<unknown-type %d>", ty->ty);
   }
 
-  buf[offset] = '\0';
   return offset;
 }
 

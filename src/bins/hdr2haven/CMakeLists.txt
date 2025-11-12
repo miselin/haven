@@ -1,0 +1,3 @@
+add_executable(hdr2haven main.c)
+target_link_libraries(hdr2haven haven_compiler_options compiler_bootstrap)
+set_target_properties(hdr2haven PROPERTIES LINKER_LANGUAGE CXX)

@@ -363,6 +363,9 @@ void dump_expr(struct ast_expr *ast, int indent);
 
 int emit_ast_as_code(struct ast_program *ast, FILE *stream);
 
+// Same as emit_ast_as_code, but expands imports instead of emitting an import statement.
+int emit_ast_as_code_expanded(struct ast_program *ast, FILE *stream);
+
 void free_toplevel(struct compiler *compiler, struct ast_toplevel *ast);
 void free_block(struct compiler *compiler, struct ast_block *ast, int heap);
 void free_stmt(struct compiler *compiler, struct ast_stmt *ast);

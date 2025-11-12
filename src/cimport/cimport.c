@@ -468,11 +468,17 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
   clang_getFileLocation(loc, &file, &line, &column, &offset);
 
   CXString loc_name = clang_getFileName(file);
+  if (clang_getCString(loc_name)) {
+    strncpy(program->loc.file, clang_getCString(loc_name), 256);
+  }
 
-  strncpy(program->loc.file, clang_getCString(loc_name), 256);
+  // Preprocessor?
+  if (clang_getCursorKind(cursor) == CXCursor_PreprocessingDirective) {
+    compiler_log(importer->compiler, LogLevelTrace, "cimport", "it's a preprocessing directive");
+  }
 
   // Check if this is a file-scope declaration
-  if (clang_equalCursors(clang_getCursorSemanticParent(cursor), TU_cursor)) {
+  else if (clang_equalCursors(clang_getCursorSemanticParent(cursor), TU_cursor)) {
     // Extract relevant information
     CXString spelling = clang_getCursorSpelling(cursor);
     const char *spelling_c = clang_getCString(spelling);
@@ -587,6 +593,8 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
         decl = NULL;
       }
     } else {
+      compiler_log(importer->compiler, LogLevelTrace, "cimport", "visitor hit unhandled kind %d",
+                   kind);
       free(decl);
       decl = NULL;
     }
@@ -605,6 +613,9 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
     }
 
     clang_disposeString(spelling);
+  } else {
+    compiler_log(importer->compiler, LogLevelTrace, "cimport",
+                 "skipping due to semantic parent not matching TU");
   }
 
   clang_disposeString(loc_name);
@@ -626,6 +637,8 @@ static void indexCallback(CXClientData client_data, const CXIdxDeclInfo *decl) {
       case CXIdxEntity_Variable:
         break;
       default:
+        compiler_log(importer->compiler, LogLevelTrace, "cimport", "skipping entity kind %d",
+                     decl->entityInfo->kind);
         return;
     }
   }
@@ -815,7 +828,7 @@ int cimport_finalize(struct cimport *importer, struct ast_import *into) {
   CXTranslationUnit unit;
   enum CXErrorCode rc = clang_parseTranslationUnit2(
       importer->index, merged_filename, command_line_args, (int)command_line_args_count, NULL, 0,
-      CXTranslationUnit_SkipFunctionBodies, &unit);
+      CXTranslationUnit_SkipFunctionBodies | CXTranslationUnit_DetailedPreprocessingRecord, &unit);
 
   for (size_t i = 0; i < command_line_args_count; i++) {
     free((void *)command_line_args[i]);

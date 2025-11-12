@@ -12,8 +12,10 @@ struct code_emitter {
   struct ast_toplevel *prev_toplevel;
 };
 
+static int code_emit_ast(struct code_emitter *code_emitter, FILE *stream, struct ast_program *ast,
+                         int expand);
 static int code_emit_toplevel(struct code_emitter *code_emitter, FILE *stream,
-                              struct ast_toplevel *ast);
+                              struct ast_toplevel *ast, int expand);
 static int code_emit_block(FILE *stream, struct ast_block *ast, int indent);
 static int code_emit_stmt(FILE *stream, struct ast_stmt *ast, int indent);
 static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent);
@@ -26,10 +28,23 @@ static void print_escaped(FILE *stream, const char *str);
 
 int emit_ast_as_code(struct ast_program *ast, FILE *stream) {
   struct code_emitter emitter = {0};
+  return code_emit_ast(&emitter, stream, ast, 0);
+}
+
+int emit_ast_as_code_expanded(struct ast_program *ast, FILE *stream) {
+  struct code_emitter emitter = {0};
+  return code_emit_ast(&emitter, stream, ast, 1);
+}
+
+static int code_emit_ast(struct code_emitter *code_emitter, FILE *stream, struct ast_program *ast,
+                         int expand) {
+  if (!ast) {
+    return 0;
+  }
 
   struct ast_toplevel *decl = ast->decls;
   while (decl) {
-    if (code_emit_toplevel(&emitter, stream, decl) < 0) {
+    if (code_emit_toplevel(code_emitter, stream, decl, expand) < 0) {
       return -1;
     }
     decl = decl->next;
@@ -51,7 +66,7 @@ static void print_indent(FILE *stream, int level) {
 }
 
 static int code_emit_toplevel(struct code_emitter *code_emitter, FILE *stream,
-                              struct ast_toplevel *ast) {
+                              struct ast_toplevel *ast, int expand) {
   struct ast_toplevel *prev = code_emitter->prev_toplevel;
   code_emitter->prev_toplevel = ast;
 
@@ -70,12 +85,16 @@ static int code_emit_toplevel(struct code_emitter *code_emitter, FILE *stream,
   } else if (ast->type == AST_DECL_TYPE_PREPROC) {
     // no-op
   } else if (ast->type == AST_DECL_TYPE_IMPORT) {
-    if (ast->toplevel.import.type == ImportTypeC) {
-      fprintf(stream, "cimport ");
+    if (expand) {
+      return code_emit_ast(code_emitter, stream, ast->toplevel.import.ast, expand);
     } else {
-      fprintf(stream, "import ");
+      if (ast->toplevel.import.type == ImportTypeC) {
+        fprintf(stream, "cimport ");
+      } else {
+        fprintf(stream, "import ");
+      }
+      fprintf(stream, "\"%s\";\n", ast->toplevel.import.path);
     }
-    fprintf(stream, "\"%s\";\n", ast->toplevel.import.path);
   } else {
     fprintf(stream, "<unhandled toplevel %d>\n", ast->type);
     return -1;
@@ -192,7 +211,21 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
     }
     // TODO
     // code_emit_vdecl(stream, ast->params[i], indent);
+
+    struct ast_ty *param_ty = ast->parsed_function_ty.oneof.function.param_types[i];
+    code_emit_ty(stream, param_ty);
+
+    fprintf(stream, " %s", ast->params[i].name);
   }
+
+  if (ast->parsed_function_ty.oneof.function.vararg) {
+    if (ast->num_params) {
+      fputs(", *", stream);
+    } else {
+      fputs("*", stream);
+    }
+  }
+
   fprintf(stream, ")");
   if (ast->body) {
     fprintf(stream, " ");
@@ -219,6 +252,16 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
 static int code_emit_vdecl(FILE *stream, struct ast_vdecl *ast, int indent) {
   struct ast_ty *ty = ast->ty ? ast->ty : &ast->parser_ty;
 
+  if (ast->flags & DECL_FLAG_PUB) {
+    fprintf(stream, "pub ");
+  }
+
+  if (ast->flags & DECL_FLAG_MUT) {
+    fprintf(stream, "state ");
+  } else {
+    fprintf(stream, "data ");
+  }
+
   if (!type_is_tbd(ty)) {
     code_emit_ty(stream, ty);
     fprintf(stream, " ");
@@ -235,7 +278,7 @@ static int code_emit_vdecl(FILE *stream, struct ast_vdecl *ast, int indent) {
 static int code_emit_tydecl(FILE *stream, struct ast_tydecl *ast, int indent) {
   INDENTED(stream, indent, "type %s = ", ast->ident.value.identv.ident);
   code_emit_ty(stream, &ast->parsed_ty);
-  fprintf(stream, ";\n\n");
+  fprintf(stream, ";\n");
   return 0;
 }
 

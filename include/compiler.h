@@ -79,6 +79,8 @@ uint64_t compiler_get_flags(struct compiler *compiler);
 const char *compiler_get_input_file(struct compiler *compiler);
 const char *compiler_get_output_file(struct compiler *compiler);
 
+void compiler_set_input_file(struct compiler *compiler, const char *input_file);
+
 int compiler_run(struct compiler *compiler, enum Pass until);
 
 int compiler_parse_import(struct compiler *compiler, enum ImportType type, const char *name,
