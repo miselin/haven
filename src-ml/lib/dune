@@ -1,4 +1,4 @@
 (library
  (name haven)
  (modules haven)
- (libraries haven_lexer haven_parser haven_cst))
+ (libraries haven_lexer haven_parser haven_cst haven_token))

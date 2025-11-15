@@ -1,5 +1,5 @@
 open Lexer
-open Haven_token
+open Haven_token.Token
 
 let symbol_tag = function
   | Arrow -> "ARROW"

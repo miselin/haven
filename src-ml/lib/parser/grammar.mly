@@ -3,9 +3,9 @@
 %}
 
 %token <string> IDENT
-%token <Haven_token.numeric_type> NUMERIC_TYPE
-%token <Haven_token.vec_type> VEC_TYPE
-%token <Haven_token.mat_type> MAT_TYPE
+%token <Haven_token.Token.numeric_type> NUMERIC_TYPE
+%token <Haven_token.Token.vec_type> VEC_TYPE
+%token <Haven_token.Token.mat_type> MAT_TYPE
 %token FLOAT_TYPE VOID_TYPE STR_TYPE
 %token <int> INT_LIT
 %token <float> FLOAT_LIT

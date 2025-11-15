@@ -1,6 +1,6 @@
 open Format
 open Cst
-open Haven_token
+open Haven_token.Token
 
 let pp_unary_op fmt op =
   match op with

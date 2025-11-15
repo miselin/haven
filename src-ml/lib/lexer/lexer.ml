@@ -1,3 +1,5 @@
+open Haven_token.Token
+
 type trivia =
   | Whitespace of { text : string; contains_newline : bool }
   | Comment of { text : string; multiline : bool; ends_with_newline : bool }
@@ -48,8 +50,6 @@ type symbol =
   | Bang
   | Tilde
   | Underscore
-
-open Haven_token
 
 module Raw = struct
   type t =

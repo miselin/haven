@@ -1,4 +1,3 @@
 (library
  (name haven_token)
- (public_name haven.token)
- (modules haven_token))
+ (public_name haven.token))

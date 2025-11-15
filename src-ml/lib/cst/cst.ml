@@ -1,4 +1,4 @@
-open Haven_token
+open Haven_token.Token
 
 type unary_operator = Not | Negate | Complement
 

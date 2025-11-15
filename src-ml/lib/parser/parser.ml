@@ -1,4 +1,4 @@
-open Haven_token
+open Haven_token.Token
 
 type located_token = Grammar.token * Lexing.position * Lexing.position
 
