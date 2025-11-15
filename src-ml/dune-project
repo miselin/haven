@@ -1,0 +1,25 @@
+(lang dune 3.19)
+
+(name haven)
+
+(generate_opam_files true)
+
+(source
+ (github username/reponame))
+
+(authors "Matthew Iselin <matthew@theiselins.net>")
+
+(maintainers "Matthew Iselin <matthew@theiselins.net>")
+
+(license ../LICENSE.md)
+
+(documentation https://url/to/documentation)
+
+(package
+ (name haven)
+ (synopsis "The Haven compiler")
+ (description "The Haven compiler")
+ (depends ocaml sedlex menhir)
+ (tags (compiler)))
+
+(using menhir 3.0)

@@ -1,0 +1,7 @@
+(executable
+ (public_name hvfmt)
+ (name hvfmt)
+ (libraries haven)
+ (preprocess
+  (pps sedlex.ppx))
+ (flags :standard -w +39))

@@ -1,0 +1,8 @@
+(menhir
+ (modules grammar)
+ (flags -la 2 --table))
+
+(library
+ (name haven_parser)
+ (modules grammar parser)
+ (libraries menhirLib haven_lexer haven_token haven_cst))
