@@ -1,3 +1,4 @@
 pub fn main() -> i32 {
-    2 + 4
+    // unattached
+    2 + 4 // attached
 }

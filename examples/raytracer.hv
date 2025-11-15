@@ -125,7 +125,7 @@ impure fn shadow_ray(fvec3 h, fvec3 l, fvec3 n, float t) -> ShadowResult {
     } else {
         // illumination factor only provided if there's no shadow
         match T(h, l) {
-            Sky => ShadowResult::NoShadow(LdN)
+            Sky => ShadowResult::NoShadow(LdN),
             _ => ShadowResult::Shadow
         }
     }
@@ -136,13 +136,13 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
     match m {
         Sky => {
             Vec<0.7, 0.6, 1.0> * __builtin_ipow(1.0 - d.z, 4)
-        }
+        },
         Ground(dat) => {
             let h = o + (d * dat.t);
             let l = vnorm(Vec<(R() + 9.0), (R() + 9.0), 16.0> - h);
             let sr = shadow_ray(h, l, dat.n, dat.t);
             let b = match sr {
-                _ => 0.0
+                _ => 0.0,
                 NoShadow(x) => x
             };
             let hfifth = h * 0.2;
@@ -155,13 +155,13 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
                 Vec<3.0, 3.0, 3.0>
             };
             floorsquare * mul
-        }
+        },
         Ball(dat) => {
             let h = o + (d * dat.t);
             let l = vnorm(Vec<(R() + 9.0), (R() + 9.0), 16.0> - h);
             let sr = shadow_ray(h, l, dat.n, dat.t);
             let b = match sr {
-                _ => 0.0
+                _ => 0.0,
                 NoShadow(x) => x
             };
             let r = {
@@ -175,7 +175,7 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
             let bounce = S(h, r) * 0.5;
             let contrib = base + bounce;
             contrib
-        }
+        },
         _ => Vec<0.0, 0.0, 0.0>
     }
 }
