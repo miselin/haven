@@ -53,24 +53,20 @@ open Haven_token
 
 module Raw = struct
   type t =
-  | Trivia of trivia
-  | Ident of string
-  | Numeric_type of numeric_type
-  | Vec_type of vec_type
-  | Mat_type of mat_type
-  | Float_type
-  | Void_type
-  | Str_type
-  | Literal of literal
-  | Symbol of symbol
-  | Newline of string
-  | EOF
+    | Trivia of trivia
+    | Ident of string
+    | Numeric_type of numeric_type
+    | Vec_type of vec_type
+    | Mat_type of mat_type
+    | Float_type
+    | Void_type
+    | Str_type
+    | Literal of literal
+    | Symbol of symbol
+    | Newline of string
+    | EOF
 
-  type tok = {
-    tok: t;
-    startp: Lexing.position;
-    endp: Lexing.position;
-  }
+  type tok = { tok : t; startp : Lexing.position; endp : Lexing.position }
 end
 
 open Raw
@@ -83,45 +79,38 @@ let bin_digit = [%sedlex.regexp? '0' | '1']
 let lowercase = [%sedlex.regexp? 'a' .. 'z']
 let uppercase = [%sedlex.regexp? 'A' .. 'Z']
 let letter = [%sedlex.regexp? lowercase | uppercase]
-
 let ident_inner = [%sedlex.regexp? letter | digit | '_']
 let ident_segment = [%sedlex.regexp? Plus ident_inner]
-
 let numeric_type = [%sedlex.regexp? ('i' | 'u'), nonzero, Star digit]
 let vec_type = [%sedlex.regexp? "fvec", nonzero, Star digit]
+
 let mat_type =
-  [%sedlex.regexp? ("fmat" | "mat"), nonzero, Star digit, 'x', nonzero, Star digit]
+  [%sedlex.regexp?
+    ("fmat" | "mat"), nonzero, Star digit, 'x', nonzero, Star digit]
+
 let float_type = [%sedlex.regexp? "float"]
 let void_type = [%sedlex.regexp? "void"]
 let str_type = [%sedlex.regexp? "str"]
-
 let int_literal = [%sedlex.regexp? Plus digit]
 let float_literal = [%sedlex.regexp? Plus digit, '.', Plus digit]
 let hex_literal = [%sedlex.regexp? "0x", Plus hex_digit]
 let oct_literal = [%sedlex.regexp? "0o", Plus oct_digit]
 let bin_literal = [%sedlex.regexp? "0b", Plus bin_digit]
-
 let escape_sequence = [%sedlex.regexp? '\\', any]
-let string_char =
-  [%sedlex.regexp? Compl ('"' | '\\') | escape_sequence]
-let char_char =
-  [%sedlex.regexp? Compl ('\'' | '\\') | escape_sequence]
-
+let string_char = [%sedlex.regexp? Compl ('"' | '\\') | escape_sequence]
+let char_char = [%sedlex.regexp? Compl ('\'' | '\\') | escape_sequence]
 let string_literal = [%sedlex.regexp? '"', Star string_char, '"']
 let char_literal = [%sedlex.regexp? '\'', char_char, '\'']
 
 let ident =
-  [%sedlex.regexp?
-    (letter | '_'),
-    Star ident_inner,
-    Star ('-', ident_segment)]
+  [%sedlex.regexp? (letter | '_'), Star ident_inner, Star ('-', ident_segment)]
 
 let newline = [%sedlex.regexp? "\r\n" | '\n' | '\r']
 let whitespace = [%sedlex.regexp? Plus (Chars " \t\012\013")]
-let line_comment =
-  [%sedlex.regexp? "//", Star (Compl ('\n' | '\r'))]
+let line_comment = [%sedlex.regexp? "//", Star (Compl ('\n' | '\r'))]
+
 let block_comment =
-  [%sedlex.regexp? "/*", Star (Compl '*' | ('*', Compl '/')), "*/"]
+  [%sedlex.regexp? "/*", Star (Compl '*' | '*', Compl '/'), "*/"]
 
 let has_newline text =
   let len = String.length text in
@@ -142,9 +131,7 @@ let ends_with_newline text =
     | '\n' | '\r' -> true
     | _ -> false
 
-let make_trivia token =
-  Trivia token
-
+let make_trivia token = Trivia token
 let make_symbol sym = Symbol sym
 
 let push_token buf tok acc =
@@ -163,7 +150,8 @@ let rec lex buf acc =
   | block_comment ->
       let text = Sedlexing.Utf8.lexeme buf in
       let trivia =
-        Comment { text; multiline = true; ends_with_newline = ends_with_newline text }
+        Comment
+          { text; multiline = true; ends_with_newline = ends_with_newline text }
       in
       lex buf (push_token buf (make_trivia trivia) acc)
   | line_comment ->
@@ -198,26 +186,36 @@ let rec lex buf acc =
   | str_type -> lex buf (push_token buf Str_type acc)
   | hex_literal ->
       let text = Sedlexing.Utf8.lexeme buf in
-      lex buf (push_token buf (Literal (Hex_lit (int_literal_of_lexeme text))) acc)
+      lex buf
+        (push_token buf (Literal (Hex_lit (int_literal_of_lexeme text))) acc)
   | oct_literal ->
       let text = Sedlexing.Utf8.lexeme buf in
-      lex buf (push_token buf (Literal (Oct_lit (int_literal_of_lexeme text))) acc)
+      lex buf
+        (push_token buf (Literal (Oct_lit (int_literal_of_lexeme text))) acc)
   | bin_literal ->
       let text = Sedlexing.Utf8.lexeme buf in
-      lex buf (push_token buf (Literal (Bin_lit (int_literal_of_lexeme text))) acc)
+      lex buf
+        (push_token buf (Literal (Bin_lit (int_literal_of_lexeme text))) acc)
   | float_literal ->
       let text = Sedlexing.Utf8.lexeme buf in
-      lex buf (push_token buf (Literal (Float_lit (float_literal_of_lexeme text))) acc)
+      lex buf
+        (push_token buf
+           (Literal (Float_lit (float_literal_of_lexeme text)))
+           acc)
   | int_literal ->
       let text = Sedlexing.Utf8.lexeme buf in
-      lex buf (push_token buf (Literal (Int_lit (int_literal_of_lexeme text))) acc)
+      lex buf
+        (push_token buf (Literal (Int_lit (int_literal_of_lexeme text))) acc)
   | string_literal ->
       let text = Sedlexing.Utf8.lexeme buf in
-      lex buf (push_token buf (Literal (String_lit (string_literal_of_lexeme text))) acc)
+      lex buf
+        (push_token buf
+           (Literal (String_lit (string_literal_of_lexeme text)))
+           acc)
   | char_literal ->
       let text = Sedlexing.Utf8.lexeme buf in
-      lex buf (push_token buf (Literal (Char_lit (char_literal_of_lexeme text))) acc)
-  | ident -> lex buf (push_token buf (Ident (Sedlexing.Utf8.lexeme buf)) acc)
+      lex buf
+        (push_token buf (Literal (Char_lit (char_literal_of_lexeme text))) acc)
   | '(' -> lex buf (push_token buf (make_symbol LParen) acc)
   | ')' -> lex buf (push_token buf (make_symbol RParen) acc)
   | '{' -> lex buf (push_token buf (make_symbol LBrace) acc)
@@ -242,6 +240,7 @@ let rec lex buf acc =
   | '!' -> lex buf (push_token buf (make_symbol Bang) acc)
   | '~' -> lex buf (push_token buf (make_symbol Tilde) acc)
   | '_' -> lex buf (push_token buf (make_symbol Underscore) acc)
+  | ident -> lex buf (push_token buf (Ident (Sedlexing.Utf8.lexeme buf)) acc)
   | eof ->
       let acc = push_token buf EOF acc in
       List.rev acc

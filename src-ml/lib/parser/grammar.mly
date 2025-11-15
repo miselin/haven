@@ -20,9 +20,9 @@
 %token EOF
 
 (* Main keywords *)
-%token PUB FN MUT IF ELSE LET FOR WHILE BREAK CONTINUE MATCH AS ITER
+%token PUB FN MUT IF ELSE LET WHILE BREAK CONTINUE MATCH AS ITER
 %token LOAD RET STRUCT TYPE NIL DEFER IMPURE ENUM IMPORT CIMPORT SIZE
-%token BOX UNBOX INTRINSIC UNTIL FOREIGN DATA STATE VEC MAT FUNCTION
+%token BOX UNBOX INTRINSIC FOREIGN DATA STATE VEC MAT FUNCTION
 %token VAFUNCTION CELL REF
 
 (* Operator precedence table *)
@@ -41,6 +41,7 @@
 %start <program> program
 %type <block> block
 %type <block_item list> block_items
+%type <struct_field> struct_field
 %%
 
 program: decls=top_decl+ EOF { { decls } } ;
@@ -48,67 +49,65 @@ program: decls=top_decl+ EOF { { decls } } ;
 (** TOP-LEVEL CONSTRUCTS **)
 
 top_decl:
-  | d=fn_intrinsic_decl { FDecl d }
   | d=fn_definition { FDecl d }
   | d=fn_forward_decl { FDecl d }
-  | import_decl { Import }
-  | cimport_decl { CImport }
-  | foreign_decl { Foreign }
-  | type_decl { TDecl }
-  | global_decl { VDecl }
+  | i=import_decl { Import i }
+  | i=cimport_decl { CImport i }
+  | f=foreign_decl { Foreign f }
+  | t=type_decl { TDecl t }
+  | v=global_decl { VDecl v }
   ;
 
-import_decl: IMPORT STRING_LIT SEMICOLON {} ;
-cimport_decl: CIMPORT STRING_LIT SEMICOLON {} ;
+import_decl: IMPORT i=STRING_LIT SEMICOLON { i } ;
+cimport_decl: CIMPORT i=STRING_LIT SEMICOLON { i } ;
 
-foreign_decl: FOREIGN STRING_LIT LBRACE foreign_fn_decl* RBRACE {} ;
-foreign_fn_decl: fn_header fn_intrinsic? SEMICOLON {} ;
+foreign_decl: FOREIGN l=STRING_LIT LBRACE d=fn_forward_decl* RBRACE { { lib = l; decls = d } } ;
 
 fn_definition: f=fn_header b=block { { f with definition = Some b } } ;
-fn_forward_decl: f=fn_header SEMICOLON { f } ;
-fn_intrinsic_decl: f=fn_header fn_intrinsic SEMICOLON { f } ;
+fn_forward_decl: f=fn_header i=option(fn_intrinsic) SEMICOLON { { f with intrinsic = i } } ;
 
-fn_header: pub=boption(PUB) impure=boption(IMPURE) FN name=IDENT LPAREN params? RPAREN return_type? {
-    { public = pub; impure = impure; name = name; definition = None }
+fn_header: pub=boption(PUB) impure=boption(IMPURE) FN name=IDENT LPAREN p=params RPAREN rt=return_type? {
+    { public = pub; impure = impure; name = name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.vararg }
 } ;
-return_type: ARROW haven_type {} ;
+return_type: ARROW t=haven_type { t } ;
 
-fn_intrinsic: INTRINSIC STRING_LIT intrinsic_type_list {} ;
-intrinsic_type_list: separated_list(COMMA, haven_type) {} ;
+fn_intrinsic: INTRINSIC n=STRING_LIT t=separated_list(COMMA, haven_type) { { name = n; types = t } } ;
 
 params:
-  | param_list {}
-  | STAR {}
-  ;
-param_list: separated_nonempty_list(COMMA, param) param_list_vararg? {} ;
-param_list_vararg: COMMA STAR {} ;
-
-param: haven_type IDENT {} ;
-
-type_decl: TYPE IDENT type_binding? SEMICOLON {} ;
-type_binding: EQUAL type_body {} ;
-type_body:
-  | haven_type {}
-  | struct_decl {}
-  | enum_decl {}
+  | p=separated_nonempty_list(COMMA, param) va=boption(pair(COMMA, STAR)) { { params = p; vararg = va } }
+  | STAR { { params = []; vararg = true } }
+  | { { params = []; vararg = false } }
   ;
 
-struct_decl: STRUCT LBRACE list(terminated(struct_field, SEMICOLON)) RBRACE {} ;
-struct_field: haven_type IDENT {} ;
+param: t=haven_type n=IDENT { { name = n; ty = t } } ;
 
-enum_decl: ENUM enum_generics? LBRACE separated_nonempty_list(COMMA, enum_variant) RBRACE {} ;
+type_decl:
+  | TYPE i=IDENT EQUAL t=type_defn SEMICOLON { { name = i; data = t } }
+  | TYPE i=IDENT SEMICOLON { { name = i; data = TypeDeclForward } }
+  ;
+type_defn:
+  | t=haven_type { TypeDeclAlias t }
+  | s=struct_decl { TypeDeclStruct s }
+  | e=enum_decl { TypeDeclEnum e }
+  ;
+
+struct_decl: STRUCT LBRACE f=list(struct_field) RBRACE { { fields = f } } ;
+struct_field: t=haven_type n=IDENT SEMICOLON { { name = n; ty = t } } ;
+
+enum_decl: ENUM enum_generics? LBRACE v=separated_nonempty_list(COMMA, enum_variant) RBRACE { { variants = v } } ;
 enum_generics: separated_list(COMMA, IDENT) {} ;
-enum_variant: IDENT enum_wrapped_type? {} ;
-enum_wrapped_type: LPAREN haven_type RPAREN {} ;
+enum_variant: i=IDENT t=option(enum_wrapped_type) { { name = i; inner_ty = t }} ;
+enum_wrapped_type: LPAREN t=haven_type RPAREN { t } ;
 
-global_decl: PUB? global_decl_inner SEMICOLON {} ;
+global_decl: p=boption(PUB) d=global_decl_inner SEMICOLON { { d with public = p } } ;
 global_decl_inner:
-  | DATA global_decl_binding {}
-  | STATE global_decl_binding {}
+  | DATA b=global_decl_binding { b }
+  | STATE b=global_decl_binding { { b with is_mutable = true } }
   ;
-global_decl_binding: haven_type IDENT bind_expr? {} ;
-
-bind_expr: EQUAL expr {} ;
+global_decl_binding: t=haven_type n=IDENT e=option(bind_expr) {
+    { name = n; public = false; is_mutable = false; ty = t; init_expr = e }
+} ;
+bind_expr: EQUAL e=expr { e } ;
 
 block: LBRACE b=block_items { { items = b } } ;
 block_items:
@@ -138,6 +137,11 @@ iter_incr: COLON e=expr { e }
 
 (** EXPRESSIONS **)
 
+(*
+ * Splitting the expr grammar is a bit ugly but it enables expressions in contexts where a Boolean operator
+ * doesn't make as much sense. For example, Vec<1.0, 2.0, 3.0>. The trailing > is never going to be relational,
+ * and it's rare to need something like Vec<1 > 2> - which can be simply written Vec<(1 < > 2)>.
+ *)
 expr:
   | l=expr EQUAL r=expr { Binary { left = l; right = r; op = Assign; }}
   | l=expr WALRUS r=expr { Binary { left = l; right = r; op = Mutate; }}
@@ -160,23 +164,25 @@ expr:
   | l=expr GT r=expr { Binary { left = l; right = r; op = GreaterThan; }}
   | l=expr GE r=expr { Binary { left = l; right = r; op = GreaterThanOrEqual; }}
   | u=unary { u }
-  ;
 
 unary:
   | BANG i=unary { Unary { inner = i; op = Not; } }
   | MINUS i=unary %prec UMINUS { Unary { inner = i; op = Negate; } }
   | TILDE i=unary { Unary { inner = i; op = Complement; } }
-  | REF unary { Ref }
-  | LOAD unary { Load }
-  | BOX unary { Box }
-  | BOX haven_type { Box }
-  | UNBOX unary { Unbox }
-  | p=primary LPAREN e=expr_seq RPAREN { Call { target = p; params = e } }
-  | p=primary LBRACKET e=expr RBRACKET { Index { target = p; index = e } }
-  | p=primary DOT i=IDENT { Field { target = p; arrow = false; field = i } }
-  | p=primary ARROW i=IDENT { Field { target = p; arrow = true; field = i } }
-  | p=primary { p }
+  | REF e=unary { Ref e }
+  | LOAD e=unary { Load e }
+  | BOX e=unary { BoxExpr e }
+  | BOX t=haven_type { BoxType t }
+  | UNBOX e=unary { Unbox e }
+  | p=postfix { p }
   ;
+
+postfix:
+  | p=postfix LPAREN e=expr_seq RPAREN { Call { target = p; params = e } }
+  | p=postfix LBRACKET e=expr RBRACKET { Index { target = p; index = e } }
+  | p=postfix DOT i=IDENT { Field { target = p; arrow = false; field = i } }
+  | p=postfix ARROW i=IDENT { Field { target = p; arrow = true; field = i } }
+  | p=primary { p }
 
 expr_seq: exprs=separated_list(COMMA, expr) { exprs } ;
 
@@ -187,7 +193,7 @@ primary:
   | i=init { Initializer i }
   | i=IDENT { Identifier i }
   | i=if_expr { If i }
-  | match_expr { Match }
+  | m=match_expr { Match m }
   | AS LT t=haven_type GT LPAREN e=expr RPAREN { As { target_type = t; inner = e } }
   | SIZE LT t=haven_type GT { SizeType t }
   | SIZE LPAREN e=expr RPAREN { SizeExpr e }
@@ -204,22 +210,22 @@ else_expr:
   | ELSE b=block { Else b }
   ;
 
-match_expr: MATCH expr LBRACE separated_nonempty_list(COMMA, match_arm) RBRACE {} ;
-match_arm: pattern FATARROW expr {} ;
+match_expr: MATCH e=expr LBRACE a=separated_nonempty_list(COMMA, match_arm) RBRACE { { expr = e; arms = a } } ;
+match_arm: p=pattern FATARROW e=expr { { pattern = p; expr = e } } ;
 
 pattern:
-  | UNDERSCORE {}
-  | literal {}
-  | pattern_enum pattern_unwrap? {}
+  | UNDERSCORE { PatternDefault }
+  | l=literal { PatternLiteral l }
+  | v=IDENT p=pattern_unwrap { PatternEnum { enum_name = None; enum_variant = v; binding = p } }
+  | e=IDENT SCOPE v=IDENT p=pattern_unwrap { PatternEnum { enum_name = Some e; enum_variant = v; binding = p } }
   ;
-pattern_enum:
-  | IDENT {}
-  | IDENT SCOPE IDENT {}
+pattern_unwrap:
+  | LPAREN b=separated_nonempty_list(COMMA, pattern_binding) RPAREN { b }
+  | { [] }
   ;
-pattern_unwrap: LPAREN separated_nonempty_list(COMMA, pattern_binding) RPAREN {} ;
 pattern_binding:
-  | IDENT {}
-  | UNDERSCORE {}
+  | UNDERSCORE { BindingIgnored }
+  | i=IDENT { BindingNamed i }
   ;
 
 (** LITERALS **)
@@ -240,18 +246,18 @@ noninteger_literal:
   | c=CHAR_LIT { Char c }
   | m=mat_literal { Matrix m }
   | v=vec_literal { Vector v }
-  | enum_literal { Enum }
+  | e=enum_literal { Enum e }
   ;
 
 mat_literal: MAT LT rows=separated_nonempty_list(COMMA, vec_literal) GT { { rows } } ;
 vec_literal: VEC u=delimited(LT, separated_nonempty_list(COMMA, unary), GT) { u } ;
 
 enum_literal:
-  | IDENT SCOPE IDENT {}
-  | IDENT SCOPE contained_type_list SCOPE IDENT {}
+  | e=IDENT SCOPE v=IDENT { { enum_name = e; enum_variant = v; types = [] } }
+  | e=IDENT SCOPE t=contained_type_list SCOPE v=IDENT { { enum_name = e; enum_variant = v; types = t } }
   ;
 
-contained_type_list: delimited(LT, separated_nonempty_list(COMMA, haven_type), GT) {} ;
+contained_type_list: t=delimited(LT, separated_nonempty_list(COMMA, haven_type), GT) { t } ;
 
 (** TYPES **)
 

@@ -87,3 +87,6 @@ build-*/
 
 # Fuzz stuff
 fuzz/findings/
+
+# Logs
+*.log

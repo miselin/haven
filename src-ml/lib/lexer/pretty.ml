@@ -79,10 +79,11 @@ let symbol_lexeme = function
 
 let pp_trivia = function
   | Whitespace { text; contains_newline } ->
-      Printf.printf "WHITESPACE[%d chars] newline=%b\n" (String.length text) contains_newline
+      Printf.printf "WHITESPACE[%d chars] newline=%b\n" (String.length text)
+        contains_newline
   | Comment { text; multiline; ends_with_newline } ->
-      Printf.printf "COMMENT[%s] multiline=%b ends_with_newline=%b\n" text multiline
-        ends_with_newline
+      Printf.printf "COMMENT[%s] multiline=%b ends_with_newline=%b\n" text
+        multiline ends_with_newline
 
 let pp_literal = function
   | Int_lit value -> Printf.printf "INT %d\n" value
@@ -97,14 +98,14 @@ let pp_token (token : Raw.tok) =
   match token.tok with
   | Trivia trivia -> pp_trivia trivia
   | Ident text -> Printf.printf "IDENT %s\n" text
-  | Numeric_type desc -> Printf.printf "NUMERIC_TYPE %s\n" (numeric_type_to_string desc)
+  | Numeric_type desc ->
+      Printf.printf "NUMERIC_TYPE %s\n" (numeric_type_to_string desc)
   | Vec_type desc -> Printf.printf "VEC_TYPE %s\n" (vec_type_to_string desc)
   | Mat_type desc -> Printf.printf "MAT_TYPE %s\n" (mat_type_to_string desc)
   | Float_type -> Printf.printf "FLOAT_TYPE float\n"
   | Void_type -> Printf.printf "VOID_TYPE void\n"
   | Str_type -> Printf.printf "STR_TYPE str\n"
   | Literal lit -> pp_literal lit
-  | Symbol sym ->
-      Printf.printf "%s %s\n" (symbol_tag sym) (symbol_lexeme sym)
+  | Symbol sym -> Printf.printf "%s %s\n" (symbol_tag sym) (symbol_lexeme sym)
   | Newline text -> Printf.printf "NEWLINE %S\n" text
   | EOF -> print_endline "EOF"
