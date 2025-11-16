@@ -266,3 +266,75 @@ let tokenize_gen g =
   tokenize lexbuf
 
 let lexbuf_from_stdin = Sedlexing.Utf8.from_channel stdin
+
+type token_with_trivia = {
+  token : Raw.t;
+  startp : Lexing.position;
+  endp : Lexing.position;
+  leading_trivia : Raw.tok list;
+  trailing_trivia : Raw.tok list;
+}
+
+let trivia_has_newline (tok : Raw.tok) =
+  match tok.tok with
+  | Trivia (Whitespace { contains_newline; _ }) -> contains_newline
+  | Trivia (Comment { ends_with_newline; multiline; _ }) ->
+      multiline && ends_with_newline
+  | Newline _ -> true
+  | _ -> false
+
+let is_trivia = function
+  | { tok = Trivia _; _ } | { tok = Newline _; _ } -> true
+  | _ -> false
+
+let add_trailing trailing (entry : token_with_trivia) =
+  { entry with trailing_trivia = entry.trailing_trivia @ trailing }
+
+let group_trivia (raw_tokens : Raw.tok list) =
+  let rec loop prev_entry acc trivia_buf = function
+    | [] -> (
+        match prev_entry with
+        | None -> List.rev acc
+        | Some entry ->
+            let entry = add_trailing trivia_buf entry in
+            List.rev (entry :: acc))
+    | tok :: rest when is_trivia tok ->
+        loop prev_entry acc (trivia_buf @ [ tok ]) rest
+    | tok :: rest ->
+        let contains_newline = List.exists trivia_has_newline trivia_buf in
+        let leading =
+          if contains_newline || Option.is_none prev_entry then trivia_buf
+          else []
+        in
+        let trailing_prev =
+          if contains_newline || Option.is_none prev_entry then [] else trivia_buf
+        in
+
+        let acc =
+          match prev_entry with
+          | None -> acc
+          | Some entry -> add_trailing trailing_prev entry :: acc
+        in
+
+        let current =
+          {
+            token = tok.tok;
+            startp = tok.startp;
+            endp = tok.endp;
+            leading_trivia = leading;
+            trailing_trivia = [];
+          }
+        in
+        loop (Some current) acc [] rest
+  in
+  loop None [] [] raw_tokens
+
+let tokenize_with_trivia buf = lex buf [] |> group_trivia
+
+let tokenize_channel_with_trivia ch =
+  let lexbuf = Sedlexing.Utf8.from_channel ch in
+  tokenize_with_trivia lexbuf
+
+let tokenize_str_with_trivia s =
+  let lexbuf = Sedlexing.Utf8.from_string s in
+  tokenize_with_trivia lexbuf
