@@ -1,7 +1,19 @@
 open Haven_token.Token
 
-type unary_operator = Not | Negate | Complement
+type location = { start_pos : Lexing.position; end_pos : Lexing.position }
+type 'a node = { value : 'a; loc : location }
 
+let location_between ~start_pos ~end_pos = { start_pos; end_pos }
+
+let location_spanning (a : _ node) (b : _ node) =
+  location_between ~start_pos:a.loc.start_pos ~end_pos:b.loc.end_pos
+
+let with_location ~start_pos ~end_pos value =
+  { value; loc = location_between ~start_pos ~end_pos }
+
+type identifier = string node
+
+type unary_operator = Not | Negate | Complement
 type binary_operator =
   | Add
   | Subtract
@@ -24,18 +36,22 @@ type binary_operator =
   | Assign
   | Mutate
 
-type custom_type = { name : string }
+type custom_type = { name : identifier }
 
-type function_type = {
+type function_type_desc = {
   param_types : haven_type list;
   return_type : haven_type;
   vararg : bool;
 }
 
-and array_type = { element : haven_type; count : literal }
-and templated_type = { outer : string; inner : haven_type list }
+and function_type = function_type_desc node
 
-and haven_type =
+and array_type_desc = { element : haven_type; count : literal }
+and array_type = array_type_desc node
+and templated_type_desc = { outer : identifier; inner : haven_type list }
+and templated_type = templated_type_desc node
+
+and haven_type_desc =
   | NumericType of numeric_type
   | VecType of vec_type
   | MatrixType of mat_type
@@ -50,20 +66,25 @@ and haven_type =
   | ArrayType of array_type
   | TemplatedType of templated_type
 
-and program = { decls : top_decl list }
+and haven_type = haven_type_desc node
 
-and top_decl =
+and program_desc = { decls : top_decl list }
+and program = program_desc node
+
+and top_decl_desc =
   | FDecl of function_decl
   | TDecl of type_decl
   | VDecl of var_decl
-  | Import of string
-  | CImport of string
+  | Import of string node
+  | CImport of string node
   | Foreign of foreign
 
-and function_decl = {
+and top_decl = top_decl_desc node
+
+and function_decl_desc = {
   public : bool;
   impure : bool;
-  name : string;
+  name : identifier;
   definition : block option;
   intrinsic : intrinsic option;
   params : param_list;
@@ -71,15 +92,20 @@ and function_decl = {
   vararg : bool;
 }
 
-and var_decl = {
-  name : string;
+and function_decl = function_decl_desc node
+
+and var_decl_desc = {
+  name : identifier;
   public : bool;
   is_mutable : bool;
   ty : haven_type;
   init_expr : expression option;
 }
 
-and type_decl = { name : string; data : type_decl_data }
+and var_decl = var_decl_desc node
+
+and type_decl_desc = { name : identifier; data : type_decl_data }
+and type_decl = type_decl_desc node
 
 and type_decl_data =
   | TypeDeclAlias of haven_type
@@ -87,18 +113,28 @@ and type_decl_data =
   | TypeDeclEnum of enum_decl
   | TypeDeclForward
 
-and struct_decl = { fields : struct_field list }
-and enum_decl = { variants : enum_variant list }
-and struct_field = { name : string; ty : haven_type }
-and enum_variant = { name : string; inner_ty : haven_type option }
-and param_list = { params : param list; vararg : bool }
-and param = { name : string; ty : haven_type }
-and intrinsic = { name : string; types : haven_type list }
-and foreign = { lib : string; decls : function_decl list }
-and block = { items : block_item list }
-and block_item = BlockStatement of statement | BlockExpression of expression
+and struct_decl_desc = { fields : struct_field list }
+and enum_decl_desc = { variants : enum_variant list }
+and struct_field_desc = { name : identifier; ty : haven_type }
+and enum_variant_desc = { name : identifier; inner_ty : haven_type option }
+and struct_decl = struct_decl_desc node
+and enum_decl = enum_decl_desc node
+and struct_field = struct_field_desc node
+and enum_variant = enum_variant_desc node
+and param_list_desc = { params : param list; vararg : bool }
+and param_list = param_list_desc node
+and param_desc = { name : identifier; ty : haven_type }
+and param = param_desc node
+and intrinsic_desc = { name : string node; types : haven_type list }
+and intrinsic = intrinsic_desc node
+and foreign_desc = { lib : string node; decls : function_decl list }
+and foreign = foreign_desc node
+and block_desc = { items : block_item list }
+and block = block_desc node
+and block_item_desc = BlockStatement of statement | BlockExpression of expression
+and block_item = block_item_desc node
 
-and statement =
+and statement_desc =
   | Expression of expression
   | Let of let_stmt
   | Return of expression option
@@ -109,29 +145,36 @@ and statement =
   | Continue
   | Empty
 
-and let_stmt = {
+and statement = statement_desc node
+
+and let_stmt_desc = {
   mut : bool;
   ty : haven_type option;
-  name : string;
+  name : identifier;
   init_expr : expression;
 }
 
-and iter_range = {
+and let_stmt = let_stmt_desc node
+
+and iter_range_desc = {
   range_start : expression;
   range_end : expression;
   range_incr : expression option;
 }
 
-and iter_stmt = { range : iter_range; var : string; body : block }
-and while_stmt = { cond : expression; body : block }
+and iter_range = iter_range_desc node
+and iter_stmt_desc = { range : iter_range; var : identifier; body : block }
+and iter_stmt = iter_stmt_desc node
+and while_stmt_desc = { cond : expression; body : block }
+and while_stmt = while_stmt_desc node
 
-and expression =
+and expression_desc =
   | Binary of binary
   | Unary of unary
   | Literal of literal
   | Block of block
   | ParenthesizedExpression of expression
-  | Identifier of string
+  | Identifier of identifier
   | Initializer of init_list
   | As of as_expr
   | SizeExpr of expression
@@ -148,39 +191,55 @@ and expression =
   | Index of index
   | Field of field
 
-and call = { target : expression; params : expression list }
-and index = { target : expression; index : expression }
-and field = { target : expression; arrow : bool; field : string }
-and binary = { left : expression; right : expression; op : binary_operator }
-and unary = { inner : expression; op : unary_operator }
-and as_expr = { target_type : haven_type; inner : expression }
-and if_else_block = ElseIf of if_expr | Else of block
+and expression = expression_desc node
 
-and if_expr = {
+and call_desc = { target : expression; params : expression list }
+and call = call_desc node
+and index_desc = { target : expression; index : expression }
+and index = index_desc node
+and field_desc = { target : expression; arrow : bool; field : identifier }
+and field = field_desc node
+and binary_desc = { left : expression; right : expression; op : binary_operator }
+and binary = binary_desc node
+and unary_desc = { inner : expression; op : unary_operator }
+and unary = unary_desc node
+and as_expr_desc = { target_type : haven_type; inner : expression }
+and as_expr = as_expr_desc node
+and if_else_block = ElseIf of if_expr | Else of block
+and if_expr_desc = {
   cond : expression;
   then_block : block;
   else_block : if_else_block option;
 }
 
-and match_expr = { expr : expression; arms : match_arm list }
+and if_expr = if_expr_desc node
+and match_expr_desc = { expr : expression; arms : match_arm list }
+and match_expr = match_expr_desc node
 
-and match_pattern =
+and match_pattern_desc =
   | PatternDefault
   | PatternLiteral of literal
   | PatternEnum of pattern_enum
 
-and pattern_binding = BindingIgnored | BindingNamed of string
+and match_pattern = match_pattern_desc node
 
-and pattern_enum = {
-  enum_name : string option;
-  enum_variant : string;
+and pattern_binding_desc = BindingIgnored | BindingNamed of identifier
+
+and pattern_binding = pattern_binding_desc node
+
+and pattern_enum_desc = {
+  enum_name : identifier option;
+  enum_variant : identifier;
   binding : pattern_binding list;
 }
 
-and match_arm = { pattern : match_pattern; expr : expression }
-and init_list = { exprs : expression list }
+and pattern_enum = pattern_enum_desc node
+and match_arm_desc = { pattern : match_pattern; expr : expression }
+and match_arm = match_arm_desc node
+and init_list_desc = { exprs : expression list }
+and init_list = init_list_desc node
 
-and literal =
+and literal_desc =
   | HexInt of int
   | OctInt of int
   | BinInt of int
@@ -192,11 +251,17 @@ and literal =
   | Vector of vec_literal
   | Enum of enum_literal
 
-and mat_literal = { rows : vec_literal list }
-and vec_literal = expression list
+and literal = literal_desc node
 
-and enum_literal = {
-  enum_name : string;
-  enum_variant : string;
+and mat_literal_desc = { rows : vec_literal list }
+and vec_literal_desc = { elements : expression list }
+and mat_literal = mat_literal_desc node
+and vec_literal = vec_literal_desc node
+
+and enum_literal_desc = {
+  enum_name : identifier;
+  enum_variant : identifier;
   types : haven_type list;
 }
+
+and enum_literal = enum_literal_desc node

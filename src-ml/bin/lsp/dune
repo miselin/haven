@@ -1,0 +1,5 @@
+(executable
+ (public_name haven-lsp)
+ (name hvlsp)
+ (libraries linol-lwt logs logs.fmt fmt.cli fmt.tty haven)
+ (flags :standard -w +39))

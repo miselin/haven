@@ -4,4 +4,5 @@
  (libraries haven)
  (preprocess
   (pps sedlex.ppx))
- (flags :standard -w +39))
+ (flags :standard -w +39)
+ (modules hvfmt))

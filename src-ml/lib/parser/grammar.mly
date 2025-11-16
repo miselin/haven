@@ -1,5 +1,14 @@
 %{
     open Haven_cst.Cst
+
+    let mk_loc start_pos end_pos value = with_location ~start_pos ~end_pos value
+    let mk_id text start_pos end_pos = mk_loc start_pos end_pos text
+    let mk_expr start_pos end_pos desc = mk_loc start_pos end_pos desc
+    let mk_binary start_pos end_pos op left right =
+      let bin = mk_expr start_pos end_pos { left; right; op } in
+      mk_expr start_pos end_pos (Binary bin)
+    let mk_unary start_pos end_pos op inner =
+      mk_expr start_pos end_pos (Unary (mk_expr start_pos end_pos { inner; op }))
 %}
 
 %token <string> IDENT
@@ -44,46 +53,60 @@
 %type <struct_field> struct_field
 %%
 
-program: decls=top_decl+ EOF { { decls } } ;
+program: decls=top_decl+ EOF { mk_loc $startpos $endpos { decls } } ;
 
 (** TOP-LEVEL CONSTRUCTS **)
 
 top_decl:
-  | d=fn_definition { FDecl d }
-  | d=fn_forward_decl { FDecl d }
-  | i=import_decl { Import i }
-  | i=cimport_decl { CImport i }
-  | f=foreign_decl { Foreign f }
-  | t=type_decl { TDecl t }
-  | v=global_decl { VDecl v }
+  | d=fn_definition { mk_loc $startpos $endpos (FDecl d) }
+  | d=fn_forward_decl { mk_loc $startpos $endpos (FDecl d) }
+  | i=import_decl { mk_loc $startpos $endpos (Import i) }
+  | i=cimport_decl { mk_loc $startpos $endpos (CImport i) }
+  | f=foreign_decl { mk_loc $startpos $endpos (Foreign f) }
+  | t=type_decl { mk_loc $startpos $endpos (TDecl t) }
+  | v=global_decl { mk_loc $startpos $endpos (VDecl v) }
   ;
 
-import_decl: IMPORT i=STRING_LIT SEMICOLON { i } ;
-cimport_decl: CIMPORT i=STRING_LIT SEMICOLON { i } ;
+import_decl: IMPORT i=STRING_LIT SEMICOLON { mk_id i $startpos(i) $endpos(i) } ;
+cimport_decl: CIMPORT i=STRING_LIT SEMICOLON { mk_id i $startpos(i) $endpos(i) } ;
 
-foreign_decl: FOREIGN l=STRING_LIT LBRACE d=fn_forward_decl* RBRACE { { lib = l; decls = d } } ;
+foreign_decl:
+  FOREIGN l=STRING_LIT LBRACE d=fn_forward_decl* RBRACE
+    { mk_loc $startpos $endpos { lib = mk_id l $startpos(l) $endpos(l); decls = d } }
+  ;
 
-fn_definition: f=fn_header b=block { { f with definition = Some b } } ;
-fn_forward_decl: f=fn_header i=option(fn_intrinsic) SEMICOLON { { f with intrinsic = i } } ;
+fn_definition:
+  f=fn_header b=block
+    { let header = f.value in mk_loc $startpos $endpos { header with definition = Some b } }
+  ;
 
-fn_header: pub=boption(PUB) impure=boption(IMPURE) FN name=IDENT LPAREN p=params RPAREN rt=return_type? {
-    { public = pub; impure = impure; name = name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.vararg }
-} ;
+fn_forward_decl:
+  f=fn_header i=option(fn_intrinsic) SEMICOLON
+    { let header = f.value in mk_loc $startpos $endpos { header with intrinsic = i } }
+  ;
+
+fn_header:
+  pub=boption(PUB) impure=boption(IMPURE) FN name=identifier LPAREN p=params RPAREN rt=return_type?
+    { mk_loc $startpos $endpos { public = pub; impure = impure; name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.value.vararg } }
+  ;
 return_type: ARROW t=haven_type { t } ;
 
-fn_intrinsic: INTRINSIC n=STRING_LIT t=separated_list(COMMA, haven_type) { { name = n; types = t } } ;
-
-params:
-  | p=separated_nonempty_list(COMMA, param) va=boption(pair(COMMA, STAR)) { { params = p; vararg = va } }
-  | STAR { { params = []; vararg = true } }
-  | { { params = []; vararg = false } }
+fn_intrinsic:
+  INTRINSIC n=STRING_LIT t=separated_list(COMMA, haven_type)
+    { mk_loc $startpos $endpos { name = mk_id n $startpos(n) $endpos(n); types = t } }
   ;
 
-param: t=haven_type n=IDENT { { name = n; ty = t } } ;
+params:
+  | p=separated_nonempty_list(COMMA, param) va=boption(pair(COMMA, STAR)) { mk_loc $startpos $endpos { params = p; vararg = va } }
+  | STAR { mk_loc $startpos $endpos { params = []; vararg = true } }
+  | { mk_loc $startpos $endpos { params = []; vararg = false } }
+  ;
+
+param: t=haven_type n=identifier { mk_loc $startpos $endpos { name = n; ty = t } } ;
 
 type_decl:
-  | TYPE i=IDENT EQUAL t=type_defn SEMICOLON { { name = i; data = t } }
-  | TYPE i=IDENT SEMICOLON { { name = i; data = TypeDeclForward } }
+  | TYPE i=identifier EQUAL t=type_defn SEMICOLON { mk_loc $startpos $endpos { name = i; data = t } }
+  | TYPE i=identifier SEMICOLON { mk_loc $startpos $endpos { name = i; data = TypeDeclForward } }
   ;
 type_defn:
   | t=haven_type { TypeDeclAlias t }
@@ -91,48 +114,51 @@ type_defn:
   | e=enum_decl { TypeDeclEnum e }
   ;
 
-struct_decl: STRUCT LBRACE f=list(struct_field) RBRACE { { fields = f } } ;
-struct_field: t=haven_type n=IDENT SEMICOLON { { name = n; ty = t } } ;
+struct_decl: STRUCT LBRACE f=list(struct_field) RBRACE { mk_loc $startpos $endpos { fields = f } } ;
+struct_field: t=haven_type n=identifier SEMICOLON {
+    let field : struct_field_desc = { name = n; ty = t } in
+    mk_loc $startpos $endpos field
+} ;
 
-enum_decl: ENUM enum_generics? LBRACE v=separated_nonempty_list(COMMA, enum_variant) RBRACE { { variants = v } } ;
+enum_decl: ENUM enum_generics? LBRACE v=separated_nonempty_list(COMMA, enum_variant) RBRACE { mk_loc $startpos $endpos { variants = v } } ;
 enum_generics: separated_list(COMMA, IDENT) {} ;
-enum_variant: i=IDENT t=option(enum_wrapped_type) { { name = i; inner_ty = t }} ;
+enum_variant: i=identifier t=option(enum_wrapped_type) { mk_loc $startpos $endpos { name = i; inner_ty = t }} ;
 enum_wrapped_type: LPAREN t=haven_type RPAREN { t } ;
 
-global_decl: p=boption(PUB) d=global_decl_inner SEMICOLON { { d with public = p } } ;
+global_decl: p=boption(PUB) d=global_decl_inner SEMICOLON { mk_loc $startpos $endpos { d.value with public = p } } ;
 global_decl_inner:
   | DATA b=global_decl_binding { b }
-  | STATE b=global_decl_binding { { b with is_mutable = true } }
+  | STATE b=global_decl_binding { mk_loc $startpos $endpos { b.value with is_mutable = true } }
   ;
-global_decl_binding: t=haven_type n=IDENT e=option(bind_expr) {
-    { name = n; public = false; is_mutable = false; ty = t; init_expr = e }
+global_decl_binding: t=haven_type n=identifier e=option(bind_expr) {
+    mk_loc $startpos $endpos { name = n; public = false; is_mutable = false; ty = t; init_expr = e }
 } ;
 bind_expr: EQUAL e=expr { e } ;
 
-block: LBRACE b=block_items { { items = b } } ;
+block: LBRACE b=block_items { mk_loc $startpos $endpos { items = b } } ;
 block_items:
   | RBRACE { [] }
-  | s=stmt b=block_items { BlockStatement s :: b }
-  | e=expr RBRACE { [BlockExpression e] }
+  | s=stmt b=block_items { mk_loc $startpos(s) $endpos(s) (BlockStatement s) :: b }
+  | e=expr RBRACE { [mk_loc $startpos(e) $endpos(e) (BlockExpression e)] }
   ;
 
 (** STATEMENTS **)
 
-stmt: s=stmt_inner SEMICOLON { s } ;
+stmt: s=stmt_inner SEMICOLON { mk_loc $startpos $endpos s } ;
 stmt_inner:
-  | LET m=boption(MUT) n=IDENT EQUAL e=expr { Let { mut = m; name = n; ty = None; init_expr = e; } }
-  | LET m=boption(MUT) t=haven_type n=IDENT EQUAL e=expr { Let { mut = m; name = n; ty = Some t; init_expr = e; } }
+  | LET m=boption(MUT) n=identifier EQUAL e=expr { Let (mk_loc $startpos $endpos { mut = m; name = n; ty = None; init_expr = e; }) }
+  | LET m=boption(MUT) t=haven_type n=identifier EQUAL e=expr { Let (mk_loc $startpos $endpos { mut = m; name = n; ty = Some t; init_expr = e; }) }
   | RET e=option(expr) { Return e }
   | DEFER e=expr { Defer e }
-  | ITER r=iter_range v=IDENT b=block { Iter { range = r; var = v; body = b } }
-  | WHILE c=expr b=block { While { cond = c; body = b } }
+  | ITER r=iter_range v=identifier b=block { Iter (mk_loc $startpos $endpos { range = r; var = v; body = b }) }
+  | WHILE c=expr b=block { While (mk_loc $startpos $endpos { cond = c; body = b }) }
   | BREAK { Break }
   | CONTINUE { Continue }
   | e=expr { Expression e }
   | { Empty }
   ;
 
-iter_range: s=expr COLON e=expr i=option(iter_incr) { { range_start = s; range_end = e; range_incr = i } } ;
+iter_range: s=expr COLON e=expr i=option(iter_incr) { mk_loc $startpos $endpos { range_start = s; range_end = e; range_incr = i } } ;
 iter_incr: COLON e=expr { e }
 
 (** EXPRESSIONS **)
@@ -143,89 +169,89 @@ iter_incr: COLON e=expr { e }
  * and it's rare to need something like Vec<1 > 2> - which can be simply written Vec<(1 < > 2)>.
  *)
 expr:
-  | l=expr EQUAL r=expr { Binary { left = l; right = r; op = Assign; }}
-  | l=expr WALRUS r=expr { Binary { left = l; right = r; op = Mutate; }}
-  | l=expr PLUS r=expr { Binary { left = l; right = r; op = Add; }}
-  | l=expr MINUS r=expr { Binary { left = l; right = r; op = Subtract; }}
-  | l=expr STAR r=expr %prec MULITPLY { Binary { left = l; right = r; op = Multiply; }}
-  | l=expr SLASH r=expr %prec DIVIDE { Binary { left = l; right = r; op = Divide; }}
-  | l=expr PERCENT r=expr %prec MODULO { Binary { left = l; right = r; op = Modulo; }}
-  | l=expr AMP r=expr %prec BITWISE_AND { Binary { left = l; right = r; op = BitwiseAnd; }}
-  | l=expr CARET r=expr %prec BITWISE_XOR { Binary { left = l; right = r; op = BitwiseXor; }}
-  | l=expr PIPE r=expr %prec BITWISE_OR { Binary { left = l; right = r; op = BitwiseOr; }}
-  | l=expr LSHIFT r=expr { Binary { left = l; right = r; op = LeftShift; }}
-  | l=expr RSHIFT r=expr { Binary { left = l; right = r; op = RightShift; }}
-  | l=expr EQEQ r=expr { Binary { left = l; right = r; op = IsEqual; }}
-  | l=expr BANGEQ r=expr { Binary { left = l; right = r; op = NotEqual; }}
-  | l=expr LOGIC_AND r=expr { Binary { left = l; right = r; op = LogicAnd; }}
-  | l=expr LOGIC_OR r=expr { Binary { left = l; right = r; op = LogicOr; }}
-  | l=expr LT r=expr { Binary { left = l; right = r; op = LessThan; }}
-  | l=expr LE r=expr { Binary { left = l; right = r; op = LessThanOrEqual; }}
-  | l=expr GT r=expr { Binary { left = l; right = r; op = GreaterThan; }}
-  | l=expr GE r=expr { Binary { left = l; right = r; op = GreaterThanOrEqual; }}
+  | l=expr EQUAL r=expr { mk_binary $startpos $endpos Assign l r }
+  | l=expr WALRUS r=expr { mk_binary $startpos $endpos Mutate l r }
+  | l=expr PLUS r=expr { mk_binary $startpos $endpos Add l r }
+  | l=expr MINUS r=expr { mk_binary $startpos $endpos Subtract l r }
+  | l=expr STAR r=expr %prec MULITPLY { mk_binary $startpos $endpos Multiply l r }
+  | l=expr SLASH r=expr %prec DIVIDE { mk_binary $startpos $endpos Divide l r }
+  | l=expr PERCENT r=expr %prec MODULO { mk_binary $startpos $endpos Modulo l r }
+  | l=expr AMP r=expr %prec BITWISE_AND { mk_binary $startpos $endpos BitwiseAnd l r }
+  | l=expr CARET r=expr %prec BITWISE_XOR { mk_binary $startpos $endpos BitwiseXor l r }
+  | l=expr PIPE r=expr %prec BITWISE_OR { mk_binary $startpos $endpos BitwiseOr l r }
+  | l=expr LSHIFT r=expr { mk_binary $startpos $endpos LeftShift l r }
+  | l=expr RSHIFT r=expr { mk_binary $startpos $endpos RightShift l r }
+  | l=expr EQEQ r=expr { mk_binary $startpos $endpos IsEqual l r }
+  | l=expr BANGEQ r=expr { mk_binary $startpos $endpos NotEqual l r }
+  | l=expr LOGIC_AND r=expr { mk_binary $startpos $endpos LogicAnd l r }
+  | l=expr LOGIC_OR r=expr { mk_binary $startpos $endpos LogicOr l r }
+  | l=expr LT r=expr { mk_binary $startpos $endpos LessThan l r }
+  | l=expr LE r=expr { mk_binary $startpos $endpos LessThanOrEqual l r }
+  | l=expr GT r=expr { mk_binary $startpos $endpos GreaterThan l r }
+  | l=expr GE r=expr { mk_binary $startpos $endpos GreaterThanOrEqual l r }
   | u=unary { u }
 
 unary:
-  | BANG i=unary { Unary { inner = i; op = Not; } }
-  | MINUS i=unary %prec UMINUS { Unary { inner = i; op = Negate; } }
-  | TILDE i=unary { Unary { inner = i; op = Complement; } }
-  | REF e=unary { Ref e }
-  | LOAD e=unary { Load e }
-  | BOX e=unary { BoxExpr e }
-  | BOX t=haven_type { BoxType t }
-  | UNBOX e=unary { Unbox e }
+  | BANG i=unary { mk_unary $startpos $endpos Not i }
+  | MINUS i=unary %prec UMINUS { mk_unary $startpos $endpos Negate i }
+  | TILDE i=unary { mk_unary $startpos $endpos Complement i }
+  | REF e=unary { mk_expr $startpos $endpos (Ref e) }
+  | LOAD e=unary { mk_expr $startpos $endpos (Load e) }
+  | BOX e=unary { mk_expr $startpos $endpos (BoxExpr e) }
+  | BOX t=haven_type { mk_expr $startpos $endpos (BoxType t) }
+  | UNBOX e=unary { mk_expr $startpos $endpos (Unbox e) }
   | p=postfix { p }
   ;
 
 postfix:
-  | p=postfix LPAREN e=expr_seq RPAREN { Call { target = p; params = e } }
-  | p=postfix LBRACKET e=expr RBRACKET { Index { target = p; index = e } }
-  | p=postfix DOT i=IDENT { Field { target = p; arrow = false; field = i } }
-  | p=postfix ARROW i=IDENT { Field { target = p; arrow = true; field = i } }
+  | p=postfix LPAREN e=expr_seq RPAREN { mk_expr $startpos $endpos (Call (mk_loc $startpos $endpos { target = p; params = e })) }
+  | p=postfix LBRACKET e=expr RBRACKET { mk_expr $startpos $endpos (Index (mk_loc $startpos $endpos { target = p; index = e })) }
+  | p=postfix DOT i=identifier { mk_expr $startpos $endpos (Field (mk_loc $startpos $endpos { target = p; arrow = false; field = i })) }
+  | p=postfix ARROW i=identifier { mk_expr $startpos $endpos (Field (mk_loc $startpos $endpos { target = p; arrow = true; field = i })) }
   | p=primary { p }
 
 expr_seq: exprs=separated_list(COMMA, expr) { exprs } ;
 
 primary:
-  | l=literal { Literal l }
-  | b=block { Block b }
-  | LPAREN e=expr RPAREN { ParenthesizedExpression e }
-  | i=init { Initializer i }
-  | i=IDENT { Identifier i }
-  | i=if_expr { If i }
-  | m=match_expr { Match m }
-  | AS LT t=haven_type GT LPAREN e=expr RPAREN { As { target_type = t; inner = e } }
-  | SIZE LT t=haven_type GT { SizeType t }
-  | SIZE LPAREN e=expr RPAREN { SizeExpr e }
-  | NIL { Nil }
+  | l=literal { mk_expr $startpos $endpos (Literal l) }
+  | b=block { mk_expr $startpos $endpos (Block b) }
+  | LPAREN e=expr RPAREN { mk_expr $startpos $endpos (ParenthesizedExpression e) }
+  | i=init { mk_expr $startpos $endpos (Initializer i) }
+  | i=identifier { mk_expr $startpos $endpos (Identifier i) }
+  | i=if_expr { mk_expr $startpos $endpos (If i) }
+  | m=match_expr { mk_expr $startpos $endpos (Match m) }
+  | AS LT t=haven_type GT LPAREN e=expr RPAREN { mk_expr $startpos $endpos (As (mk_loc $startpos $endpos { target_type = t; inner = e })) }
+  | SIZE LT t=haven_type GT { mk_expr $startpos $endpos (SizeType t) }
+  | SIZE LPAREN e=expr RPAREN { mk_expr $startpos $endpos (SizeExpr e) }
+  | NIL { mk_expr $startpos $endpos Nil }
   ;
 
-init: LBRACE exprs=separated_nonempty_list(COMMA, expr) RBRACE { { exprs } } ;
+init: LBRACE exprs=separated_nonempty_list(COMMA, expr) RBRACE { mk_loc $startpos $endpos { exprs } } ;
 
 (** COMPLEX EXPRESSIONS **)
 
-if_expr: IF c=expr t=block e=option(else_expr) { { cond = c; then_block = t; else_block = e } } ;
+if_expr: IF c=expr t=block e=option(else_expr) { mk_loc $startpos $endpos { cond = c; then_block = t; else_block = e } } ;
 else_expr:
   | ELSE e=if_expr { ElseIf e }
   | ELSE b=block { Else b }
   ;
 
-match_expr: MATCH e=expr LBRACE a=separated_nonempty_list(COMMA, match_arm) RBRACE { { expr = e; arms = a } } ;
-match_arm: p=pattern FATARROW e=expr { { pattern = p; expr = e } } ;
+match_expr: MATCH e=expr LBRACE a=separated_nonempty_list(COMMA, match_arm) RBRACE { mk_loc $startpos $endpos { expr = e; arms = a } } ;
+match_arm: p=pattern FATARROW e=expr { mk_loc $startpos $endpos { pattern = p; expr = e } } ;
 
 pattern:
-  | UNDERSCORE { PatternDefault }
-  | l=literal { PatternLiteral l }
-  | v=IDENT p=pattern_unwrap { PatternEnum { enum_name = None; enum_variant = v; binding = p } }
-  | e=IDENT SCOPE v=IDENT p=pattern_unwrap { PatternEnum { enum_name = Some e; enum_variant = v; binding = p } }
+  | UNDERSCORE { mk_loc $startpos $endpos PatternDefault }
+  | l=literal { mk_loc $startpos $endpos (PatternLiteral l) }
+  | v=identifier p=pattern_unwrap { mk_loc $startpos $endpos (PatternEnum (mk_loc $startpos $endpos { enum_name = None; enum_variant = v; binding = p })) }
+  | e=identifier SCOPE v=identifier p=pattern_unwrap { mk_loc $startpos $endpos (PatternEnum (mk_loc $startpos $endpos { enum_name = Some e; enum_variant = v; binding = p })) }
   ;
 pattern_unwrap:
   | LPAREN b=separated_nonempty_list(COMMA, pattern_binding) RPAREN { b }
   | { [] }
   ;
 pattern_binding:
-  | UNDERSCORE { BindingIgnored }
-  | i=IDENT { BindingNamed i }
+  | UNDERSCORE { mk_loc $startpos $endpos BindingIgnored }
+  | i=identifier { mk_loc $startpos $endpos (BindingNamed i) }
   ;
 
 (** LITERALS **)
@@ -235,57 +261,62 @@ literal:
   | i=noninteger_literal { i }
 
 integer_literal:
-  | i=HEX_LIT { HexInt i }
-  | i=OCT_LIT { OctInt i }
-  | i=BIN_LIT { BinInt i }
-  | i=INT_LIT { DecInt i }
+  | i=HEX_LIT { mk_loc $startpos $endpos (HexInt i) }
+  | i=OCT_LIT { mk_loc $startpos $endpos (OctInt i) }
+  | i=BIN_LIT { mk_loc $startpos $endpos (BinInt i) }
+  | i=INT_LIT { mk_loc $startpos $endpos (DecInt i) }
 
 noninteger_literal:
-  | f=FLOAT_LIT { Float f }
-  | s=STRING_LIT { String s }
-  | c=CHAR_LIT { Char c }
-  | m=mat_literal { Matrix m }
-  | v=vec_literal { Vector v }
-  | e=enum_literal { Enum e }
+  | f=FLOAT_LIT { mk_loc $startpos $endpos (Float f) }
+  | s=STRING_LIT { mk_loc $startpos $endpos (String s) }
+  | c=CHAR_LIT { mk_loc $startpos $endpos (Char c) }
+  | m=mat_literal { mk_loc $startpos $endpos (Matrix m) }
+  | v=vec_literal { mk_loc $startpos $endpos (Vector v) }
+  | e=enum_literal { mk_loc $startpos $endpos (Enum e) }
   ;
 
-mat_literal: MAT LT rows=separated_nonempty_list(COMMA, vec_literal) GT { { rows } } ;
-vec_literal: VEC u=delimited(LT, separated_nonempty_list(COMMA, unary), GT) { u } ;
+mat_literal: MAT LT rows=separated_nonempty_list(COMMA, vec_literal) GT { mk_loc $startpos $endpos { rows } } ;
+vec_literal: VEC u=delimited(LT, separated_nonempty_list(COMMA, unary), GT) { mk_loc $startpos $endpos { elements = u } } ;
 
 enum_literal:
-  | e=IDENT SCOPE v=IDENT { { enum_name = e; enum_variant = v; types = [] } }
-  | e=IDENT SCOPE t=contained_type_list SCOPE v=IDENT { { enum_name = e; enum_variant = v; types = t } }
+  | e=identifier SCOPE v=identifier { mk_loc $startpos $endpos { enum_name = e; enum_variant = v; types = [] } }
+  | e=identifier SCOPE t=contained_type_list SCOPE v=identifier { mk_loc $startpos $endpos { enum_name = e; enum_variant = v; types = t } }
   ;
 
 contained_type_list: t=delimited(LT, separated_nonempty_list(COMMA, haven_type), GT) { t } ;
+
+identifier: i=IDENT { mk_id i $startpos $endpos } ;
 
 (** TYPES **)
 
 haven_type:
   | t=type_primary { t }
-  | t=type_primary STAR { PointerType t }
-  | t=type_primary CARET { BoxType t }
-  | t=type_primary LBRACKET c=integer_literal RBRACKET { ArrayType { element = t; count = c } }
+  | t=type_primary STAR { mk_loc $startpos $endpos (PointerType t) }
+  | t=type_primary CARET {
+      let ty : haven_type_desc = BoxType t in
+      mk_loc $startpos $endpos ty
+    }
+  | t=type_primary LBRACKET c=integer_literal RBRACKET { mk_loc $startpos $endpos (ArrayType (mk_loc $startpos $endpos { element = t; count = c })) }
   ;
 
 type_primary:
   | t=builtin_type { t }
-  | CELL LT t=haven_type GT { CellType t }
+  | CELL LT t=haven_type GT { mk_loc $startpos $endpos (CellType t) }
   | FUNCTION LT LPAREN p=separated_list(COMMA, haven_type) RPAREN ARROW r=haven_type GT {
-    FunctionType { param_types = p; return_type = r; vararg = false; }
+    mk_loc $startpos $endpos (FunctionType (mk_loc $startpos $endpos { param_types = p; return_type = r; vararg = false; }))
     }
   | VAFUNCTION LT LPAREN p=separated_list(COMMA, haven_type) RPAREN ARROW r=haven_type GT {
-    FunctionType { param_types = p; return_type = r; vararg = true; }
+    mk_loc $startpos $endpos (FunctionType (mk_loc $startpos $endpos { param_types = p; return_type = r; vararg = true; }))
     }
-  | o=IDENT SCOPE LT i=separated_nonempty_list(COMMA, haven_type) GT { TemplatedType { outer = o; inner = i; } }
-  | i=IDENT { CustomType { name = i; } }
+  | o=identifier SCOPE LT i=separated_nonempty_list(COMMA, haven_type) GT { mk_loc $startpos $endpos (TemplatedType (mk_loc $startpos $endpos { outer = o; inner = i; })) }
+  | i=identifier { mk_loc $startpos $endpos (CustomType { name = i; }) }
   ;
 
 builtin_type:
-  | t=NUMERIC_TYPE { NumericType t }
-  | t=VEC_TYPE { VecType t }
-  | t=MAT_TYPE { MatrixType t }
-  | FLOAT_TYPE { FloatType }
-  | VOID_TYPE { VoidType }
-  | STR_TYPE { StringType }
+  | t=NUMERIC_TYPE { mk_loc $startpos $endpos (NumericType t) }
+  | t=VEC_TYPE { mk_loc $startpos $endpos (VecType t) }
+  | t=MAT_TYPE { mk_loc $startpos $endpos (MatrixType t) }
+  | FLOAT_TYPE { mk_loc $startpos $endpos FloatType }
+  | VOID_TYPE { mk_loc $startpos $endpos VoidType }
+  | STR_TYPE { mk_loc $startpos $endpos StringType }
   ;
