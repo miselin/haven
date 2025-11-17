@@ -255,7 +255,7 @@ let tokenize_channel ch =
   let lexbuf = Sedlexing.Utf8.from_channel ch in
   tokenize lexbuf
 
-let tokenize_stdin = tokenize_channel stdin
+let tokenize_stdin () = tokenize_channel stdin
 
 let tokenize_str s =
   let lexbuf = Sedlexing.Utf8.from_string s in

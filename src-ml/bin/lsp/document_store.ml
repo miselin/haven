@@ -4,6 +4,8 @@ type document = {
   uri : DocumentUri.t;
   mutable version : int option;
   mutable text : string;
+  (* None until the program has been parsed *)
+  mutable cst : Haven.Cst.Cst.parsed_program option;
 }
 
 type t = (DocumentUri.t, document) Hashtbl.t
@@ -12,7 +14,14 @@ let create () : t = Hashtbl.create 16
 
 let open_doc (store : t) (td : TextDocumentItem.t) =
   let uri = td.uri in
-  let doc = { uri; version = Some td.version; text = td.text } in
+  let doc =
+    {
+      uri;
+      version = Some td.version;
+      text = td.text;
+      cst = Some (Haven.Parser.parse_string td.text);
+    }
+  in
   Hashtbl.replace store uri doc
 
 let close_doc (store : t) (uri : DocumentUri.t) = Hashtbl.remove store uri
@@ -32,7 +41,11 @@ let change_doc (store : t) (d : VersionedTextDocumentIdentifier.t)
   | None -> ()
   | Some doc ->
       doc.version <- Some d.version;
-      List.iter (apply_change doc) evs
+      List.iter (apply_change doc) evs;
+      doc.cst <- Some (Haven.Parser.parse_string doc.text)
 
 let get_text (store : t) (uri : DocumentUri.t) : string option =
   Hashtbl.find_opt store uri |> Option.map (fun d -> d.text)
+
+let get_cst (store : t) (uri : DocumentUri.t) =
+  match Hashtbl.find_opt store uri with None -> None | Some doc -> doc.cst

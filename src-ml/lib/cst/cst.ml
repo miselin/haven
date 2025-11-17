@@ -1,4 +1,16 @@
 open Haven_token.Token
+module Lexer = Haven_lexer.Lexer
+module Raw = Lexer.Raw
+
+type trivia_entry = Lexer.token_with_trivia
+type trivia_table = (string * int, Raw.tok list) Hashtbl.t
+type trivia_tables = { leading : trivia_table; trailing : trivia_table }
+
+type comment = {
+  tok : Raw.tok;
+  startp : Lexing.position;
+  endp : Lexing.position;
+}
 
 type location = { start_pos : Lexing.position; end_pos : Lexing.position }
 type 'a node = { value : 'a; loc : location }
@@ -11,9 +23,45 @@ let location_spanning (a : _ node) (b : _ node) =
 let with_location ~start_pos ~end_pos value =
   { value; loc = location_between ~start_pos ~end_pos }
 
-type identifier = string node
+let pos_key (pos : Lexing.position) = (pos.pos_fname, pos.pos_cnum)
+let trivia_key_of_location (loc : location) = pos_key loc.start_pos
 
+let build_trivia_tables (tokens : trivia_entry list) : trivia_tables =
+  let leading = Hashtbl.create 64 in
+  let trailing = Hashtbl.create 64 in
+  let comments_from_trivia trivia =
+    List.filter
+      (fun (tok : Raw.tok) ->
+        match tok.tok with Raw.Trivia (Comment _) -> true | _ -> false)
+      trivia
+  in
+  List.iter
+    (fun (tok : trivia_entry) ->
+      let l = comments_from_trivia tok.leading_trivia in
+      if l <> [] then Hashtbl.replace leading (pos_key tok.startp) l;
+      let r = comments_from_trivia tok.trailing_trivia in
+      if r <> [] then Hashtbl.replace trailing (pos_key tok.endp) r)
+    tokens;
+  { leading; trailing }
+
+let comments_from_raw_tokens tokens =
+  tokens
+  |> List.filter_map (fun (tok : Raw.tok) ->
+      match tok.tok with
+      | Raw.Trivia (Lexer.Comment _) ->
+          Some { tok; startp = tok.startp; endp = tok.endp }
+      | _ -> None)
+  |> List.sort (fun a b -> compare a.startp.pos_cnum b.startp.pos_cnum)
+
+let trivia_for_location (tables : trivia_tables) ~kind (loc : location) =
+  let table =
+    match kind with `Leading -> tables.leading | `Trailing -> tables.trailing
+  in
+  Hashtbl.find_opt table (trivia_key_of_location loc)
+
+type identifier = string node
 type unary_operator = Not | Negate | Complement
+
 type binary_operator =
   | Add
   | Subtract
@@ -45,7 +93,6 @@ type function_type_desc = {
 }
 
 and function_type = function_type_desc node
-
 and array_type_desc = { element : haven_type; count : literal }
 and array_type = array_type_desc node
 and templated_type_desc = { outer : identifier; inner : haven_type list }
@@ -67,9 +114,9 @@ and haven_type_desc =
   | TemplatedType of templated_type
 
 and haven_type = haven_type_desc node
-
 and program_desc = { decls : top_decl list }
 and program = program_desc node
+and top_level_item = Decl of top_decl | Comments of comment list
 
 and top_decl_desc =
   | FDecl of function_decl
@@ -103,7 +150,6 @@ and var_decl_desc = {
 }
 
 and var_decl = var_decl_desc node
-
 and type_decl_desc = { name : identifier; data : type_decl_data }
 and type_decl = type_decl_desc node
 
@@ -131,7 +177,11 @@ and foreign_desc = { lib : string node; decls : function_decl list }
 and foreign = foreign_desc node
 and block_desc = { items : block_item list }
 and block = block_desc node
-and block_item_desc = BlockStatement of statement | BlockExpression of expression
+
+and block_item_desc =
+  | BlockStatement of statement
+  | BlockExpression of expression
+
 and block_item = block_item_desc node
 
 and statement_desc =
@@ -192,20 +242,26 @@ and expression_desc =
   | Field of field
 
 and expression = expression_desc node
-
 and call_desc = { target : expression; params : expression list }
 and call = call_desc node
 and index_desc = { target : expression; index : expression }
 and index = index_desc node
 and field_desc = { target : expression; arrow : bool; field : identifier }
 and field = field_desc node
-and binary_desc = { left : expression; right : expression; op : binary_operator }
+
+and binary_desc = {
+  left : expression;
+  right : expression;
+  op : binary_operator;
+}
+
 and binary = binary_desc node
 and unary_desc = { inner : expression; op : unary_operator }
 and unary = unary_desc node
 and as_expr_desc = { target_type : haven_type; inner : expression }
 and as_expr = as_expr_desc node
 and if_else_block = ElseIf of if_expr | Else of block
+
 and if_expr_desc = {
   cond : expression;
   then_block : block;
@@ -222,9 +278,7 @@ and match_pattern_desc =
   | PatternEnum of pattern_enum
 
 and match_pattern = match_pattern_desc node
-
 and pattern_binding_desc = BindingIgnored | BindingNamed of identifier
-
 and pattern_binding = pattern_binding_desc node
 
 and pattern_enum_desc = {
@@ -252,7 +306,6 @@ and literal_desc =
   | Enum of enum_literal
 
 and literal = literal_desc node
-
 and mat_literal_desc = { rows : vec_literal list }
 and vec_literal_desc = { elements : expression list }
 and mat_literal = mat_literal_desc node
@@ -265,3 +318,31 @@ and enum_literal_desc = {
 }
 
 and enum_literal = enum_literal_desc node
+
+type parsed_program = {
+  program : program;
+  trivia : trivia_entry list;
+  trivia_table : trivia_tables;
+  comments : comment list;
+  items : top_level_item list;
+}
+
+let merge_comments_with_decls (program : program) (comments : comment list) :
+    top_level_item list =
+  let decls = program.value.decls in
+  let rec merge acc remaining_comments remaining_decls =
+    match (remaining_comments, remaining_decls) with
+    | [], [] -> List.rev acc
+    | [], d :: ds -> merge (Decl d :: acc) [] ds
+    | cs, [] -> List.rev (Comments cs :: acc)
+    | c :: cs_tail, d :: ds ->
+        if c.startp.pos_cnum < d.loc.start_pos.pos_cnum then
+          let comments_for_decl, rest =
+            List.partition
+              (fun cmt -> cmt.startp.pos_cnum < d.loc.start_pos.pos_cnum)
+              (c :: cs_tail)
+          in
+          merge (Comments comments_for_decl :: acc) rest (d :: ds)
+        else merge (Decl d :: acc) remaining_comments ds
+  in
+  merge [] comments decls

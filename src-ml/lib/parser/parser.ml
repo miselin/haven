@@ -248,10 +248,25 @@ let rec loop st checkpoint =
       failwith message
   | I.Rejected -> failwith "parse rejected"
 
-let parse_stdin =
-  let raw_tokens = Haven_lexer.Lexer.tokenize_stdin in
+let parse_from_tokens raw_tokens =
   let st =
     { tokens = raw_tokens; i = 0; last_token = None; prev_token = None }
   in
-
   loop st (Grammar.Incremental.program (List.nth raw_tokens 0).startp)
+
+let do_parse raw_tokens =
+  let tokens_with_trivia = Haven_lexer.Lexer.group_trivia raw_tokens in
+  let program = parse_from_tokens raw_tokens in
+  let trivia_table = Haven_cst.Cst.build_trivia_tables tokens_with_trivia in
+  let comments = Haven_cst.Cst.comments_from_raw_tokens raw_tokens in
+  let items = Haven_cst.Cst.merge_comments_with_decls program comments in
+  {
+    Haven_cst.Cst.program;
+    trivia = tokens_with_trivia;
+    trivia_table;
+    comments;
+    items;
+  }
+
+let parse_string s = do_parse (Haven_lexer.Lexer.tokenize_str s)
+let parse_stdin () = do_parse (Haven_lexer.Lexer.tokenize_stdin ())

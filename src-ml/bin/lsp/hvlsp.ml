@@ -3,7 +3,7 @@ module Lsp = Linol.Lsp
 module Server = struct
   class haven_lsp_server =
     object (_self)
-      inherit Linol_lwt.Jsonrpc2.server
+      inherit Linol_lwt.Jsonrpc2.server as super
       val state = Haven_lsp.create_state ()
 
       method! on_req_initialize ~notify_back:_
@@ -41,6 +41,17 @@ module Server = struct
         (* At this point you probably want to parse [new_content] and maybe
          call [notify_back (Server_notification.PublishDiagnostics ...)] *)
         Lwt.return_unit
+
+      method! on_request_unhandled : type r.
+          notify_back:Linol_lwt.Jsonrpc2.notify_back ->
+          id:Linol_lwt.Jsonrpc2.Req_id.t ->
+          r Lsp.Client_request.t ->
+          r Linol_lwt.IO_lwt.t =
+        fun ~notify_back ~id req ->
+          match req with
+          | Lsp.Client_request.TextDocumentFormatting params ->
+              Linol_lwt.IO_lwt.return (Haven_lsp.on_formatting state params)
+          | _ -> super#on_request_unhandled ~notify_back ~id req
 
       method spawn_query_handler f = Linol_lwt.spawn f
     end
