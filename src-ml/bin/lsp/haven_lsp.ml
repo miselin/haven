@@ -10,7 +10,12 @@ let server_capabilities () : ServerCapabilities.t =
       (`TextDocumentSyncOptions
          (TextDocumentSyncOptions.create ~openClose:true
             ~change:TextDocumentSyncKind.Full ()))
-    ~documentFormattingProvider:(`Bool true) ()
+    ~documentFormattingProvider:(`Bool true)
+    ~semanticTokensProvider:
+      (`SemanticTokensOptions
+         (SemanticTokensOptions.create ~full:(`Bool true) ~range:true
+            ~legend:Semantic_tokens.legend ()))
+    ()
 (* add more as you implement them:
        ~documentSymbolProvider:(`Bool true)
        ~foldingRangeProvider:(`Bool true)
@@ -51,3 +56,19 @@ let format_document (state : state) (uri : DocumentUri.t) :
 let on_formatting (state : state) (params : DocumentFormattingParams.t) :
     TextEdit.t list option =
   format_document state params.textDocument.uri
+
+let semantic_tokens_for_uri (state : state) (uri : DocumentUri.t) =
+  match Document_store.get_cst state.docs uri with
+  | None -> None
+  | Some cst -> Some (Semantic_tokens.semantic_tokens_for_program cst)
+
+let on_semantic_tokens_full (state : state) (params : SemanticTokensParams.t) =
+  semantic_tokens_for_uri state params.textDocument.uri
+
+let on_semantic_tokens_range (state : state)
+    (params : SemanticTokensRangeParams.t) =
+  match Document_store.get_cst state.docs params.textDocument.uri with
+  | None -> None
+  | Some cst ->
+      Some
+        (Semantic_tokens.semantic_tokens_for_program_in_range cst params.range)

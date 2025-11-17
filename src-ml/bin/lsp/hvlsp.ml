@@ -49,6 +49,14 @@ module Server = struct
           r Linol_lwt.IO_lwt.t =
         fun ~notify_back ~id req ->
           match req with
+          | Lsp.Client_request.SemanticTokensFull params ->
+              Linol_lwt.IO_lwt.return
+                (Haven_lsp.on_semantic_tokens_full state params)
+          | Lsp.Client_request.SemanticTokensRange params ->
+              Linol_lwt.IO_lwt.return
+                (Haven_lsp.on_semantic_tokens_range state params)
+          | Lsp.Client_request.SemanticTokensDelta _params ->
+              Linol_lwt.IO_lwt.return None
           | Lsp.Client_request.TextDocumentFormatting params ->
               Linol_lwt.IO_lwt.return (Haven_lsp.on_formatting state params)
           | _ -> super#on_request_unhandled ~notify_back ~id req
