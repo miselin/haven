@@ -1,61 +1,11 @@
+(* AST definitions - very similar to CST, but without trivia and desugared in some cases *)
+
 open Haven_token.Token
 open Haven_core
 module Lexer = Haven_lexer.Lexer
 module Raw = Lexer.Raw
 
-type trivia_entry = Lexer.token_with_trivia
-type trivia_table = (string * int, Raw.tok list) Hashtbl.t
-type trivia_tables = { leading : trivia_table; trailing : trivia_table }
-
-type comment = {
-  tok : Raw.tok;
-  startp : Lexing.position;
-  endp : Lexing.position;
-}
-
 type 'a node = { value : 'a; loc : Loc.t }
-
-let with_location ~start_pos ~end_pos value =
-  { value; loc = Loc.location_between ~start_pos ~end_pos }
-
-let location_spanning (a : _ node) (b : _ node) =
-  Loc.location_between ~start_pos:a.loc.start_pos ~end_pos:b.loc.end_pos
-
-let trivia_key_of_location (loc : Loc.t) = Loc.pos_key loc.start_pos
-
-let build_trivia_tables (tokens : trivia_entry list) : trivia_tables =
-  let leading = Hashtbl.create 64 in
-  let trailing = Hashtbl.create 64 in
-  let comments_from_trivia trivia =
-    List.filter
-      (fun (tok : Raw.tok) ->
-        match tok.tok with Raw.Trivia (Comment _) -> true | _ -> false)
-      trivia
-  in
-  List.iter
-    (fun (tok : trivia_entry) ->
-      let l = comments_from_trivia tok.leading_trivia in
-      if l <> [] then Hashtbl.replace leading (Loc.pos_key tok.startp) l;
-      let r = comments_from_trivia tok.trailing_trivia in
-      if r <> [] then Hashtbl.replace trailing (Loc.pos_key tok.endp) r)
-    tokens;
-  { leading; trailing }
-
-let comments_from_raw_tokens tokens =
-  tokens
-  |> List.filter_map (fun (tok : Raw.tok) ->
-      match tok.tok with
-      | Raw.Trivia (Lexer.Comment _) ->
-          Some { tok; startp = tok.startp; endp = tok.endp }
-      | _ -> None)
-  |> List.sort (fun a b -> compare a.startp.pos_cnum b.startp.pos_cnum)
-
-let trivia_for_location (tables : trivia_tables) ~kind (loc : Loc.t) =
-  let table =
-    match kind with `Leading -> tables.leading | `Trailing -> tables.trailing
-  in
-  Hashtbl.find_opt table (trivia_key_of_location loc)
-
 type identifier = string node
 type unary_operator = Not | Negate | Complement
 
@@ -113,7 +63,7 @@ and haven_type_desc =
 and haven_type = haven_type_desc node
 and program_desc = { decls : top_decl list }
 and program = program_desc node
-and top_level_item = Decl of top_decl | Comments of comment list
+and top_level_item = Decl of top_decl
 
 and top_decl_desc =
   | FDecl of function_decl
@@ -190,7 +140,6 @@ and statement_desc =
   | While of while_stmt
   | Break
   | Continue
-  | Empty
 
 and statement = statement_desc node
 
@@ -220,7 +169,6 @@ and expression_desc =
   | Unary of unary
   | Literal of literal
   | Block of block
-  | ParenthesizedExpression of expression
   | Identifier of identifier
   | Initializer of init_list
   | As of as_expr
@@ -237,6 +185,8 @@ and expression_desc =
   | Call of call
   | Index of index
   | Field of field
+  (* todo = not implemented yet - throws errors but allows for iterative conversion logic writing *)
+  | Todo
 
 and expression = expression_desc node
 and call_desc = { target : expression; params : expression list }
@@ -257,12 +207,12 @@ and unary_desc = { inner : expression; op : unary_operator }
 and unary = unary_desc node
 and as_expr_desc = { target_type : haven_type; inner : expression }
 and as_expr = as_expr_desc node
-and if_else_block = ElseIf of if_expr | Else of block
 
 and if_expr_desc = {
   cond : expression;
-  then_block : block;
-  else_block : if_else_block option;
+  then_block : expression;
+  (* CST else-if is to be desugared into a block containing single if expr *)
+  else_block : expression option;
 }
 
 and if_expr = if_expr_desc node
@@ -291,10 +241,7 @@ and init_list_desc = { exprs : expression list }
 and init_list = init_list_desc node
 
 and literal_desc =
-  | HexInt of int
-  | OctInt of int
-  | BinInt of int
-  | DecInt of int
+  | Integer of int
   | Float of float
   | String of string
   | Char of char
@@ -312,34 +259,9 @@ and enum_literal_desc = {
   enum_name : identifier;
   enum_variant : identifier;
   types : haven_type list;
+  wrapped : expression list;
 }
 
 and enum_literal = enum_literal_desc node
 
-type parsed_program = {
-  program : program;
-  trivia : trivia_entry list;
-  trivia_table : trivia_tables;
-  comments : comment list;
-  items : top_level_item list;
-}
-
-let merge_comments_with_decls (program : program) (comments : comment list) :
-    top_level_item list =
-  let decls = program.value.decls in
-  let rec merge acc remaining_comments remaining_decls =
-    match (remaining_comments, remaining_decls) with
-    | [], [] -> List.rev acc
-    | [], d :: ds -> merge (Decl d :: acc) [] ds
-    | cs, [] -> List.rev (Comments cs :: acc)
-    | c :: cs_tail, d :: ds ->
-        if c.startp.pos_cnum < d.loc.start_pos.pos_cnum then
-          let comments_for_decl, rest =
-            List.partition
-              (fun cmt -> cmt.startp.pos_cnum < d.loc.start_pos.pos_cnum)
-              (c :: cs_tail)
-          in
-          merge (Comments comments_for_decl :: acc) rest (d :: ds)
-        else merge (Decl d :: acc) remaining_comments ds
-  in
-  merge [] comments decls
+type parsed_ast = { program : program; items : top_level_item list }

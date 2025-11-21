@@ -307,7 +307,8 @@ let group_trivia (raw_tokens : Raw.tok list) =
           else []
         in
         let trailing_prev =
-          if contains_newline || Option.is_none prev_entry then [] else trivia_buf
+          if contains_newline || Option.is_none prev_entry then []
+          else trivia_buf
         in
 
         let acc =

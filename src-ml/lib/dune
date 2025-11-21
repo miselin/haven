@@ -1,4 +1,13 @@
+; Shim library to re-namespce sub-libraries
+
 (library
  (name haven)
  (modules haven)
  (libraries haven_lexer haven_parser haven_cst haven_token))
+
+; Main core library with shared modules across the rest of the compiler
+
+(library
+ (name haven_core)
+ (public_name haven.core)
+ (modules loc))

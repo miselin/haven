@@ -1,5 +1,5 @@
 open Linol.Lsp.Types
-
+open Haven_core
 module CST = Haven.Cst.Cst
 module Locate = Haven.Cst.Locate
 module Lexer = Haven_lexer.Lexer
@@ -48,12 +48,10 @@ let modifier_index =
 let modifier_mask mods =
   List.fold_left
     (fun acc m ->
-      match modifier_index m with
-      | None -> acc
-      | Some idx -> acc lor (1 lsl idx))
+      match modifier_index m with None -> acc | Some idx -> acc lor (1 lsl idx))
     0 mods
 
-let loc_to_token_info ~token_type (loc : CST.location) =
+let loc_to_token_info ~token_type (loc : Loc.t) =
   let open Lexing in
   let line = loc.start_pos.pos_lnum - 1 in
   let start_char = loc.start_pos.pos_cnum - loc.start_pos.pos_bol in
@@ -67,20 +65,11 @@ let add_identifier_token acc ~token_type (id : CST.identifier) =
   | Some tok -> tok :: acc
 
 let predicate = function
-  | Locate.TypeDecl _
-  | Locate.FunctionDecl _
-  | Locate.VarDecl _
-  | Locate.LetStmt _
-  | Locate.Param _
-  | Locate.StructField _
-  | Locate.EnumVariant _
-  | Locate.HavenType _
-  | Locate.TemplatedType _
-  | Locate.EnumLiteral _
-  | Locate.PatternEnum _
-  | Locate.PatternBinding _
-  | Locate.Expression _
-  | Locate.Field _ ->
+  | Locate.TypeDecl _ | Locate.FunctionDecl _ | Locate.VarDecl _
+  | Locate.LetStmt _ | Locate.Param _ | Locate.StructField _
+  | Locate.EnumVariant _ | Locate.HavenType _ | Locate.TemplatedType _
+  | Locate.EnumLiteral _ | Locate.PatternEnum _ | Locate.PatternBinding _
+  | Locate.Expression _ | Locate.Field _ ->
       true
   | _ -> false
 
@@ -119,7 +108,8 @@ let collect_cst_tokens (program : CST.program) =
           add_identifier_token acc ~token_type:"type" t.value.outer
       | Locate.EnumLiteral e ->
           let acc =
-            add_identifier_token acc ~token_type:"enumMember" e.value.enum_variant
+            add_identifier_token acc ~token_type:"enumMember"
+              e.value.enum_variant
           in
           add_identifier_token acc ~token_type:"enum" e.value.enum_name
       | Locate.PatternEnum e ->
@@ -193,7 +183,7 @@ let keyword_table =
 
 let is_keyword s = Hashtbl.mem keyword_table s
 
-let loc_of_raw_tok (tok : Lexer.Raw.tok) : CST.location =
+let loc_of_raw_tok (tok : Lexer.Raw.tok) : Loc.t =
   { start_pos = tok.startp; end_pos = tok.endp }
 
 let add_token_for_loc acc ~token_type loc =
@@ -211,41 +201,10 @@ let add_comment_tokens acc trivia =
     acc trivia
 
 let symbol_is_operator = function
-  | Lexer.Arrow
-  | FatArrow
-  | Scope
-  | Walrus
-  | LogicAnd
-  | LogicOr
-  | EqEq
-  | BangEq
-  | LtEq
-  | GtEq
-  | LShift
-  | RShift
-  | Lt
-  | Gt
-  | Star
-  | Caret
-  | Plus
-  | Minus
-  | Slash
-  | Percent
-  | Equal
-  | Ampersand
-  | Pipe
-  | Bang
-  | Tilde
-  | LParen
-  | RParen
-  | LBrace
-  | RBrace
-  | LBracket
-  | RBracket
-  | Comma
-  | Dot
-  | Semicolon
-  | Colon
+  | Lexer.Arrow | FatArrow | Scope | Walrus | LogicAnd | LogicOr | EqEq | BangEq
+  | LtEq | GtEq | LShift | RShift | Lt | Gt | Star | Caret | Plus | Minus
+  | Slash | Percent | Equal | Ampersand | Pipe | Bang | Tilde | LParen | RParen
+  | LBrace | RBrace | LBracket | RBracket | Comma | Dot | Semicolon | Colon
   | Underscore ->
       true
 
@@ -265,7 +224,7 @@ let collect_lexical_tokens (parsed : CST.parsed_program) =
             add_token_for_loc acc ~token_type:"type"
               (loc_of_raw_tok
                  { tok = entry.token; startp = entry.startp; endp = entry.endp })
-        | Lexer.Raw.Literal lit -> (
+        | Lexer.Raw.Literal lit ->
             let token_type =
               match lit with
               | Hex_lit _ | Oct_lit _ | Bin_lit _ | Int_lit _ | Float_lit _ ->
@@ -274,7 +233,7 @@ let collect_lexical_tokens (parsed : CST.parsed_program) =
             in
             add_token_for_loc acc ~token_type
               (loc_of_raw_tok
-                 { tok = entry.token; startp = entry.startp; endp = entry.endp }))
+                 { tok = entry.token; startp = entry.startp; endp = entry.endp })
         | Lexer.Raw.Symbol sym when symbol_is_operator sym ->
             add_token_for_loc acc ~token_type:"operator"
               (loc_of_raw_tok
@@ -336,10 +295,10 @@ let tokens_in_range tokens (range : Range.t) =
     let line = token.line in
     let char_ = token.start_char in
     let starts_after_start =
-      (line > start_line) || (line = start_line && char_ >= start_char)
+      line > start_line || (line = start_line && char_ >= start_char)
     in
     let starts_before_end =
-      (line < end_line) || (line = end_line && char_ <= end_char)
+      line < end_line || (line = end_line && char_ <= end_char)
     in
     starts_after_start && starts_before_end
   in
@@ -349,7 +308,9 @@ let build_tokens ?range (parsed : CST.parsed_program) =
   let cst_tokens = collect_cst_tokens parsed.program in
   let lex_tokens = collect_lexical_tokens parsed in
   let merged = dedup_tokens (cst_tokens @ lex_tokens) in
-  let merged = match range with None -> merged | Some r -> tokens_in_range merged r in
+  let merged =
+    match range with None -> merged | Some r -> tokens_in_range merged r
+  in
   encode_tokens merged
 
 let semantic_tokens_for_program parsed =

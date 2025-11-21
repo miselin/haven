@@ -2,6 +2,7 @@
 open Format
 open Cst
 open Haven_token.Token
+open Haven_core
 module Raw = Cst.Raw
 
 let unwrap (n : _ Cst.node) = n.value
@@ -39,7 +40,8 @@ let flush_comments ?inline_line ~indent ~limit_pos queue fmt =
   in
   loop ()
 
-let emit_comments ~comments ~indent ~loc ~kind ?inline ?(separate = false) fmt =
+let emit_comments ~comments ~indent ~(loc : Loc.t) ~kind ?inline
+    ?(separate = false) fmt =
   match kind with
   | `Leading ->
       flush_comments ~indent ~limit_pos:loc.start_pos.pos_cnum comments fmt

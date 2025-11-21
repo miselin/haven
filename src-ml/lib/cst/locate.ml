@@ -1,4 +1,5 @@
 open Cst
+open Haven_core
 
 type any_node =
   | Program of program
@@ -88,28 +89,21 @@ let location_of = function
   | TemplatedType t -> t.loc
   | FunctionType f -> f.loc
 
-let pos_before (a : Lexing.position) (b : Lexing.position) =
-  a.pos_cnum < b.pos_cnum
-
-let contains_position loc pos =
-  not (pos_before pos loc.start_pos) && not (pos_before loc.end_pos pos)
-
-let overlaps_range loc range =
-  not (pos_before loc.end_pos range.start_pos || pos_before range.end_pos loc.start_pos)
-
 let add_if predicate node acc = if predicate node then node :: acc else acc
 
 let rec walk_haven_type predicate acc (ty : haven_type) =
   let acc = add_if predicate (HavenType ty) acc in
   match ty.value with
-  | NumericType _ | VecType _ | MatrixType _ | FloatType | VoidType
-  | StringType ->
+  | NumericType _ | VecType _ | MatrixType _ | FloatType | VoidType | StringType
+    ->
       acc
   | CustomType _ -> acc
   | CellType inner -> walk_haven_type predicate acc inner
   | FunctionType fn ->
       let acc = add_if predicate (FunctionType fn) acc in
-      let acc = List.fold_left (walk_haven_type predicate) acc fn.value.param_types in
+      let acc =
+        List.fold_left (walk_haven_type predicate) acc fn.value.param_types
+      in
       walk_haven_type predicate acc fn.value.return_type
   | PointerType inner -> walk_haven_type predicate acc inner
   | BoxType inner -> walk_haven_type predicate acc inner
@@ -147,8 +141,9 @@ and walk_match_pattern predicate acc pat =
   | PatternEnum e ->
       let acc = add_if predicate (PatternEnum e) acc in
       let acc =
-        List.fold_left (fun acc b -> add_if predicate (PatternBinding b) acc) acc
-          e.value.binding
+        List.fold_left
+          (fun acc b -> add_if predicate (PatternBinding b) acc)
+          acc e.value.binding
       in
       acc
 
@@ -285,8 +280,9 @@ and walk_function_decl predicate acc fn =
   let acc = add_if predicate (FunctionDecl fn) acc in
   let acc = add_if predicate (ParamList fn.value.params) acc in
   let acc =
-    List.fold_left (fun acc p -> add_if predicate (Param p) acc) acc
-      fn.value.params.value.params
+    List.fold_left
+      (fun acc p -> add_if predicate (Param p) acc)
+      acc fn.value.params.value.params
   in
   let acc =
     match fn.value.return_type with
@@ -326,7 +322,11 @@ let nodes_matching predicate (program : program) =
   walk_program predicate [] program |> List.rev
 
 let nodes_at_position pos program =
-  nodes_matching (fun node -> contains_position (location_of node) pos) program
+  nodes_matching
+    (fun node -> Loc.contains_position (location_of node) pos)
+    program
 
 let nodes_overlapping_range range program =
-  nodes_matching (fun node -> overlaps_range (location_of node) range) program
+  nodes_matching
+    (fun node -> Loc.overlaps_range (location_of node) range)
+    program

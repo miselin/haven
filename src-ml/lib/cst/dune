@@ -1,4 +1,4 @@
 (library
  (name haven_cst)
  (public_name haven.cst)
-(libraries haven_token haven_lexer))
+ (libraries haven_core haven_token haven_lexer))
