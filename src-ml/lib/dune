@@ -3,7 +3,7 @@
 (library
  (name haven)
  (modules haven)
- (libraries haven_lexer haven_parser haven_cst haven_token))
+ (libraries haven_lexer haven_parser haven_cst haven_ast haven_token))
 
 ; Main core library with shared modules across the rest of the compiler
 
