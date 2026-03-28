@@ -62,6 +62,11 @@ module Typing = struct
         }
     | None -> unknown_expr_annotation
 
+  let expected_enum_variant state loc expected_type variant_name =
+    match expected_type with
+    | Some enum_ty -> lookup_enum_variant state.type_env loc enum_ty variant_name
+    | None -> None
+
   let function_type_of_decl (fn : Core.function_decl) =
     let return_type = Option.value ~default:(void_type fn.loc) fn.value.return_type in
     mk_type fn.loc
@@ -109,14 +114,16 @@ module Typing = struct
         | Core.TDecl _ | Core.Import _ | Core.CImport _ -> ())
       program.value.decls
 
-  let rec infer_block state env (block : Core.block) : expr_annotation =
+  let rec infer_block state env ?(result_expected : resolved_ty option = None)
+      ~return_expected (block : Core.block) :
+      expr_annotation =
     let env = push_scope env in
     let env =
-      List.fold_left (infer_statement state) env block.value.statements
+      List.fold_left (infer_statement state ~return_expected) env block.value.statements
     in
     match block.value.result with
     | Some expr ->
-        let expr_ann = infer_expression state env expr in
+        let expr_ann = infer_expression state env ~expected_type:result_expected expr in
         {
           inferred_type = expr_ann.inferred_type;
           resolved_type = expr_ann.resolved_type;
@@ -130,14 +137,15 @@ module Typing = struct
           metavar = metavar_of_type ty;
         }
 
-  and infer_statement state env (stmt : Core.statement) : env =
+  and infer_statement state ~return_expected env (stmt : Core.statement) : env =
     match stmt.value with
     | Core.Expression expr ->
         ignore (infer_expression state env expr);
         env
     | Core.Return expr ->
         Option.iter
-          (fun (expr : Core.expression) -> ignore (infer_expression state env expr))
+          (fun (expr : Core.expression) ->
+            ignore (infer_expression state env ~expected_type:return_expected expr))
           expr;
         env
     | Core.Defer expr ->
@@ -145,7 +153,12 @@ module Typing = struct
         env
     | Core.Break | Core.Continue -> env
     | Core.Let binding ->
-        let init_ann = infer_expression state env binding.value.init_expr in
+        let init_expected =
+          Option.bind binding.value.ty (resolve_core_type state.type_env [] [] binding.loc)
+        in
+        let init_ann =
+          infer_expression state env ~expected_type:init_expected binding.value.init_expr
+        in
         let inferred_type =
           match binding.value.ty with
           | Some ty -> Some ty
@@ -172,13 +185,17 @@ module Typing = struct
         bind_current env binding.value.name.value binding_ann
     | Core.Loop loop ->
         let loop_env = push_scope env in
-        let loop_env = List.fold_left (infer_statement state) loop_env loop.value.init in
+        let loop_env =
+          List.fold_left (infer_statement state ~return_expected) loop_env loop.value.init
+        in
         ignore (infer_expression state loop_env loop.value.cond);
-        ignore (infer_block state loop_env loop.value.body);
-        ignore (List.fold_left (infer_statement state) loop_env loop.value.step);
+        ignore (infer_block state loop_env ~return_expected loop.value.body);
+        ignore
+          (List.fold_left (infer_statement state ~return_expected) loop_env loop.value.step);
         env
 
-  and infer_expression state env (expr : Core.expression) : expr_annotation =
+  and infer_expression state env ?(expected_type : resolved_ty option = None)
+      (expr : Core.expression) : expr_annotation =
     let annotation =
       match expr.value with
       | Core.Identifier id -> (
@@ -197,11 +214,15 @@ module Typing = struct
                     resolved_type = binding.resolved_type;
                     metavar = binding.metavar;
                   }
-              | None ->
-                  add_diagnostic state Error expr.loc
-                    (Printf.sprintf "unknown identifier %s" id.value);
-                  unknown_expr_annotation))
-      | Core.Literal literal -> infer_literal state env expr.loc literal
+              | None -> (
+                  match expected_enum_variant state expr.loc expected_type id.value with
+                  | Some (_, None) -> annotation_of_resolved expr.loc expected_type
+                  | Some (_, Some _) -> unknown_expr_annotation
+                  | None ->
+                      add_diagnostic state Error expr.loc
+                        (Printf.sprintf "unknown identifier %s" id.value);
+                      unknown_expr_annotation)))
+      | Core.Literal literal -> infer_literal state env ~expected_type expr.loc literal
       | Core.ToBool inner ->
           let inner_ann = infer_expression state env inner in
           let ty = bool_type expr.loc in
@@ -221,7 +242,7 @@ module Typing = struct
           }
       | Core.Unary unary -> infer_unary state env expr.loc unary
       | Core.Binary binary -> infer_binary state env expr.loc binary
-      | Core.Block block -> infer_block state env block
+      | Core.Block block -> infer_block state env ~return_expected:None block
       | Core.Initializer init ->
           List.iter
             (fun (expr : Core.expression) -> ignore (infer_expression state env expr))
@@ -261,7 +282,7 @@ module Typing = struct
                 integer = None;
               };
           }
-      | Core.Match match_expr -> infer_match state env expr.loc match_expr
+      | Core.Match match_expr -> infer_match state env ~expected_type expr.loc match_expr
       | Core.BoxExpr inner -> (
           let inner_ann = infer_expression state env inner in
           match inner_ann.resolved_type with
@@ -331,7 +352,7 @@ module Typing = struct
                   }
               | _ -> unknown_expr_annotation)
           | None -> unknown_expr_annotation)
-      | Core.Call call -> infer_call state env expr.loc call
+      | Core.Call call -> infer_call state env ~expected_type expr.loc call
       | Core.Index index -> infer_index state env expr.loc index
       | Core.Field field -> (
           let target_ann = infer_expression state env field.value.target in
@@ -387,7 +408,8 @@ module Typing = struct
     in
     record_expr state expr annotation
 
-  and infer_literal state env loc (literal : Core.literal) : expr_annotation =
+  and infer_literal state env ~(expected_type : resolved_ty option) loc
+      (literal : Core.literal) : expr_annotation =
     match literal.value with
     | Core.Integer value ->
         let ty = smallest_integer_type loc value in
@@ -525,11 +547,32 @@ module Typing = struct
             };
         }
     | Core.Enum enum ->
-        let ty =
+        let resolved_type =
           if enum.value.types = [] then
-            mk_type loc
-              (Core.CustomType { name = mk_identifier enum.value.enum_name.loc enum.value.enum_name.value })
+            match expected_type with
+            | Some (ResolvedNamed (name, _) as expected)
+              when String.equal name enum.value.enum_name.value ->
+                Some expected
+            | Some expected -> (
+                match expected with
+                | ResolvedNamed (name, _) when String.equal name enum.value.enum_name.value ->
+                    Some expected
+                | _ -> None)
+            | None -> None
           else
+            None
+        in
+        let ty =
+          match resolved_type with
+          | Some resolved -> core_type_of_resolved_ty loc resolved
+          | None when enum.value.types = [] ->
+              mk_type loc
+                (Core.CustomType
+                   {
+                     name =
+                       mk_identifier enum.value.enum_name.loc enum.value.enum_name.value;
+                   })
+          | None ->
             mk_type loc
               (Core.TemplatedType
                  {
@@ -546,7 +589,10 @@ module Typing = struct
           enum.value.wrapped;
         {
           inferred_type = Some ty;
-          resolved_type = resolve_core_type state.type_env [] [] loc ty;
+          resolved_type =
+            (match resolved_type with
+            | Some resolved -> Some resolved
+            | None -> resolve_core_type state.type_env [] [] loc ty);
           metavar = metavar_of_type ty;
         }
 
@@ -643,13 +689,15 @@ module Typing = struct
                   metavar = { unknown_metavar with classes = [ TypeClassNumeric ] };
                 }))
 
-  and infer_match state env loc (match_expr : Core.match_expr) : expr_annotation =
+  and infer_match state env ~(expected_type : resolved_ty option) loc
+      (match_expr : Core.match_expr) :
+      expr_annotation =
     ignore (infer_expression state env match_expr.value.expr);
     let arm_types =
       List.map
         (fun (arm : Core.match_arm) ->
           let env = infer_pattern_bindings state env match_expr.value.expr arm.value.pattern in
-          let ann = infer_expression state env arm.value.expr in
+          let ann = infer_expression state env ~expected_type arm.value.expr in
           ann.inferred_type)
         match_expr.value.arms
     in
@@ -723,39 +771,84 @@ module Typing = struct
                 bind_current env id.value binding_ann)
           initial enum.value.binding
 
-  and infer_call state env _loc (call : Core.call) : expr_annotation =
-    let target_ann = infer_expression state env call.value.target in
-    let _arg_anns =
-      List.map
-        (fun (expr : Core.expression) -> infer_expression state env expr)
-        call.value.params
+  and infer_call state env ~(expected_type : resolved_ty option) _loc
+      (call : Core.call) : expr_annotation =
+    let infer_enum_constructor enum_ty inner_ty =
+      let _arg_anns =
+        match (inner_ty, call.value.params) with
+        | Some expected_inner, [ arg ] ->
+            [ infer_expression state env ~expected_type:(Some expected_inner) arg ]
+        | _ ->
+            List.map
+              (fun (expr : Core.expression) -> infer_expression state env expr)
+              call.value.params
+      in
+      match (inner_ty, call.value.params) with
+      | None, [] | Some _, [ _ ] ->
+          let ty = core_type_of_resolved_ty call.loc enum_ty in
+          {
+            inferred_type = Some ty;
+            resolved_type = Some enum_ty;
+            metavar = metavar_of_type ty;
+          }
+      | _ -> unknown_expr_annotation
     in
-    match (call.value.target.value, target_ann.resolved_type) with
-    | Core.Literal literal, Some enum_ty -> (
-        match literal.value with
-        | Core.Enum enum_lit -> (
-            match
-              lookup_enum_variant state.type_env call.loc enum_ty
-                enum_lit.value.enum_variant.value
-            with
-            | Some (_, inner_ty) -> (
-                match (inner_ty, call.value.params) with
-                | None, [] ->
-                    let ty = core_type_of_resolved_ty call.loc enum_ty in
+    match call.value.target.value with
+    | Core.Identifier id -> (
+        match expected_enum_variant state call.loc expected_type id.value with
+        | Some (_, inner_ty) -> (
+            match expected_type with
+            | Some enum_ty -> infer_enum_constructor enum_ty inner_ty
+            | None -> unknown_expr_annotation)
+        | None ->
+            let target_ann = infer_expression state env ~expected_type call.value.target in
+            let _arg_anns =
+              List.map
+                (fun (expr : Core.expression) -> infer_expression state env expr)
+                call.value.params
+            in
+            match target_ann.inferred_type with
+            | Some ty -> (
+                match ty.value with
+                | Core.FunctionType fn ->
                     {
-                      inferred_type = Some ty;
-                      resolved_type = Some enum_ty;
-                      metavar = metavar_of_type ty;
-                    }
-                | Some _, [ _ ] ->
-                    let ty = core_type_of_resolved_ty call.loc enum_ty in
-                    {
-                      inferred_type = Some ty;
-                      resolved_type = Some enum_ty;
-                      metavar = metavar_of_type ty;
+                      inferred_type = Some fn.value.return_type;
+                      resolved_type =
+                        resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
+                      metavar = metavar_of_type fn.value.return_type;
                     }
                 | _ -> unknown_expr_annotation)
             | None -> unknown_expr_annotation)
+    | _ ->
+        let target_ann = infer_expression state env ~expected_type call.value.target in
+        let _arg_anns =
+          List.map
+            (fun (expr : Core.expression) -> infer_expression state env expr)
+            call.value.params
+        in
+        match (call.value.target.value, target_ann.resolved_type) with
+        | Core.Literal literal, Some enum_ty -> (
+            match literal.value with
+            | Core.Enum enum_lit -> (
+                match
+                  lookup_enum_variant state.type_env call.loc enum_ty
+                    enum_lit.value.enum_variant.value
+                with
+                | Some (_, inner_ty) -> infer_enum_constructor enum_ty inner_ty
+                | None -> unknown_expr_annotation)
+            | _ -> (
+                match target_ann.inferred_type with
+                | Some ty -> (
+                    match ty.value with
+                    | Core.FunctionType fn ->
+                        {
+                          inferred_type = Some fn.value.return_type;
+                          resolved_type =
+                            resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
+                          metavar = metavar_of_type fn.value.return_type;
+                        }
+                    | _ -> unknown_expr_annotation)
+                | None -> unknown_expr_annotation))
         | _ -> (
             match target_ann.inferred_type with
             | Some ty -> (
@@ -768,20 +861,7 @@ module Typing = struct
                       metavar = metavar_of_type fn.value.return_type;
                     }
                 | _ -> unknown_expr_annotation)
-            | None -> unknown_expr_annotation))
-    | _ -> (
-        match target_ann.inferred_type with
-        | Some ty -> (
-            match ty.value with
-            | Core.FunctionType fn ->
-                {
-                  inferred_type = Some fn.value.return_type;
-                  resolved_type =
-                    resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
-                  metavar = metavar_of_type fn.value.return_type;
-                }
-            | _ -> unknown_expr_annotation)
-        | None -> unknown_expr_annotation)
+            | None -> unknown_expr_annotation)
 
   and infer_index state env _loc (index : Core.index) : expr_annotation =
     let target_ann = infer_expression state env index.value.target in
@@ -854,22 +934,31 @@ module Typing = struct
             | None -> ()
             | Some body ->
                 let env = push_scope env in
-                let env =
-                  List.fold_left
-                    (fun env (param : Core.param) ->
-                      let binding =
+        let return_expected =
+          Option.bind fn.value.return_type (resolve_core_type state.type_env [] [] fn.loc)
+        in
+        let env =
+          List.fold_left
+            (fun env (param : Core.param) ->
+              let binding =
                         binding_from_type ~is_mutable:false state.type_env param.value.ty
                       in
                       bind_current env param.value.name.value binding)
                     env fn.value.params.value.params
                 in
-                ignore (infer_block state env body))
+                ignore
+                  (infer_block state env ~result_expected:return_expected ~return_expected
+                     body))
         | Core.Foreign foreign ->
             List.iter
               (fun (fn : Core.function_decl) ->
                 match fn.value.definition with
                 | None -> ()
                 | Some body ->
+                    let return_expected =
+                      Option.bind fn.value.return_type
+                        (resolve_core_type state.type_env [] [] fn.loc)
+                    in
                     let env = push_scope env in
                     let env =
                       List.fold_left
@@ -880,12 +969,17 @@ module Typing = struct
                           bind_current env param.value.name.value binding)
                         env fn.value.params.value.params
                     in
-                    ignore (infer_block state env body))
+                    ignore
+                      (infer_block state env ~result_expected:return_expected
+                         ~return_expected body))
               foreign.value.decls
         | Core.VDecl binding ->
             Option.iter
               (fun init ->
-                ignore (infer_expression state env init);
+                let expected_type =
+                  resolve_core_type state.type_env [] [] binding.loc binding.value.ty
+                in
+                ignore (infer_expression state env ~expected_type init);
                 ignore
                   (record_binding state
                      {

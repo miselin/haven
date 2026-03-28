@@ -172,6 +172,55 @@ pub fn sut() -> i32 {
   assert_no_diagnostics "generic enum constructor typing" enum_pipeline.typing.diagnostics;
   assert_no_diagnostics "generic enum pattern semantics" enum_pipeline.semantic.diagnostics;
 
+  let expected_return_enum_pipeline =
+    parse_to_core
+      {|
+type Result = enum <T> {
+  Ok(T),
+  Error
+};
+
+fn thing() -> Result::<i32> {
+  Ok(5)
+}
+
+pub fn sut() -> i32 {
+  match thing() {
+    Ok(x) => x,
+    _ => 1
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "expected return enum constructor typing"
+    expected_return_enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "expected return enum constructor semantics"
+    expected_return_enum_pipeline.semantic.diagnostics;
+
+  let expected_let_enum_pipeline =
+    parse_to_core
+      {|
+type Result = enum <T> {
+  Ok(T),
+  Error
+};
+
+pub fn sut() -> i32 {
+  let Result::<i32> value = Ok(5);
+  match value {
+    Ok(x) => x,
+    _ => 1
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "expected let enum constructor typing"
+    expected_let_enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "expected let enum constructor semantics"
+    expected_let_enum_pipeline.semantic.diagnostics;
+
   let statement_match_pipeline =
     parse_to_core
       {|
