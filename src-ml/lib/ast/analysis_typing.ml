@@ -290,7 +290,10 @@ module Typing = struct
           }
       | Core.Match match_expr -> infer_match state env ~expected_type expr.loc match_expr
       | Core.BoxExpr inner -> (
-          let inner_ann = infer_expression state env inner in
+          let inner_expected =
+            match expected_type with Some (ResolvedBox inner) -> Some inner | _ -> None
+          in
+          let inner_ann = infer_expression state env ~expected_type:inner_expected inner in
           match inner_ann.resolved_type with
           | Some inner_ty ->
               let ty = box_type expr.loc (core_type_of_resolved_ty expr.loc inner_ty) in
@@ -653,7 +656,9 @@ module Typing = struct
     | _ ->
         List.iter
           (fun (expr : Core.expression) -> ignore (infer_expression state env expr))
-          init.value.exprs);
+          init.value.exprs;
+        add_diagnostic state Error loc
+          "not enough information to infer type for initializer");
     match expected_type with
     | Some expected -> annotation_of_resolved loc (Some expected)
     | None -> unknown_expr_annotation
@@ -707,8 +712,29 @@ module Typing = struct
     | Core.BitwiseAnd
     | Core.BitwiseOr
     | Core.BitwiseXor -> (
-        match (left_ann.inferred_type, right_ann.inferred_type) with
-        | Some left_ty, Some right_ty
+        match
+          ( left_ann.inferred_type,
+            right_ann.inferred_type,
+            left_ann.resolved_type,
+            right_ann.resolved_type )
+        with
+        | Some left_ty, _, Some left_resolved, Some right_resolved
+          when resolved_is_pointerish left_resolved && resolved_is_numeric right_resolved
+               && (binary.value.op = Core.Add || binary.value.op = Core.Subtract) ->
+            {
+              inferred_type = Some left_ty;
+              resolved_type = Some left_resolved;
+              metavar = metavar_of_type left_ty;
+            }
+        | _, Some right_ty, Some left_resolved, Some right_resolved
+          when resolved_is_numeric left_resolved && resolved_is_pointerish right_resolved
+               && binary.value.op = Core.Add ->
+            {
+              inferred_type = Some right_ty;
+              resolved_type = Some right_resolved;
+              metavar = metavar_of_type right_ty;
+            }
+        | Some left_ty, Some right_ty, _, _
           when is_numeric_type left_ty || left_ty.value = Core.FloatType ->
             let ty =
               if is_numeric_type right_ty || right_ty.value = Core.FloatType then
@@ -720,19 +746,19 @@ module Typing = struct
               resolved_type = resolve_core_type state.type_env [] [] loc ty;
               metavar = metavar_of_type ty;
             }
-        | Some left_ty, Some _ ->
+        | Some left_ty, Some _, _, _ ->
             {
               inferred_type = Some left_ty;
               resolved_type = resolve_core_type state.type_env [] [] loc left_ty;
               metavar = metavar_of_type left_ty;
             }
-        | Some ty, None | None, Some ty ->
+        | Some ty, None, _, _ | None, Some ty, _, _ ->
             {
               inferred_type = Some ty;
               resolved_type = resolve_core_type state.type_env [] [] loc ty;
               metavar = metavar_of_type ty;
             }
-        | None, None -> (
+        | None, None, _, _ -> (
             match
               ( Option.bind left_ann.metavar.integer (fun i -> i.exact_value),
                 Option.bind right_ann.metavar.integer (fun i -> i.exact_value) )

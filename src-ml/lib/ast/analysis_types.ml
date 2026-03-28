@@ -351,6 +351,14 @@ let rec resolved_compatible actual expected =
       equal_list resolved_compatible actual_args expected_args
   | _ -> false
 
+let resolved_can_cast source target =
+  resolved_compatible source target
+  ||
+  match (source, target) with
+  | source, target when resolved_is_numeric source && resolved_is_numeric target -> true
+  | source, target when resolved_is_pointerish source && resolved_is_pointerish target -> true
+  | _ -> false
+
 let coerce_annotation_to_expected loc expected (annotation : expr_annotation) =
   let coerced_resolved =
     match annotation.resolved_type with

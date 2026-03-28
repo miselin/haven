@@ -323,6 +323,64 @@ pub fn sut() -> i32 {
   in
   assert_has_diagnostics "nil assigned to integer binding" nil_pipeline.semantic.diagnostics;
 
+  let untyped_initializer =
+    parse_to_core "pub fn main() -> void { let values = { 1, 2 }; }"
+    |> Analysis.Typing.run
+  in
+  assert_has_diagnostics "untyped initializer should fail typing"
+    untyped_initializer.diagnostics;
+  assert_diagnostic_message_contains "untyped initializer wording"
+    "not enough information to infer type for initializer"
+    untyped_initializer.diagnostics;
+
+  let short_struct_initializer =
+    parse_to_core
+      {|
+type Pair = struct {
+  i32 left;
+  i32 right;
+};
+
+pub fn main() -> void {
+  let Pair pair = { 1 };
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "short struct initializer should fail"
+    short_struct_initializer.semantic.diagnostics;
+
+  let bad_cast_pipeline =
+    parse_to_core
+      {|
+type Pair = struct {
+  i32 left;
+  i32 right;
+};
+
+pub fn main() -> void {
+  let Pair pair = as<Pair>(5);
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "incompatible cast should fail"
+    bad_cast_pipeline.semantic.diagnostics;
+
+  let bad_ref_pipeline =
+    parse_to_core "pub fn main() -> void { let x = ref as<i32>(5); }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "ref of non-lvalue should fail"
+    bad_ref_pipeline.semantic.diagnostics;
+
+  let bad_load_pipeline =
+    parse_to_core
+      "pub fn main() -> void { let boxed = box as<i32>(5); let x = load boxed; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "load of box should fail" bad_load_pipeline.semantic.diagnostics;
+
   let bare_return_pipeline =
     parse_to_core "pub fn main() -> i32 { ret; }"
     |> Analysis.Pipeline.run_core
@@ -389,4 +447,18 @@ pub fn sut() -> i32 {
   assert_has_diagnostics "non-exhaustive match should fail"
     non_exhaustive_match_pipeline.semantic.diagnostics;
   assert_diagnostic_message_contains "non-exhaustive match wording" "not exhaustive"
-    non_exhaustive_match_pipeline.semantic.diagnostics
+    non_exhaustive_match_pipeline.semantic.diagnostics;
+
+  let mismatched_match_arms_pipeline =
+    parse_to_core "pub fn main() -> i32 { match 5 { 5 => 5, _ => \"hi\" } }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "mismatched match arms should fail"
+    mismatched_match_arms_pipeline.semantic.diagnostics;
+
+  let bad_binary_pipeline =
+    parse_to_core "pub fn main() -> void { let x = \"hi\" * 2; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "invalid binary operands should fail"
+    bad_binary_pipeline.semantic.diagnostics

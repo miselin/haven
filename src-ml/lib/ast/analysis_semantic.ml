@@ -102,6 +102,70 @@ module Semantic = struct
       | Some { resolved_type = Some actual; _ } -> resolved_compatible actual expected
       | _ -> false
 
+  let expr_resolved_type state (expr : Core.expression) =
+    match expr_annotation state expr with
+    | Some { resolved_type = Some ty; _ } -> Some ty
+    | _ -> None
+
+  let check_expr_matches_expected state (expr : Core.expression) expected mismatch_message
+      nil_message =
+    if expr.value = Core.Nil then (
+      if not (resolved_is_pointerish expected) then add_diagnostic state Error expr.loc nil_message)
+    else
+      match expr_resolved_type state expr with
+      | Some actual when not (resolved_compatible actual expected) ->
+          add_diagnostic state Error expr.loc mismatch_message
+      | _ -> ()
+
+  let check_initializer_shape state loc (init : Core.init_list) expected =
+    let check_slots slots too_many_message too_few_message mismatch_for_index =
+      let actual_count = List.length init.value.exprs in
+      let expected_count = List.length slots in
+      if actual_count > expected_count then add_diagnostic state Error loc too_many_message;
+      if actual_count < expected_count then add_diagnostic state Error loc too_few_message;
+      List.iteri
+        (fun index expected_slot ->
+          if index < actual_count then
+            let expr = List.nth init.value.exprs index in
+            check_expr_matches_expected state expr expected_slot
+              (mismatch_for_index index) "nil is only valid for pointer-like initializer elements")
+        slots
+    in
+    match expected with
+    | ResolvedArray (element_ty, count) ->
+        check_slots (List.init count (fun _ -> element_ty))
+          "array initializer has more elements than the target type"
+          "array initializer has fewer elements than the target type"
+          (fun _ -> "array initializer element type does not match the target type")
+    | ResolvedNamed _ as struct_ty -> (
+        match lookup_struct_fields state.type_env loc struct_ty with
+        | Some fields ->
+            let field_names, field_types = List.split fields in
+            check_slots field_types
+              "struct initializer has more elements than the target type"
+              "struct initializer has fewer elements than the target type"
+              (fun index ->
+                let field_name =
+                  if index < List.length field_names then List.nth field_names index
+                  else "<unknown>"
+                in
+                Printf.sprintf
+                  "struct initializer field %s does not match the declared field type"
+                  field_name)
+        | None -> ())
+    | ResolvedVec vec ->
+        check_slots (List.init vec.dimension (fun _ -> ResolvedFloat))
+          "vector initializer has more elements than the target type"
+          "vector initializer has fewer elements than the target type"
+          (fun _ -> "vector initializer element type does not match the target type")
+    | ResolvedMatrix mat ->
+        check_slots
+          (List.init mat.rows (fun _ -> ResolvedVec { kind = FloatVec; dimension = mat.columns }))
+          "matrix initializer has more rows than the target type"
+          "matrix initializer has fewer rows than the target type"
+          (fun _ -> "matrix initializer row type does not match the target type")
+    | _ -> ()
+
   let statement_guarantees_return (stmt : Core.statement) =
     match stmt.value with Core.Return _ -> true | _ -> false
 
@@ -182,6 +246,11 @@ module Semantic = struct
               when not (resolved_compatible actual expected) ->
                 add_diagnostic state Error binding.value.init_expr.loc
                   "let initializer type does not match the declared binding type"
+            | Some expected, _ -> (
+                match binding.value.init_expr.value with
+                | Core.Initializer init ->
+                    check_initializer_shape state binding.value.init_expr.loc init expected
+                | _ -> ())
             | _ -> ())
         | None -> ());
         if duplicate_binding env binding.value.name.value then
@@ -245,12 +314,64 @@ module Semantic = struct
     | Core.Unary unary -> check_expression state env loop_depth unary.value.inner
     | Core.Binary binary ->
         check_expression state env loop_depth binary.value.left;
-        check_expression state env loop_depth binary.value.right
+        check_expression state env loop_depth binary.value.right;
+        let left_resolved = expr_resolved_type state binary.value.left in
+        let right_resolved = expr_resolved_type state binary.value.right in
+        let numeric_pair =
+          match (left_resolved, right_resolved) with
+          | Some left, Some right -> resolved_is_numeric left && resolved_is_numeric right
+          | _ -> false
+        in
+        let pointer_numeric_pair =
+          match (left_resolved, right_resolved) with
+          | Some left, Some right ->
+              (resolved_is_pointerish left && resolved_is_numeric right)
+              || (resolved_is_numeric left && resolved_is_pointerish right)
+          | _ -> false
+        in
+        let compatible_pair =
+          match (left_resolved, right_resolved) with
+          | Some left, Some right -> resolved_compatible left right
+          | _ -> false
+        in
+        (match binary.value.op with
+        | Core.Add | Core.Subtract ->
+            if not (numeric_pair || pointer_numeric_pair) then
+              add_diagnostic state Error expr.loc
+                "binary arithmetic requires numeric operands or pointer arithmetic"
+        | Core.Multiply | Core.Divide | Core.Modulo ->
+            if not numeric_pair then
+              add_diagnostic state Error expr.loc
+                "binary arithmetic requires numeric operands"
+        | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr | Core.BitwiseXor
+          ->
+            if not numeric_pair then
+              add_diagnostic state Error expr.loc
+                "bitwise operations require numeric operands"
+        | Core.IsEqual | Core.NotEqual ->
+            if not compatible_pair then
+              add_diagnostic state Error expr.loc
+                "comparison operands must have compatible types"
+        | Core.LessThan | Core.LessThanOrEqual | Core.GreaterThan | Core.GreaterThanOrEqual ->
+            if not numeric_pair then
+              add_diagnostic state Error expr.loc
+                "ordered comparisons require numeric operands"
+        | Core.LogicAnd | Core.LogicOr ->
+            check_scalar_truthy binary.value.left;
+            check_scalar_truthy binary.value.right)
     | Core.Block block ->
         ignore (check_block state env loop_depth ~return_expected:None block)
     | Core.Initializer init ->
         List.iter (check_expression state env loop_depth) init.value.exprs
-    | Core.As cast -> check_expression state env loop_depth cast.value.inner
+    | Core.As cast ->
+        check_expression state env loop_depth cast.value.inner;
+        (match
+           ( expr_resolved_type state cast.value.inner,
+             resolve_core_type state.type_env [] [] cast.loc cast.value.target_type )
+         with
+        | Some source, Some target when not (resolved_can_cast source target) ->
+            add_diagnostic state Error cast.loc "incompatible cast"
+        | _ -> ())
     | Core.SizeExpr inner -> check_expression state env loop_depth inner
     | Core.Match match_expr ->
         check_expression state env loop_depth match_expr.value.expr;
@@ -292,6 +413,17 @@ module Semantic = struct
             in
             check_expression state env loop_depth arm.value.expr)
           match_expr.value.arms;
+        let arm_exprs = List.map (fun (arm : Core.match_arm) -> arm.value.expr) match_expr.value.arms in
+        let expected_arm_type = expr_resolved_type state expr in
+        (match expected_arm_type with
+        | Some expected ->
+            List.iter
+              (fun arm_expr ->
+                check_expr_matches_expected state arm_expr expected
+                  "match arm type does not match the rest of the match expression"
+                  "nil is only valid for pointer-like match arm types")
+              arm_exprs
+        | None -> ());
         (match expr_annotation state match_expr.value.expr with
         | Some { resolved_type = Some scrutinee_ty; _ } ->
             List.iter
@@ -329,8 +461,32 @@ module Semantic = struct
                 | Core.PatternDefault | Core.PatternLiteral _ -> ())
               match_expr.value.arms
         | _ -> ())
-    | Core.BoxExpr inner | Core.Unbox inner | Core.Ref inner | Core.Load inner ->
+    | Core.BoxExpr inner ->
         check_expression state env loop_depth inner
+    | Core.Unbox inner ->
+        check_expression state env loop_depth inner;
+        (match expr_resolved_type state inner with
+        | Some (ResolvedBox _) -> ()
+        | Some _ ->
+            add_diagnostic state Error expr.loc
+              "unbox can only be used with boxed types"
+        | None -> ())
+    | Core.Ref inner ->
+        check_expression state env loop_depth inner;
+        if not (is_lvalue inner) then
+          add_diagnostic state Error expr.loc
+            "ref expression must resolve to an assignable target"
+    | Core.Load inner ->
+        check_expression state env loop_depth inner;
+        (match expr_resolved_type state inner with
+        | Some (ResolvedPointer _ | ResolvedCell _) -> ()
+        | Some (ResolvedBox _) ->
+            add_diagnostic state Error expr.loc
+              "use unbox instead of load to retrieve the interior value of a box"
+        | Some _ ->
+            add_diagnostic state Error expr.loc
+              "load expression must resolve to a pointer-like reference"
+        | None -> ())
     | Core.BoxType _ -> ()
     | Core.Call call ->
         check_expression state env loop_depth call.value.target;
@@ -444,6 +600,11 @@ module Semantic = struct
           when not (resolved_compatible actual expected) ->
             add_diagnostic state Error write.value.value.loc
               "assignment value type does not match the target"
+        | Some { resolved_type = Some expected; _ }, _ -> (
+            match write.value.value.value with
+            | Core.Initializer init ->
+                check_initializer_shape state write.value.value.loc init expected
+            | _ -> ())
         | _ -> ());
         if write.value.value.value = Core.Nil then (
           match expr_annotation state write.value.target with
@@ -485,6 +646,13 @@ module Semantic = struct
           when not (resolved_compatible actual expected) ->
             add_diagnostic state Error write.value.value.loc
               "mutation value type does not match the pointed-to type"
+        | Some { resolved_type = Some (ResolvedPointer expected); _ }, _
+        | Some { resolved_type = Some (ResolvedBox expected); _ }, _
+        | Some { resolved_type = Some (ResolvedCell expected); _ }, _ -> (
+            match write.value.value.value with
+            | Core.Initializer init ->
+                check_initializer_shape state write.value.value.loc init expected
+            | _ -> ())
         | _ -> ());
         if write.value.value.value = Core.Nil then (
           match expr_annotation state write.value.target with
@@ -570,7 +738,17 @@ module Semantic = struct
                     | None -> ()))
               foreign.value.decls
         | Core.VDecl binding ->
-            Option.iter (check_expression state env 0) binding.value.init_expr
+            Option.iter
+              (fun init ->
+                check_expression state env 0 init;
+                match
+                  ( resolve_core_type state.type_env [] [] binding.loc binding.value.ty,
+                    init.value )
+                with
+                | Some expected, Core.Initializer init ->
+                    check_initializer_shape state init.loc init expected
+                | _ -> ())
+              binding.value.init_expr
         | Core.TDecl _ | Core.Import _ | Core.CImport _ -> ())
       typed.program.program.value.decls;
     { diagnostics = List.rev state.diagnostics_rev }
