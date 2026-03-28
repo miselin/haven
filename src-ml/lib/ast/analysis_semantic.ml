@@ -95,24 +95,61 @@ module Semantic = struct
     in
     has_true && has_false
 
-  let rec check_block state env loop_depth (block : Core.block) =
+  let return_value_matches state expected (expr : Core.expression) =
+    if expr.value = Core.Nil then resolved_is_pointerish expected
+    else
+      match expr_annotation state expr with
+      | Some { resolved_type = Some actual; _ } -> resolved_compatible actual expected
+      | _ -> false
+
+  let statement_guarantees_return (stmt : Core.statement) =
+    match stmt.value with Core.Return _ -> true | _ -> false
+
+  let block_guarantees_return (block : Core.block) =
+    Option.is_some block.value.result || List.exists statement_guarantees_return block.value.statements
+
+  let rec check_block state env loop_depth ~return_expected (block : Core.block) =
     let env = push_scope env in
     let env =
       List.fold_left
-        (fun env (stmt : Core.statement) -> check_statement state env loop_depth stmt)
+        (fun env (stmt : Core.statement) ->
+          check_statement state env loop_depth ~return_expected stmt)
         env
         block.value.statements
     in
-    Option.iter (check_expression state env loop_depth) block.value.result;
+    Option.iter
+      (fun (expr : Core.expression) ->
+        check_expression state env loop_depth expr;
+        match return_expected with
+        | Some ResolvedVoid ->
+            add_diagnostic state Error expr.loc "void function cannot return a value"
+        | Some expected when not (return_value_matches state expected expr) ->
+            add_diagnostic state Error expr.loc
+              "returned value does not match the function return type"
+        | _ -> ())
+      block.value.result;
     env
 
-  and check_statement state env loop_depth (stmt : Core.statement) =
+  and check_statement state env loop_depth ~return_expected (stmt : Core.statement) =
     match stmt.value with
     | Core.Expression expr ->
         check_expression_in_context state env loop_depth true expr;
         env
     | Core.Return expr ->
         Option.iter (check_expression state env loop_depth) expr;
+        (match (return_expected, expr) with
+        | Some ResolvedVoid, Some returned ->
+            add_diagnostic state Error returned.loc
+              "void function cannot return a value"
+        | Some ResolvedVoid, None -> ()
+        | Some _, None ->
+            add_diagnostic state Error stmt.loc
+              "non-void function must return a value"
+        | Some expected, Some returned ->
+            if not (return_value_matches state expected returned) then
+              add_diagnostic state Error returned.loc
+                "returned value does not match the function return type"
+        | None, _ -> ());
         env
     | Core.Defer expr ->
         check_expression state env loop_depth expr;
@@ -168,15 +205,15 @@ module Semantic = struct
         let env =
           List.fold_left
             (fun env (stmt : Core.statement) ->
-              check_statement state env (loop_depth + 1) stmt)
+              check_statement state env (loop_depth + 1) ~return_expected stmt)
             env loop.value.init
         in
         check_expression state env (loop_depth + 1) loop.value.cond;
-        ignore (check_block state env (loop_depth + 1) loop.value.body);
+        ignore (check_block state env (loop_depth + 1) ~return_expected loop.value.body);
         ignore
           (List.fold_left
              (fun env (stmt : Core.statement) ->
-               check_statement state env (loop_depth + 1) stmt)
+               check_statement state env (loop_depth + 1) ~return_expected stmt)
              env loop.value.step);
         env
 
@@ -210,7 +247,7 @@ module Semantic = struct
         check_expression state env loop_depth binary.value.left;
         check_expression state env loop_depth binary.value.right
     | Core.Block block ->
-        ignore (check_block state env loop_depth block)
+        ignore (check_block state env loop_depth ~return_expected:None block)
     | Core.Initializer init ->
         List.iter (check_expression state env loop_depth) init.value.exprs
     | Core.As cast -> check_expression state env loop_depth cast.value.inner
@@ -471,6 +508,12 @@ module Semantic = struct
             match fn.value.definition with
             | None -> ()
             | Some body ->
+                let return_expected =
+                  let core_ty =
+                    Option.value ~default:(void_type fn.loc) fn.value.return_type
+                  in
+                  resolve_core_type state.type_env [] [] fn.loc core_ty
+                in
                 let env = push_scope env in
                 let env =
                   List.fold_left
@@ -480,17 +523,30 @@ module Semantic = struct
                           inferred_type = Some param.value.ty;
                           resolved_type = None;
                           metavar = metavar_of_type param.value.ty;
-                          is_mutable = false;
-                        })
+                              is_mutable = false;
+                            })
                     env fn.value.params.value.params
                 in
-                ignore (check_block state env 0 body))
+                ignore (check_block state env 0 ~return_expected body);
+                (match return_expected with
+                | Some ResolvedVoid -> ()
+                | Some _ when block_guarantees_return body -> ()
+                | Some _ ->
+                    add_diagnostic state Error body.loc
+                      "non-void function must return a value"
+                | None -> ()))
         | Core.Foreign foreign ->
             List.iter
               (fun (fn : Core.function_decl) ->
                 match fn.value.definition with
                 | None -> ()
                 | Some body ->
+                    let return_expected =
+                      let core_ty =
+                        Option.value ~default:(void_type fn.loc) fn.value.return_type
+                      in
+                      resolve_core_type state.type_env [] [] fn.loc core_ty
+                    in
                     let env = push_scope env in
                     let env =
                       List.fold_left
@@ -504,7 +560,14 @@ module Semantic = struct
                             })
                         env fn.value.params.value.params
                     in
-                    ignore (check_block state env 0 body))
+                    ignore (check_block state env 0 ~return_expected body);
+                    (match return_expected with
+                    | Some ResolvedVoid -> ()
+                    | Some _ when block_guarantees_return body -> ()
+                    | Some _ ->
+                        add_diagnostic state Error body.loc
+                          "non-void function must return a value"
+                    | None -> ()))
               foreign.value.decls
         | Core.VDecl binding ->
             Option.iter (check_expression state env 0) binding.value.init_expr

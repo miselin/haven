@@ -247,6 +247,34 @@ pub fn sut() -> i32 {
   in
   assert_has_diagnostics "nil assigned to integer binding" nil_pipeline.semantic.diagnostics;
 
+  let bare_return_pipeline =
+    parse_to_core "pub fn main() -> i32 { ret; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "bare return in non-void function"
+    bare_return_pipeline.semantic.diagnostics;
+
+  let void_return_value_pipeline =
+    parse_to_core "pub fn main() -> void { ret 5; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "value return in void function"
+    void_return_value_pipeline.semantic.diagnostics;
+
+  let wrong_return_type_pipeline =
+    parse_to_core "pub fn main() -> i32 { \"hello\" }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "wrong implicit return type"
+    wrong_return_type_pipeline.semantic.diagnostics;
+
+  let missing_return_pipeline =
+    parse_to_core "pub fn main() -> i32 { let x = 5; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "missing non-void return"
+    missing_return_pipeline.semantic.diagnostics;
+
   let mutate_pipeline =
     parse_to_core
       "pub impure fn main() -> i32 { let mut i32 x = 0; let y = ref x := as<i32>(1); 0 }"
