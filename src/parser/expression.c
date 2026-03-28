@@ -530,6 +530,10 @@ struct ast_expr *parse_factor(struct parser *parser) {
 
           result->expr.match.num_arms++;
         }
+
+        if (parser_peek(parser) == TOKEN_COMMA) {
+          parser_consume_peeked(parser, NULL);
+        }
       }
       if (parser_consume(parser, NULL, TOKEN_RBRACE) < 0) {
         free(result);
