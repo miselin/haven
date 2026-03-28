@@ -221,6 +221,82 @@ pub fn sut() -> i32 {
   assert_no_diagnostics "expected let enum constructor semantics"
     expected_let_enum_pipeline.semantic.diagnostics;
 
+  let expected_block_enum_pipeline =
+    parse_to_core
+      {|
+type Result = enum <T> {
+  Ok(T),
+  Error
+};
+
+fn thing() -> Result::<i32> {
+  { Ok(5) }
+}
+
+pub fn sut() -> i32 {
+  match thing() {
+    Ok(x) => x,
+    _ => 1
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "expected block enum constructor typing"
+    expected_block_enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "expected block enum constructor semantics"
+    expected_block_enum_pipeline.semantic.diagnostics;
+
+  let parameter_enum_pipeline =
+    parse_to_core
+      {|
+type Result = enum <T> {
+  Ok(T),
+  Error
+};
+
+fn pass(Result::<i32> value) -> Result::<i32> {
+  value
+}
+
+pub fn sut() -> i32 {
+  match pass(Ok(5)) {
+    Ok(x) => x,
+    _ => 1
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "parameter-driven enum constructor typing"
+    parameter_enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "parameter-driven enum constructor semantics"
+    parameter_enum_pipeline.semantic.diagnostics;
+
+  let assignment_enum_pipeline =
+    parse_to_core
+      {|
+type Result = enum <T> {
+  Ok(T),
+  Error
+};
+
+pub fn sut() -> i32 {
+  let mut Result::<i32> value = Error;
+  value = Ok(5);
+  match value {
+    Ok(x) => x,
+    _ => 1
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "assignment-driven enum constructor typing"
+    assignment_enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "assignment-driven enum constructor semantics"
+    assignment_enum_pipeline.semantic.diagnostics;
+
   let statement_match_pipeline =
     parse_to_core
       {|

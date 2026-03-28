@@ -326,9 +326,49 @@ let resolved_is_pointerish = function
   | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedString -> true
   | _ -> false
 
-let resolved_compatible actual expected =
+let rec resolved_compatible actual expected =
   equal_resolved_type actual expected
-  || (resolved_is_numeric actual && resolved_is_numeric expected)
+  ||
+  match (actual, expected) with
+  | actual, expected when resolved_is_numeric actual && resolved_is_numeric expected -> true
+  | ResolvedPointer actual, ResolvedPointer expected
+  | ResolvedBox actual, ResolvedBox expected
+  | ResolvedCell actual, ResolvedCell expected ->
+      resolved_compatible actual expected
+  | ResolvedArray (actual, actual_count), ResolvedArray (expected, expected_count) ->
+      actual_count = expected_count && resolved_compatible actual expected
+  | ResolvedFunction (actual_params, actual_ret, actual_vararg),
+    ResolvedFunction (expected_params, expected_ret, expected_vararg) ->
+      actual_vararg = expected_vararg
+      && equal_list resolved_compatible actual_params expected_params
+      && resolved_compatible actual_ret expected_ret
+  | ResolvedNamed (actual_name, []), ResolvedNamed (expected_name, _)
+  | ResolvedNamed (actual_name, _), ResolvedNamed (expected_name, [])
+    when String.equal actual_name expected_name ->
+      true
+  | ResolvedNamed (actual_name, actual_args), ResolvedNamed (expected_name, expected_args)
+    when String.equal actual_name expected_name ->
+      equal_list resolved_compatible actual_args expected_args
+  | _ -> false
+
+let coerce_annotation_to_expected loc expected (annotation : expr_annotation) =
+  let coerced_resolved =
+    match annotation.resolved_type with
+    | Some actual when resolved_compatible actual expected -> Some expected
+    | None when List.mem TypeClassNil annotation.metavar.classes && resolved_is_pointerish expected
+      ->
+        Some expected
+    | _ -> None
+  in
+  match coerced_resolved with
+  | Some resolved ->
+      let inferred_type = core_type_of_resolved_ty loc resolved in
+      {
+        inferred_type = Some inferred_type;
+        resolved_type = Some resolved;
+        metavar = { annotation.metavar with classes = type_class_of_type inferred_type };
+      }
+  | None -> annotation
 
 let type_env_of_program (program : Core.program) =
   List.fold_left
