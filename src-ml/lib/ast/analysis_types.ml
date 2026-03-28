@@ -322,9 +322,47 @@ let resolved_is_bool = function ResolvedInt (Unsigned, 1) -> true | _ -> false
 
 let resolved_is_numeric = function ResolvedInt _ | ResolvedFloat -> true | _ -> false
 
+let resolved_is_vector = function ResolvedVec _ -> true | _ -> false
+let resolved_is_matrix = function ResolvedMatrix _ -> true | _ -> false
+
 let resolved_is_pointerish = function
   | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedString -> true
   | _ -> false
+
+let combine_matrix_kind left right =
+  match (left.kind, right.kind) with
+  | FloatMat, FloatMat -> FloatMat
+  | _ -> GenericMat
+
+(* TODO: The language needs a story for dimension-polymorphic vectors/matrices.
+   Hard-coding every operator and function per concrete size will make useful
+   linear algebra libraries impractical. *)
+let resolved_arithmetic_binary_result op left right =
+  match (op, left, right) with
+  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo ),
+    ResolvedVec left,
+    ResolvedVec right
+    when left = right ->
+      Some (ResolvedVec left)
+  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedVec vec, ResolvedFloat
+  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedFloat, ResolvedVec vec ->
+      Some (ResolvedVec vec)
+  | (Core.Add | Core.Subtract), ResolvedMatrix left, ResolvedMatrix right
+    when left.rows = right.rows && left.columns = right.columns ->
+      Some
+        (ResolvedMatrix
+           { kind = combine_matrix_kind left right; rows = left.rows; columns = left.columns })
+  | Core.Multiply, ResolvedMatrix left, ResolvedMatrix right
+    when left.columns = right.rows ->
+      Some
+        (ResolvedMatrix
+           { kind = combine_matrix_kind left right; rows = left.rows; columns = right.columns })
+  | Core.Multiply, ResolvedMatrix mat, ResolvedFloat
+  | Core.Multiply, ResolvedFloat, ResolvedMatrix mat ->
+      Some (ResolvedMatrix mat)
+  | Core.Multiply, ResolvedVec vec, ResolvedMatrix mat when vec.dimension = mat.rows ->
+      Some (ResolvedVec { kind = vec.kind; dimension = mat.columns })
+  | _ -> None
 
 let rec resolved_compatible actual expected =
   equal_resolved_type actual expected

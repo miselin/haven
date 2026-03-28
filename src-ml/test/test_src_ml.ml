@@ -273,6 +273,38 @@ pub fn sut() -> i32 {
   assert_no_diagnostics "parameter-driven enum constructor semantics"
     parameter_enum_pipeline.semantic.diagnostics;
 
+  let vector_matrix_pipeline =
+    parse_to_core
+      {|
+fn vadd(fvec3 a, fvec3 b) -> fvec3 {
+  a + b
+}
+
+fn vscale(fvec3 a, float b) -> fvec3 {
+  a * b
+}
+
+fn mmul(mat2x3 a, mat3x4 b) -> mat2x4 {
+  a * b
+}
+
+fn mscale(mat2x3 a, float b) -> mat2x3 {
+  a * b
+}
+
+fn vmul(fvec2 a, mat2x3 b) -> fvec3 {
+  a * b
+}
+
+pub fn sut() -> void {}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "vector and matrix operator typing"
+    vector_matrix_pipeline.typing.diagnostics;
+  assert_no_diagnostics "vector and matrix operator semantic"
+    vector_matrix_pipeline.semantic.diagnostics;
+
   let assignment_enum_pipeline =
     parse_to_core
       {|
@@ -461,4 +493,11 @@ pub fn sut() -> i32 {
     |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "invalid binary operands should fail"
-    bad_binary_pipeline.semantic.diagnostics
+    bad_binary_pipeline.semantic.diagnostics;
+
+  let bad_vector_binary_pipeline =
+    parse_to_core "pub fn main(fvec3 v) -> void { let x = v + 1.0; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "invalid vector arithmetic should fail"
+    bad_vector_binary_pipeline.semantic.diagnostics

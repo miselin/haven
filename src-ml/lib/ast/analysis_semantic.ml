@@ -329,6 +329,12 @@ module Semantic = struct
               || (resolved_is_numeric left && resolved_is_pointerish right)
           | _ -> false
         in
+        let vector_or_matrix_result =
+          match (left_resolved, right_resolved) with
+          | Some left, Some right ->
+              resolved_arithmetic_binary_result binary.value.op left right
+          | _ -> None
+        in
         let compatible_pair =
           match (left_resolved, right_resolved) with
           | Some left, Some right -> resolved_compatible left right
@@ -336,11 +342,12 @@ module Semantic = struct
         in
         (match binary.value.op with
         | Core.Add | Core.Subtract ->
-            if not (numeric_pair || pointer_numeric_pair) then
+            if not (numeric_pair || pointer_numeric_pair || Option.is_some vector_or_matrix_result)
+            then
               add_diagnostic state Error expr.loc
                 "binary arithmetic requires numeric operands or pointer arithmetic"
         | Core.Multiply | Core.Divide | Core.Modulo ->
-            if not numeric_pair then
+            if not (numeric_pair || Option.is_some vector_or_matrix_result) then
               add_diagnostic state Error expr.loc
                 "binary arithmetic requires numeric operands"
         | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr | Core.BitwiseXor

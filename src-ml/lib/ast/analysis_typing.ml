@@ -713,69 +713,83 @@ module Typing = struct
     | Core.BitwiseOr
     | Core.BitwiseXor -> (
         match
-          ( left_ann.inferred_type,
-            right_ann.inferred_type,
-            left_ann.resolved_type,
-            right_ann.resolved_type )
+          Option.bind left_ann.resolved_type (fun left_resolved ->
+              Option.bind right_ann.resolved_type (fun right_resolved ->
+                  resolved_arithmetic_binary_result binary.value.op left_resolved
+                    right_resolved))
         with
-        | Some left_ty, _, Some left_resolved, Some right_resolved
-          when resolved_is_pointerish left_resolved && resolved_is_numeric right_resolved
-               && (binary.value.op = Core.Add || binary.value.op = Core.Subtract) ->
-            {
-              inferred_type = Some left_ty;
-              resolved_type = Some left_resolved;
-              metavar = metavar_of_type left_ty;
-            }
-        | _, Some right_ty, Some left_resolved, Some right_resolved
-          when resolved_is_numeric left_resolved && resolved_is_pointerish right_resolved
-               && binary.value.op = Core.Add ->
-            {
-              inferred_type = Some right_ty;
-              resolved_type = Some right_resolved;
-              metavar = metavar_of_type right_ty;
-            }
-        | Some left_ty, Some right_ty, _, _
-          when is_numeric_type left_ty || left_ty.value = Core.FloatType ->
-            let ty =
-              if is_numeric_type right_ty || right_ty.value = Core.FloatType then
-                wider_numeric_type loc left_ty right_ty
-              else left_ty
-            in
+        | Some resolved ->
+            let ty = core_type_of_resolved_ty loc resolved in
             {
               inferred_type = Some ty;
-              resolved_type = resolve_core_type state.type_env [] [] loc ty;
+              resolved_type = Some resolved;
               metavar = metavar_of_type ty;
             }
-        | Some left_ty, Some _, _, _ ->
-            {
-              inferred_type = Some left_ty;
-              resolved_type = resolve_core_type state.type_env [] [] loc left_ty;
-              metavar = metavar_of_type left_ty;
-            }
-        | Some ty, None, _, _ | None, Some ty, _, _ ->
-            {
-              inferred_type = Some ty;
-              resolved_type = resolve_core_type state.type_env [] [] loc ty;
-              metavar = metavar_of_type ty;
-            }
-        | None, None, _, _ -> (
+        | None -> (
             match
-              ( Option.bind left_ann.metavar.integer (fun i -> i.exact_value),
-                Option.bind right_ann.metavar.integer (fun i -> i.exact_value) )
+              ( left_ann.inferred_type,
+                right_ann.inferred_type,
+                left_ann.resolved_type,
+                right_ann.resolved_type )
             with
-            | Some left_value, Some right_value ->
-                let ty = smallest_integer_type loc (max left_value right_value) in
+            | Some left_ty, _, Some left_resolved, Some right_resolved
+              when resolved_is_pointerish left_resolved && resolved_is_numeric right_resolved
+                   && (binary.value.op = Core.Add || binary.value.op = Core.Subtract) ->
+                {
+                  inferred_type = Some left_ty;
+                  resolved_type = Some left_resolved;
+                  metavar = metavar_of_type left_ty;
+                }
+            | _, Some right_ty, Some left_resolved, Some right_resolved
+              when resolved_is_numeric left_resolved && resolved_is_pointerish right_resolved
+                   && binary.value.op = Core.Add ->
+                {
+                  inferred_type = Some right_ty;
+                  resolved_type = Some right_resolved;
+                  metavar = metavar_of_type right_ty;
+                }
+            | Some left_ty, Some right_ty, _, _
+              when is_numeric_type left_ty || left_ty.value = Core.FloatType ->
+                let ty =
+                  if is_numeric_type right_ty || right_ty.value = Core.FloatType then
+                    wider_numeric_type loc left_ty right_ty
+                  else left_ty
+                in
                 {
                   inferred_type = Some ty;
                   resolved_type = resolve_core_type state.type_env [] [] loc ty;
                   metavar = metavar_of_type ty;
                 }
-            | _ ->
+            | Some left_ty, Some _, _, _ ->
                 {
-                  inferred_type = None;
-                  resolved_type = None;
-                  metavar = { unknown_metavar with classes = [ TypeClassNumeric ] };
-                }))
+                  inferred_type = Some left_ty;
+                  resolved_type = resolve_core_type state.type_env [] [] loc left_ty;
+                  metavar = metavar_of_type left_ty;
+                }
+            | Some ty, None, _, _ | None, Some ty, _, _ ->
+                {
+                  inferred_type = Some ty;
+                  resolved_type = resolve_core_type state.type_env [] [] loc ty;
+                  metavar = metavar_of_type ty;
+                }
+            | None, None, _, _ -> (
+                match
+                  ( Option.bind left_ann.metavar.integer (fun i -> i.exact_value),
+                    Option.bind right_ann.metavar.integer (fun i -> i.exact_value) )
+                with
+                | Some left_value, Some right_value ->
+                    let ty = smallest_integer_type loc (max left_value right_value) in
+                    {
+                      inferred_type = Some ty;
+                      resolved_type = resolve_core_type state.type_env [] [] loc ty;
+                      metavar = metavar_of_type ty;
+                    }
+                | _ ->
+                    {
+                      inferred_type = None;
+                      resolved_type = None;
+                      metavar = { unknown_metavar with classes = [ TypeClassNumeric ] };
+                    })))
 
   and infer_match state env ~(expected_type : resolved_ty option) loc
       (match_expr : Core.match_expr) :
