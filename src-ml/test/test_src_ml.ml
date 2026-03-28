@@ -6,6 +6,34 @@ let assert_true message cond = if not cond then failwith message
 let assert_no_diagnostics label diagnostics =
   assert_true (label ^ " unexpectedly produced diagnostics") (diagnostics = [])
 
+let assert_has_diagnostics label diagnostics =
+  assert_true (label ^ " unexpectedly produced no diagnostics") (diagnostics <> [])
+
+let string_contains haystack needle =
+  let haystack_len = String.length haystack in
+  let needle_len = String.length needle in
+  let rec loop index =
+    if needle_len = 0 then true
+    else if index + needle_len > haystack_len then false
+    else if String.sub haystack index needle_len = needle then true
+    else loop (index + 1)
+  in
+  loop 0
+
+let assert_diagnostic_message_contains label needle diagnostics =
+  match diagnostics with
+  | [] -> failwith (label ^ " expected at least one diagnostic")
+  | diagnostic :: _ ->
+      assert_true (label ^ " did not include the expected diagnostic text")
+        (string_contains diagnostic.Analysis.message needle)
+
+let assert_diagnostic_category label expected_category diagnostics =
+  match diagnostics with
+  | [] -> failwith (label ^ " expected at least one diagnostic")
+  | diagnostic :: _ ->
+      assert_true (label ^ " had the wrong diagnostic category")
+        (diagnostic.Analysis.category = expected_category)
+
 let parse_to_core text = Haven.Ast.Convert.core_of_cst (Haven.Parser.parse_string text)
 
 let find_first_let_binding (program : Core.parsed_program) =
@@ -107,4 +135,105 @@ let () =
     |> Analysis.Pipeline.run_core
   in
   assert_true "expected break outside loop to fail semantic analysis"
-    (bad_semantics.semantic.diagnostics <> [])
+    (bad_semantics.semantic.diagnostics <> []);
+  assert_diagnostic_category "semantic diagnostic category"
+    Analysis.Semantic bad_semantics.semantic.diagnostics;
+
+  let bad_typing =
+    parse_to_core "pub fn main() -> void { foo; }"
+    |> Analysis.Typing.run
+  in
+  assert_has_diagnostics "expected unknown identifier to fail typing analysis"
+    bad_typing.diagnostics;
+  assert_diagnostic_category "typing diagnostic category" Analysis.TypeCheck
+    bad_typing.diagnostics;
+
+  let enum_pipeline =
+    parse_to_core
+      {|
+type Result = enum <T> {
+  Ok(T),
+  Error
+};
+
+fn thing() -> Result::<i32> {
+  Result::<i32>::Ok(5)
+}
+
+pub fn sut() -> i32 {
+  match thing() {
+    Ok(x) => x,
+    _ => 1
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "generic enum constructor typing" enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "generic enum pattern semantics" enum_pipeline.semantic.diagnostics;
+
+  let statement_match_pipeline =
+    parse_to_core
+      {|
+pub fn sut() -> i32 {
+  let mut i32 result = 0;
+  match 5 {
+    5 => {
+      result = 5;
+    }
+  };
+  result
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "statement match without otherwise typing"
+    statement_match_pipeline.typing.diagnostics;
+  assert_no_diagnostics "statement match without otherwise semantic"
+    statement_match_pipeline.semantic.diagnostics;
+
+  let nil_pipeline =
+    parse_to_core "pub fn main() -> void { let i32 x = nil; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "nil assigned to integer binding" nil_pipeline.semantic.diagnostics;
+
+  let mutate_pipeline =
+    parse_to_core
+      "pub impure fn main() -> i32 { let mut i32 x = 0; let y = ref x := as<i32>(1); 0 }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "mutation used as a value" mutate_pipeline.semantic.diagnostics;
+
+  let bad_pattern_pipeline =
+    parse_to_core
+      {|
+type Result = enum <T> {
+  Ok(T),
+  Error
+};
+
+fn thing() -> Result::<i32> {
+  Result::<i32>::Ok(5)
+}
+
+pub fn sut() -> i32 {
+  match thing() {
+    Ok => 1,
+    _ => 0
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "enum payload pattern without binding"
+    bad_pattern_pipeline.semantic.diagnostics;
+
+  let non_exhaustive_match_pipeline =
+    parse_to_core "pub fn main() -> i32 { match 5 { 5 => 5 } }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "non-exhaustive match should fail"
+    non_exhaustive_match_pipeline.semantic.diagnostics;
+  assert_diagnostic_message_contains "non-exhaustive match wording" "not exhaustive"
+    non_exhaustive_match_pipeline.semantic.diagnostics

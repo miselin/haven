@@ -147,7 +147,10 @@ and cst_struct_field_to_surface (field : Cst.struct_field) : Surface.struct_fiel
 
 and cst_enum_decl_to_surface (decl : Cst.enum_decl) : Surface.enum_decl =
   let value =
-    { Surface.variants = List.map cst_enum_variant_to_surface decl.value.variants }
+    {
+      Surface.generics = List.map cst_identifier_to_surface decl.value.generics;
+      variants = List.map cst_enum_variant_to_surface decl.value.variants;
+    }
   in
   mk_surface decl.loc value
 
@@ -749,7 +752,10 @@ and surface_struct_field_to_core _st (field : Surface.struct_field) :
 
 and surface_enum_decl_to_core st (decl : Surface.enum_decl) : Core.enum_decl =
   mk_core decl.loc
-    { Core.variants = List.map (surface_enum_variant_to_core st) decl.value.variants }
+    {
+      Core.generics = List.map surface_identifier_to_core decl.value.generics;
+      variants = List.map (surface_enum_variant_to_core st) decl.value.variants;
+    }
 
 and surface_enum_variant_to_core _st (variant : Surface.enum_variant) :
     Core.enum_variant =

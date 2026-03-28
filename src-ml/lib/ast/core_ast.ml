@@ -100,7 +100,7 @@ and type_decl_data =
   | TypeDeclForward
 
 and struct_decl_desc = { fields : struct_field list }
-and enum_decl_desc = { variants : enum_variant list }
+and enum_decl_desc = { generics : identifier list; variants : enum_variant list }
 and struct_field_desc = { name : identifier; ty : haven_type }
 and enum_variant_desc = { name : identifier; inner_ty : haven_type option }
 and struct_decl = struct_decl_desc node

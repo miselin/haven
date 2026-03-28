@@ -283,8 +283,11 @@ let pp_enum_variant fmt (v : enum_variant) =
 
 let pp_enum_decl fmt (d : enum_decl) =
   let d = unwrap d in
-  (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_enum_variant)
-    fmt d.variants
+  fprintf fmt "generics=[%a], variants=[%a]"
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_identifier)
+    d.generics
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_enum_variant)
+    d.variants
 
 let pp_type_decl_data fmt tyd =
   match tyd with

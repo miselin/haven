@@ -258,7 +258,9 @@ let pp_surface_type_decl_data fmt = function
         (pp_print_list ~pp_sep pp_surface_struct_field)
         decl.value.fields
   | TypeDeclEnum decl ->
-      fprintf fmt "Enum(%a)"
+      fprintf fmt "Enum(generics=[%a], variants=[%a])"
+        (pp_print_list ~pp_sep pp_surface_identifier)
+        decl.value.generics
         (pp_print_list ~pp_sep pp_surface_enum_variant)
         decl.value.variants
   | TypeDeclForward -> fprintf fmt "Forward"
@@ -486,7 +488,9 @@ let pp_core_type_decl_data fmt = function
         (pp_print_list ~pp_sep pp_core_struct_field)
         decl.value.fields
   | TypeDeclEnum decl ->
-      fprintf fmt "Enum(%a)"
+      fprintf fmt "Enum(generics=[%a], variants=[%a])"
+        (pp_print_list ~pp_sep pp_core_identifier)
+        decl.value.generics
         (pp_print_list ~pp_sep pp_core_enum_variant)
         decl.value.variants
   | TypeDeclForward -> fprintf fmt "Forward"

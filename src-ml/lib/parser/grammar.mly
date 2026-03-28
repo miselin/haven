@@ -120,8 +120,8 @@ struct_field: t=haven_type n=identifier SEMICOLON {
     mk_loc $startpos $endpos field
 } ;
 
-enum_decl: ENUM enum_generics? LBRACE v=separated_nonempty_list(COMMA, enum_variant) RBRACE { mk_loc $startpos $endpos { variants = v } } ;
-enum_generics: separated_list(COMMA, IDENT) {} ;
+enum_decl: ENUM g=enum_generics? LBRACE v=separated_nonempty_list(COMMA, enum_variant) RBRACE { mk_loc $startpos $endpos { generics = Option.value ~default:[] g; variants = v } } ;
+enum_generics: g=delimited(LT, separated_list(COMMA, identifier), GT) { g } ;
 enum_variant: i=identifier t=option(enum_wrapped_type) { mk_loc $startpos $endpos { name = i; inner_ty = t }} ;
 enum_wrapped_type: LPAREN t=haven_type RPAREN { t } ;
 
