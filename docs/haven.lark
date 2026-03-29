@@ -139,19 +139,18 @@ literal: HEX
        | mat_literal
        | vec_literal
 
-mat_literal: "Mat" "<" mat_row ("," mat_row)* ","? ">"
+mat_literal: "Mat" "<" mat_row ("," mat_row)* ">"
 mat_row: vec_literal
 
 vec_literal: "Vec" "<" unary vec_literal_tail? ">"
 vec_literal_tail: "," unary ("," unary)*
 
 initializer: "{" initializer_list "}"
-initializer_list: (expr ",")
-                | expr ("," expr)+ ","?
+initializer_list: expr ("," expr)*
 
 if_expr: "if" expr block ("else" (if_expr | block))?
 
-match_expr: "match" expr "{" match_arm (","? match_arm)* ","? "}"
+match_expr: "match" expr "{" match_arm ("," match_arm)* "}"
 match_arm: pattern "=>" expr
 
 pattern: "_"

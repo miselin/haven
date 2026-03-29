@@ -8,8 +8,8 @@ type Outer = struct {
 };
 
 pub fn main() -> i32 {
-    let Inner inner = { 5, };
-    let Outer outer = { inner, };
+    let Inner inner = { 5 };
+    let Outer outer = { inner };
 
     (outer.inner).x
 }

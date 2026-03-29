@@ -65,6 +65,20 @@ let write_file path contents =
 
 let parse_to_core text = Haven.Ast.Convert.core_of_cst (Haven.Parser.parse_string text)
 
+let assert_parse_ok label text =
+  try
+    ignore (Haven.Parser.parse_string text)
+  with Failure msg -> failwith (label ^ " unexpectedly failed to parse: " ^ msg)
+
+let assert_parse_error_contains label needle text =
+  try
+    ignore (Haven.Parser.parse_string text);
+    failwith (label ^ " unexpectedly parsed successfully")
+  with
+  | Failure msg ->
+      assert_true (label ^ " did not include the expected parse error text")
+        (string_contains msg needle)
+
 let find_first_let_binding (program : Core.parsed_program) =
   let rec collect_in_statements acc (statements : Core.statement list) =
     match statements with

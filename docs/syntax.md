@@ -963,7 +963,7 @@ referenced by:
 
 ```
 mat_inner
-         ::= mat_row+
+         ::= mat_row ( ',' mat_row )*
 ```
 
 referenced by:
@@ -975,7 +975,7 @@ referenced by:
 ![mat_row](diagram/mat_row.svg)
 
 ```
-mat_row  ::= vec_literal ','
+mat_row  ::= vec_literal
 ```
 
 referenced by:
@@ -1028,7 +1028,7 @@ referenced by:
 
 ```
 initializer_list
-         ::= expr ( ',' | ( ',' expr )+ ','? )
+         ::= expr ( ',' expr )*
 ```
 
 referenced by:
@@ -1041,7 +1041,7 @@ referenced by:
 
 ```
 match_expr
-         ::= 'match' expr '{' match_arm+ '}'
+         ::= 'match' expr '{' match_arm ( ',' match_arm )* '}'
 ```
 
 referenced by:

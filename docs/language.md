@@ -112,10 +112,10 @@ let Node node = { 1234, nil };
 
 In contexts where the type is known (e.g. a function return), the type will be inferred automatically.
 
-Single-element structs require a trailing comma to initialize:
+Single-element structs do not require a trailing comma:
 
 ```
-let Thing thing = { 1234, };
+let Thing thing = { 1234 };
 ```
 
 ### Enums
@@ -145,7 +145,7 @@ Use of enums in expressions requires both the enum name and the field name to be
 ```
 match x {
     Numeric::Int(_) => 0,
-    Numeric::Float(_) => 1,
+    Numeric::Float(_) => 1
 }
 ```
 
@@ -591,8 +591,8 @@ This variant simply evaluates comparisons between the condition and the arms of 
 
 ```
 let v = match 5 {
-    5 => 0
-    4 => { 2 + 2 } // any expression is valid
+    5 => 0,
+    4 => { 2 + 2 }, // any expression is valid
     _ => 1
 };
 ```
@@ -601,7 +601,7 @@ let v = match 5 {
 
 ```
 let v = match number(2) {
-    Numbers::Two => 0
+    Numbers::Two => 0,
     _ => 1
 }
 ```
@@ -612,8 +612,8 @@ It is an error to _not_ provide a binding if the enum value includes a binding. 
 
 ```
 let v = match numeric(0) {
-    Numeric::Int(x) => x // x is defined for the duration of the expression
-    Numeric::Float(_) => 0 // you may opt out of binding
+    Numeric::Int(x) => x, // x is defined for the duration of the expression
+    Numeric::Float(_) => 0, // you may opt out of binding
     _ => 10
 };
 ```

@@ -97,9 +97,18 @@ fn_intrinsic:
   ;
 
 params:
-  | p=separated_nonempty_list(COMMA, param) va=boption(pair(COMMA, STAR)) { mk_loc $startpos $endpos { params = p; vararg = va } }
+  | p=fixed_params { mk_loc $startpos $endpos { params = p; vararg = false } }
+  | p=vararg_params { mk_loc $startpos $endpos { params = p; vararg = true } }
   | STAR { mk_loc $startpos $endpos { params = []; vararg = true } }
   | { mk_loc $startpos $endpos { params = []; vararg = false } }
+  ;
+fixed_params:
+  | p=param { [p] }
+  | p=param COMMA ps=fixed_params { p :: ps }
+  ;
+vararg_params:
+  | p=param COMMA STAR { [p] }
+  | p=param COMMA ps=vararg_params { p :: ps }
   ;
 
 param: t=haven_type n=identifier { mk_loc $startpos $endpos { name = n; ty = t } } ;

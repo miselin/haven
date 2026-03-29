@@ -138,6 +138,67 @@ let push_token buf tok acc =
   let startp, endp = Sedlexing.lexing_positions buf in
   { tok; startp; endp } :: acc
 
+let rec next_significant_token = function
+  | [] -> None
+  | { tok = Trivia _ | Newline _; _ } :: rest -> next_significant_token rest
+  | tok :: _ -> Some tok
+
+let should_split_rshift rest =
+  match next_significant_token rest with
+  | None -> true
+  | Some { tok = EOF; _ } -> true
+  | Some { tok = Symbol sym; _ } -> (
+      match sym with
+      | Comma
+      | Dot
+      | Semicolon
+      | Colon
+      | Star
+      | Caret
+      | RParen
+      | RBrace
+      | RBracket
+      | LBracket
+      | Gt
+      | Scope ->
+          true
+      | Arrow
+      | FatArrow
+      | Walrus
+      | LogicAnd
+      | LogicOr
+      | EqEq
+      | BangEq
+      | LtEq
+      | GtEq
+      | LShift
+      | RShift
+      | LParen
+      | LBrace
+      | Lt
+      | Plus
+      | Minus
+      | Slash
+      | Percent
+      | Equal
+      | Ampersand
+      | Pipe
+      | Bang
+      | Tilde
+      | Underscore ->
+          false)
+  | Some _ -> false
+
+let split_closing_rshifts tokens =
+  let gt_of tok = { tok with tok = Symbol Gt } in
+  let rec loop acc = function
+    | [] -> List.rev acc
+    | ({ tok = Symbol RShift; _ } as tok) :: rest when should_split_rshift rest ->
+        loop (gt_of tok :: gt_of tok :: acc) rest
+    | tok :: rest -> loop (tok :: acc) rest
+  in
+  loop [] tokens
+
 let rec lex buf acc =
   match%sedlex buf with
   | newline ->
@@ -249,7 +310,7 @@ let rec lex buf acc =
       failwith (Printf.sprintf "Unexpected character: %s" bad)
   | _ -> lex buf acc
 
-let tokenize buf = lex buf []
+let tokenize buf = lex buf [] |> split_closing_rshifts
 
 let tokenize_channel ?(filename = "") ch =
   let lexbuf = Sedlexing.Utf8.from_channel ch in

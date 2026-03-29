@@ -41,6 +41,11 @@ struct ast_expr_list *parse_expression_list_alt(struct parser *parser, enum toke
     if (peek == TOKEN_COMMA) {
       parser_consume_peeked(parser, NULL);
       peek = parser_peek(parser);
+      if (peek == terminator || peek == alt_terminator) {
+        parser_diag(1, parser, NULL, "trailing commas are not permitted in expression lists");
+        free_expr_list(parser->compiler, result);
+        return NULL;
+      }
     } else {
       break;
     }
@@ -531,8 +536,18 @@ struct ast_expr *parse_factor(struct parser *parser) {
           result->expr.match.num_arms++;
         }
 
-        if (parser_peek(parser) == TOKEN_COMMA) {
-          parser_consume_peeked(parser, NULL);
+        if (parser_peek(parser) == TOKEN_RBRACE) {
+          continue;
+        }
+
+        if (parser_consume(parser, NULL, TOKEN_COMMA) < 0) {
+          free(result);
+          return NULL;
+        }
+        if (parser_peek(parser) == TOKEN_RBRACE) {
+          parser_diag(1, parser, NULL, "trailing commas are not permitted in match expressions");
+          free(result);
+          return NULL;
         }
       }
       if (parser_consume(parser, NULL, TOKEN_RBRACE) < 0) {

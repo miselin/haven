@@ -55,6 +55,10 @@ int parse_block(struct parser *parser, struct ast_block *into, struct ast_expr *
         parser_consume_peeked(parser, NULL);
 
         is_initializer = 1;
+        if (parser_peek(parser) == TOKEN_RBRACE) {
+          parser_diag(1, parser, NULL, "trailing commas are not permitted in initializers");
+          return -1;
+        }
       }
     }
 
