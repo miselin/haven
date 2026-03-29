@@ -34,41 +34,85 @@ let assert_diagnostic_category label expected_category diagnostics =
       assert_true (label ^ " had the wrong diagnostic category")
         (diagnostic.Analysis.category = expected_category)
 
+let assert_has_ownership_action label predicate actions =
+  assert_true (label ^ " did not include the expected ownership action")
+    (List.exists predicate actions)
+
 let parse_to_core text = Haven.Ast.Convert.core_of_cst (Haven.Parser.parse_string text)
 
 let find_first_let_binding (program : Core.parsed_program) =
-  let rec find_in_statements (statements : Core.statement list) =
+  let rec collect_in_statements acc (statements : Core.statement list) =
     match statements with
-    | [] -> None
+    | [] -> List.rev acc
     | stmt :: rest -> (
         match stmt.value with
-        | Core.Let binding -> Some binding
+        | Core.Let binding -> collect_in_statements (binding :: acc) rest
         | Core.Expression _
         | Core.Return _
         | Core.Defer _
         | Core.Break
         | Core.Continue ->
-            find_in_statements rest
-        | Core.Loop loop -> (
-            match find_in_statements loop.value.body.value.statements with
-            | Some binding -> Some binding
-            | None -> find_in_statements rest))
+            collect_in_statements acc rest
+        | Core.Loop loop ->
+            collect_in_statements
+              (List.rev_append
+                 (List.rev (collect_in_statements [] loop.value.body.value.statements))
+                 acc)
+              rest)
   in
-  let rec find_in_decls (decls : Core.top_decl list) =
+  let rec collect_in_decls acc (decls : Core.top_decl list) =
     match decls with
-    | [] -> None
+    | [] -> List.rev acc
     | decl :: rest -> (
         match decl.value with
         | Core.FDecl fn -> (
             match fn.value.definition with
-            | Some body -> (
-                match find_in_statements body.value.statements with
-                | Some binding -> Some binding
-                | None -> find_in_decls rest)
-            | None -> find_in_decls rest)
-        | _ -> find_in_decls rest)
+            | Some body ->
+                let acc =
+                  List.rev_append
+                    (List.rev (collect_in_statements [] body.value.statements))
+                    acc
+                in
+                collect_in_decls acc rest
+            | None -> collect_in_decls acc rest)
+        | _ -> collect_in_decls acc rest)
   in
-  match find_in_decls program.program.value.decls with
+  match collect_in_decls [] program.program.value.decls with
+  | binding :: _ -> binding
+  | [] -> failwith "expected to find a let binding"
+
+let find_let_binding_at index (program : Core.parsed_program) =
+  let rec collect_stmt (bindings : Core.let_stmt list) (statements : Core.statement list) =
+    match statements with
+    | [] -> List.rev bindings
+    | stmt :: stmt_rest -> (
+        match stmt.value with
+        | Core.Let binding ->
+            collect_stmt (binding :: bindings) stmt_rest
+        | Core.Loop loop ->
+            let inner = collect_stmt [] loop.value.body.value.statements in
+            collect_stmt (List.rev_append inner bindings) stmt_rest
+        | Core.Expression _
+        | Core.Return _
+        | Core.Defer _
+        | Core.Break
+        | Core.Continue ->
+            collect_stmt bindings stmt_rest)
+  in
+  let rec collect (bindings : Core.let_stmt list) (decls : Core.top_decl list) =
+    match decls with
+    | [] -> List.rev bindings
+    | decl :: rest -> (
+        match decl.value with
+        | Core.FDecl fn -> (
+            match fn.value.definition with
+            | Some body ->
+                collect (List.rev_append (collect_stmt [] body.value.statements) bindings) rest
+            | None -> collect bindings rest)
+        | _ -> collect bindings rest)
+  in
+  let bindings = collect [] program.program.value.decls in
+  match List.nth_opt bindings index with
   | Some binding -> binding
   | None -> failwith "expected to find a let binding"
 
@@ -355,6 +399,164 @@ pub fn sut() -> i32 {
   in
   assert_has_diagnostics "nil assigned to integer binding" nil_pipeline.semantic.diagnostics;
 
+  let box_copy_pipeline =
+    parse_to_core
+      "pub fn main() -> i32 { let boxed = box as<i32>(5); let inner = unbox boxed; inner }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "unbox copies in value contexts typing"
+    box_copy_pipeline.typing.diagnostics;
+  assert_no_diagnostics "unbox copies in value contexts semantic"
+    box_copy_pipeline.semantic.diagnostics;
+  let inner_binding = find_let_binding_at 1 box_copy_pipeline.core in
+  let inner_binding_ann =
+    Hashtbl.find box_copy_pipeline.typing.annotations.bindings
+      (Analysis.binding_id inner_binding)
+  in
+  (match inner_binding_ann.resolved_type with
+  | Some (Analysis.ResolvedInt (_, _)) -> ()
+  | _ -> failwith "expected let inner = unbox boxed to infer a copied inner value");
+
+  let box_cell_pipeline =
+    parse_to_core
+      "pub fn main() -> i32 { let boxed = box as<i32>(5); let Cell<i32> inner = unbox boxed; load inner }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "unbox preserves cell when requested typing"
+    box_cell_pipeline.typing.diagnostics;
+  assert_no_diagnostics "unbox preserves cell when requested semantic"
+    box_cell_pipeline.semantic.diagnostics;
+  let cell_binding = find_let_binding_at 1 box_cell_pipeline.core in
+  let cell_binding_ann =
+    Hashtbl.find box_cell_pipeline.typing.annotations.bindings
+      (Analysis.binding_id cell_binding)
+  in
+  (match cell_binding_ann.resolved_type with
+  | Some (Analysis.ResolvedCell (Analysis.ResolvedInt (_, _))) -> ()
+  | _ -> failwith "expected explicit Cell binding to preserve the unbox reference");
+
+  let box_load_pipeline =
+    parse_to_core "pub fn main() -> i32 { let boxed = box as<i32>(5); load boxed }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "load from box typing" box_load_pipeline.typing.diagnostics;
+  assert_no_diagnostics "load from box semantic" box_load_pipeline.semantic.diagnostics;
+
+  let box_arg_pipeline =
+    parse_to_core
+      "fn take(i32 value) -> i32 { value } pub fn main() -> i32 { let boxed = box as<i32>(5); take(unbox boxed) }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "unbox passed by copied value typing"
+    box_arg_pipeline.typing.diagnostics;
+  assert_no_diagnostics "unbox passed by copied value semantic"
+    box_arg_pipeline.semantic.diagnostics;
+
+  let box_cell_arg_pipeline =
+    parse_to_core
+      "fn take(Cell<i32> value) -> i32 { load value } pub fn main() -> i32 { let boxed = box as<i32>(5); take(unbox boxed) }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "unbox passed as cell typing"
+    box_cell_arg_pipeline.typing.diagnostics;
+  assert_no_diagnostics "unbox passed as cell semantic"
+    box_cell_arg_pipeline.semantic.diagnostics;
+
+  let ownership_binding_pipeline =
+    parse_to_core "pub fn main(i32^ input) -> void { let alias = input; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "ownership binding typing"
+    ownership_binding_pipeline.typing.diagnostics;
+  assert_no_diagnostics "ownership binding semantic"
+    ownership_binding_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "ownership binding ownership"
+    ownership_binding_pipeline.ownership.diagnostics;
+  assert_has_ownership_action "binding init should retain shared box handles"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Retain, Analysis.BindingInit, Analysis.OwnershipExpr (_, Some "input") ->
+          true
+      | _ -> false)
+    ownership_binding_pipeline.ownership.actions;
+  assert_has_ownership_action "binding scope exit should release box bindings"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Release, Analysis.ScopeExit, Analysis.OwnershipBinding "alias" -> true
+      | _ -> false)
+    ownership_binding_pipeline.ownership.actions;
+  assert_has_ownership_action "function exit should release box params"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Release, Analysis.FunctionExit, Analysis.OwnershipParam "input" -> true
+      | _ -> false)
+    ownership_binding_pipeline.ownership.actions;
+
+  let ownership_return_pipeline =
+    parse_to_core "fn forward(i32^ input) -> i32^ { input }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "ownership return typing"
+    ownership_return_pipeline.typing.diagnostics;
+  assert_no_diagnostics "ownership return semantic"
+    ownership_return_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "ownership return ownership"
+    ownership_return_pipeline.ownership.diagnostics;
+  assert_has_ownership_action "returning a shared box should retain it first"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Retain, Analysis.ReturnValue, Analysis.OwnershipExpr (_, Some "input")
+        ->
+          true
+      | _ -> false)
+    ownership_return_pipeline.ownership.actions;
+
+  let ownership_call_pipeline =
+    parse_to_core
+      "fn consume(i32^ value) -> void { } pub fn main(i32^ input) -> void { consume(input); }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "ownership call typing"
+    ownership_call_pipeline.typing.diagnostics;
+  assert_no_diagnostics "ownership call semantic"
+    ownership_call_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "ownership call ownership"
+    ownership_call_pipeline.ownership.diagnostics;
+  assert_has_ownership_action "passing a shared box should retain it for the call"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Retain, Analysis.CallArg, Analysis.OwnershipExpr (_, Some "input") ->
+          true
+      | _ -> false)
+    ownership_call_pipeline.ownership.actions;
+
+  let ownership_assign_pipeline =
+    parse_to_core
+      "pub fn main(i32^ left, i32^ right) -> void { let mut alias = left; alias = right; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "ownership assign typing"
+    ownership_assign_pipeline.typing.diagnostics;
+  assert_no_diagnostics "ownership assign semantic"
+    ownership_assign_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "ownership assign ownership"
+    ownership_assign_pipeline.ownership.diagnostics;
+  assert_has_ownership_action "assignment should retain shared incoming box values"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Retain, Analysis.AssignValue, Analysis.OwnershipExpr (_, Some "right") ->
+          true
+      | _ -> false)
+    ownership_assign_pipeline.ownership.actions;
+  assert_has_ownership_action "assignment should release the overwritten box target"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Release, Analysis.AssignOverwrite, Analysis.OwnershipTarget (_, Some "alias")
+        ->
+          true
+      | _ -> false)
+    ownership_assign_pipeline.ownership.actions;
+
   let untyped_initializer =
     parse_to_core "pub fn main() -> void { let values = { 1, 2 }; }"
     |> Analysis.Typing.run
@@ -407,11 +609,11 @@ pub fn main() -> void {
     bad_ref_pipeline.semantic.diagnostics;
 
   let bad_load_pipeline =
-    parse_to_core
-      "pub fn main() -> void { let boxed = box as<i32>(5); let x = load boxed; }"
+    parse_to_core "pub fn main() -> void { let x = load as<i32>(5); }"
     |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "load of box should fail" bad_load_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "load of plain value should fail"
+    bad_load_pipeline.semantic.diagnostics;
 
   let bare_return_pipeline =
     parse_to_core "pub fn main() -> i32 { ret; }"

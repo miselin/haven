@@ -75,7 +75,7 @@ type binding_annotation = {
   is_mutable : bool;
 }
 
-type diagnostic_category = TypeCheck | Semantic | Cleanup
+type diagnostic_category = TypeCheck | Semantic | Cleanup | Ownership
 
 type diagnostic_level = Error | Warning
 
@@ -99,6 +99,49 @@ type typing_result = {
 
 type semantic_result = { diagnostics : diagnostic list }
 
+type ownership_anchor =
+  | AfterExpr of string
+  | BeforeExpr of string
+  | BeforeStmt of string
+  | OnBlockExit of string
+  | OnLoopExit of string
+  | OnFunctionExit of string
+  | OnGlobalInit of string
+
+type ownership_action_kind = Retain | Release
+
+type ownership_reason =
+  | BindingInit
+  | CallArg
+  | ReturnValue
+  | AssignValue
+  | AssignOverwrite
+  | MutateValue
+  | MutateOverwrite
+  | ScopeExit
+  | LoopExit
+  | FunctionExit
+
+type ownership_subject =
+  | OwnershipExpr of string * string option
+  | OwnershipBinding of string
+  | OwnershipParam of string
+  | OwnershipTarget of string * string option
+
+type ownership_action = {
+  anchor : ownership_anchor;
+  kind : ownership_action_kind;
+  reason : ownership_reason;
+  subject : ownership_subject;
+  loc : Loc.t;
+  resolved_type : resolved_ty option;
+}
+
+type ownership_result = {
+  actions : ownership_action list;
+  diagnostics : diagnostic list;
+}
+
 let make_annotations () =
   {
     exprs = Hashtbl.create 256;
@@ -113,6 +156,9 @@ let node_id (loc : Loc.t) =
 
 let expr_id (expr : Core.expression) = node_id expr.loc
 let binding_id (binding : Core.let_stmt) = node_id binding.loc
+let statement_id (stmt : Core.statement) = node_id stmt.loc
+let block_id (block : Core.block) = node_id block.loc
+let function_id (fn : Core.function_decl) = node_id fn.loc
 
 let mk_type loc value : Core.haven_type = { Core.value; loc }
 let mk_expr loc value : Core.expression = { Core.value; loc }
@@ -329,7 +375,9 @@ let resolved_is_pointerish = function
   | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedString -> true
   | _ -> false
 
-let combine_matrix_kind left right =
+let resolved_value_type = function ResolvedCell inner -> inner | ty -> ty
+
+let combine_matrix_kind (left : mat_type) (right : mat_type) =
   match (left.kind, right.kind) with
   | FloatMat, FloatMat -> FloatMat
   | _ -> GenericMat
@@ -360,7 +408,8 @@ let resolved_arithmetic_binary_result op left right =
   | Core.Multiply, ResolvedMatrix mat, ResolvedFloat
   | Core.Multiply, ResolvedFloat, ResolvedMatrix mat ->
       Some (ResolvedMatrix mat)
-  | Core.Multiply, ResolvedVec vec, ResolvedMatrix mat when vec.dimension = mat.rows ->
+  | Core.Multiply, ResolvedVec (vec : vec_type), ResolvedMatrix mat
+    when vec.dimension = mat.rows ->
       Some (ResolvedVec { kind = vec.kind; dimension = mat.columns })
   | _ -> None
 
@@ -392,7 +441,7 @@ let rec resolved_compatible actual expected =
 let resolved_can_cast source target =
   resolved_compatible source target
   ||
-  match (source, target) with
+  match (resolved_value_type source, target) with
   | source, target when resolved_is_numeric source && resolved_is_numeric target -> true
   | source, target when resolved_is_pointerish source && resolved_is_pointerish target -> true
   | _ -> false
@@ -401,6 +450,7 @@ let coerce_annotation_to_expected loc expected (annotation : expr_annotation) =
   let coerced_resolved =
     match annotation.resolved_type with
     | Some actual when resolved_compatible actual expected -> Some expected
+    | Some (ResolvedCell actual) when resolved_compatible actual expected -> Some expected
     | None when List.mem TypeClassNil annotation.metavar.classes && resolved_is_pointerish expected
       ->
         Some expected
@@ -593,6 +643,57 @@ let rec lookup_struct_fields type_env loc ty =
       | _ -> None)
   | _ -> None
 
+let rec resolved_contains_box_ownership type_env active loc ty =
+  match ty with
+  | ResolvedBox _ -> true
+  | ResolvedPointer _
+  | ResolvedCell _
+  | ResolvedString
+  | ResolvedInt _
+  | ResolvedFloat
+  | ResolvedVoid
+  | ResolvedVec _
+  | ResolvedMatrix _
+  | ResolvedFunction _
+  | ResolvedGenericParam _ ->
+      false
+  | ResolvedArray (inner, _) ->
+      resolved_contains_box_ownership type_env active loc inner
+  | ResolvedNamed (name, _args) as resolved -> (
+      if List.mem name active then false
+      else
+        match lookup_named_type type_env name with
+        | Some (TypeAlias alias) -> (
+            match resolve_core_type type_env [] [] loc alias with
+            | Some alias_ty ->
+                resolved_contains_box_ownership type_env (name :: active) loc alias_ty
+            | None -> false)
+        | Some (TypeStruct decl) ->
+            List.exists
+              (fun (field : Core.struct_field) ->
+                match resolve_core_type type_env [] [] field.loc field.value.ty with
+                | Some field_ty ->
+                    resolved_contains_box_ownership type_env (name :: active) field.loc
+                      field_ty
+                | None -> false)
+              decl.value.fields
+        | Some (TypeEnum decl) -> (
+            match lookup_enum_decl type_env loc resolved with
+            | Some (_, subst) ->
+                List.exists
+                  (fun (variant : Core.enum_variant) ->
+                    match variant.value.inner_ty with
+                    | Some inner_ty -> (
+                        match resolve_core_type type_env [] subst variant.loc inner_ty with
+                        | Some variant_ty ->
+                            resolved_contains_box_ownership type_env (name :: active)
+                              variant.loc variant_ty
+                        | None -> false)
+                    | None -> false)
+                  decl.value.variants
+            | None -> false)
+        | Some TypeForward | None -> false)
+
 let resolved_deref_once = function
   | ResolvedPointer inner | ResolvedBox inner | ResolvedCell inner -> Some inner
   | _ -> None
@@ -612,6 +713,7 @@ let root_identifier_name (expr : Core.expression) =
     | Core.Identifier id -> Some id.value
     | Core.Index idx -> loop idx.value.target
     | Core.Field field -> loop field.value.target
+    | Core.Unbox inner -> loop inner
     | Core.Load inner -> loop inner
     | _ -> None
   in
@@ -621,6 +723,7 @@ let is_lvalue (expr : Core.expression) =
   let rec loop (expr : Core.expression) =
     match expr.value with
     | Core.Identifier _ | Core.Index _ | Core.Field _ -> true
+    | Core.Unbox inner -> loop inner
     | Core.Load inner -> loop inner
     | _ -> false
   in

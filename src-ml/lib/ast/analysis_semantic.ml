@@ -486,10 +486,7 @@ module Semantic = struct
     | Core.Load inner ->
         check_expression state env loop_depth inner;
         (match expr_resolved_type state inner with
-        | Some (ResolvedPointer _ | ResolvedCell _) -> ()
-        | Some (ResolvedBox _) ->
-            add_diagnostic state Error expr.loc
-              "use unbox instead of load to retrieve the interior value of a box"
+        | Some (ResolvedPointer _ | ResolvedBox _ | ResolvedCell _) -> ()
         | Some _ ->
             add_diagnostic state Error expr.loc
               "load expression must resolve to a pointer-like reference"
