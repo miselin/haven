@@ -668,7 +668,7 @@ module Semantic = struct
               add_diagnostic state Error write.value.value.loc
                 "nil is only valid for pointer-like mutation targets")
 
-  let run typed =
+  let run typed : semantic_result =
     let state =
       { typed; diagnostics_rev = []; type_env = type_env_of_program typed.program.program }
     in

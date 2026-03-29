@@ -184,6 +184,7 @@ let () =
     |> Analysis.Pipeline.run_cst
   in
   assert_no_diagnostics "semantic cleanup input typing" pipeline.typing.diagnostics;
+  assert_no_diagnostics "semantic cleanup input verify" pipeline.verify.diagnostics;
   assert_no_diagnostics "semantic cleanup input semantic" pipeline.semantic.diagnostics;
   let scrutinee_before = find_if_scrutinee pipeline.core in
   let scrutinee_after = find_if_scrutinee pipeline.cleaned in
@@ -234,6 +235,7 @@ pub fn sut() -> i32 {
     |> Analysis.Pipeline.run_core
   in
   assert_no_diagnostics "generic enum constructor typing" enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "generic enum constructor verify" enum_pipeline.verify.diagnostics;
   assert_no_diagnostics "generic enum pattern semantics" enum_pipeline.semantic.diagnostics;
 
   let expected_return_enum_pipeline =
@@ -366,6 +368,8 @@ pub fn sut() -> void {}
   in
   assert_no_diagnostics "vector and matrix operator typing"
     vector_matrix_pipeline.typing.diagnostics;
+  assert_no_diagnostics "vector and matrix operator verify"
+    vector_matrix_pipeline.verify.diagnostics;
   assert_no_diagnostics "vector and matrix operator semantic"
     vector_matrix_pipeline.semantic.diagnostics;
 
@@ -419,6 +423,23 @@ pub fn sut() -> i32 {
   in
   assert_has_diagnostics "nil assigned to integer binding" nil_pipeline.semantic.diagnostics;
 
+  let verify_unknown_type_pipeline =
+    parse_to_core "pub fn main(Missing value) -> void { }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "verify should reject unresolved parameter types"
+    verify_unknown_type_pipeline.verify.diagnostics;
+  assert_diagnostic_category "verify diagnostic category" Analysis.TypeVerify
+    verify_unknown_type_pipeline.verify.diagnostics;
+
+  let stpq_pipeline =
+    parse_to_core "pub fn main(fvec4 uv) -> float { uv.s + uv.t + uv.p + uv.q }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "stpq vector aliases typing" stpq_pipeline.typing.diagnostics;
+  assert_no_diagnostics "stpq vector aliases verify" stpq_pipeline.verify.diagnostics;
+  assert_no_diagnostics "stpq vector aliases semantic" stpq_pipeline.semantic.diagnostics;
+
   let box_copy_pipeline =
     parse_to_core
       "pub fn main() -> i32 { let boxed = box as<i32>(5); let inner = unbox boxed; inner }"
@@ -426,6 +447,8 @@ pub fn sut() -> i32 {
   in
   assert_no_diagnostics "unbox copies in value contexts typing"
     box_copy_pipeline.typing.diagnostics;
+  assert_no_diagnostics "unbox copies in value contexts verify"
+    box_copy_pipeline.verify.diagnostics;
   assert_no_diagnostics "unbox copies in value contexts semantic"
     box_copy_pipeline.semantic.diagnostics;
   let inner_binding = find_let_binding_at 1 box_copy_pipeline.core in
@@ -488,6 +511,8 @@ pub fn sut() -> i32 {
   in
   assert_no_diagnostics "ownership binding typing"
     ownership_binding_pipeline.typing.diagnostics;
+  assert_no_diagnostics "ownership binding verify"
+    ownership_binding_pipeline.verify.diagnostics;
   assert_no_diagnostics "ownership binding semantic"
     ownership_binding_pipeline.semantic.diagnostics;
   assert_no_diagnostics "ownership binding ownership"

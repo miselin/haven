@@ -75,7 +75,7 @@ type binding_annotation = {
   is_mutable : bool;
 }
 
-type diagnostic_category = TypeCheck | Semantic | Cleanup | Ownership
+type diagnostic_category = TypeCheck | TypeVerify | Semantic | Cleanup | Ownership
 
 type diagnostic_level = Error | Warning
 
@@ -98,6 +98,7 @@ type typing_result = {
 }
 
 type semantic_result = { diagnostics : diagnostic list }
+type verify_result = { diagnostics : diagnostic list }
 
 type ownership_anchor =
   | AfterExpr of string
@@ -712,9 +713,10 @@ let resolved_deref_once = function
 let vector_field_index field =
   match field with
   | "x" | "r" -> Some 0
-  | "y" | "g" -> Some 1
-  | "z" | "b" -> Some 2
-  | "w" | "a" -> Some 3
+  | "y" | "g" | "t" -> Some 1
+  | "z" | "b" | "p" -> Some 2
+  | "w" | "a" | "q" -> Some 3
+  | "s" -> Some 0
   | _ -> (
       try Some (int_of_string field) with Failure _ -> None)
 
