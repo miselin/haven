@@ -21,7 +21,7 @@
 (executable
  (public_name haven)
  (name haven)
- (libraries haven)
+ (libraries haven unix)
  (link_flags :standard -cclib -L/opt/homebrew/lib)
  (flags :standard -w +39)
  (modules haven))

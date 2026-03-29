@@ -71,4 +71,36 @@ pub fn main() -> void {
       assert_diagnostic_category "missing import diagnostic category" Analysis.Import
         unresolved.diagnostics;
       assert_any_diagnostic_message_contains "missing import wording" "failed to resolve"
-        unresolved.diagnostics)
+        unresolved.diagnostics);
+
+  with_temp_dir "haven-include-import" (fun root ->
+      let include_dir = Filename.concat root "include" in
+      let src_dir = Filename.concat root "src" in
+      Unix.mkdir include_dir 0o700;
+      Unix.mkdir src_dir 0o700;
+
+      write_file (Filename.concat include_dir "helper.hv")
+        {|
+pub fn helper() -> i32 {
+  11
+}
+|};
+
+      let main_path = Filename.concat src_dir "main.hv" in
+      write_file main_path
+        {|
+import "helper";
+
+pub fn main() -> i32 {
+  helper()
+}
+|};
+
+      let imported_pipeline =
+        Analysis.Pipeline.run_cst ~search_dirs:[ include_dir ]
+          (Haven.Parser.parse_file main_path)
+      in
+      assert_no_diagnostics "include search path typing" imported_pipeline.typing.diagnostics;
+      assert_no_diagnostics "include search path verify" imported_pipeline.verify.diagnostics;
+      assert_no_diagnostics "include search path semantic" imported_pipeline.semantic.diagnostics;
+      ignore (find_named_function "helper" imported_pipeline.core))

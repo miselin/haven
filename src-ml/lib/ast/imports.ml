@@ -6,11 +6,17 @@ module Parser = Haven_parser.Parser
 type state = {
   seen : (string, unit) Hashtbl.t;
   active : (string, unit) Hashtbl.t;
+  search_dirs : string list;
   mutable diagnostics_rev : diagnostic list;
 }
 
-let create_state () =
-  { seen = Hashtbl.create 32; active = Hashtbl.create 32; diagnostics_rev = [] }
+let create_state ?(search_dirs = []) () =
+  {
+    seen = Hashtbl.create 32;
+    active = Hashtbl.create 32;
+    search_dirs;
+    diagnostics_rev = [];
+  }
 
 type result = {
   parsed : Cst.parsed_program;
@@ -49,7 +55,7 @@ let resolve_candidate path =
     if is_regular_file with_suffix then Some with_suffix else None
   else None
 
-let resolve_import_path ~current_file import_path =
+let resolve_import_path ~search_dirs ~current_file import_path =
   let resolve_from base =
     let candidate =
       if Filename.is_relative import_path then Filename.concat base import_path
@@ -60,8 +66,18 @@ let resolve_import_path ~current_file import_path =
   match resolve_from (current_dir current_file) with
   | Some path -> Some path
   | None ->
-      let cwd = Sys.getcwd () in
-      if String.equal cwd (current_dir current_file) then None else resolve_from cwd
+      let rec resolve_search_dirs = function
+        | [] -> None
+        | base :: rest -> (
+            match resolve_from base with
+            | Some path -> Some path
+            | None -> resolve_search_dirs rest)
+      in
+      (match resolve_search_dirs search_dirs with
+      | Some path -> Some path
+      | None ->
+          let cwd = Sys.getcwd () in
+          if String.equal cwd (current_dir current_file) then None else resolve_from cwd)
 
 let rec expand_program state (parsed : Cst.parsed_program) : Cst.parsed_program =
   let current_file = program_file parsed.program in
@@ -76,7 +92,7 @@ and expand_top_decl state ~current_file (decl : Cst.top_decl) : Cst.top_decl lis
       [ decl ]
 
 and expand_import state ~current_file import_path loc =
-  match resolve_import_path ~current_file import_path with
+  match resolve_import_path ~search_dirs:state.search_dirs ~current_file import_path with
   | None ->
       add_diagnostic state loc
         (Printf.sprintf "failed to resolve Haven import %S from %s" import_path current_file);
@@ -100,7 +116,7 @@ and expand_import state ~current_file import_path loc =
                    import_path current_file (Printexc.to_string exn));
               []))
 
-let expand_cst parsed =
-  let state = create_state () in
+let expand_cst ?(search_dirs = []) parsed =
+  let state = create_state ~search_dirs () in
   let parsed = expand_program state parsed in
   { parsed; diagnostics = List.rev state.diagnostics_rev }

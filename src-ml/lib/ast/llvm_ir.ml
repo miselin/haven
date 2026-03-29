@@ -10,6 +10,20 @@ let fail ?loc fmt = Printf.ksprintf (fun msg -> raise (Error (loc, msg))) fmt
 
 let with_default default = function Some value -> value | None -> default
 
+type opt_level =
+  | O0
+  | O1
+  | O2
+  | O3
+  | Os
+
+type codegen_options = {
+  opt_level : opt_level;
+  debug_llvm : bool;
+}
+
+let default_codegen_options = { opt_level = O0; debug_llvm = false }
+
 type symbol =
   | Function_symbol of {
       fn : Llvm.llvalue;
@@ -350,13 +364,31 @@ let create_preamble context llmodule =
   in
   { new_empty_box; new_empty_box_ty; new_box; new_box_ty; box_ref; box_ref_ty; box_unref; box_unref_ty }
 
-let create_context (pipeline : Analysis.Pipeline.result) =
+let target_codegen_opt_level = function
+  | O0 -> Llvm_target.CodeGenOptLevel.None
+  | O1 -> Less
+  | O2 -> Default
+  | O3 -> Aggressive
+  | Os -> Default
+
+let pass_pipeline = function
+  | O0 -> "globaldce,default<O0>"
+  | O1 -> "globaldce,default<O1>"
+  | O2 -> "globaldce,default<O2>"
+  | O3 -> "globaldce,default<O3>"
+  | Os -> "globaldce,default<Os>"
+
+let create_context ?(options = default_codegen_options) (pipeline : Analysis.Pipeline.result) =
   initialize_llvm ();
   let context = Llvm.create_context () in
   let llmodule = Llvm.create_module context "haven" in
   let triple = Llvm_target.Target.default_triple () in
   let target = Llvm_target.Target.by_triple triple in
-  let target_machine = Llvm_target.TargetMachine.create ~triple target in
+  let target_machine =
+    Llvm_target.TargetMachine.create ~triple
+      ~level:(target_codegen_opt_level options.opt_level)
+      target
+  in
   let data_layout = Llvm_target.TargetMachine.data_layout target_machine in
   Llvm.set_target_triple triple llmodule;
   Llvm.set_data_layout (Llvm_target.DataLayout.as_string data_layout) llmodule;
@@ -1709,24 +1741,43 @@ let lower_functions t =
       | Core.TDecl _ | Core.VDecl _ | Core.Import _ | Core.CImport _ -> ())
     t.pipeline.cleaned.program.value.decls
 
-let verify_and_run_passes t =
+let verify_and_run_passes ?(options = default_codegen_options) t =
   match Llvm_analysis.verify_module t.llmodule with
   | Some reason -> fail "LLVM module verification failed:\n%s" reason
   | None ->
       let opts = Llvm_passbuilder.create_passbuilder_options () in
+      Llvm_passbuilder.passbuilder_options_set_debug_logging opts options.debug_llvm;
       let result =
-        Llvm_passbuilder.run_passes t.llmodule "globaldce,default<O0>" t.target_machine opts
+        Llvm_passbuilder.run_passes t.llmodule (pass_pipeline options.opt_level)
+          t.target_machine opts
       in
       Llvm_passbuilder.dispose_passbuilder_options opts;
       (match result with Ok () -> () | Error msg -> fail "LLVM pass pipeline failed: %s" msg)
 
-let emit_module pipeline =
-  let t = create_context pipeline in
+let compile ?(options = default_codegen_options) pipeline =
+  let t = create_context ~options pipeline in
   List.iter (declare_toplevel t) pipeline.cleaned.program.value.decls;
   lower_globals t;
   emit_global_ctor t;
   lower_functions t;
-  verify_and_run_passes t;
-  t.llmodule
+  verify_and_run_passes ~options t;
+  t
 
-let emit_ir_string pipeline = Llvm.string_of_llmodule (emit_module pipeline)
+let emit_module ?(options = default_codegen_options) pipeline =
+  (compile ~options pipeline).llmodule
+
+let emit_ir_string ?(options = default_codegen_options) pipeline =
+  let compiled = compile ~options pipeline in
+  Llvm.string_of_llmodule compiled.llmodule
+
+let emit_assembly_file compiled path =
+  Llvm_target.TargetMachine.emit_to_file compiled.llmodule
+    Llvm_target.CodeGenFileType.AssemblyFile path compiled.target_machine
+
+let emit_object_file compiled path =
+  Llvm_target.TargetMachine.emit_to_file compiled.llmodule
+    Llvm_target.CodeGenFileType.ObjectFile path compiled.target_machine
+
+let emit_bitcode_file compiled path =
+  if not (Llvm_bitwriter.write_bitcode_file compiled.llmodule path) then
+    fail "failed to write LLVM bitcode to %s" path
