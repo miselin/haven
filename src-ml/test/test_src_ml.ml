@@ -138,6 +138,26 @@ let find_if_scrutinee (program : Core.parsed_program) =
   | Some expr -> expr
   | None -> failwith "expected to find lowered if scrutinee"
 
+let find_named_function name (program : Core.parsed_program) =
+  let rec loop (decls : Core.top_decl list) =
+    match decls with
+    | [] -> failwith ("expected to find function " ^ name)
+    | (decl : Core.top_decl) :: rest -> (
+        match decl.value with
+        | Core.FDecl fn when fn.value.name.value = name -> fn
+        | Core.Foreign foreign -> (
+            match
+              List.find_opt
+                (fun (fn : Core.function_decl) -> fn.value.name.value = name)
+                foreign.value.decls
+            with
+            | Some fn -> fn
+            | None -> loop rest)
+        | Core.FDecl _ | Core.TDecl _ | Core.VDecl _ | Core.Import _ | Core.CImport _ ->
+            loop rest)
+  in
+  loop program.program.value.decls
+
 let () =
   let typed_program =
     parse_to_core "pub fn main() -> void { let x = 5; }"
@@ -510,6 +530,32 @@ pub fn sut() -> i32 {
           true
       | _ -> false)
     ownership_return_pipeline.ownership.actions;
+  let forward_fn = find_named_function "forward" ownership_return_pipeline.core in
+  let forward_body =
+    match forward_fn.value.definition with
+    | Some body -> body
+    | None -> failwith "expected forward to have a body"
+  in
+  let forward_result =
+    match forward_body.value.result with
+    | Some expr -> expr
+    | None -> failwith "expected forward to have an implicit return expression"
+  in
+  assert_has_ownership_action "indexed ownership after-expr lookup should expose return retains"
+    (fun action ->
+      match (action.Analysis.kind, action.reason) with
+      | Analysis.Retain, Analysis.ReturnValue -> true
+      | _ -> false)
+    (Analysis.Ownership.actions_after_expr ownership_return_pipeline.ownership
+       forward_result);
+  assert_has_ownership_action
+    "indexed ownership function-exit lookup should expose param releases"
+    (fun action ->
+      match (action.Analysis.kind, action.reason, action.subject) with
+      | Analysis.Release, Analysis.FunctionExit, Analysis.OwnershipParam "input" -> true
+      | _ -> false)
+    (Analysis.Ownership.actions_on_function_exit ownership_return_pipeline.ownership
+       forward_fn);
 
   let ownership_call_pipeline =
     parse_to_core
@@ -556,6 +602,28 @@ pub fn sut() -> i32 {
           true
       | _ -> false)
     ownership_assign_pipeline.ownership.actions;
+  let assign_main = find_named_function "main" ownership_assign_pipeline.core in
+  let assign_stmt =
+    match assign_main.value.definition with
+    | Some body -> (
+        match List.nth_opt body.value.statements 1 with
+        | Some stmt -> stmt
+        | None -> failwith "expected assignment statement")
+    | None -> failwith "expected main to have a body"
+  in
+  let assign_expr =
+    match assign_stmt.value with
+    | Core.Expression expr -> expr
+    | _ -> failwith "expected assignment expression statement"
+  in
+  assert_has_ownership_action
+    "indexed ownership before-expr lookup should expose overwrite releases"
+    (fun action ->
+      match (action.Analysis.kind, action.reason) with
+      | Analysis.Release, Analysis.AssignOverwrite -> true
+      | _ -> false)
+    (Analysis.Ownership.actions_before_expr ownership_assign_pipeline.ownership
+       assign_expr);
 
   let untyped_initializer =
     parse_to_core "pub fn main() -> void { let values = { 1, 2 }; }"

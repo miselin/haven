@@ -137,8 +137,19 @@ type ownership_action = {
   resolved_type : resolved_ty option;
 }
 
+type ownership_index = {
+  after_expr : (string, ownership_action list) Hashtbl.t;
+  before_expr : (string, ownership_action list) Hashtbl.t;
+  before_stmt : (string, ownership_action list) Hashtbl.t;
+  on_block_exit : (string, ownership_action list) Hashtbl.t;
+  on_loop_exit : (string, ownership_action list) Hashtbl.t;
+  on_function_exit : (string, ownership_action list) Hashtbl.t;
+  on_global_init : (string, ownership_action list) Hashtbl.t;
+}
+
 type ownership_result = {
   actions : ownership_action list;
+  index : ownership_index;
   diagnostics : diagnostic list;
 }
 

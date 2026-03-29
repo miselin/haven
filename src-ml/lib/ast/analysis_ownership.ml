@@ -25,6 +25,59 @@ module Ownership = struct
     mutable diagnostics_rev : diagnostic list;
   }
 
+  let make_index_table () = Hashtbl.create 32
+
+  let make_index () =
+    {
+      after_expr = make_index_table ();
+      before_expr = make_index_table ();
+      before_stmt = make_index_table ();
+      on_block_exit = make_index_table ();
+      on_loop_exit = make_index_table ();
+      on_function_exit = make_index_table ();
+      on_global_init = make_index_table ();
+    }
+
+  let add_indexed_action table key action =
+    let existing = Hashtbl.find_opt table key |> Option.value ~default:[] in
+    Hashtbl.replace table key (existing @ [ action ])
+
+  let index_actions actions =
+    let index = make_index () in
+    List.iter
+      (fun (action : ownership_action) ->
+        match action.anchor with
+        | AfterExpr id -> add_indexed_action index.after_expr id action
+        | BeforeExpr id -> add_indexed_action index.before_expr id action
+        | BeforeStmt id -> add_indexed_action index.before_stmt id action
+        | OnBlockExit id -> add_indexed_action index.on_block_exit id action
+        | OnLoopExit id -> add_indexed_action index.on_loop_exit id action
+        | OnFunctionExit id -> add_indexed_action index.on_function_exit id action
+        | OnGlobalInit id -> add_indexed_action index.on_global_init id action)
+      actions;
+    index
+
+  let find_actions table key =
+    Hashtbl.find_opt table key |> Option.value ~default:[]
+
+  let actions_after_expr result (expr : Core.expression) =
+    find_actions result.index.after_expr (expr_id expr)
+
+  let actions_before_expr result (expr : Core.expression) =
+    find_actions result.index.before_expr (expr_id expr)
+
+  let actions_before_stmt result (stmt : Core.statement) =
+    find_actions result.index.before_stmt (statement_id stmt)
+
+  let actions_on_block_exit result (block : Core.block) =
+    find_actions result.index.on_block_exit (block_id block)
+
+  let actions_on_loop_exit result (stmt : Core.statement) =
+    find_actions result.index.on_loop_exit (statement_id stmt)
+
+  let actions_on_function_exit result (fn : Core.function_decl) =
+    find_actions result.index.on_function_exit (function_id fn)
+
   let add_diagnostic state level loc message =
     state.diagnostics_rev <-
       { category = Ownership; level; loc; message } :: state.diagnostics_rev
@@ -402,8 +455,6 @@ module Ownership = struct
       }
     in
     List.iter (visit_top_decl state) typed.program.program.value.decls;
-    {
-      actions = List.rev state.actions_rev;
-      diagnostics = List.rev state.diagnostics_rev;
-    }
+    let actions = List.rev state.actions_rev in
+    { actions; index = index_actions actions; diagnostics = List.rev state.diagnostics_rev }
 end
