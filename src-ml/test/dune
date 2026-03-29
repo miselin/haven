@@ -1,3 +1,5 @@
 (test
  (name test_src_ml)
- (libraries haven))
+ (modules test_support test_pipeline test_typing_semantics test_ownership
+  test_purity test_imports test_src_ml)
+ (libraries haven unix))
