@@ -1,13 +1,24 @@
+open Analysis_types
+
 module Cst = Haven_cst.Cst
 module Parser = Haven_parser.Parser
 
 type state = {
   seen : (string, unit) Hashtbl.t;
   active : (string, unit) Hashtbl.t;
+  mutable diagnostics_rev : diagnostic list;
 }
 
 let create_state () =
-  { seen = Hashtbl.create 32; active = Hashtbl.create 32 }
+  { seen = Hashtbl.create 32; active = Hashtbl.create 32; diagnostics_rev = [] }
+
+type result = {
+  parsed : Cst.parsed_program;
+  diagnostics : diagnostic list;
+}
+
+let add_diagnostic state loc message =
+  state.diagnostics_rev <- { category = Import; level = Error; loc; message } :: state.diagnostics_rev
 
 let program_file (program : Cst.program) = program.loc.start_pos.Lexing.pos_fname
 
@@ -64,11 +75,12 @@ and expand_top_decl state ~current_file (decl : Cst.top_decl) : Cst.top_decl lis
   | Cst.CImport _ | Cst.Foreign _ | Cst.FDecl _ | Cst.TDecl _ | Cst.VDecl _ ->
       [ decl ]
 
-and expand_import state ~current_file import_path _loc =
+and expand_import state ~current_file import_path loc =
   match resolve_import_path ~current_file import_path with
   | None ->
-      failwith
-        (Printf.sprintf "failed to resolve Haven import %S from %s" import_path current_file)
+      add_diagnostic state loc
+        (Printf.sprintf "failed to resolve Haven import %S from %s" import_path current_file);
+      []
   | Some resolved ->
       let key = file_key resolved in
       if Hashtbl.mem state.seen key || Hashtbl.mem state.active key then []
@@ -77,11 +89,18 @@ and expand_import state ~current_file import_path _loc =
         Fun.protect
           ~finally:(fun () -> Hashtbl.remove state.active key)
           (fun () ->
-            let imported = Parser.parse_file resolved in
-            let expanded = expand_program state imported in
-            Hashtbl.add state.seen key ();
-            expanded.program.value.decls))
+            try
+              let imported = Parser.parse_file resolved in
+              let expanded = expand_program state imported in
+              Hashtbl.add state.seen key ();
+              expanded.program.value.decls
+            with exn ->
+              add_diagnostic state loc
+                (Printf.sprintf "failed to load Haven import %S from %s: %s"
+                   import_path current_file (Printexc.to_string exn));
+              []))
 
 let expand_cst parsed =
   let state = create_state () in
-  expand_program state parsed
+  let parsed = expand_program state parsed in
+  { parsed; diagnostics = List.rev state.diagnostics_rev }

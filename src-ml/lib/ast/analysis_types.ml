@@ -75,7 +75,14 @@ type binding_annotation = {
   is_mutable : bool;
 }
 
-type diagnostic_category = TypeCheck | TypeVerify | Semantic | Purity | Cleanup | Ownership
+type diagnostic_category =
+  | Import
+  | TypeCheck
+  | TypeVerify
+  | Semantic
+  | Purity
+  | Cleanup
+  | Ownership
 
 type diagnostic_level = Error | Warning
 

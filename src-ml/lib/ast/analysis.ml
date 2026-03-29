@@ -30,5 +30,14 @@ module Pipeline = struct
     let cleaned = Cleanup.run typing in
     { core; typing; verify; semantic; purity; ownership; cfold; cleaned }
 
-  let run_cst parsed = run_core (Convert.core_of_cst parsed)
+  let run_cst parsed =
+    let expanded = Imports.expand_cst parsed in
+    let result = run_core (Convert.core_of_expanded_cst expanded.parsed) in
+    let typing =
+      {
+        result.typing with
+        diagnostics = expanded.diagnostics @ result.typing.diagnostics;
+      }
+    in
+    { result with typing }
 end
