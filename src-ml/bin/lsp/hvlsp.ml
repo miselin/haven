@@ -17,20 +17,27 @@ module Server = struct
         let result = Haven_lsp.on_initialize state params in
         Lwt.return result
 
-      method on_notif_doc_did_open ~notify_back:_
+      method on_notif_doc_did_open ~notify_back
           (doc : Lsp.Types.TextDocumentItem.t) ~content:_ =
         Logs.info (fun m ->
             m "didOpen: %s (version=%d)" (Lsp.Uri.to_string doc.uri) doc.version);
         Haven_lsp.on_did_open state doc;
-        Lwt.return_unit
+        (match Haven_lsp.publish_diagnostics_params state doc.uri with
+        | None -> Lwt.return_unit
+        | Some params ->
+            notify_back#send_notification
+              (Lsp.Server_notification.PublishDiagnostics params))
 
-      method on_notif_doc_did_close ~notify_back:_
+      method on_notif_doc_did_close ~notify_back
           (id : Lsp.Types.TextDocumentIdentifier.t) =
         Logs.info (fun m -> m "didClose: %s" (Lsp.Uri.to_string id.uri));
         Haven_lsp.on_did_close state id;
-        Lwt.return_unit
+        notify_back#send_notification
+          (Lsp.Server_notification.PublishDiagnostics
+             (Lsp.Types.PublishDiagnosticsParams.create ~uri:id.uri ~diagnostics:[]
+                ()))
 
-      method on_notif_doc_did_change ~notify_back:_
+      method on_notif_doc_did_change ~notify_back
           (id : Lsp.Types.VersionedTextDocumentIdentifier.t)
           (changes : Lsp.Types.TextDocumentContentChangeEvent.t list)
           ~old_content:_ ~new_content:_ =
@@ -38,9 +45,11 @@ module Server = struct
             m "didChange: %s (version=%d, %d changes)"
               (Lsp.Uri.to_string id.uri) id.version (List.length changes));
         Haven_lsp.on_did_change state id changes;
-        (* At this point you probably want to parse [new_content] and maybe
-         call [notify_back (Server_notification.PublishDiagnostics ...)] *)
-        Lwt.return_unit
+        (match Haven_lsp.publish_diagnostics_params state id.uri with
+        | None -> Lwt.return_unit
+        | Some params ->
+            notify_back#send_notification
+              (Lsp.Server_notification.PublishDiagnostics params))
 
       method! on_request_unhandled : type r.
           notify_back:Linol_lwt.Jsonrpc2.notify_back ->
@@ -49,6 +58,8 @@ module Server = struct
           r Linol_lwt.IO_lwt.t =
         fun ~notify_back ~id req ->
           match req with
+          | Lsp.Client_request.TextDocumentHover params ->
+              Linol_lwt.IO_lwt.return (Haven_lsp.on_hover state params)
           | Lsp.Client_request.SemanticTokensFull params ->
               Linol_lwt.IO_lwt.return
                 (Haven_lsp.on_semantic_tokens_full state params)
