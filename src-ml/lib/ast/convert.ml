@@ -766,10 +766,24 @@ and surface_enum_variant_to_core _st (variant : Surface.enum_variant) :
     }
 
 and surface_foreign_to_core st (foreign : Surface.foreign) : Core.foreign =
+  let normalize_foreign_decl (fn : Surface.function_decl) =
+    {
+      fn with
+      value =
+        {
+          fn.value with
+          public = true;
+          impure = true;
+        };
+    }
+  in
   mk_core foreign.loc
     {
       Core.lib = { value = foreign.value.lib.value; loc = foreign.value.lib.loc };
-      decls = List.map (surface_function_decl_to_core st) foreign.value.decls;
+      decls =
+        List.map
+          (fun fn -> surface_function_decl_to_core st (normalize_foreign_decl fn))
+          foreign.value.decls;
     }
 
 and surface_block_to_core st ~context (block : Surface.block) : Core.block =

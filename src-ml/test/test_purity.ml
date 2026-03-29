@@ -1,6 +1,30 @@
 open Test_support
 
 let run () =
+  let foreign_pipeline =
+    Haven.Parser.parse_string
+      {|
+foreign "c" {
+  fn puts(str s) -> i32;
+}
+
+pub fn main() -> i32 {
+  puts("hello")
+}
+|}
+    |> Analysis.Pipeline.run_cst
+  in
+  let puts_decl = find_named_function "puts" foreign_pipeline.core in
+  assert_true "foreign declarations should be marked public"
+    puts_decl.value.public;
+  assert_true "foreign declarations should be marked impure"
+    puts_decl.value.impure;
+  assert_has_diagnostics "calling foreign from a pure function should fail purity"
+    foreign_pipeline.purity.diagnostics;
+  assert_any_diagnostic_message_contains
+    "foreign purity diagnostic should mention the calling function" "main"
+    foreign_pipeline.purity.diagnostics;
+
   let box_load_pipeline =
     parse_to_core "pub fn main() -> i32 { let boxed = box as<i32>(5); load boxed }"
     |> Analysis.Pipeline.run_core
