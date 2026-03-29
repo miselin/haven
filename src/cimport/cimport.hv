@@ -5,18 +5,18 @@ type FILE = struct {
 
 import "clex.hv";
 
-pub fn FILE *fopen(str filename, str mode);
-pub fn i32 fclose(FILE *stream);
+pub fn fopen(str filename, str mode) -> FILE *;
+pub fn fclose(FILE *stream) -> i32;
 
-pub fn i32 open(str filepath, i32 mode);
-pub fn i32 read(i32 fd, i8 *buf, i32 count);
-pub fn i32 close(i32 fd);
+pub fn open(str filepath, i32 mode) -> i32;
+pub fn read(i32 fd, i8 *buf, i32 count) -> i32;
+pub fn close(i32 fd) -> i32;
 
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn void free(i8 *ptr);
+pub fn free(i8 *ptr) -> void;
 
-pub fn i32 haven_cimport_present() {
+pub fn haven_cimport_present() -> i32 {
     1
 }
 
@@ -37,9 +37,9 @@ type Keyword = enum {
     Static,
 };
 
-pub fn i32 strcmp(i8 *s1, str other);
+pub fn strcmp(i8 *s1, str other) -> i32;
 
-fn Keyword keyword(i8* s) {
+fn keyword(i8* s) -> Keyword {
     if strcmp(s, "typedef") == 0 {
         ret Keyword::Typedef;
     };
@@ -82,7 +82,7 @@ fn Keyword keyword(i8* s) {
     Keyword::NotAKeyword
 }
 
-pub impure fn i32 haven_cimport_process(str filepath) {
+pub impure fn haven_cimport_process(str filepath) -> i32 {
     let fp = fopen(filepath, "r");
 
     let mut token = next_token(fp);

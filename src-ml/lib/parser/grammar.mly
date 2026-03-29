@@ -88,30 +88,8 @@ fn_forward_decl:
 fn_header:
   pub=boption(PUB) impure=boption(IMPURE) FN name=identifier LPAREN p=params RPAREN rt=return_type?
     { mk_loc $startpos $endpos { public = pub; impure = impure; name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.value.vararg } }
-  | pub=boption(PUB) impure=boption(IMPURE) FN rt=legacy_return_type name=identifier LPAREN p=params RPAREN
-    { mk_loc $startpos $endpos { public = pub; impure = impure; name; definition = None; intrinsic = None; params = p; return_type = Some rt; vararg = p.value.vararg } }
   ;
 return_type: ARROW t=haven_type { t } ;
-legacy_return_type:
-  | t=base_legacy_return_type { t }
-  | t=base_legacy_return_type STAR {
-      let ty : haven_type_desc = PointerType t in
-      mk_loc $startpos $endpos ty
-    }
-  | t=base_legacy_return_type CARET {
-      let ty : haven_type_desc = BoxType t in
-      mk_loc $startpos $endpos ty
-    }
-  ;
-base_legacy_return_type:
-  | t=named_numeric_type { t }
-  | FLOAT_TYPE { mk_loc $startpos $endpos FloatType }
-  | VOID_TYPE { mk_loc $startpos $endpos VoidType }
-  | STR_TYPE { mk_loc $startpos $endpos StringType }
-  ;
-named_numeric_type:
-  | t=NUMERIC_TYPE { mk_loc $startpos $endpos (NumericType t) }
-  ;
 
 fn_intrinsic:
   INTRINSIC n=STRING_LIT t=separated_list(COMMA, haven_type)
