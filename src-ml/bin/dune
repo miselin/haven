@@ -15,3 +15,10 @@
   (pps sedlex.ppx))
  (flags :standard -w +39)
  (modules hvast))
+
+(executable
+ (public_name haven)
+ (name haven)
+ (libraries haven)
+ (flags :standard -w +39)
+ (modules haven))

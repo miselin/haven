@@ -53,4 +53,22 @@ pub fn main() -> i32 {
            (List.exists
               (fun (decl : Core.top_decl) ->
                 match decl.value with Core.Import _ -> true | _ -> false)
-              imported_pipeline.core.program.value.decls)))
+              imported_pipeline.core.program.value.decls)));
+
+  with_temp_dir "haven-missing-import" (fun root ->
+      let main_path = Filename.concat root "main.hv" in
+      write_file main_path
+        {|
+import "missing";
+
+pub fn main() -> void {
+}
+|};
+
+      let unresolved = Haven.Ast.Imports.expand_cst (Haven.Parser.parse_file main_path) in
+      assert_has_diagnostics "missing import should produce diagnostics"
+        unresolved.diagnostics;
+      assert_diagnostic_category "missing import diagnostic category" Analysis.Import
+        unresolved.diagnostics;
+      assert_any_diagnostic_message_contains "missing import wording" "failed to resolve"
+        unresolved.diagnostics)
