@@ -275,10 +275,11 @@ and llvm_struct_type t ?loc:_ resolved (decl : Core.struct_decl) =
           (List.map
              (fun (field : Core.struct_field) ->
                let resolved_field =
-                 with_default
-                   (fail ~loc:field.loc "failed to resolve field type for %s"
-                      field.value.name.value)
-                   (Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty)
+                 match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+                 | Some resolved_field -> resolved_field
+                 | None ->
+                     fail ~loc:field.loc "failed to resolve field type for %s"
+                       field.value.name.value
                in
                llvm_type_of_resolved t ~loc:field.loc resolved_field)
              decl.value.fields)
@@ -590,6 +591,17 @@ let ensure_storage t resolved value =
   ignore (Llvm.build_store value slot t.builder);
   slot
 
+let coerce_store_value t ?loc value source target =
+  if Analysis.equal_resolved_type source target then emit_cast t value source target
+  else
+    match Analysis.lookup_struct_fields t.type_env (with_default dummy_loc loc) target with
+    | Some [ (_, field_ty) ] when Analysis.resolved_compatible source field_ty ->
+        let cast_field = emit_cast t value source field_ty in
+        Llvm.build_insertvalue
+          (Llvm.undef (llvm_type_of_resolved t target))
+          cast_field 0 "struct.coerce" t.builder
+    | _ -> emit_cast t value source target
+
 let rec emit_ownership_on_storage t kind resolved storage =
   match resolved with
   | Analysis.ResolvedBox _ ->
@@ -891,9 +903,15 @@ and emit_literal t (expr : Core.expression) lit =
 
 and emit_initializer t (expr : Core.expression) (init : Core.init_list) =
   let resolved = expr_resolved_type t expr in
-  let elements = List.map (emit_expr t) init.value.exprs in
   match resolved with
-  | Analysis.ResolvedArray _ ->
+  | Analysis.ResolvedArray (inner, _) ->
+      let elements =
+        List.map
+          (fun element ->
+            let value = emit_expr t element in
+            emit_cast t value (expr_resolved_type t element) inner)
+          init.value.exprs
+      in
       List.fold_left
         (fun aggregate (value, index) ->
           Llvm.build_insertvalue aggregate value index "insert" t.builder)
@@ -901,7 +919,14 @@ and emit_initializer t (expr : Core.expression) (init : Core.init_list) =
         (List.mapi (fun index value -> (value, index)) elements)
   | Analysis.ResolvedNamed _ -> (
       match Analysis.lookup_struct_fields t.type_env expr.loc resolved with
-      | Some _ ->
+      | Some fields ->
+          let elements =
+            List.map2
+              (fun element (_, field_ty) ->
+                let value = emit_expr t element in
+                emit_cast t value (expr_resolved_type t element) field_ty)
+              init.value.exprs fields
+          in
           List.fold_left
             (fun aggregate (value, index) ->
               Llvm.build_insertvalue aggregate value index "insert" t.builder)
@@ -1015,6 +1040,13 @@ and emit_binary t (expr : Core.expression) (binary : Core.binary) =
   | _ -> emit_nonfloat_binary t expr binary lhs rhs lhs_ty rhs_ty result_ty
 
 and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty result_ty =
+  let cast_to_result lhs rhs =
+    if Analysis.resolved_is_numeric result_ty then
+      ( emit_cast t lhs lhs_ty result_ty,
+        emit_cast t rhs rhs_ty result_ty,
+        result_ty )
+    else (lhs, rhs, lhs_ty)
+  in
   match binary.value.op with
   | Core.IsEqual ->
       emit_integer_or_pointer_cmp t expr Llvm.Icmp.Eq lhs rhs lhs_ty rhs_ty
@@ -1043,22 +1075,39 @@ and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty
         (if Analysis.resolved_is_pointerish lhs_ty then lhs else rhs)
         [| if Analysis.resolved_is_pointerish lhs_ty then rhs else lhs |]
         "ptr.add" t.builder
-  | Core.Add -> Llvm.build_add lhs rhs "add" t.builder
-  | Core.Subtract -> Llvm.build_sub lhs rhs "sub" t.builder
-  | Core.Multiply -> Llvm.build_mul lhs rhs "mul" t.builder
+  | Core.Add ->
+      let lhs, rhs, _ = cast_to_result lhs rhs in
+      Llvm.build_add lhs rhs "add" t.builder
+  | Core.Subtract ->
+      let lhs, rhs, _ = cast_to_result lhs rhs in
+      Llvm.build_sub lhs rhs "sub" t.builder
+  | Core.Multiply ->
+      let lhs, rhs, _ = cast_to_result lhs rhs in
+      Llvm.build_mul lhs rhs "mul" t.builder
   | Core.Divide ->
-      if resolved_is_signed lhs_ty then Llvm.build_sdiv lhs rhs "sdiv" t.builder
+      let lhs, rhs, op_ty = cast_to_result lhs rhs in
+      if resolved_is_signed op_ty then Llvm.build_sdiv lhs rhs "sdiv" t.builder
       else Llvm.build_udiv lhs rhs "udiv" t.builder
   | Core.Modulo ->
-      if resolved_is_signed lhs_ty then Llvm.build_srem lhs rhs "srem" t.builder
+      let lhs, rhs, op_ty = cast_to_result lhs rhs in
+      if resolved_is_signed op_ty then Llvm.build_srem lhs rhs "srem" t.builder
       else Llvm.build_urem lhs rhs "urem" t.builder
-  | Core.LeftShift -> Llvm.build_shl lhs rhs "shl" t.builder
+  | Core.LeftShift ->
+      let lhs, rhs, _ = cast_to_result lhs rhs in
+      Llvm.build_shl lhs rhs "shl" t.builder
   | Core.RightShift ->
-      if resolved_is_signed lhs_ty then Llvm.build_ashr lhs rhs "ashr" t.builder
+      let lhs, rhs, op_ty = cast_to_result lhs rhs in
+      if resolved_is_signed op_ty then Llvm.build_ashr lhs rhs "ashr" t.builder
       else Llvm.build_lshr lhs rhs "lshr" t.builder
-  | Core.BitwiseAnd -> Llvm.build_and lhs rhs "and" t.builder
-  | Core.BitwiseXor -> Llvm.build_xor lhs rhs "xor" t.builder
-  | Core.BitwiseOr -> Llvm.build_or lhs rhs "or" t.builder
+  | Core.BitwiseAnd ->
+      let lhs, rhs, _ = cast_to_result lhs rhs in
+      Llvm.build_and lhs rhs "and" t.builder
+  | Core.BitwiseXor ->
+      let lhs, rhs, _ = cast_to_result lhs rhs in
+      Llvm.build_xor lhs rhs "xor" t.builder
+  | Core.BitwiseOr ->
+      let lhs, rhs, _ = cast_to_result lhs rhs in
+      Llvm.build_or lhs rhs "or" t.builder
   | Core.LogicAnd | Core.LogicOr ->
       fail ~loc:expr.loc "logical operator lowering bug"
 
@@ -1067,15 +1116,37 @@ and emit_integer_or_pointer_cmp t (_expr : Core.expression) pred lhs rhs lhs_ty 
     if Analysis.resolved_is_pointerish lhs_ty then
       ( emit_cast t lhs lhs_ty (Analysis.ResolvedInt (Unsigned, 64)),
         emit_cast t rhs lhs_ty (Analysis.ResolvedInt (Unsigned, 64)) )
-    else (lhs, rhs)
+    else
+      let cmp_ty =
+        match Analysis.resolved_arithmetic_binary_result Core.Add lhs_ty _rhs_ty with
+        | Some cmp_ty when Analysis.resolved_is_numeric cmp_ty -> cmp_ty
+        | _ -> lhs_ty
+      in
+      ( emit_cast t lhs lhs_ty cmp_ty,
+        emit_cast t rhs _rhs_ty cmp_ty )
   in
   Llvm.build_icmp pred lhs rhs "icmp" t.builder
 
+and emit_enum_constructor_call t (expr : Core.expression) (call : Core.call)
+    (enum_lit : Core.enum_literal) =
+  emit_enum_literal t expr
+    {
+      enum_lit with
+      value = { enum_lit.value with wrapped = call.value.params };
+    }
+
 and emit_call t (expr : Core.expression) (call : Core.call) =
-  let target_value = emit_expr t call.value.target in
   let target_resolved = expr_resolved_type t call.value.target in
   match target_resolved with
+  | Analysis.ResolvedNamed _ -> (
+      match call.value.target.value with
+      | Core.Literal literal -> (
+          match literal.value with
+          | Core.Enum enum_lit -> emit_enum_constructor_call t expr call enum_lit
+          | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
+      | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
   | Analysis.ResolvedFunction (params, ret, vararg) ->
+      let target_value = emit_expr t call.value.target in
       let args =
         Array.of_list
           (List.mapi
@@ -1101,7 +1172,11 @@ and emit_call t (expr : Core.expression) (call : Core.call) =
           Llvm.function_type (llvm_type_of_resolved t ret)
             (Array.of_list (List.map (llvm_type_of_resolved t) params))
       in
-      let result = Llvm.build_call fn_ty target_value args "call" t.builder in
+      let result =
+        Llvm.build_call fn_ty target_value args
+          (if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then "" else "call")
+          t.builder
+      in
       if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then unit_value t else result
   | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering"
 
@@ -1310,7 +1385,10 @@ and emit_assign t (expr : Core.expression) (write : Core.write) =
   emit_before_expr_actions t expr;
   let target_resolved = expr_resolved_type t write.value.target in
   let value = emit_expr t write.value.value in
-  let cast_value = emit_cast t value (expr_resolved_type t write.value.value) target_resolved in
+  let cast_value =
+    coerce_store_value t ~loc:expr.loc value (expr_resolved_type t write.value.value)
+      target_resolved
+  in
   ignore (Llvm.build_store cast_value target_ptr t.builder);
   cast_value
 
@@ -1335,11 +1413,19 @@ and emit_unary t (expr : Core.expression) (unary : Core.unary) =
   let inner = emit_expr t unary.value.inner in
   match (unary.value.op, expr_resolved_type t unary.value.inner) with
   | Core.Negate, Analysis.ResolvedFloat -> Llvm.build_fneg inner "fneg" t.builder
-  | Core.Negate, Analysis.ResolvedInt _ -> Llvm.build_neg inner "neg" t.builder
+  | Core.Negate, Analysis.ResolvedInt _ ->
+      let inner_cast =
+        emit_cast t inner (expr_resolved_type t unary.value.inner) (expr_resolved_type t expr)
+      in
+      Llvm.build_neg inner_cast "neg" t.builder
   | Core.Not, _ ->
       let bool_value = emit_to_bool t unary.value.inner inner in
       Llvm.build_not bool_value "not" t.builder
-  | Core.Complement, Analysis.ResolvedInt _ -> Llvm.build_not inner "compl" t.builder
+  | Core.Complement, Analysis.ResolvedInt _ ->
+      let inner_cast =
+        emit_cast t inner (expr_resolved_type t unary.value.inner) (expr_resolved_type t expr)
+      in
+      Llvm.build_not inner_cast "compl" t.builder
   | _ -> fail ~loc:expr.loc "unsupported unary operator during LLVM lowering"
 
 and emit_block_expr t (expr : Core.expression) block =
@@ -1386,7 +1472,9 @@ and emit_statement t (stmt : Core.statement) =
       let value = emit_expr t binding.value.init_expr in
       ignore
         (Llvm.build_store
-           (emit_cast t value (expr_resolved_type t binding.value.init_expr) resolved)
+           (coerce_store_value t ~loc:binding.loc value
+              (expr_resolved_type t binding.value.init_expr)
+              resolved)
            slot t.builder);
       add_symbol t binding.value.name.value
         (Variable_symbol
@@ -1547,10 +1635,11 @@ and declare_type_decl t (ty : Core.type_decl) =
            (Analysis.ResolvedNamed (ty.value.name.value, []))
            decl)
   | Core.TypeDeclEnum decl ->
-      ignore
-        (llvm_enum_type t
-           (Analysis.ResolvedNamed (ty.value.name.value, []))
-           decl)
+      if decl.value.generics = [] then
+        ignore
+          (llvm_enum_type t
+             (Analysis.ResolvedNamed (ty.value.name.value, []))
+             decl)
   | Core.TypeDeclAlias _ | Core.TypeDeclForward -> ()
 
 let lower_global_initializer t (decl : Core.var_decl) =

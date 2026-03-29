@@ -29,10 +29,10 @@
 %token EOF
 
 (* Main keywords *)
-%token PUB FN MUT IF ELSE LET WHILE BREAK CONTINUE MATCH AS ITER
+%token PUB FN MUT IF ELSE LET WHILE UNTIL BREAK CONTINUE MATCH AS ITER
 %token LOAD RET STRUCT TYPE NIL DEFER IMPURE ENUM IMPORT CIMPORT SIZE
 %token BOX UNBOX INTRINSIC FOREIGN DATA STATE VEC MAT FUNCTION
-%token VAFUNCTION CELL REF
+%token VAFUNCTION CELL REF STORE
 
 (* Operator precedence table *)
 %left LOGIC_OR
@@ -88,8 +88,30 @@ fn_forward_decl:
 fn_header:
   pub=boption(PUB) impure=boption(IMPURE) FN name=identifier LPAREN p=params RPAREN rt=return_type?
     { mk_loc $startpos $endpos { public = pub; impure = impure; name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.value.vararg } }
+  | pub=boption(PUB) impure=boption(IMPURE) FN rt=legacy_return_type name=identifier LPAREN p=params RPAREN
+    { mk_loc $startpos $endpos { public = pub; impure = impure; name; definition = None; intrinsic = None; params = p; return_type = Some rt; vararg = p.value.vararg } }
   ;
 return_type: ARROW t=haven_type { t } ;
+legacy_return_type:
+  | t=base_legacy_return_type { t }
+  | t=base_legacy_return_type STAR {
+      let ty : haven_type_desc = PointerType t in
+      mk_loc $startpos $endpos ty
+    }
+  | t=base_legacy_return_type CARET {
+      let ty : haven_type_desc = BoxType t in
+      mk_loc $startpos $endpos ty
+    }
+  ;
+base_legacy_return_type:
+  | t=named_numeric_type { t }
+  | FLOAT_TYPE { mk_loc $startpos $endpos FloatType }
+  | VOID_TYPE { mk_loc $startpos $endpos VoidType }
+  | STR_TYPE { mk_loc $startpos $endpos StringType }
+  ;
+named_numeric_type:
+  | t=NUMERIC_TYPE { mk_loc $startpos $endpos (NumericType t) }
+  ;
 
 fn_intrinsic:
   INTRINSIC n=STRING_LIT t=separated_list(COMMA, haven_type)
@@ -142,7 +164,10 @@ global_decl_inner:
 global_decl_binding: t=haven_type n=identifier e=option(bind_expr) {
     mk_loc $startpos $endpos { name = n; public = false; is_mutable = false; ty = t; init_expr = e }
 } ;
-bind_expr: EQUAL e=expr { e } ;
+bind_expr:
+  | EQUAL i=init { mk_expr $startpos(i) $endpos(i) (Initializer i) }
+  | EQUAL e=expr { e }
+  ;
 
 block: LBRACE b=block_items { mk_loc $startpos $endpos { items = b } } ;
 block_items:
@@ -156,13 +181,18 @@ block_items:
 stmt: s=stmt_inner SEMICOLON { mk_loc $startpos $endpos s } ;
 stmt_inner:
   | LET m=boption(MUT) n=identifier EQUAL e=expr { Let (mk_loc $startpos $endpos { mut = m; name = n; ty = None; init_expr = e; }) }
+  | LET m=boption(MUT) t=haven_type n=identifier EQUAL i=init {
+      Let (mk_loc $startpos $endpos { mut = m; name = n; ty = Some t; init_expr = mk_expr $startpos(i) $endpos(i) (Initializer i); })
+    }
   | LET m=boption(MUT) t=haven_type n=identifier EQUAL e=expr { Let (mk_loc $startpos $endpos { mut = m; name = n; ty = Some t; init_expr = e; }) }
   | RET e=option(expr) { Return e }
   | DEFER e=expr { Defer e }
   | ITER r=iter_range v=identifier b=block { Iter (mk_loc $startpos $endpos { range = r; var = v; body = b }) }
   | WHILE c=expr b=block { While (mk_loc $startpos $endpos { cond = c; body = b }) }
+  | UNTIL c=expr b=block { While (mk_loc $startpos $endpos { cond = mk_unary $startpos(c) $endpos(c) Not c; body = b }) }
   | BREAK { Break }
   | CONTINUE { Continue }
+  | STORE t=expr v=expr { Expression (mk_binary $startpos $endpos Mutate t v) }
   | e=expr { Expression e }
   | { Empty }
   ;
@@ -223,9 +253,9 @@ expr_seq: exprs=separated_list(COMMA, expr) { exprs } ;
 
 primary:
   | l=literal { mk_expr $startpos $endpos (Literal l) }
+  | i=init { mk_expr $startpos $endpos (Initializer i) }
   | b=block { mk_expr $startpos $endpos (Block b) }
   | LPAREN e=expr RPAREN { mk_expr $startpos $endpos (ParenthesizedExpression e) }
-  | i=init { mk_expr $startpos $endpos (Initializer i) }
   | i=identifier { mk_expr $startpos $endpos (Identifier i) }
   | i=if_expr { mk_expr $startpos $endpos (If i) }
   | m=match_expr { mk_expr $startpos $endpos (Match m) }

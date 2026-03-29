@@ -446,8 +446,9 @@ module Typing = struct
 
   and infer_literal state env ~(expected_type : resolved_ty option) loc
       (literal : Core.literal) : expr_annotation =
-    match literal.value with
-    | Core.Integer value ->
+    let annotation =
+      match literal.value with
+      | Core.Integer value ->
         let ty = smallest_integer_type loc value in
         {
           inferred_type = Some ty;
@@ -465,7 +466,7 @@ module Typing = struct
                   };
             };
         }
-    | Core.Bool value ->
+      | Core.Bool value ->
         let ty = bool_type loc in
         {
           inferred_type = Some ty;
@@ -483,7 +484,7 @@ module Typing = struct
                   };
             };
         }
-    | Core.Float value ->
+      | Core.Float value ->
         let ty = float_type loc in
         {
           inferred_type = Some ty;
@@ -495,7 +496,7 @@ module Typing = struct
               integer = None;
             };
         }
-    | Core.String value ->
+      | Core.String value ->
         let ty = string_type loc in
         {
           inferred_type = Some ty;
@@ -507,7 +508,7 @@ module Typing = struct
               integer = None;
             };
         }
-    | Core.Char value ->
+      | Core.Char value ->
         let ty = numeric_type loc Unsigned 8 in
         {
           inferred_type = Some ty;
@@ -525,7 +526,7 @@ module Typing = struct
                   };
             };
         }
-    | Core.Vector vec ->
+      | Core.Vector vec ->
         let element_expected =
           match expected_type with Some ResolvedVec _ -> Some ResolvedFloat | _ -> None
         in
@@ -561,7 +562,7 @@ module Typing = struct
               integer = None;
             };
         }
-    | Core.Matrix mat ->
+      | Core.Matrix mat ->
         let rows =
           List.map
             (fun (row : Core.vec_literal) ->
@@ -597,7 +598,7 @@ module Typing = struct
               integer = None;
             };
         }
-    | Core.Enum enum ->
+      | Core.Enum enum ->
         let resolved_type =
           if enum.value.types = [] then
             match expected_type with
@@ -646,6 +647,17 @@ module Typing = struct
             | None -> resolve_core_type state.type_env [] [] loc ty);
           metavar = metavar_of_type ty;
         }
+    in
+    match (expected_type, annotation.resolved_type) with
+    | Some expected, Some actual when resolved_can_cast actual expected ->
+        let inferred_type = core_type_of_resolved_ty loc expected in
+        {
+          inferred_type = Some inferred_type;
+          resolved_type = Some expected;
+          metavar =
+            { annotation.metavar with classes = type_class_of_type inferred_type };
+        }
+    | _ -> annotation
 
   and infer_initializer state env ~(expected_type : resolved_ty option) loc
       (init : Core.init_list) : expr_annotation =
@@ -702,6 +714,9 @@ module Typing = struct
         }
     | Core.Negate | Core.Complement -> (
         match (inner_ann.inferred_type, inner_ann.resolved_type) with
+        | Some _ty, Some (ResolvedInt (_, bits)) ->
+            let ty = numeric_type loc Signed (max 32 bits) in
+            { inferred_type = Some ty; resolved_type = Some (ResolvedInt (Signed, max 32 bits)); metavar = metavar_of_type ty }
         | Some ty, resolved_type ->
             { inferred_type = Some ty; resolved_type; metavar = metavar_of_type ty }
         | None, _ ->
@@ -1001,7 +1016,10 @@ module Typing = struct
 
   and infer_index state env _loc (index : Core.index) : expr_annotation =
     let target_ann = infer_expression state env index.value.target in
-    ignore (infer_value_expression state env index.value.index);
+    ignore
+      (infer_value_expression state env
+         ~expected_type:(Some (ResolvedInt (Unsigned, 32)))
+         index.value.index);
     match (target_ann.inferred_type, target_ann.resolved_type) with
     | Some ty, _ -> (
         match ty.value with

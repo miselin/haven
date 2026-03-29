@@ -469,8 +469,8 @@ let resolved_can_cast source target =
 let coerce_annotation_to_expected loc expected (annotation : expr_annotation) =
   let coerced_resolved =
     match annotation.resolved_type with
-    | Some actual when resolved_compatible actual expected -> Some expected
-    | Some (ResolvedCell actual) when resolved_compatible actual expected -> Some expected
+    | Some actual when equal_resolved_type actual expected -> Some expected
+    | Some (ResolvedCell actual) when equal_resolved_type actual expected -> Some expected
     | None when List.mem TypeClassNil annotation.metavar.classes && resolved_is_pointerish expected
       ->
         Some expected
@@ -603,7 +603,7 @@ let wider_numeric_type loc (left : Core.haven_type) (right : Core.haven_type) =
         | Signed, _ | _, Signed -> Signed
         | Unsigned, Unsigned -> Unsigned
       in
-      numeric_type loc signedness (max a.bits b.bits)
+      numeric_type loc signedness (max 32 (max a.bits b.bits))
   | _ -> left
 
 let lookup_named_type type_env name = String_map.find_opt name type_env

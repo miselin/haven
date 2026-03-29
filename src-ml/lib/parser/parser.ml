@@ -17,6 +17,7 @@ let keywords =
          ("else", Grammar.ELSE);
          ("let", Grammar.LET);
          ("while", Grammar.WHILE);
+         ("until", Grammar.UNTIL);
          ("break", Grammar.BREAK);
          ("continue", Grammar.CONTINUE);
          ("match", Grammar.MATCH);
@@ -52,6 +53,7 @@ let keywords =
          ("Cell", Grammar.CELL);
          ("load", Grammar.LOAD);
          ("ref", Grammar.REF);
+         ("store", Grammar.STORE);
        ])
 
 let keyword_or_ident s =
@@ -177,6 +179,8 @@ let token_to_string = function
   | Grammar.RET -> "ret"
   | Grammar.MATCH -> "match"
   | Grammar.WHILE -> "while"
+  | Grammar.UNTIL -> "until"
+  | Grammar.STORE -> "store"
   | Grammar.LPAREN -> "("
   | Grammar.RPAREN -> ")"
   | Grammar.LBRACE -> "{"

@@ -44,6 +44,9 @@ let mk_core_vec loc value : Core.vec_literal = { value; loc }
 let mk_core_mat loc value : Core.mat_literal = { value; loc }
 let mk_core_enum loc value : Core.enum_literal = { value; loc }
 let mk_core_iteration_hint loc value : Core.iteration_hint = { value; loc }
+let default_iter_type loc =
+  mk_core_type loc
+    (Core.NumericType { Haven_token.Token.signedness = Haven_token.Token.Signed; bits = 32 })
 
 let rec cst_program_to_surface (program : Cst.program) : Surface.program =
   let decls = List.map cst_top_decl_to_surface program.value.decls in
@@ -859,7 +862,7 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
          (mk_core loc
             {
               Core.mut = false;
-              ty = None;
+              ty = Some (default_iter_type end_name.loc);
               name = end_name;
               init_expr = end_expr;
             }))
@@ -870,7 +873,7 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
          (mk_core loc
             {
               Core.mut = false;
-              ty = None;
+              ty = Some (default_iter_type step_name.loc);
               name = step_name;
               init_expr = step_expr;
             }))
@@ -881,7 +884,7 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
          (mk_core iter.value.var.loc
             {
               Core.mut = true;
-              ty = None;
+              ty = Some (default_iter_type index_name.loc);
               name = index_name;
               init_expr = start_expr;
             }))
@@ -918,7 +921,7 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
     mk_core_stmt loc
       (Core.Expression
          (mk_core_expr loc
-            (Core.Mutate (mk_core loc { Core.target = index_expr; value = next_value }))))
+            (Core.Assign (mk_core loc { Core.target = index_expr; value = next_value }))))
   in
   let body = surface_block_to_core st ~context:`Statement iter.value.body in
   let iteration_hint =

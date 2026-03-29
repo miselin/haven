@@ -117,6 +117,11 @@ module Semantic = struct
           add_diagnostic state Error expr.loc mismatch_message
       | _ -> ()
 
+  let expr_matches_single_field_struct state (expr : Core.expression) expected =
+    match (expr_resolved_type state expr, lookup_struct_fields state.type_env expr.loc expected) with
+    | Some actual, Some [ (_, field_ty) ] -> resolved_compatible actual field_ty
+    | _ -> false
+
   let check_initializer_shape state loc (init : Core.init_list) expected =
     let check_slots slots too_many_message too_few_message mismatch_for_index =
       let actual_count = List.length init.value.exprs in
@@ -243,7 +248,9 @@ module Semantic = struct
                 expr_annotation state binding.value.init_expr )
             with
             | Some expected, Some { resolved_type = Some actual; _ }
-              when not (resolved_compatible actual expected) ->
+              when not (resolved_compatible actual expected)
+                   && not (expr_matches_single_field_struct state binding.value.init_expr expected)
+              ->
                 add_diagnostic state Error binding.value.init_expr.loc
                   "let initializer type does not match the declared binding type"
             | Some expected, _ -> (

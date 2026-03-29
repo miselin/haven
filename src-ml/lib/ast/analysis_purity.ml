@@ -135,8 +135,7 @@ module Purity = struct
         classify_field state current field
     | Core.Assign write ->
         visit env write.value.target;
-        visit env write.value.value;
-        mark_direct_effect current
+        visit env write.value.value
     | Core.Mutate write ->
         visit env write.value.target;
         visit env write.value.value;

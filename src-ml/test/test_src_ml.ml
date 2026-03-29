@@ -5,4 +5,5 @@ let () =
   Test_ownership.run ();
   Test_purity.run ();
   Test_imports.run ();
-  Test_llvm_ir.run ()
+  Test_llvm_ir.run ();
+  Test_rc.run ()
