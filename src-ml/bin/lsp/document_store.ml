@@ -19,7 +19,7 @@ let open_doc (store : t) (td : TextDocumentItem.t) =
       uri;
       version = Some td.version;
       text = td.text;
-      cst = Some (Haven.Parser.parse_string td.text);
+      cst = Some (Haven.Parser.parse_string ~filename:(DocumentUri.to_path uri) td.text);
     }
   in
   Hashtbl.replace store uri doc
@@ -42,7 +42,7 @@ let change_doc (store : t) (d : VersionedTextDocumentIdentifier.t)
   | Some doc ->
       doc.version <- Some d.version;
       List.iter (apply_change doc) evs;
-      doc.cst <- Some (Haven.Parser.parse_string doc.text)
+      doc.cst <- Some (Haven.Parser.parse_string ~filename:(DocumentUri.to_path d.uri) doc.text)
 
 let get_text (store : t) (uri : DocumentUri.t) : string option =
   Hashtbl.find_opt store uri |> Option.map (fun d -> d.text)

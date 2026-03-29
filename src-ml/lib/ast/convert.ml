@@ -1080,4 +1080,6 @@ let core_of_surface (parsed : Surface.parsed_program) : Core.parsed_program =
   let st = fresh_state () in
   { Core.program = surface_program_to_core st parsed.program }
 
-let core_of_cst parsed = core_of_surface (surface_of_cst parsed)
+let core_of_cst parsed =
+  let parsed = Imports.expand_cst parsed in
+  core_of_surface (surface_of_cst parsed)

@@ -4,5 +4,6 @@
 
 (library
  (name haven_parser)
+ (public_name haven.parser)
  (modules grammar parser)
  (libraries menhirLib haven_lexer haven_token haven_cst))

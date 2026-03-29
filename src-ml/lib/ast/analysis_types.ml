@@ -75,7 +75,7 @@ type binding_annotation = {
   is_mutable : bool;
 }
 
-type diagnostic_category = TypeCheck | TypeVerify | Semantic | Cleanup | Ownership
+type diagnostic_category = TypeCheck | TypeVerify | Semantic | Purity | Cleanup | Ownership
 
 type diagnostic_level = Error | Warning
 
@@ -99,6 +99,7 @@ type typing_result = {
 
 type semantic_result = { diagnostics : diagnostic list }
 type verify_result = { diagnostics : diagnostic list }
+type purity_result = { diagnostics : diagnostic list }
 
 type ownership_anchor =
   | AfterExpr of string

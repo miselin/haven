@@ -1,4 +1,7 @@
 (library
  (name haven_ast)
  (public_name haven.ast)
- (libraries haven_core haven_token haven_cst))
+(modules analysis_cfold analysis analysis_cleanup analysis_ownership
+  analysis_purity analysis_semantic analysis_types analysis_typing
+  analysis_verify ast convert core_ast imports pretty surface_ast)
+ (libraries haven_core haven_token haven_cst haven_parser unix))

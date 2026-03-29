@@ -19,7 +19,7 @@
  (name haven)
  (synopsis "The Haven compiler")
  (description "The Haven compiler")
- (depends ocaml sedlex menhir)
+ (depends ocaml sedlex menhir unix)
  (tags (compiler)))
 
 (using menhir 3.0)

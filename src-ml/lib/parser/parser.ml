@@ -268,5 +268,14 @@ let do_parse raw_tokens =
     items;
   }
 
-let parse_string s = do_parse (Haven_lexer.Lexer.tokenize_str s)
-let parse_stdin () = do_parse (Haven_lexer.Lexer.tokenize_stdin ())
+let parse_string ?(filename = "<string>") s =
+  do_parse (Haven_lexer.Lexer.tokenize_str ~filename s)
+
+let parse_file filename =
+  let ch = open_in filename in
+  Fun.protect
+    ~finally:(fun () -> close_in_noerr ch)
+    (fun () -> do_parse (Haven_lexer.Lexer.tokenize_channel ~filename ch))
+
+let parse_stdin ?(filename = "<stdin>") () =
+  do_parse (Haven_lexer.Lexer.tokenize_stdin ~filename ())

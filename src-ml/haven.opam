@@ -14,6 +14,7 @@ depends: [
   "ocaml"
   "sedlex"
   "menhir"
+  "unix"
   "odoc" {with-doc}
 ]
 build: [

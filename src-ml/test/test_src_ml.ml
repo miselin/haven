@@ -27,6 +27,13 @@ let assert_diagnostic_message_contains label needle diagnostics =
       assert_true (label ^ " did not include the expected diagnostic text")
         (string_contains diagnostic.Analysis.message needle)
 
+let assert_any_diagnostic_message_contains label needle diagnostics =
+  assert_true (label ^ " did not include the expected diagnostic text")
+    (List.exists
+       (fun (diagnostic : Analysis.diagnostic) ->
+         string_contains diagnostic.Analysis.message needle)
+       diagnostics)
+
 let assert_diagnostic_category label expected_category diagnostics =
   match diagnostics with
   | [] -> failwith (label ^ " expected at least one diagnostic")
@@ -37,6 +44,24 @@ let assert_diagnostic_category label expected_category diagnostics =
 let assert_has_ownership_action label predicate actions =
   assert_true (label ^ " did not include the expected ownership action")
     (List.exists predicate actions)
+
+let rec remove_tree path =
+  if Sys.file_exists path then
+    if Sys.is_directory path then (
+      Array.iter (fun entry -> remove_tree (Filename.concat path entry))
+        (Sys.readdir path);
+      Unix.rmdir path)
+    else Sys.remove path
+
+let with_temp_dir prefix f =
+  let path = Filename.temp_file prefix "" in
+  Sys.remove path;
+  Unix.mkdir path 0o700;
+  Fun.protect ~finally:(fun () -> remove_tree path) (fun () -> f path)
+
+let write_file path contents =
+  let ch = open_out path in
+  Fun.protect ~finally:(fun () -> close_out_noerr ch) (fun () -> output_string ch contents)
 
 let parse_to_core text = Haven.Ast.Convert.core_of_cst (Haven.Parser.parse_string text)
 
@@ -187,13 +212,34 @@ let () =
   assert_no_diagnostics "semantic cleanup input verify" pipeline.verify.diagnostics;
   assert_no_diagnostics "semantic cleanup input semantic" pipeline.semantic.diagnostics;
   let scrutinee_before = find_if_scrutinee pipeline.core in
+  let scrutinee_folded = find_if_scrutinee pipeline.cfold in
   let scrutinee_after = find_if_scrutinee pipeline.cleaned in
   (match scrutinee_before.value with
   | Core.ToBool _ -> ()
   | _ -> failwith "expected lowered if condition to contain ToBool before cleanup");
+  (match scrutinee_folded.value with
+  | Core.Literal lit -> (
+      match lit.value with
+      | Core.Bool true -> ()
+      | _ -> failwith "expected constant folding to reduce the if condition to true")
+  | _ -> failwith "expected constant folding to reduce the if condition to a literal");
   (match scrutinee_after.value with
   | Core.Unary _ -> ()
   | _ -> failwith "expected cleanup to remove redundant ToBool around bool-valued condition");
+
+  let folded_pipeline =
+    parse_to_core "pub fn main() -> i32 { let x = 1 + 2 * 3; x }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "constant folding typing" folded_pipeline.typing.diagnostics;
+  assert_no_diagnostics "constant folding semantic" folded_pipeline.semantic.diagnostics;
+  let folded_binding = find_first_let_binding folded_pipeline.cfold in
+  (match folded_binding.value.init_expr.value with
+  | Core.Literal lit -> (
+      match lit.value with
+      | Core.Integer 7 -> ()
+      | _ -> failwith "expected arithmetic constant folding to produce 7")
+  | _ -> failwith "expected arithmetic constant folding to produce a literal");
 
   let bad_semantics =
     parse_to_core "pub fn main() -> void { break; }"
@@ -484,6 +530,9 @@ pub fn sut() -> i32 {
   in
   assert_no_diagnostics "load from box typing" box_load_pipeline.typing.diagnostics;
   assert_no_diagnostics "load from box semantic" box_load_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "load from box purity" box_load_pipeline.purity.diagnostics;
+  assert_diagnostic_category "load from box purity category" Analysis.Purity
+    box_load_pipeline.purity.diagnostics;
 
   let box_arg_pipeline =
     parse_to_core
@@ -742,6 +791,59 @@ pub fn main() -> void {
     |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "mutation used as a value" mutate_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "marked impure function should pass purity"
+    mutate_pipeline.purity.diagnostics;
+
+  let immutable_assign_pipeline =
+    parse_to_core "pub fn main() -> void { let i32 x = 0; x = as<i32>(1); }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "assignment to immutable binding should fail"
+    immutable_assign_pipeline.semantic.diagnostics;
+
+  let immutable_field_assign_pipeline =
+    parse_to_core
+      {|
+type Pair = struct {
+  i32 left;
+};
+
+pub fn main() -> void {
+  let Pair pair = { 0 };
+  pair.left = as<i32>(1);
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "assignment through immutable root binding should fail"
+    immutable_field_assign_pipeline.semantic.diagnostics;
+
+  let mutable_assign_pipeline =
+    parse_to_core "pub fn main() -> void { let mut i32 x = 0; x = as<i32>(1); }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "assignment to mutable binding should pass"
+    mutable_assign_pipeline.semantic.diagnostics;
+
+  let pure_call_pipeline =
+    parse_to_core "fn helper() -> i32 { 1 } pub fn main() -> i32 { helper() }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "pure call purity" pure_call_pipeline.purity.diagnostics;
+
+  let transitive_impurity_pipeline =
+    parse_to_core
+      "fn helper() -> i32 { let mut i32 x = 0; ref x := as<i32>(1); 1 } pub fn main() -> i32 { helper() }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "transitive impurity should fail purity"
+    transitive_impurity_pipeline.purity.diagnostics;
+  assert_diagnostic_category "transitive impurity category" Analysis.Purity
+    transitive_impurity_pipeline.purity.diagnostics;
+  assert_any_diagnostic_message_contains "transitive impurity should flag helper" "helper"
+    transitive_impurity_pipeline.purity.diagnostics;
+  assert_any_diagnostic_message_contains "transitive impurity should flag wrapper" "main"
+    transitive_impurity_pipeline.purity.diagnostics;
 
   let bad_pattern_pipeline =
     parse_to_core
@@ -795,4 +897,61 @@ pub fn sut() -> i32 {
     |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "invalid vector arithmetic should fail"
-    bad_vector_binary_pipeline.semantic.diagnostics
+    bad_vector_binary_pipeline.semantic.diagnostics;
+
+  with_temp_dir "haven-import" (fun root ->
+      let lib_dir = Filename.concat root "lib" in
+      let nested_dir = Filename.concat root "nested" in
+      Unix.mkdir lib_dir 0o700;
+      Unix.mkdir nested_dir 0o700;
+
+      write_file (Filename.concat lib_dir "index.hv")
+        {|
+pub fn helper() -> i32 {
+  7
+}
+|};
+
+      write_file (Filename.concat nested_dir "index.hv")
+        {|
+import "../lib";
+
+pub fn nested() -> i32 {
+  helper()
+}
+|};
+
+      let main_path = Filename.concat root "main.hv" in
+      write_file main_path
+        {|
+import "lib";
+import "nested";
+
+pub fn main() -> i32 {
+  helper() + nested()
+}
+|};
+
+      let imported_pipeline = Haven.Ast.Analysis.Pipeline.run_cst
+        (Haven.Parser.parse_file main_path)
+      in
+      assert_no_diagnostics "imported module typing" imported_pipeline.typing.diagnostics;
+      assert_no_diagnostics "imported module verify" imported_pipeline.verify.diagnostics;
+      assert_no_diagnostics "imported module semantic" imported_pipeline.semantic.diagnostics;
+
+      let helper_count =
+        List.fold_left
+          (fun acc (decl : Core.top_decl) ->
+            match decl.value with
+            | Core.FDecl fn when fn.value.name.value = "helper" -> acc + 1
+            | _ -> acc)
+          0 imported_pipeline.core.program.value.decls
+      in
+      assert_true "expected helper to be imported exactly once" (helper_count = 1);
+      assert_true "expected import declarations to be expanded away"
+        (not
+           (List.exists
+              (fun (decl : Core.top_decl) ->
+                match decl.value with Core.Import _ -> true | _ -> false)
+              imported_pipeline.core.program.value.decls))
+    )

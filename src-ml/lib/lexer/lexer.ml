@@ -251,14 +251,16 @@ let rec lex buf acc =
 
 let tokenize buf = lex buf []
 
-let tokenize_channel ch =
+let tokenize_channel ?(filename = "") ch =
   let lexbuf = Sedlexing.Utf8.from_channel ch in
+  Sedlexing.set_filename lexbuf filename;
   tokenize lexbuf
 
-let tokenize_stdin () = tokenize_channel stdin
+let tokenize_stdin ?(filename = "<stdin>") () = tokenize_channel ~filename stdin
 
-let tokenize_str s =
+let tokenize_str ?(filename = "") s =
   let lexbuf = Sedlexing.Utf8.from_string s in
+  Sedlexing.set_filename lexbuf filename;
   tokenize lexbuf
 
 let tokenize_gen g =
@@ -332,10 +334,12 @@ let group_trivia (raw_tokens : Raw.tok list) =
 
 let tokenize_with_trivia buf = lex buf [] |> group_trivia
 
-let tokenize_channel_with_trivia ch =
+let tokenize_channel_with_trivia ?(filename = "") ch =
   let lexbuf = Sedlexing.Utf8.from_channel ch in
+  Sedlexing.set_filename lexbuf filename;
   tokenize_with_trivia lexbuf
 
-let tokenize_str_with_trivia s =
+let tokenize_str_with_trivia ?(filename = "") s =
   let lexbuf = Sedlexing.Utf8.from_string s in
+  Sedlexing.set_filename lexbuf filename;
   tokenize_with_trivia lexbuf
