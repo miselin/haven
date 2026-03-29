@@ -4,6 +4,7 @@
  (libraries haven)
  (preprocess
   (pps sedlex.ppx))
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
  (flags :standard -w +39)
  (modules hvfmt))
 
@@ -13,6 +14,7 @@
  (libraries haven)
  (preprocess
   (pps sedlex.ppx))
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
  (flags :standard -w +39)
  (modules hvast))
 
@@ -20,5 +22,6 @@
  (public_name haven)
  (name haven)
  (libraries haven)
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
  (flags :standard -w +39)
  (modules haven))

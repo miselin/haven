@@ -2,4 +2,5 @@
  (public_name haven-lsp)
  (name hvlsp)
  (libraries linol-lwt logs logs.fmt fmt.cli fmt.tty haven)
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
  (flags :standard -w +39))

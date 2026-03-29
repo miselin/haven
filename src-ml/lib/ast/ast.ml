@@ -5,3 +5,4 @@ module Import = Imports
 module Pretty = Pretty
 module Analysis = Analysis
 module ConstantFold = Analysis.ConstantFold
+module Llvm_ir = Llvm_ir

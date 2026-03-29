@@ -1,7 +1,8 @@
 (library
  (name haven_ast)
  (public_name haven.ast)
-(modules analysis_cfold analysis analysis_cleanup analysis_ownership
+ (modules analysis_cfold analysis analysis_cleanup analysis_ownership
   analysis_purity analysis_semantic analysis_types analysis_typing
-  analysis_verify ast convert core_ast imports pretty surface_ast)
- (libraries haven_core haven_token haven_cst haven_parser unix))
+  analysis_verify ast convert core_ast imports llvm_ir pretty surface_ast)
+ (libraries haven_core haven_token haven_cst haven_parser unix llvm
+  llvm.analysis llvm.target llvm.passbuilder llvm.all_backends))

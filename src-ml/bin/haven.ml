@@ -3,7 +3,12 @@ open Format
 module Analysis = Haven.Ast.Analysis
 module Convert = Haven.Ast.Convert
 module Imports = Haven.Ast.Imports
+module Llvm_ir = Haven.Ast.Llvm_ir
 module Pretty = Haven.Ast.Pretty
+
+type emit_mode =
+  | Emit_ir
+  | Emit_core
 
 let string_of_category = function
   | Analysis.Import -> "import"
@@ -49,16 +54,23 @@ let parse_input = function
   | Some filename -> Haven.Parser.parse_file filename
 
 let usage () =
-  eprintf "usage: haven [FILE]@.";
+  eprintf "usage: haven [--emit-ir|--emit-core] [FILE]@.";
   exit 1
 
 let main () =
-  let input =
-    match Array.length Sys.argv with
-    | 1 -> None
-    | 2 -> Some Sys.argv.(1)
-    | _ -> usage ()
+  let rec parse_args index mode input =
+    if index >= Array.length Sys.argv then (mode, input)
+    else
+      match Sys.argv.(index) with
+      | "--emit-ir" -> parse_args (index + 1) Emit_ir input
+      | "--emit-core" -> parse_args (index + 1) Emit_core input
+      | filename when String.length filename > 0 && filename.[0] <> '-' -> (
+          match input with
+          | None -> parse_args (index + 1) mode (Some filename)
+          | Some _ -> usage ())
+      | _ -> usage ()
   in
+  let emit_mode, input = parse_args 1 Emit_ir None in
   let parsed =
     try parse_input input
     with
@@ -76,7 +88,20 @@ let main () =
   let diagnostics = collect_pipeline_diagnostics pipeline in
   List.iter print_diagnostic diagnostics;
   if has_error diagnostics then exit 1;
-  Pretty.pp_core_program std_formatter pipeline.cleaned;
-  pp_print_newline std_formatter ()
+  match emit_mode with
+  | Emit_core ->
+      Pretty.pp_core_program std_formatter pipeline.cleaned;
+      pp_print_newline std_formatter ()
+  | Emit_ir -> (
+      try
+        pp_print_string std_formatter (Llvm_ir.emit_ir_string pipeline);
+        pp_print_newline std_formatter ()
+      with
+      | Llvm_ir.Error (Some loc, message) ->
+          eprintf "%s: llvm: error: %s@." (string_of_loc loc) message;
+          exit 1
+      | Llvm_ir.Error (None, message) ->
+          eprintf "haven: llvm: error: %s@." message;
+          exit 1)
 
 let () = main ()
