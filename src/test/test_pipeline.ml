@@ -54,4 +54,15 @@ let run () =
       match lit.value with
       | Core.Integer 7 -> ()
       | _ -> failwith "expected arithmetic constant folding to produce 7")
-  | _ -> failwith "expected arithmetic constant folding to produce a literal")
+  | _ -> failwith "expected arithmetic constant folding to produce a literal");
+
+  let specialization_pipeline =
+    parse_to_core
+      "fn vadd(fvec? a, fvec? b) { a + b }\n\
+       fn width(mat? m) { m.cols }\n\
+       fn main() -> i32 { 0 }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "specialization typing" specialization_pipeline.typing.diagnostics;
+  assert_no_diagnostics "specialization verify" specialization_pipeline.verify.diagnostics;
+  assert_no_diagnostics "specialization semantic" specialization_pipeline.semantic.diagnostics

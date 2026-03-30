@@ -34,14 +34,17 @@ module Semantic = struct
   let expr_annotation state expr =
     Hashtbl.find_opt state.typed.annotations.exprs (expr_id expr)
 
-  let initial_scope typed =
+  let initial_scope (typed : typing_result) =
+    let type_env = type_env_of_program typed.program.program in
     let add_decl scope (decl : Core.top_decl) =
       match decl.value with
       | Core.FDecl fn ->
           String_map.add fn.value.name.value
             {
               inferred_type = Some (Typing.function_type_of_decl fn);
-              resolved_type = None;
+              resolved_type =
+                resolve_core_type type_env [] [] fn.loc
+                  (Typing.function_type_of_decl fn);
               metavar = metavar_of_type (Typing.function_type_of_decl fn);
               is_mutable = false;
             }
@@ -61,7 +64,9 @@ module Semantic = struct
               String_map.add fn.value.name.value
                 {
                   inferred_type = Some (Typing.function_type_of_decl fn);
-                  resolved_type = None;
+                  resolved_type =
+                    resolve_core_type type_env [] [] fn.loc
+                      (Typing.function_type_of_decl fn);
                   metavar = metavar_of_type (Typing.function_type_of_decl fn);
                   is_mutable = false;
                 }
@@ -717,19 +722,20 @@ module Semantic = struct
             | None -> ()
             | Some body ->
                 let return_expected =
-                  let core_ty =
-                    Option.value ~default:(void_type fn.loc) fn.value.return_type
-                  in
-                  resolve_core_type state.type_env [] [] fn.loc core_ty
+                  Option.bind fn.value.return_type
+                    (resolve_core_type state.type_env [] [] fn.loc)
                 in
                 let env = push_scope env in
                 let env =
                   List.fold_left
                     (fun env (param : Core.param) ->
+                      let resolved_type =
+                        resolve_core_type state.type_env [] [] param.loc param.value.ty
+                      in
                       bind_current env param.value.name.value
                         {
                           inferred_type = Some param.value.ty;
-                          resolved_type = None;
+                          resolved_type;
                           metavar = metavar_of_type param.value.ty;
                               is_mutable = false;
                             })
@@ -750,19 +756,20 @@ module Semantic = struct
                 | None -> ()
                 | Some body ->
                     let return_expected =
-                      let core_ty =
-                        Option.value ~default:(void_type fn.loc) fn.value.return_type
-                      in
-                      resolve_core_type state.type_env [] [] fn.loc core_ty
+                      Option.bind fn.value.return_type
+                        (resolve_core_type state.type_env [] [] fn.loc)
                     in
                     let env = push_scope env in
                     let env =
                       List.fold_left
                         (fun env (param : Core.param) ->
+                          let resolved_type =
+                            resolve_core_type state.type_env [] [] param.loc param.value.ty
+                          in
                           bind_current env param.value.name.value
                             {
                               inferred_type = Some param.value.ty;
-                              resolved_type = None;
+                              resolved_type;
                               metavar = metavar_of_type param.value.ty;
                               is_mutable = false;
                             })

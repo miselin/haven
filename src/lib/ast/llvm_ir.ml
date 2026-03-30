@@ -133,6 +133,8 @@ let rec mangle_resolved_ty = function
         vec.Haven_token.Token.dimension
   | ResolvedMatrix mat ->
       Printf.sprintf "mat.%d.%d" mat.rows mat.columns
+  | ResolvedVecHole -> "vec.hole"
+  | ResolvedMatrixHole -> "mat.hole"
   | ResolvedFunction (params, ret, vararg) ->
       String.concat "."
         ([ "fn" ]
@@ -278,6 +280,10 @@ let rec llvm_type_of_resolved t ?loc = function
       Llvm.array_type (llvm_type_of_resolved t ?loc inner) count
   | ResolvedVec vec -> llvm_vector_type t vec.Haven_token.Token.dimension
   | ResolvedMatrix mat -> llvm_matrix_flat_type t mat
+  | ResolvedVecHole ->
+      fail ?loc "specialization vector hole reached LLVM lowering"
+  | ResolvedMatrixHole ->
+      fail ?loc "specialization matrix hole reached LLVM lowering"
   | (ResolvedNamed _ as resolved) -> llvm_named_type t ?loc resolved
   | ResolvedGenericParam name ->
       fail ?loc "unresolved generic parameter %s reached LLVM lowering" name
@@ -819,7 +825,10 @@ let rec emit_ownership_on_storage t kind resolved storage =
   | Analysis.ResolvedFunction _
   | Analysis.ResolvedGenericParam _ ->
       ()
-  | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _ ->
+  | Analysis.ResolvedVec _
+  | Analysis.ResolvedMatrix _
+  | Analysis.ResolvedVecHole
+  | Analysis.ResolvedMatrixHole ->
       ()
 
 and emit_ownership_on_named t kind resolved storage =
