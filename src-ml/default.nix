@@ -1,8 +1,10 @@
 {
   lib,
   stdenv,
+  llvmOcaml,
   llvmPackages,
   ocamlPackages,
+  repoSrc,
   ...
 }:
 
@@ -11,6 +13,7 @@ ocamlPackages.buildDunePackage {
   version = "1.0.0";
   src = ./.;
   DUNE_CACHE = "disabled";
+  HAVEN_REPO_ROOT = repoSrc;
 
   nativeBuildInputs = [
     llvmPackages.clang
@@ -19,7 +22,7 @@ ocamlPackages.buildDunePackage {
   propagatedBuildInputs = [
     ocamlPackages.fmt
     ocamlPackages.linol-lwt
-    ocamlPackages.llvm
+    llvmOcaml
     ocamlPackages.logs
     ocamlPackages.menhirLib
     ocamlPackages.sedlex

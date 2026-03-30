@@ -12,8 +12,19 @@
       pkgs = import nixpkgs { inherit system; };
       llvmPkgs = pkgs.llvmPackages_18;
       llvmCmakeDir = "${llvmPkgs.libllvm.dev}/lib/cmake/llvm";
+      llvmOcaml =
+        (pkgs.ocamlPackages.callPackage (pkgs.path + "/pkgs/development/ocaml-modules/llvm") {
+          libllvm = llvmPkgs.libllvm;
+        }).overrideAttrs
+          (old: {
+            patches = (old.patches or [ ]) ++ [ ./nix/ocaml-llvm-macos-ext-dll.patch ];
+          });
       haven = pkgs.callPackage ./default.nix { inherit llvmPkgs llvmCmakeDir self; stdenv = llvmPkgs.stdenv; };
-      havenMl = pkgs.callPackage ./src-ml/default.nix { inherit self; };
+      havenMl = pkgs.callPackage ./src-ml/default.nix {
+        inherit llvmOcaml;
+        llvmPackages = llvmPkgs;
+        repoSrc = ./.;
+      };
     in {
       apps.default = {
         type = "app";

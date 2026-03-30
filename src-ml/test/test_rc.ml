@@ -132,6 +132,14 @@ let rec find_repo_root dir =
     let parent = Filename.dirname dir in
     if String.equal parent dir then failwith "failed to locate repository root" else find_repo_root parent
 
+let resolve_repo_root () =
+  match Sys.getenv_opt "HAVEN_REPO_ROOT" with
+  | Some dir ->
+      let marker = Filename.concat dir "tests/inputs/add.hv" in
+      if Sys.file_exists marker then dir
+      else failwith "HAVEN_REPO_ROOT does not contain tests/inputs/add.hv"
+  | None -> find_repo_root (Sys.getcwd ())
+
 let read_all fd =
   let buffer = Buffer.create 1024 in
   let bytes = Bytes.create 4096 in
@@ -244,7 +252,7 @@ let run_case temp_dir harness_obj root (case : rc_case) (opt : opt_case) =
   with Failure message -> Some (Printf.sprintf "%s/%s failed\n%s" case.name opt.label message)
 
 let run () =
-  let root = find_repo_root (Sys.getcwd ()) in
+  let root = resolve_repo_root () in
   Test_support.with_temp_dir "haven-rc" (fun temp_dir ->
       let harness_c = Filename.concat temp_dir "rc_harness.c" in
       let harness_obj = Filename.concat temp_dir "rc_harness.o" in

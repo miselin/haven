@@ -1,0 +1,39 @@
+diff --git a/llvm/cmake/modules/AddOCaml.cmake b/llvm/cmake/modules/AddOCaml.cmake
+index ff6c26b..63f56b7 100644
+--- a/llvm/cmake/modules/AddOCaml.cmake
++++ b/llvm/cmake/modules/AddOCaml.cmake
+@@ -25,6 +25,13 @@
+ function(add_ocaml_library name)
+   CMAKE_PARSE_ARGUMENTS(ARG "NOCOPY" "" "OCAML;OCAMLDEP;C;CFLAGS;PKG;LLVM" ${ARGN})
+ 
++  set(ocaml_shared_library_suffix "${CMAKE_SHARED_LIBRARY_SUFFIX}")
++  if(APPLE)
++    # ocamlmklib emits stub DLLs using OCaml's ext_dll suffix, which stays
++    # `.so` on macOS even though CMake shared libraries default to `.dylib`.
++    set(ocaml_shared_library_suffix ".so")
++  endif()
++
+   set(src ${CMAKE_CURRENT_SOURCE_DIR})
+   set(bin ${CMAKE_CURRENT_BINARY_DIR})
+ 
+@@ -39,7 +46,7 @@ function(add_ocaml_library name)
+          "${bin}/lib${name}${CMAKE_STATIC_LIBRARY_SUFFIX}")
+     if ( BUILD_SHARED_LIBS )
+       list(APPEND ocaml_outputs
+-           "${bin}/dll${name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
++           "${bin}/dll${name}${ocaml_shared_library_suffix}")
+     endif()
+   endif()
+   if( HAVE_OCAMLOPT )
+@@ -195,9 +202,9 @@ function(add_ocaml_library name)
+     if( NOT (ext STREQUAL ".cmo" OR
+              ext STREQUAL ".ml" OR
+              ext STREQUAL CMAKE_C_OUTPUT_EXTENSION OR
+-             ext STREQUAL CMAKE_SHARED_LIBRARY_SUFFIX) )
++             ext STREQUAL ocaml_shared_library_suffix) )
+       list(APPEND install_files "${ocaml_output}")
+-    elseif( ext STREQUAL CMAKE_SHARED_LIBRARY_SUFFIX)
++    elseif( ext STREQUAL ocaml_shared_library_suffix)
+       list(APPEND install_shlibs "${ocaml_output}")
+     endif()
+   endforeach()
