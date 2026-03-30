@@ -163,6 +163,36 @@ pub impure fn main() -> i32 {
       ignore (find_named_function "add" imported_pipeline.core);
       ignore (find_named_function "main" imported_pipeline.core));
 
+  let previous_nix_cflags = Sys.getenv_opt "NIX_CFLAGS_COMPILE" in
+  Fun.protect
+    ~finally:(fun () ->
+      Unix.putenv "NIX_CFLAGS_COMPILE"
+        (match previous_nix_cflags with Some value -> value | None -> ""))
+    (fun () ->
+      with_temp_dir "haven-cimport-defaults" (fun root ->
+          let include_dir = Filename.concat root "include" in
+          Unix.mkdir include_dir 0o700;
+          write_file (Filename.concat include_dir "env_sample.h")
+            {|
+int env_add(int left, int right);
+|};
+          Unix.putenv "NIX_CFLAGS_COMPILE" ("-I " ^ include_dir);
+          let pipeline =
+            Analysis.Pipeline.run_cst
+              (Haven.Parser.parse_string
+                 {|
+cimport "env_sample.h";
+
+pub impure fn main() -> i32 {
+  env_add(2, 3)
+}
+|})
+          in
+          assert_no_diagnostics "default cimport typing" pipeline.typing.diagnostics;
+          assert_no_diagnostics "default cimport verify" pipeline.verify.diagnostics;
+          assert_no_diagnostics "default cimport semantic" pipeline.semantic.diagnostics;
+          ignore (find_named_function "env_add" pipeline.core)));
+
   let stdio_pipeline =
     Analysis.Pipeline.run_cst
       (Haven.Parser.parse_string

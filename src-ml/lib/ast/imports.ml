@@ -130,6 +130,7 @@ and expand_cimport state ~current_file import_path loc =
   expanded.decls
 
 let expand_cst ?(search_dirs = []) ?sysroot parsed =
-  let state = create_state ~search_dirs ?sysroot () in
+  let defaults = Platform_defaults.resolve ~search_dirs ?sysroot () in
+  let state = create_state ~search_dirs:defaults.search_dirs ?sysroot:defaults.sysroot () in
   let parsed = expand_program state parsed in
   { parsed; diagnostics = List.rev state.diagnostics_rev }
