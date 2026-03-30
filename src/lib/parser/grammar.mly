@@ -15,6 +15,7 @@
 %token <Haven_token.Token.numeric_type> NUMERIC_TYPE
 %token <Haven_token.Token.vec_type> VEC_TYPE
 %token <Haven_token.Token.mat_type> MAT_TYPE
+%token VEC_HOLE_TYPE MAT_HOLE_TYPE
 %token FLOAT_TYPE VOID_TYPE STR_TYPE
 %token <int> INT_LIT
 %token <float> FLOAT_LIT
@@ -332,6 +333,8 @@ builtin_type:
   | t=NUMERIC_TYPE { mk_loc $startpos $endpos (NumericType t) }
   | t=VEC_TYPE { mk_loc $startpos $endpos (VecType t) }
   | t=MAT_TYPE { mk_loc $startpos $endpos (MatrixType t) }
+  | VEC_HOLE_TYPE { mk_loc $startpos $endpos VecHoleType }
+  | MAT_HOLE_TYPE { mk_loc $startpos $endpos MatrixHoleType }
   | FLOAT_TYPE { mk_loc $startpos $endpos FloatType }
   | VOID_TYPE { mk_loc $startpos $endpos VoidType }
   | STR_TYPE { mk_loc $startpos $endpos StringType }

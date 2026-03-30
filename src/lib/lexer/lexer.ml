@@ -58,6 +58,8 @@ module Raw = struct
     | Numeric_type of numeric_type
     | Vec_type of vec_type
     | Mat_type of mat_type
+    | Vec_hole_type
+    | Mat_hole_type
     | Float_type
     | Void_type
     | Str_type
@@ -83,10 +85,13 @@ let ident_inner = [%sedlex.regexp? letter | digit | '_']
 let ident_segment = [%sedlex.regexp? Plus ident_inner]
 let numeric_type = [%sedlex.regexp? ('i' | 'u'), nonzero, Star digit]
 let vec_type = [%sedlex.regexp? "fvec", nonzero, Star digit]
+let vec_hole_type = [%sedlex.regexp? "fvec?"]
 
 let mat_type =
   [%sedlex.regexp?
     ("fmat" | "mat"), nonzero, Star digit, 'x', nonzero, Star digit]
+
+let mat_hole_type = [%sedlex.regexp? "mat?"]
 
 let float_type = [%sedlex.regexp? "float"]
 let void_type = [%sedlex.regexp? "void"]
@@ -359,9 +364,11 @@ let rec lex buf acc =
   | numeric_type ->
       let text = Sedlexing.Utf8.lexeme buf in
       lex buf (push_token buf (Numeric_type (numeric_type_of_string text)) acc)
+  | vec_hole_type -> lex buf (push_token buf Vec_hole_type acc)
   | vec_type ->
       let text = Sedlexing.Utf8.lexeme buf in
       lex buf (push_token buf (Vec_type (vec_type_of_string text)) acc)
+  | mat_hole_type -> lex buf (push_token buf Mat_hole_type acc)
   | mat_type ->
       let text = Sedlexing.Utf8.lexeme buf in
       lex buf (push_token buf (Mat_type (mat_type_of_string text)) acc)

@@ -1,6 +1,7 @@
 module Cst = Haven_cst.Cst
 module Surface = Surface_ast
 module Core = Core_ast
+open Haven_core
 
 type block_context = [ `Statement | `Value ]
 
@@ -48,6 +49,47 @@ let default_iter_type loc =
   mk_core_type loc
     (Core.NumericType { Haven_token.Token.signedness = Haven_token.Token.Signed; bits = 32 })
 
+let string_of_loc (loc : Loc.t) =
+  let pos = loc.start_pos in
+  let col = pos.pos_cnum - pos.pos_bol + 1 in
+  if pos.pos_fname = "" then Printf.sprintf "%d:%d" pos.pos_lnum col
+  else Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum col
+
+let rec surface_type_has_specialization_hole (ty : Surface.haven_type) =
+  match ty.value with
+  | Surface.VecHoleType | Surface.MatrixHoleType -> true
+  | Surface.CellType inner
+  | Surface.PointerType inner
+  | Surface.BoxType inner ->
+      surface_type_has_specialization_hole inner
+  | Surface.ArrayType arr -> surface_type_has_specialization_hole arr.value.element
+  | Surface.FunctionType fn ->
+      surface_type_has_specialization_hole fn.value.return_type
+      || List.exists surface_type_has_specialization_hole fn.value.param_types
+  | Surface.TemplatedType templ ->
+      List.exists surface_type_has_specialization_hole templ.value.inner
+  | Surface.NumericType _
+  | Surface.VecType _
+  | Surface.MatrixType _
+  | Surface.FloatType
+  | Surface.VoidType
+  | Surface.StringType
+  | Surface.CustomType _ ->
+      false
+
+let function_has_specialization_param (fn : Surface.function_decl) =
+  List.exists
+    (fun (param : Surface.param) ->
+      surface_type_has_specialization_hole param.value.ty)
+    fn.value.params.value.params
+
+let validate_surface_function_decl (fn : Surface.function_decl) =
+  if fn.value.return_type = None && not (function_has_specialization_param fn) then
+    failwith
+      (Printf.sprintf
+         "function %s omits its return type, but only specialization functions may infer returns (%s)"
+         fn.value.name.value (string_of_loc fn.loc))
+
 let rec cst_program_to_surface (program : Cst.program) : Surface.program =
   let decls = List.map cst_top_decl_to_surface program.value.decls in
   mk_surface program.loc { Surface.decls }
@@ -77,7 +119,9 @@ and cst_function_decl_to_surface (fn : Cst.function_decl) : Surface.function_dec
       vararg = fn.value.vararg;
     }
   in
-  mk_surface fn.loc value
+  let decl = mk_surface fn.loc value in
+  validate_surface_function_decl decl;
+  decl
 
 and cst_intrinsic_to_surface (intr : Cst.intrinsic) : Surface.intrinsic =
   let value =
@@ -362,6 +406,8 @@ and cst_type_to_surface (ty : Cst.haven_type) : Surface.haven_type =
     | Cst.NumericType n -> Surface.NumericType n
     | Cst.VecType v -> Surface.VecType v
     | Cst.MatrixType m -> Surface.MatrixType m
+    | Cst.VecHoleType -> Surface.VecHoleType
+    | Cst.MatrixHoleType -> Surface.MatrixHoleType
     | Cst.FloatType -> Surface.FloatType
     | Cst.VoidType -> Surface.VoidType
     | Cst.StringType -> Surface.StringType
@@ -522,6 +568,8 @@ let rec surface_type_to_core (ty : Surface.haven_type) : Core.haven_type =
     | Surface.NumericType n -> Core.NumericType n
     | Surface.VecType v -> Core.VecType v
     | Surface.MatrixType m -> Core.MatrixType m
+    | Surface.VecHoleType -> Core.VecHoleType
+    | Surface.MatrixHoleType -> Core.MatrixHoleType
     | Surface.FloatType -> Core.FloatType
     | Surface.VoidType -> Core.VoidType
     | Surface.StringType -> Core.StringType

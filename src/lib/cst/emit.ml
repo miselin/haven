@@ -264,6 +264,8 @@ and emit_type fmt ty =
   | NumericType n -> fprintf fmt "%s" (numeric_type_to_string n)
   | VecType v -> fprintf fmt "%s" (vec_type_to_string v)
   | MatrixType m -> fprintf fmt "%s" (mat_type_to_string m)
+  | VecHoleType -> fprintf fmt "fvec?"
+  | MatrixHoleType -> fprintf fmt "mat?"
   | FloatType -> fprintf fmt "float"
   | VoidType -> fprintf fmt "void"
   | StringType -> fprintf fmt "str"

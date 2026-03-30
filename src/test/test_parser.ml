@@ -13,6 +13,9 @@ let run () =
   assert_parse_ok "matrix literal accepts vector expressions"
     "pub fn main() -> i32 { let v = Vec<3.0, 4.0>; let x = Mat<Vec<1.0, 0.0>, v>; 0 }";
 
+  assert_parse_ok "specialization hole parameter types"
+    "fn vadd(fvec? a, mat? b) { a }";
+
   assert_parse_ok "multi-payload enum variants"
     "type Pair = enum { Both(i32, i32), Empty }; pub fn main() -> i32 { 0 }";
 
@@ -56,4 +59,25 @@ let run () =
   assert_true "parse errors should report remapped preprocessor filename"
     (string_contains parse_error "preprocessed/input.hv:7:");
   assert_true "parse errors should report remapped preprocessor line"
-    (string_contains parse_error "at preprocessed/input.hv:7:")
+    (string_contains parse_error "at preprocessed/input.hv:7:");
+
+  let specialized_core = parse_to_core "fn vadd(fvec? a, mat? b) { a }" in
+  let specialized_fn = find_named_function "vadd" specialized_core in
+  (match specialized_fn.value.params.value.params with
+  | [ vec_param; mat_param ] -> (
+      match (vec_param.value.ty.value, mat_param.value.ty.value) with
+      | Core.VecHoleType, Core.MatrixHoleType -> ()
+      | _ -> failwith "expected specialization hole parameter types to survive into core AST")
+  | _ -> failwith "expected vadd to have two parameters");
+  assert_true "specialization function should keep omitted return type through core conversion"
+    (specialized_fn.value.return_type = None);
+
+  let missing_return_error =
+    try
+      ignore (parse_to_core "fn add(i32 a, i32 b) { a + b }");
+      failwith "expected omitted non-specialization return type to fail"
+    with Failure msg -> msg
+  in
+  assert_true "omitted return type should require specialization parameters"
+    (string_contains missing_return_error
+       "only specialization functions may infer returns")

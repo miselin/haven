@@ -214,6 +214,8 @@ let type_class_of_type (ty : Core.haven_type) =
   | Core.ArrayType _ -> [ TypeClassArray ]
   | Core.VecType _ -> [ TypeClassVector ]
   | Core.MatrixType _ -> [ TypeClassMatrix ]
+  | Core.VecHoleType -> [ TypeClassVector ]
+  | Core.MatrixHoleType -> [ TypeClassMatrix ]
   | Core.FunctionType _ -> [ TypeClassFunction ]
   | Core.CustomType custom -> [ TypeClassCustom custom.name.value ]
   | Core.CellType _ -> [ TypeClassPointer ]
@@ -274,6 +276,9 @@ let rec equal_type (left : Core.haven_type) (right : Core.haven_type) =
       a.signedness = b.signedness && a.bits = b.bits
   | Core.VecType a, Core.VecType b -> a = b
   | Core.MatrixType a, Core.MatrixType b -> a = b
+  | Core.VecHoleType, Core.VecHoleType
+  | Core.MatrixHoleType, Core.MatrixHoleType ->
+      true
   | Core.FloatType, Core.FloatType
   | Core.VoidType, Core.VoidType
   | Core.StringType, Core.StringType ->
@@ -546,6 +551,9 @@ and resolve_core_type type_env active subst loc (ty : Core.haven_type) =
   | Core.VoidType -> Some ResolvedVoid
   | Core.VecType vec -> Some (ResolvedVec vec)
   | Core.MatrixType mat -> Some (ResolvedMatrix mat)
+  | Core.VecHoleType
+  | Core.MatrixHoleType ->
+      None
   | Core.PointerType inner ->
       Option.map (fun inner -> ResolvedPointer inner)
         (resolve_core_type type_env active subst loc inner)

@@ -86,6 +86,8 @@ let rec next_token st : Grammar.token * Lexing.position * Lexing.position =
     | Numeric_type s -> store_token st (Grammar.NUMERIC_TYPE s, startp, endp)
     | Vec_type s -> store_token st (Grammar.VEC_TYPE s, startp, endp)
     | Mat_type s -> store_token st (Grammar.MAT_TYPE s, startp, endp)
+    | Vec_hole_type -> store_token st (Grammar.VEC_HOLE_TYPE, startp, endp)
+    | Mat_hole_type -> store_token st (Grammar.MAT_HOLE_TYPE, startp, endp)
     | Float_type -> store_token st (Grammar.FLOAT_TYPE, startp, endp)
     | Void_type -> store_token st (Grammar.VOID_TYPE, startp, endp)
     | Str_type -> store_token st (Grammar.STR_TYPE, startp, endp)
@@ -165,6 +167,8 @@ let token_to_string = function
       Printf.sprintf "vector type %s" (vec_type_to_string desc)
   | Grammar.MAT_TYPE desc ->
       Printf.sprintf "matrix type %s" (mat_type_to_string desc)
+  | Grammar.VEC_HOLE_TYPE -> "vector specialization type fvec?"
+  | Grammar.MAT_HOLE_TYPE -> "matrix specialization type mat?"
   | Grammar.VOID_TYPE -> "void"
   | Grammar.FLOAT_TYPE -> "float"
   | Grammar.STR_TYPE -> "str"

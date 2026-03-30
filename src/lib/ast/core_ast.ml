@@ -43,6 +43,8 @@ and haven_type_desc =
   | NumericType of numeric_type
   | VecType of vec_type
   | MatrixType of mat_type
+  | VecHoleType
+  | MatrixHoleType
   | FloatType
   | VoidType
   | StringType
