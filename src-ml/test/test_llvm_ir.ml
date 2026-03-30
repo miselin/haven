@@ -31,4 +31,46 @@ let run () =
   assert_true "box ownership should call box ref"
     (string_contains box_ir "@__haven_box_ref");
   assert_true "box ownership should call box unref"
-    (string_contains box_ir "@__haven_box_unref")
+    (string_contains box_ir "@__haven_box_unref");
+
+  let vec_mat_ir =
+    emit_ir
+      {|
+pub fn scale(fvec3 v, float s) -> fvec3 { v * s }
+pub fn mmul(mat2x3 a, mat3x4 b) -> mat2x4 { a * b }
+pub fn vmul(fvec2 v, mat2x3 m) -> fvec3 { v * m }
+pub fn main() -> void {}
+|}
+  in
+  assert_true "vector scalar multiply should splat the scalar"
+    (string_contains vec_mat_ir "fmul <3 x float>");
+  assert_true "matrix multiply should declare the correctly typed intrinsic"
+    (string_contains vec_mat_ir "@llvm.matrix.multiply.v8f32.v6f32.v12f32");
+  assert_true "vector-matrix multiply should declare the correctly typed intrinsic"
+    (string_contains vec_mat_ir "@llvm.matrix.multiply.v3f32.v2f32.v6f32");
+
+  let field_ir =
+    emit_ir
+      {|
+pub fn lane(fvec3 v) -> float { v.x }
+pub fn row(mat2x3 m) -> fvec3 { m.y }
+pub fn main() -> void {}
+|}
+  in
+  assert_true "vector field access should lower through a vector GEP"
+    (string_contains field_ir "getelementptr inbounds <3 x float>");
+  assert_true "matrix row access should lower through scalar row addressing"
+    (string_contains field_ir "getelementptr inbounds float");
+
+  let literal_ir =
+    emit_ir
+      {|
+pub fn make_vec(float x) -> fvec3 { Vec<x, 2.0, 3.0> }
+pub fn make_mat(float x) -> mat2x2 { Mat<Vec<x, 2.0>, Vec<3.0, 4.0>> }
+pub fn main() -> void {}
+|}
+  in
+  assert_true "non-constant vector literals should be assembled with insertelement"
+    (string_contains literal_ir "define <3 x float> @make_vec");
+  assert_true "non-constant matrix literals should lower to their flat vector form"
+    (string_contains literal_ir "define <4 x float> @make_mat")

@@ -10,9 +10,23 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_link_libraries(vec_test haven_compiler_options_no_warnings haven_vec GTest::gtest_main)
     gtest_discover_tests(vec_test)
 
+    if (TARGET haven_ml_cli)
+        add_ocaml_haven_library(haven_vec_ml inputs/vec.hv)
+        add_executable(vec_ml_test vec_test.cc)
+        target_link_libraries(vec_ml_test haven_compiler_options_no_warnings haven_vec_ml GTest::gtest_main)
+        gtest_discover_tests(vec_ml_test)
+    endif ()
+
     add_executable(mat_test mat_test.cc)
     target_link_libraries(mat_test haven_compiler_options_no_warnings haven_mat GTest::gtest_main)
     gtest_discover_tests(mat_test)
+
+    if (TARGET haven_ml_cli)
+        add_ocaml_haven_library(haven_mat_ml inputs/mat.hv)
+        add_executable(mat_ml_test mat_test.cc)
+        target_link_libraries(mat_ml_test haven_compiler_options_no_warnings haven_mat_ml GTest::gtest_main)
+        gtest_discover_tests(mat_ml_test)
+    endif ()
 endif ()
 
 add_executable(trie_test trie_test.cc)

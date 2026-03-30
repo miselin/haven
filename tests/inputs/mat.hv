@@ -8,7 +8,7 @@ pub impure fn madd(mat3x3 *out, mat3x3 *a, mat3x3 *b) -> void {
 
 pub impure fn mscale(mat3x3 *out, mat3x3 *a, float b) -> void {
     let a_ = load a;
-    out := a_ * b
+    out := a_ * b;
 }
 
 pub impure fn msub(mat3x3 *out, mat3x3 *a, mat3x3 *b) -> void {

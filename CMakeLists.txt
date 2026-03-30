@@ -86,6 +86,15 @@ set(HAVEN_COMPILE_FLAGS "${HAVEN_C_FLAGS} --O2" CACHE STRING "flags to use when 
 
 include(build-etc/compiler.cmake)
 
+find_program(DUNE_EXECUTABLE dune)
+if (DUNE_EXECUTABLE)
+    add_custom_target(haven_ml_cli
+        COMMAND ${DUNE_EXECUTABLE} build bin/haven.exe
+        BYPRODUCTS ${CMAKE_SOURCE_DIR}/src-ml/_build/default/bin/haven.exe
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src-ml
+        COMMENT "Building OCaml Haven compiler")
+endif ()
+
 # Use jemalloc?
 if (OTHER_MALLOC AND MALLOC)
     set (CMAKE_C_STANDARD_LIBRARIES "${CMAKE_C_STANDARD_LIBRARIES} ${MALLOC}")

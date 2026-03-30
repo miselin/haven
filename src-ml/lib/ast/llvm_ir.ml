@@ -93,6 +93,13 @@ let initialize_llvm () =
   Llvm_all_backends.initialize ();
   ()
 
+let llvm_options_configured = ref false
+
+let configure_llvm () =
+  if not !llvm_options_configured then (
+    Llvm.parse_command_line_options [| "haven"; "-enable-matrix" |];
+    llvm_options_configured := true)
+
 let expr_id = Analysis.expr_id
 let binding_id = Analysis.binding_id
 let statement_id = Analysis.statement_id
@@ -198,6 +205,18 @@ let double_type t = Llvm.double_type t.context
 let void_type t = Llvm.void_type t.context
 let unit_value t = Llvm.const_int (i1_type t) 0
 let dummy_loc = { Loc.start_pos = Lexing.dummy_pos; end_pos = Lexing.dummy_pos }
+let const_i32 t value = Llvm.const_int (i32_type t) value
+
+let llvm_vector_type t dimension = Llvm.vector_type (float_type t) dimension
+
+let llvm_matrix_flat_type t (mat : Haven_token.Token.mat_type) =
+  llvm_vector_type t (mat.rows * mat.columns)
+
+let llvm_matrix_row_type t (mat : Haven_token.Token.mat_type) =
+  llvm_vector_type t mat.columns
+
+let llvm_matrix_row_array_type t (mat : Haven_token.Token.mat_type) =
+  Llvm.array_type (llvm_matrix_row_type t mat) mat.rows
 
 let resolved_type_of_core_type t loc ty =
   match Analysis.resolve_core_type t.type_env [] [] loc ty with
@@ -233,6 +252,21 @@ let function_resolved_type t (fn : Core.function_decl) =
   in
   Analysis.ResolvedFunction (param_tys, return_ty, fn.value.vararg)
 
+let llvm_intrinsic_suffix ?loc = function
+  | Analysis.ResolvedInt (_, bits) -> Printf.sprintf "i%d" bits
+  | Analysis.ResolvedFloat -> "f32"
+  | Analysis.ResolvedPointer _ -> "p0"
+  | Analysis.ResolvedVec vec -> Printf.sprintf "v%df32" vec.Haven_token.Token.dimension
+  | Analysis.ResolvedMatrix mat -> Printf.sprintf "v%df32" (mat.rows * mat.columns)
+  | ty ->
+      fail ?loc "unsupported intrinsic overload type %s during LLVM lowering"
+        (mangle_resolved_ty ty)
+
+let declare_function_if_missing t name fn_ty =
+  match Llvm.lookup_function name t.llmodule with
+  | Some fn -> fn
+  | None -> Llvm.declare_function name fn_ty t.llmodule
+
 let rec llvm_type_of_resolved t ?loc = function
   | Analysis.ResolvedInt (_, bits) -> Llvm.integer_type t.context bits
   | ResolvedFloat -> float_type t
@@ -241,8 +275,8 @@ let rec llvm_type_of_resolved t ?loc = function
   | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedFunction _ -> ptr_type t
   | ResolvedArray (inner, count) ->
       Llvm.array_type (llvm_type_of_resolved t ?loc inner) count
-  | ResolvedVec _ | ResolvedMatrix _ ->
-      fail ?loc "vector and matrix lowering are not implemented yet"
+  | ResolvedVec vec -> llvm_vector_type t vec.Haven_token.Token.dimension
+  | ResolvedMatrix mat -> llvm_matrix_flat_type t mat
   | (ResolvedNamed _ as resolved) -> llvm_named_type t ?loc resolved
   | ResolvedGenericParam name ->
       fail ?loc "unresolved generic parameter %s reached LLVM lowering" name
@@ -336,8 +370,71 @@ and llvm_enum_type t ?loc resolved decl =
         Llvm.struct_set_body ty body false;
         ty
 
+let declare_matrix_multiply_intrinsic t ?loc result_ty lhs_ty rhs_ty =
+  let name =
+    Printf.sprintf "llvm.matrix.multiply.%s.%s.%s"
+      (llvm_intrinsic_suffix ?loc result_ty)
+      (llvm_intrinsic_suffix ?loc lhs_ty)
+      (llvm_intrinsic_suffix ?loc rhs_ty)
+  in
+  let fn_ty =
+    Llvm.function_type
+      (llvm_type_of_resolved t ?loc result_ty)
+      [|
+        llvm_type_of_resolved t ?loc lhs_ty;
+        llvm_type_of_resolved t ?loc rhs_ty;
+        i32_type t;
+        i32_type t;
+        i32_type t;
+      |]
+  in
+  (declare_function_if_missing t name fn_ty, fn_ty)
+
 let zero_constant t resolved =
   Llvm.const_null (llvm_type_of_resolved t resolved)
+
+let build_vector_value t vector_ty values =
+  List.fold_left
+    (fun current (index, value) ->
+      Llvm.build_insertelement current value (const_i32 t index) "vec.insert" t.builder)
+    (Llvm.undef vector_ty)
+    (List.mapi (fun index value -> (index, value)) values)
+
+let flatten_matrix_rows (mat : Core.mat_literal) =
+  List.concat_map (fun (row : Core.vec_literal) -> row.value.elements) mat.value.rows
+
+let matrix_row_base_ptr t matrix_storage (mat : Haven_token.Token.mat_type) row_index =
+  let raw = Llvm.build_pointercast matrix_storage (ptr_type t) "matrix.row.raw" t.builder in
+  let base =
+    Llvm.build_mul row_index (const_i32 t mat.columns) "matrix.row.base" t.builder
+  in
+  Llvm.build_in_bounds_gep (float_type t) raw [| base |] "matrix.row.ptr" t.builder
+
+let load_matrix_row t row_ptr (mat : Haven_token.Token.mat_type) =
+  let elements =
+    List.init mat.columns (fun index ->
+        let element_ptr =
+          Llvm.build_in_bounds_gep (float_type t) row_ptr
+            [| const_i32 t index |]
+            "matrix.row.element.ptr" t.builder
+        in
+        Llvm.build_load (float_type t) element_ptr "matrix.row.element" t.builder)
+  in
+  build_vector_value t (llvm_matrix_row_type t mat) elements
+
+let store_matrix_row t row_ptr (mat : Haven_token.Token.mat_type) value =
+  List.iter
+    (fun index ->
+      let element =
+        Llvm.build_extractelement value (const_i32 t index) "matrix.row.extract" t.builder
+      in
+      let element_ptr =
+        Llvm.build_in_bounds_gep (float_type t) row_ptr
+          [| const_i32 t index |]
+          "matrix.row.store.ptr" t.builder
+      in
+      ignore (Llvm.build_store element element_ptr t.builder))
+    (List.init mat.columns Fun.id)
 
 let declare_runtime_function llmodule name return_ty param_tys =
   let fn_ty = Llvm.function_type return_ty (Array.of_list param_tys) in
@@ -381,6 +478,7 @@ let pass_pipeline = function
 
 let create_context ?(options = default_codegen_options) (pipeline : Analysis.Pipeline.result) =
   initialize_llvm ();
+  configure_llvm ();
   let context = Llvm.create_context () in
   let llmodule = Llvm.create_module context "haven" in
   let triple = Llvm_target.Target.default_triple () in
@@ -492,8 +590,22 @@ and constant_of_literal t loc resolved (lit : Core.literal) =
       Some (Llvm.const_int (Llvm.integer_type t.context bits) (Char.code value))
   | Core.String value, Analysis.ResolvedString -> Some (create_string_literal t value)
   | Core.Enum enum_lit, Analysis.ResolvedNamed _ -> constant_of_enum_literal t loc resolved enum_lit
-  | Core.Vector _, _ | Core.Matrix _, _ ->
-      fail ~loc "vector and matrix lowering are not implemented yet"
+  | Core.Vector vec, Analysis.ResolvedVec _ -> (
+      let values = List.map (constant_of_expr t) vec.value.elements in
+      if List.for_all Option.is_some values then
+        Some
+          (Llvm.const_vector
+             (Array.of_list (List.map Option.get values)))
+      else None)
+  | Core.Matrix mat, Analysis.ResolvedMatrix resolved_mat -> (
+      let values = List.map (constant_of_expr t) (flatten_matrix_rows mat) in
+      if List.for_all Option.is_some values then
+        let vector_ty = llvm_matrix_flat_type t resolved_mat in
+        Some
+          (Llvm.const_bitcast
+             (Llvm.const_vector (Array.of_list (List.map Option.get values)))
+             vector_ty)
+      else None)
   | _ -> None
 
 and constant_of_enum_literal t loc resolved (enum_lit : Core.enum_literal) =
@@ -526,8 +638,21 @@ and constant_of_initializer t loc resolved init =
                  (Array.of_list (List.map Option.get elements)))
           else None
       | None -> None)
-  | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _ ->
-      fail ~loc "vector and matrix lowering are not implemented yet"
+  | Analysis.ResolvedVec _ ->
+      let elements = List.map (constant_of_expr t) init.value.exprs in
+      if List.for_all Option.is_some elements then
+        Some
+          (Llvm.const_vector
+             (Array.of_list (List.map Option.get elements)))
+      else None
+  | Analysis.ResolvedMatrix mat ->
+      let elements = List.map (constant_of_expr t) init.value.exprs in
+      if List.for_all Option.is_some elements then
+        Some
+          (Llvm.const_bitcast
+             (Llvm.const_vector (Array.of_list (List.map Option.get elements)))
+             (llvm_matrix_flat_type t mat))
+      else None
   | _ -> None
 
 and enum_tag_value variant_name resolved type_env loc =
@@ -628,7 +753,7 @@ let rec emit_ownership_on_storage t kind resolved storage =
   | Analysis.ResolvedGenericParam _ ->
       ()
   | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _ ->
-      fail "vector and matrix lowering are not implemented yet"
+      ()
 
 and emit_ownership_on_named t kind resolved storage =
   match resolved with
@@ -836,7 +961,7 @@ and emit_box_value_ptr t inner_ty box_handle =
 
 and emit_field_lvalue t (expr : Core.expression) (field : Core.field) =
   let target_resolved = expr_resolved_type t field.value.target in
-  let struct_storage, struct_resolved =
+  let target_storage, target_value_resolved =
     if field.value.arrow then
       let pointer_value = emit_expr t field.value.target in
       let pointee =
@@ -853,21 +978,41 @@ and emit_field_lvalue t (expr : Core.expression) (field : Core.field) =
       let storage = emit_addressable_struct t field.value.target in
       (storage, target_resolved)
   in
-  match Analysis.lookup_struct_fields t.type_env expr.loc struct_resolved with
-  | Some fields ->
-      let rec find_index index = function
-        | [] ->
-            fail ~loc:expr.loc "unknown field %s during LLVM lowering"
-              field.value.field.value
-        | (name, _) :: rest ->
-            if String.equal name field.value.field.value then index
-            else find_index (index + 1) rest
-      in
-      let struct_ty = llvm_type_of_resolved t struct_resolved in
-      Llvm.build_struct_gep struct_ty struct_storage (find_index 0 fields) "field.ptr"
-        t.builder
-  | None ->
-      fail ~loc:expr.loc "field access requires a struct target during LLVM lowering"
+  match target_value_resolved with
+  | Analysis.ResolvedVec vec -> (
+      match Analysis.vector_field_index field.value.field.value with
+      | Some idx when idx < vec.Haven_token.Token.dimension ->
+          Llvm.build_in_bounds_gep
+            (llvm_type_of_resolved t target_value_resolved)
+            target_storage
+            [| const_i32 t 0; const_i32 t idx |]
+            "vec.field" t.builder
+      | _ ->
+          fail ~loc:expr.loc "unknown vector field %s during LLVM lowering"
+            field.value.field.value)
+  | Analysis.ResolvedMatrix mat -> (
+      match Analysis.vector_field_index field.value.field.value with
+      | Some idx when idx < mat.rows ->
+          matrix_row_base_ptr t target_storage mat (const_i32 t idx)
+      | _ ->
+          fail ~loc:expr.loc "unknown matrix row %s during LLVM lowering"
+            field.value.field.value)
+  | _ -> (
+      match Analysis.lookup_struct_fields t.type_env expr.loc target_value_resolved with
+      | Some fields ->
+          let rec find_index index = function
+            | [] ->
+                fail ~loc:expr.loc "unknown field %s during LLVM lowering"
+                  field.value.field.value
+            | (name, _) :: rest ->
+                if String.equal name field.value.field.value then index
+                else find_index (index + 1) rest
+          in
+          let struct_ty = llvm_type_of_resolved t target_value_resolved in
+          Llvm.build_struct_gep struct_ty target_storage (find_index 0 fields) "field.ptr"
+            t.builder
+      | None ->
+          fail ~loc:expr.loc "field access requires a struct target during LLVM lowering")
 
 and emit_index_lvalue t (expr : Core.expression) (index : Core.index) =
   let target_ty = expr_resolved_type t index.value.target in
@@ -879,14 +1024,43 @@ and emit_index_lvalue t (expr : Core.expression) (index : Core.index) =
         t.builder
   | Analysis.ResolvedArray (_inner, _) ->
       let target = emit_addressable_struct t index.value.target in
-      let zero = Llvm.const_int (i32_type t) 0 in
-      Llvm.build_in_bounds_gep (llvm_type_of_resolved t target_ty) target [| zero; idx |]
+      Llvm.build_in_bounds_gep (llvm_type_of_resolved t target_ty) target
+        [| const_i32 t 0; idx |]
         "array.index" t.builder
-  | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _ ->
-      fail ~loc:expr.loc "vector and matrix lowering are not implemented yet"
+  | Analysis.ResolvedVec _ ->
+      let target = emit_addressable_struct t index.value.target in
+      Llvm.build_in_bounds_gep (llvm_type_of_resolved t target_ty) target
+        [| const_i32 t 0; idx |]
+        "vec.index" t.builder
+  | Analysis.ResolvedMatrix mat ->
+      let target = emit_addressable_struct t index.value.target in
+      matrix_row_base_ptr t target mat idx
   | _ ->
       fail ~loc:expr.loc "indexing unsupported for %s during LLVM lowering"
         (mangle_resolved_ty target_ty)
+
+and matrix_row_access t (expr : Core.expression) =
+  match expr.value with
+  | Core.Index index -> (
+      match expr_resolved_type t index.value.target with
+      | Analysis.ResolvedMatrix mat -> Some (mat, emit_index_lvalue t expr index)
+      | _ -> None)
+  | Core.Field field -> (
+      let target_ty =
+        if field.value.arrow then
+          match expr_resolved_type t field.value.target with
+          | Analysis.ResolvedPointer inner
+          | Analysis.ResolvedCell inner
+          | Analysis.ResolvedBox inner ->
+              Some inner
+          | _ -> None
+        else
+          Some (expr_resolved_type t field.value.target)
+      in
+      match target_ty with
+      | Some (Analysis.ResolvedMatrix mat) -> Some (mat, emit_field_lvalue t expr field)
+      | _ -> None)
+  | _ -> None
 
 and emit_identifier t (_expr : Core.expression) (id : Core.identifier) =
   match lookup_symbol t id.value with
@@ -894,12 +1068,94 @@ and emit_identifier t (_expr : Core.expression) (id : Core.identifier) =
       load_variable t storage resolved_type
   | Function_symbol { fn; _ } -> fn
 
+and emit_float_vector_op t op lhs rhs =
+  match op with
+  | Core.Add -> Llvm.build_fadd lhs rhs "fadd" t.builder
+  | Core.Subtract -> Llvm.build_fsub lhs rhs "fsub" t.builder
+  | Core.Multiply -> Llvm.build_fmul lhs rhs "fmul" t.builder
+  | Core.Divide -> Llvm.build_fdiv lhs rhs "fdiv" t.builder
+  | Core.Modulo -> Llvm.build_frem lhs rhs "frem" t.builder
+  | _ -> fail "unexpected vector or matrix operator during LLVM lowering"
+
+and emit_splat_float_vector t width scalar =
+  let vector_ty = llvm_vector_type t width in
+  build_vector_value t vector_ty (List.init width (fun _ -> scalar))
+
+and emit_splat_matrix t (mat : Haven_token.Token.mat_type) scalar =
+  let count = mat.rows * mat.columns in
+  build_vector_value t (llvm_matrix_flat_type t mat) (List.init count (fun _ -> scalar))
+
+and emit_matrix_multiply t ?loc result_ty lhs rhs lhs_ty rhs_ty ~rows ~columns ~inner =
+  let intrinsic, fn_ty =
+    declare_matrix_multiply_intrinsic t ?loc result_ty lhs_ty rhs_ty
+  in
+  Llvm.build_call fn_ty intrinsic
+    [|
+      lhs;
+      rhs;
+      const_i32 t rows;
+      const_i32 t inner;
+      const_i32 t columns;
+    |]
+    "matrix.multiply" t.builder
+
+and emit_vector_or_matrix_binary t (expr : Core.expression) (binary : Core.binary) lhs rhs lhs_ty rhs_ty result_ty =
+  match (binary.value.op, lhs_ty, rhs_ty, result_ty) with
+  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo ),
+    Analysis.ResolvedVec _,
+    Analysis.ResolvedVec _,
+    Analysis.ResolvedVec _ ->
+      emit_float_vector_op t binary.value.op lhs rhs
+  | (Core.Multiply | Core.Divide | Core.Modulo), Analysis.ResolvedVec vec, Analysis.ResolvedFloat, Analysis.ResolvedVec _ ->
+      let rhs = emit_splat_float_vector t vec.Haven_token.Token.dimension rhs in
+      emit_float_vector_op t binary.value.op lhs rhs
+  | (Core.Multiply | Core.Divide | Core.Modulo), Analysis.ResolvedFloat, Analysis.ResolvedVec vec, Analysis.ResolvedVec _ ->
+      let lhs = emit_splat_float_vector t vec.Haven_token.Token.dimension lhs in
+      emit_float_vector_op t binary.value.op lhs rhs
+  | Core.Multiply, Analysis.ResolvedVec _, Analysis.ResolvedMatrix mat, Analysis.ResolvedVec _ ->
+      emit_matrix_multiply t ~loc:expr.loc result_ty lhs rhs lhs_ty rhs_ty ~rows:1
+        ~columns:mat.columns ~inner:mat.rows
+  | (Core.Add | Core.Subtract), Analysis.ResolvedMatrix _, Analysis.ResolvedMatrix _, Analysis.ResolvedMatrix _ ->
+      emit_float_vector_op t binary.value.op lhs rhs
+  | Core.Multiply, Analysis.ResolvedMatrix left, Analysis.ResolvedMatrix right, Analysis.ResolvedMatrix _ ->
+      emit_matrix_multiply t ~loc:expr.loc result_ty lhs rhs lhs_ty rhs_ty ~rows:left.rows
+        ~columns:right.columns ~inner:left.columns
+  | Core.Multiply, Analysis.ResolvedMatrix mat, Analysis.ResolvedFloat, Analysis.ResolvedMatrix _ ->
+      let rhs = emit_splat_matrix t mat rhs in
+      Llvm.build_fmul lhs rhs "fmul" t.builder
+  | Core.Multiply, Analysis.ResolvedFloat, Analysis.ResolvedMatrix mat, Analysis.ResolvedMatrix _ ->
+      let lhs = emit_splat_matrix t mat lhs in
+      Llvm.build_fmul lhs rhs "fmul" t.builder
+  | _ -> emit_nonfloat_binary t expr binary lhs rhs lhs_ty rhs_ty result_ty
+
 and emit_literal t (expr : Core.expression) lit =
   let resolved = expr_resolved_type t expr in
   match constant_of_literal t expr.loc resolved lit with
   | Some value -> value
-  | None ->
-      fail ~loc:expr.loc "non-constant literal form unsupported during LLVM lowering"
+  | None -> (
+      match (lit.value, resolved) with
+      | Core.Vector vec, Analysis.ResolvedVec resolved_vec ->
+          let elements =
+            List.map
+              (fun element ->
+                let value = emit_expr t element in
+                emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
+              vec.value.elements
+          in
+          build_vector_value t
+            (llvm_vector_type t resolved_vec.Haven_token.Token.dimension)
+            elements
+      | Core.Matrix mat, Analysis.ResolvedMatrix resolved_mat ->
+          let elements =
+            List.map
+              (fun element ->
+                let value = emit_expr t element in
+                emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
+              (flatten_matrix_rows mat)
+          in
+          build_vector_value t (llvm_matrix_flat_type t resolved_mat) elements
+      | _ ->
+          fail ~loc:expr.loc "non-constant literal form unsupported during LLVM lowering")
 
 and emit_initializer t (expr : Core.expression) (init : Core.init_list) =
   let resolved = expr_resolved_type t expr in
@@ -934,8 +1190,26 @@ and emit_initializer t (expr : Core.expression) (init : Core.init_list) =
             (List.mapi (fun index value -> (value, index)) elements)
       | None ->
           fail ~loc:expr.loc "initializer expects struct target during LLVM lowering")
-  | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _ ->
-      fail ~loc:expr.loc "vector and matrix lowering are not implemented yet"
+  | Analysis.ResolvedVec vec ->
+      let elements =
+        List.map
+          (fun element ->
+            let value = emit_expr t element in
+            emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
+          init.value.exprs
+      in
+      build_vector_value t
+        (llvm_vector_type t vec.Haven_token.Token.dimension)
+        elements
+  | Analysis.ResolvedMatrix mat ->
+      let elements =
+        List.map
+          (fun element ->
+            let value = emit_expr t element in
+            emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
+          init.value.exprs
+      in
+      build_vector_value t (llvm_matrix_flat_type t mat) elements
   | _ -> fail ~loc:expr.loc "initializer unsupported for this type during LLVM lowering"
 
 and emit_enum_literal t (expr : Core.expression) (enum_lit : Core.enum_literal) =
@@ -1037,6 +1311,8 @@ and emit_binary t (expr : Core.expression) (binary : Core.binary) =
           [ (Llvm.const_int (i1_type t) 1, current_block); (rhs_bool, rhs_block_final) ]
       in
       Llvm.build_phi incoming "logic.phi" t.builder
+  | _, _, _, (Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _) ->
+      emit_vector_or_matrix_binary t expr binary lhs rhs lhs_ty rhs_ty result_ty
   | _ -> emit_nonfloat_binary t expr binary lhs rhs lhs_ty rhs_ty result_ty
 
 and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty result_ty =
@@ -1334,13 +1610,19 @@ and emit_expr t (expr : Core.expression) =
           t.builder
     | Core.Call call -> emit_call t expr call
     | Core.Index index ->
-        let ptr = emit_index_lvalue t expr index in
-        Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) ptr "index.load"
-          t.builder
+        (match matrix_row_access t expr with
+        | Some (mat, row_ptr) -> load_matrix_row t row_ptr mat
+        | None ->
+            let ptr = emit_index_lvalue t expr index in
+            Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) ptr "index.load"
+              t.builder)
     | Core.Field field ->
-        let ptr = emit_field_lvalue t expr field in
-        Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) ptr "field.load"
-          t.builder
+        (match matrix_row_access t expr with
+        | Some (mat, row_ptr) -> load_matrix_row t row_ptr mat
+        | None ->
+            let ptr = emit_field_lvalue t expr field in
+            Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) ptr "field.load"
+              t.builder)
     | Core.Assign write -> emit_assign t expr write
     | Core.Mutate write -> emit_mutate t expr write
   in
@@ -1389,7 +1671,9 @@ and emit_assign t (expr : Core.expression) (write : Core.write) =
     coerce_store_value t ~loc:expr.loc value (expr_resolved_type t write.value.value)
       target_resolved
   in
-  ignore (Llvm.build_store cast_value target_ptr t.builder);
+  (match matrix_row_access t write.value.target with
+  | Some (mat, row_ptr) -> store_matrix_row t row_ptr mat cast_value
+  | None -> ignore (Llvm.build_store cast_value target_ptr t.builder));
   cast_value
 
 and emit_mutate t (expr : Core.expression) (write : Core.write) =
