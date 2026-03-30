@@ -1,0 +1,16 @@
+type Inner = struct {
+    i32 x;
+    i32 tag;
+};
+
+type Outer = struct {
+    Inner inner;
+    i32 tag;
+};
+
+pub fn main() -> i32 {
+    let Inner inner = { 5, 0 };
+    let Outer outer = { inner, 0 };
+
+    (outer.inner).x
+}

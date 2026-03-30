@@ -18,14 +18,22 @@ fi
 FAILURES=()
 EXPECTED_FAILURES="${REPO_DIR}/examples/badparse.hv ${REPO_DIR}/examples/badsemantic1.hv ${REPO_DIR}/examples/badsemantic2.hv ${REPO_DIR}/examples/badlex.hv ${REPO_DIR}/examples/missing_expr.hv ${REPO_DIR}/examples/impure.hv"
 
+params=()
 IFS=";"
 read -ra params <<< "$@"
 unset IFS
 
 for f in "${REPO_DIR}"/examples/*.hv; do
     echo "${EXPECTED_FAILURES}" | grep "${f}" >/dev/null && continue
+    [[ "${f}" == *_legacy.hv ]] && continue
 
-    if ! ${COMPILER} -c "${f}" ${params[@]} -o /dev/null; then
+    compile_target="${f}"
+    legacy_target="${f%.hv}_legacy.hv"
+    if [ -f "${legacy_target}" ]; then
+        compile_target="${legacy_target}"
+    fi
+
+    if ! ${COMPILER} -c "${compile_target}" ${params[@]} -o /dev/null; then
         FAILURES+=("${f}")
     fi
 done
