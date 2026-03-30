@@ -1,5 +1,6 @@
 type Thing = struct {
     i32^ boxed;
+    i32 tag;
 };
 
 fn new_boxed() -> i32^ {
@@ -7,7 +8,7 @@ fn new_boxed() -> i32^ {
 }
 
 pub impure fn sut() -> i32 {
-    let mut Thing t = { new_boxed() };
+    let mut Thing t = { new_boxed(), 0 };
     let mut b = box t;
     unbox b->boxed
 }
