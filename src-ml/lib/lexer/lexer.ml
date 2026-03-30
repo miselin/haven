@@ -106,6 +106,7 @@ let ident =
   [%sedlex.regexp? (letter | '_'), Star ident_inner, Star ('-', ident_segment)]
 
 let newline = [%sedlex.regexp? "\r\n" | '\n' | '\r']
+let preprocessor_directive = [%sedlex.regexp? '#', Star (Compl ('\n' | '\r')), Opt newline]
 let whitespace = [%sedlex.regexp? Plus (Chars " \t\012\013")]
 let line_comment = [%sedlex.regexp? "//", Star (Compl ('\n' | '\r'))]
 
@@ -137,6 +138,121 @@ let make_symbol sym = Symbol sym
 let push_token buf tok acc =
   let startp, endp = Sedlexing.lexing_positions buf in
   { tok; startp; endp } :: acc
+
+let trim_ascii_whitespace text =
+  let len = String.length text in
+  let is_space = function
+    | ' ' | '\t' | '\012' | '\013' -> true
+    | _ -> false
+  in
+  let rec find_start i =
+    if i >= len then len
+    else if is_space (String.unsafe_get text i) then find_start (i + 1)
+    else i
+  in
+  let rec find_end i =
+    if i < 0 then -1
+    else if is_space (String.unsafe_get text i) then find_end (i - 1)
+    else i
+  in
+  let start = find_start 0 in
+  let finish = find_end (len - 1) in
+  if finish < start then "" else String.sub text start (finish - start + 1)
+
+let strip_trailing_newline text =
+  let len = String.length text in
+  let rec find_end i =
+    if i < 0 then -1
+    else
+      match String.unsafe_get text i with
+      | '\n' | '\r' -> find_end (i - 1)
+      | _ -> i
+  in
+  let finish = find_end (len - 1) in
+  if finish < 0 then "" else String.sub text 0 (finish + 1)
+
+let parse_decimal_prefix text start =
+  let len = String.length text in
+  let rec loop i =
+    if i < len then
+      match String.unsafe_get text i with
+      | '0' .. '9' -> loop (i + 1)
+      | _ -> i
+    else i
+  in
+  let finish = loop start in
+  if finish = start then None
+  else Some (int_of_string (String.sub text start (finish - start)), finish)
+
+let parse_quoted_string text start =
+  let len = String.length text in
+  if start >= len || String.unsafe_get text start <> '"' then None
+  else
+    let buf = Buffer.create 32 in
+    let rec loop i =
+      if i >= len then None
+      else
+        match String.unsafe_get text i with
+        | '"' -> Some (Buffer.contents buf, i + 1)
+        | '\\' when i + 1 < len ->
+            Buffer.add_char buf (String.unsafe_get text (i + 1));
+            loop (i + 2)
+        | c ->
+            Buffer.add_char buf c;
+            loop (i + 1)
+    in
+    loop (start + 1)
+
+let parse_line_directive text =
+  let body =
+    text |> strip_trailing_newline |> trim_ascii_whitespace
+  in
+  let body =
+    if String.length body > 0 && String.unsafe_get body 0 = '#' then
+      String.sub body 1 (String.length body - 1) |> trim_ascii_whitespace
+    else body
+  in
+  let body =
+    if
+      String.length body >= 4
+      && String.equal (String.sub body 0 4) "line"
+      &&
+      (String.length body = 4
+      ||
+      match String.unsafe_get body 4 with
+      | ' ' | '\t' | '\012' | '\013' -> true
+      | _ -> false)
+    then
+      String.sub body 4 (String.length body - 4) |> trim_ascii_whitespace
+    else body
+  in
+  match parse_decimal_prefix body 0 with
+  | None -> None
+  | Some (line, after_line) ->
+      let rest =
+        String.sub body after_line (String.length body - after_line)
+        |> trim_ascii_whitespace
+      in
+      let file =
+        match parse_quoted_string rest 0 with
+        | Some (path, _) -> Some path
+        | None -> None
+      in
+      Some (line, file)
+
+let apply_line_directive buf (endp : Lexing.position) line file =
+  let filename = Option.value ~default:endp.pos_fname file in
+  let next_pos =
+    {
+      endp with
+      pos_fname = filename;
+      pos_lnum = line;
+      (* Keep absolute offsets monotonic while rebasing the next logical line. *)
+      pos_bol = endp.pos_cnum;
+    }
+  in
+  Sedlexing.set_filename buf filename;
+  Sedlexing.set_position ~bytes_position:next_pos buf next_pos
 
 let rec next_significant_token = function
   | [] -> None
@@ -201,6 +317,13 @@ let split_closing_rshifts tokens =
 
 let rec lex buf acc =
   match%sedlex buf with
+  | preprocessor_directive ->
+      let text = Sedlexing.Utf8.lexeme buf in
+      let _, endp = Sedlexing.lexing_positions buf in
+      Option.iter
+        (fun (line, file) -> apply_line_directive buf endp line file)
+        (parse_line_directive text);
+      lex buf acc
   | newline ->
       let text = Sedlexing.Utf8.lexeme buf in
       lex buf (push_token buf (Newline text) acc)
