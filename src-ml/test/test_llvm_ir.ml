@@ -33,6 +33,20 @@ let run () =
   assert_true "box ownership should call box unref"
     (string_contains box_ir "@__haven_box_unref");
 
+  let intrinsic_ir =
+    emit_ir
+      {|
+pub fn __builtin_ipow(float x, i32 power) -> float intrinsic "llvm.powi" float, i32;
+pub fn __builtin_sqrtf(float x) -> float intrinsic "llvm.sqrt" float;
+pub fn root(float x) -> float { __builtin_sqrtf(x) }
+pub fn pow3(float x) -> float { __builtin_ipow(x, 3) }
+|}
+  in
+  assert_true "custom sqrt intrinsic should declare the f32 overload"
+    (string_contains intrinsic_ir "declare float @llvm.sqrt.f32(float)");
+  assert_true "custom powi intrinsic should declare the typed overload"
+    (string_contains intrinsic_ir "declare float @llvm.powi.f32.i32(float, i32)");
+
   let vec_mat_ir =
     emit_ir
       {|

@@ -1847,38 +1847,54 @@ and emit_block_statements t (block : Core.block) =
   pop_scope t
 
 let declare_function_symbol t (fn : Core.function_decl) =
-  if fn.value.intrinsic <> None then
-    fail ~loc:fn.loc "intrinsic lowering is not implemented yet"
-  else
-    let resolved = function_resolved_type t fn in
-    match resolved with
-    | Analysis.ResolvedFunction (params, ret, vararg) ->
-        let fn_ty =
-          if vararg then
-            Llvm.var_arg_function_type (llvm_type_of_resolved t ret)
-              (Array.of_list (List.map (llvm_type_of_resolved t) params))
-          else
-            Llvm.function_type (llvm_type_of_resolved t ret)
-              (Array.of_list (List.map (llvm_type_of_resolved t) params))
-        in
-        let fn_value = Llvm.declare_function fn.value.name.value fn_ty t.llmodule in
-        Llvm.set_linkage
-          (if fn.value.public then Llvm.Linkage.External else Llvm.Linkage.Internal)
-          fn_value;
-        Llvm.set_function_call_conv Llvm.CallConv.c fn_value;
-        let symbol =
-          Function_symbol
-            {
-              fn = fn_value;
-              fn_type = fn_ty;
-              resolved_type = resolved;
-              vararg;
-              named_params = List.length params;
-            }
-        in
-        Hashtbl.replace t.functions fn.value.name.value symbol;
-        symbol
-    | _ -> fail ~loc:fn.loc "function declaration did not resolve to function type"
+  let resolved = function_resolved_type t fn in
+  match resolved with
+  | Analysis.ResolvedFunction (params, ret, vararg) ->
+      let fn_ty =
+        if vararg then
+          Llvm.var_arg_function_type (llvm_type_of_resolved t ret)
+            (Array.of_list (List.map (llvm_type_of_resolved t) params))
+        else
+          Llvm.function_type (llvm_type_of_resolved t ret)
+            (Array.of_list (List.map (llvm_type_of_resolved t) params))
+      in
+      let fn_value =
+        match fn.value.intrinsic with
+        | Some intr ->
+            let overloads =
+              List.map
+                (fun (ty : Core.haven_type) ->
+                  let resolved_ty = resolved_type_of_core_type t ty.loc ty in
+                  llvm_intrinsic_suffix ~loc:ty.loc resolved_ty)
+                intr.value.types
+            in
+            let name =
+              match overloads with
+              | [] -> intr.value.name.value
+              | _ -> String.concat "." (intr.value.name.value :: overloads)
+            in
+            declare_function_if_missing t name fn_ty
+        | None ->
+            let fn_value = Llvm.declare_function fn.value.name.value fn_ty t.llmodule in
+            Llvm.set_linkage
+              (if fn.value.public then Llvm.Linkage.External else Llvm.Linkage.Internal)
+              fn_value;
+            Llvm.set_function_call_conv Llvm.CallConv.c fn_value;
+            fn_value
+      in
+      let symbol =
+        Function_symbol
+          {
+            fn = fn_value;
+            fn_type = fn_ty;
+            resolved_type = resolved;
+            vararg;
+            named_params = List.length params;
+          }
+      in
+      Hashtbl.replace t.functions fn.value.name.value symbol;
+      symbol
+  | _ -> fail ~loc:fn.loc "function declaration did not resolve to function type"
 
 let declare_global_symbol t (decl : Core.var_decl) =
   let resolved = resolved_type_of_core_type t decl.loc decl.value.ty in
