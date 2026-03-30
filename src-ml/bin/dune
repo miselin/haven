@@ -1,0 +1,27 @@
+(executable
+ (public_name hvfmt)
+ (name hvfmt)
+ (libraries haven)
+ (preprocess
+  (pps sedlex.ppx))
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
+ (flags :standard -w +39)
+ (modules hvfmt))
+
+(executable
+ (public_name hvast-ml)
+ (name hvast)
+ (libraries haven)
+ (preprocess
+  (pps sedlex.ppx))
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
+ (flags :standard -w +39)
+ (modules hvast))
+
+(executable
+ (public_name haven)
+ (name haven)
+ (libraries haven unix)
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
+ (flags :standard -w +39)
+ (modules haven))

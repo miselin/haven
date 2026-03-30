@@ -76,6 +76,26 @@ macro(add_haven_test_library name source optlevel)
     set_target_properties(${name} PROPERTIES LINKER_LANGUAGE C)
 endmacro()
 
+macro(add_ocaml_haven_library name source)
+    if (NOT TARGET haven_ml_cli)
+        message(FATAL_ERROR "add_ocaml_haven_library requires the haven_ml_cli target")
+    endif ()
+
+    separate_arguments(HAVEN_COMPILE_FLAGS_LIST NATIVE_COMMAND ${HAVEN_COMPILE_FLAGS})
+
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND ${CMAKE_SOURCE_DIR}/src-ml/_build/default/bin/haven.exe ${HAVEN_SANITIZER_FLAGS} --trace --debug-ir -c ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
+        DEPENDS haven_ml_cli ${ARGN}
+        COMMENT "Building ${name} from ${source} [ocaml]"
+    )
+
+    add_library(${name} STATIC ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
+    target_link_libraries(${name} runtime)
+    set_target_properties(${name} PROPERTIES LINKER_LANGUAGE C)
+endmacro()
+
 macro(add_haven_runtime_library name source)
     set(options)
     set(oneValueArgs)

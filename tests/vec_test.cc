@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
-
-#include <glm/glm.hpp>
+#include <cmath>
 
 // actually a vec4, due to alignment, but we only use the first 3 components
 typedef float float3 __attribute__((vector_size(sizeof(float) * 4)));
@@ -14,22 +13,60 @@ extern "C" float velement(float3 v, int idx);
 extern "C" float3 make_fvec3(float x, float y, float z);
 extern "C" float3 make_const_fvec3();
 
-static float3 glm2vec(glm::vec3 v) {
+struct ref_vec3 {
+  float x;
+  float y;
+  float z;
+};
+
+static float ref_get(ref_vec3 v, int idx) {
+  switch (idx) {
+    case 0:
+      return v.x;
+    case 1:
+      return v.y;
+    default:
+      return v.z;
+  }
+}
+
+static float3 ref2vec(ref_vec3 v) {
   float3 result = {v.x, v.y, v.z, 0.0f};
   return result;
 }
 
-TEST(VecTest, Add) {
-  glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
-  glm::vec3 b = glm::vec3(4.0f, 5.0f, 6.0f);
+static ref_vec3 ref_add(ref_vec3 a, ref_vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
 
-  glm::vec3 c = a + b;
+static float ref_dot(ref_vec3 a, ref_vec3 b) {
+  return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+}
+
+static ref_vec3 ref_cross(ref_vec3 a, ref_vec3 b) {
+  return {
+      (a.y * b.z) - (a.z * b.y),
+      (a.z * b.x) - (a.x * b.z),
+      (a.x * b.y) - (a.y * b.x),
+  };
+}
+
+static ref_vec3 ref_scale(ref_vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
+
+static ref_vec3 ref_normalize(ref_vec3 a) {
+  float len = std::sqrt(ref_dot(a, a));
+  return {a.x / len, a.y / len, a.z / len};
+}
+
+TEST(VecTest, Add) {
+  ref_vec3 a = {1.0f, 2.0f, 3.0f};
+  ref_vec3 b = {4.0f, 5.0f, 6.0f};
+
+  ref_vec3 c = ref_add(a, b);
 
   EXPECT_EQ(c.x, 5.0f);
   EXPECT_EQ(c.y, 7.0f);
   EXPECT_EQ(c.z, 9.0f);
 
-  float3 result = vadd(glm2vec(a), glm2vec(b));
+  float3 result = vadd(ref2vec(a), ref2vec(b));
 
   EXPECT_EQ(result[0], 5.0f);
   EXPECT_EQ(result[1], 7.0f);
@@ -37,15 +74,15 @@ TEST(VecTest, Add) {
 }
 
 TEST(VecTest, Normalize) {
-  glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
+  ref_vec3 a = {1.0f, 2.0f, 3.0f};
 
-  glm::vec3 b = glm::normalize(a);
+  ref_vec3 b = ref_normalize(a);
 
   EXPECT_FLOAT_EQ(b.x, 0.267261236f);
   EXPECT_FLOAT_EQ(b.y, 0.534522474f);
   EXPECT_FLOAT_EQ(b.z, 0.801783681f);
 
-  float3 result = vnorm(glm2vec(a));
+  float3 result = vnorm(ref2vec(a));
 
   EXPECT_FLOAT_EQ(result[0], 0.267261236f);
   EXPECT_FLOAT_EQ(result[1], 0.534522474f);
@@ -53,29 +90,29 @@ TEST(VecTest, Normalize) {
 }
 
 TEST(VecTest, Dot) {
-  glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
-  glm::vec3 b = glm::vec3(4.0f, 5.0f, 6.0f);
+  ref_vec3 a = {1.0f, 2.0f, 3.0f};
+  ref_vec3 b = {4.0f, 5.0f, 6.0f};
 
-  float c = glm::dot(a, b);
+  float c = ref_dot(a, b);
 
   EXPECT_FLOAT_EQ(c, 32.0f);
 
-  float result = vdot(glm2vec(a), glm2vec(b));
+  float result = vdot(ref2vec(a), ref2vec(b));
 
   EXPECT_FLOAT_EQ(result, 32.0f);
 }
 
 TEST(VecTest, Cross) {
-  glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
-  glm::vec3 b = glm::vec3(4.0f, 5.0f, 6.0f);
+  ref_vec3 a = {1.0f, 2.0f, 3.0f};
+  ref_vec3 b = {4.0f, 5.0f, 6.0f};
 
-  glm::vec3 c = glm::cross(a, b);
+  ref_vec3 c = ref_cross(a, b);
 
   EXPECT_FLOAT_EQ(c.x, -3.0f);
   EXPECT_FLOAT_EQ(c.y, 6.0f);
   EXPECT_FLOAT_EQ(c.z, -3.0f);
 
-  float3 result = vcross(glm2vec(a), glm2vec(b));
+  float3 result = vcross(ref2vec(a), ref2vec(b));
 
   EXPECT_FLOAT_EQ(result[0], -3.0f);
   EXPECT_FLOAT_EQ(result[1], 6.0f);
@@ -83,15 +120,15 @@ TEST(VecTest, Cross) {
 }
 
 TEST(VecTest, Scale) {
-  glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
+  ref_vec3 a = {1.0f, 2.0f, 3.0f};
 
-  glm::vec3 b = a * 2.0f;
+  ref_vec3 b = ref_scale(a, 2.0f);
 
   EXPECT_FLOAT_EQ(b.x, 2.0f);
   EXPECT_FLOAT_EQ(b.y, 4.0f);
   EXPECT_FLOAT_EQ(b.z, 6.0f);
 
-  float3 result = vscale(glm2vec(a), 2.0f);
+  float3 result = vscale(ref2vec(a), 2.0f);
 
   EXPECT_FLOAT_EQ(result[0], 2.0f);
   EXPECT_FLOAT_EQ(result[1], 4.0f);
@@ -99,13 +136,13 @@ TEST(VecTest, Scale) {
 }
 
 TEST(VecTest, Element) {
-  glm::vec3 a = glm::vec3(1.0f, 2.0f, 3.0f);
+  ref_vec3 a = {1.0f, 2.0f, 3.0f};
 
-  EXPECT_FLOAT_EQ(a[0], 1.0f);
-  EXPECT_FLOAT_EQ(a[1], 2.0f);
-  EXPECT_FLOAT_EQ(a[2], 3.0f);
+  EXPECT_FLOAT_EQ(ref_get(a, 0), 1.0f);
+  EXPECT_FLOAT_EQ(ref_get(a, 1), 2.0f);
+  EXPECT_FLOAT_EQ(ref_get(a, 2), 3.0f);
 
-  float3 vec = glm2vec(a);
+  float3 vec = ref2vec(a);
 
   EXPECT_FLOAT_EQ(velement(vec, 0), 1.0f);
   EXPECT_FLOAT_EQ(velement(vec, 1), 2.0f);

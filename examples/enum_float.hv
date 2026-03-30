@@ -10,10 +10,10 @@ type Wrapped = enum {
 };
 
 pub impure fn main() -> i32 {
-    let Inner inner = { 5.0, };
+    let Inner inner = { 5.0 };
     let foo = Wrapped::Inner(inner);
     match foo {
-        Inner(x) => { printf("float: %f\n", x.x); 0 }
+        Inner(x) => { printf("float: %f\n", x.x); 0 },
         _ => 1
     }
 }

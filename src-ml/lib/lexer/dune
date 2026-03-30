@@ -1,0 +1,7 @@
+(library
+ (name haven_lexer)
+ (public_name haven.lexer)
+ (libraries sedlex haven_token)
+ (preprocess
+  (pps sedlex.ppx))
+ (flags :standard -w +39))

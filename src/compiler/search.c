@@ -75,6 +75,7 @@ void add_search_dir(struct compiler *compiler, const char *path) {
 }
 
 const char *const *compiler_get_cimport_compiler_flags(struct compiler *compiler, size_t *count) {
+  size_t extra_args = compiler->sysroot ? 2 : 0;
   size_t num_search_dirs = 0;
   struct search_dir *dir = compiler->search_dirs;
   while (dir) {
@@ -82,12 +83,17 @@ const char *const *compiler_get_cimport_compiler_flags(struct compiler *compiler
     dir = dir->next;
   }
 
-  char **result = (char **)malloc(sizeof(char *) * ((num_search_dirs * 2) + 1));
+  char **result = (char **)malloc(sizeof(char *) * ((num_search_dirs * 2) + extra_args + 1));
   if (!result) {
     return NULL;
   }
 
   size_t i = 0;
+  if (compiler->sysroot) {
+    result[i++] = strdup("-isysroot");
+    result[i++] = strdup(compiler->sysroot);
+  }
+
   dir = compiler->search_dirs;
   while (dir) {
     result[i++] = strdup("-I");
@@ -98,7 +104,7 @@ const char *const *compiler_get_cimport_compiler_flags(struct compiler *compiler
   result[i] = NULL;
 
   if (count) {
-    *count = num_search_dirs * 2;
+    *count = (num_search_dirs * 2) + extra_args;
   }
 
   return (const char *const *)result;

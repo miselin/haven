@@ -1,0 +1,24 @@
+cimport "stdio.h";
+
+type Inner = struct {
+    fvec3 vec;
+    i32 tag;
+};
+
+type Wrapped = enum {
+    Inner(Inner),
+    Error
+};
+
+pub impure fn main() -> i32 {
+    let Inner inner = { Vec<1.0, 2.0, 3.0>, 0 };
+    let foo = Wrapped::Inner(inner);
+    match foo {
+        Inner(x) => {
+            let v = x.vec;
+            printf("float: %f %f %f\n", v.x, v.y, v.z);
+            0
+        },
+        _ => 1
+    }
+}

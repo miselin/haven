@@ -68,7 +68,7 @@ impure fn check_purity_expr(mut PurityContext *ctx, ast_expr *ast) -> i32 {
             } else {
                 0
             }
-        }
+        },
 
         // AST_EXPR_TYPE_CALL
         8 => {
@@ -83,13 +83,13 @@ impure fn check_purity_expr(mut PurityContext *ctx, ast_expr *ast) -> i32 {
             } else {
                 0
             }
-        }
+        },
 
         // AST_EXPR_TYPE_LOAD
         15 => {
             compiler_log(ctx->comp, LogLevel::LogLevelError, "purity", "dereference of pointers is not allowed in pure functions");
             1
-        }
+        },
 
         _ => {
             0

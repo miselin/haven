@@ -13,10 +13,10 @@ fn nope() -> Result::<i32, str> {
 
 pub impure fn sut() -> i32 {
     match nope() {
-        Ok(x) => x
+        Ok(x) => x,
         Error(s) => {
             strcmp(s, "oh no!")
-        }
+        },
         _ => 123
     }
 }

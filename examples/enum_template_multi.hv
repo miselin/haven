@@ -14,11 +14,11 @@ fn nope() -> Result::<i32, str> {
 
 pub impure fn main() -> i32 {
     match nope() {
-        Ok(x) => x
+        Ok(x) => x,
         Error(s) => {
             printf("got '%s'\n", s);
             strcmp(s, "oh no!")
-        }
+        },
         _ => 123
     }
 }

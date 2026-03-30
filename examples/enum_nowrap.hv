@@ -8,16 +8,16 @@ type Numbers = enum {
 
 fn number(i32 x) -> Numbers {
     match x {
-        1 => Numbers::One
-        2 => Numbers::Two
-        3 => Numbers::Three
+        1 => Numbers::One,
+        2 => Numbers::Two,
+        3 => Numbers::Three,
         _ => Numbers::Error
     }
 }
 
 pub fn main() -> i32 {
     match number(2) {
-        Numbers::Two => 0
+        Numbers::Two => 0,
         _ => 1
     }
 }

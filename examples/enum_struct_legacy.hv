@@ -1,0 +1,18 @@
+type Inner = struct {
+    i32 x;
+    i32 tag;
+};
+
+type Wrapped = enum {
+    Inner(Inner),
+    Error
+};
+
+pub fn main() -> i32 {
+    let Inner inner = { as<i32>(5), 0 };
+    let foo = Wrapped::Inner(inner);
+    match foo {
+        Inner(x) => x.x,
+        _ => 1
+    }
+}

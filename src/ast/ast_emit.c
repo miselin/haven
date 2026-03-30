@@ -155,7 +155,7 @@ static int code_emit_stmt(FILE *stream, struct ast_stmt *ast, int indent) {
     case AST_STMT_TYPE_STORE:
       print_indent(stream, indent);
       code_emit_expr(stream, ast->stmt.store.lhs, indent);
-      fprintf(stream, " = ");
+      fprintf(stream, " := ");
       code_emit_expr(stream, ast->stmt.store.rhs, indent);
       break;
 
@@ -203,8 +203,7 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
   if (ast->flags & DECL_FLAG_IMPURE) {
     fprintf(stream, "impure ");
   }
-  code_emit_ty(stream, ast->parsed_function_ty.oneof.function.retty);
-  fprintf(stream, " fn %s(", ast->ident.value.identv.ident);
+  fprintf(stream, "fn %s(", ast->ident.value.identv.ident);
   for (size_t i = 0; i < ast->num_params; i++) {
     if (i > 0) {
       fprintf(stream, ", ");
@@ -226,7 +225,8 @@ static int code_emit_fdecl(FILE *stream, struct ast_fdecl *ast, int indent) {
     }
   }
 
-  fprintf(stream, ")");
+  fprintf(stream, ") -> ");
+  code_emit_ty(stream, ast->parsed_function_ty.oneof.function.retty);
   if (ast->body) {
     fprintf(stream, " ");
     code_emit_block(stream, ast->body, indent);

@@ -52,7 +52,7 @@ pub impure fn hash_map_insert(mut HashMap *map, str key, void *value) -> i32 {
                     kv.value = value;
                     ret 0;
                 }
-            }
+            },
             _ => {
                 break;
             }

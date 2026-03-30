@@ -1,17 +1,17 @@
 
-pub fn i32 fgetc(FILE *stream);
-pub fn i32 ungetc(i32 c, FILE *stream);
+pub fn fgetc(FILE *stream) -> i32;
+pub fn ungetc(i32 c, FILE *stream) -> i32;
 
-pub fn i32 read(i32 fd, i8 *buf, i32 count);
-pub fn i32 isdigit(i32 c);
-pub fn i32 isspace(i32 c);
-pub fn i32 isalpha(i32 c);
+pub fn read(i32 fd, i8 *buf, i32 count) -> i32;
+pub fn isdigit(i32 c) -> i32;
+pub fn isspace(i32 c) -> i32;
+pub fn isalpha(i32 c) -> i32;
 
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn i8 *malloc(i32 size);
-pub fn i8 *calloc(i32 nmemb, i32 size);
-pub fn void free(i8 *ptr);
+pub fn malloc(i32 size) -> i8 *;
+pub fn calloc(i32 nmemb, i32 size) -> i8 *;
+pub fn free(i8 *ptr) -> void;
 
 type StringLiteral = struct {
     i8 *s;
@@ -57,7 +57,7 @@ type Token = enum {
     DotDotDot
 };
 
-impure fn i8 next_char(FILE *fp) {
+impure fn next_char(FILE *fp) -> i8 {
     let i32 n = fgetc(fp);
     match n {
         -1 => -1
@@ -66,7 +66,7 @@ impure fn i8 next_char(FILE *fp) {
     }
 }
 
-impure fn Token string_literal(FILE *fp) {
+impure fn string_literal(FILE *fp) -> Token {
     let mut buf = malloc(256);
     let mut i32 i = 0;
 
@@ -80,16 +80,16 @@ impure fn Token string_literal(FILE *fp) {
             break;
         };
 
-        store (buf + i) c;
+        (buf + i) := c;
         i = i + 1;
     };
 
-    store (buf + i) as i8 0;
+    (buf + i) := as i8 0;
 
     Token::String(buf)
 }
 
-impure fn Token integer_literal(FILE *fp, i8 first_char) {
+impure fn integer_literal(FILE *fp, i8 first_char) -> Token {
     let mut i64 n = as i64 (first_char - '0');
     while 1 {
         let c = next_char(fp);
@@ -108,7 +108,7 @@ impure fn Token integer_literal(FILE *fp, i8 first_char) {
     Token::Integer(n)
 }
 
-impure fn Token identifier(FILE *fp, i8 first_char) {
+impure fn identifier(FILE *fp, i8 first_char) -> Token {
     if isalpha(as i32 first_char) == 0 && first_char != '_' {
         ret Token::Error;
     };
@@ -116,7 +116,7 @@ impure fn Token identifier(FILE *fp, i8 first_char) {
     let mut buf = malloc(256);
     let mut i32 i = 0;
 
-    store (buf + i) first_char;
+    (buf + i) := first_char;
     i = 1;
 
     while 1 {
@@ -130,16 +130,16 @@ impure fn Token identifier(FILE *fp, i8 first_char) {
             break;
         };
 
-        store (buf + i) c;
+        (buf + i) := c;
         i = i + 1;
     };
 
-    store (buf + i) as i8 0;
+    (buf + i) := as i8 0;
 
     Token::Ident(buf)
 }
 
-impure fn Token comment(FILE *fp) {
+impure fn comment(FILE *fp) -> Token {
     while 1  {
         let c = next_char(fp);
         if c <= 0 {
@@ -157,7 +157,7 @@ impure fn Token comment(FILE *fp) {
     Token::Comment
 }
 
-impure fn Token commentline(FILE *fp) {
+impure fn commentline(FILE *fp) -> Token {
     while 1 {
         let c = next_char(fp);
         if c <= 0 {
@@ -172,7 +172,7 @@ impure fn Token commentline(FILE *fp) {
     Token::Comment
 }
 
-impure fn Token next_token(FILE *fp) {
+impure fn next_token(FILE *fp) -> Token {
     let mut c = next_char(fp);
     if c <= 0 {
         ret Token::EOF;

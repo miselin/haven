@@ -23,7 +23,6 @@ struct lookup {
     {"fn", TOKEN_KW_FN},
     {"iter", TOKEN_KW_ITER},
     {"ref", TOKEN_KW_REF},
-    {"store", TOKEN_KW_STORE},
     {"load", TOKEN_KW_LOAD},
     {"ret", TOKEN_KW_RETURN},
     {"struct", TOKEN_KW_STRUCT},

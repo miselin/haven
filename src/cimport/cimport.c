@@ -517,6 +517,7 @@ static enum CXChildVisitResult libclang_visitor_decls(CXCursor cursor, CXCursor 
         // didn't yet see the type the typedef is referring to; emit it first unless it's a builtin
         if ((underlying.kind < CXType_FirstBuiltin || underlying.kind > CXType_LastBuiltin) &&
             underlying.kind != CXType_Pointer && underlying.kind != CXType_FunctionProto &&
+            underlying.kind != CXType_ConstantArray && underlying.kind != CXType_IncompleteArray &&
             strncmp("__builtin_", underlying_name_c, 10)) {
           compiler_log(
               importer->compiler, LogLevelTrace, "cimport",

@@ -1,0 +1,6 @@
+(test
+ (name test_src_ml)
+ (modules test_support test_pipeline test_typing_semantics test_ownership
+  test_purity test_imports test_llvm_ir test_parser test_rc test_src_ml)
+ (link_flags :standard -cclib -L/opt/homebrew/lib)
+ (libraries haven unix))

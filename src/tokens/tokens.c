@@ -122,8 +122,6 @@ const char *token_id_to_string(enum token_id token) {
       return "iter";
     case TOKEN_KW_REF:
       return "ref";
-    case TOKEN_KW_STORE:
-      return "store";
     case TOKEN_KW_LOAD:
       return "load";
     case TOKEN_KW_RETURN:

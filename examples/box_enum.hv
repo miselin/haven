@@ -9,7 +9,7 @@ pub fn print(Wrapped value) -> void {
     match value {
         Wrapped::Wrapped(inner) => {
             printf("wrapped: %d\n", unbox inner);
-        }
+        },
         _ => {
             printf("no value\n");
         }

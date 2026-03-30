@@ -1,4 +1,4 @@
-pub impure fn malloc(i32 size) -> i8*;
+pub impure fn malloc(i32 bytes) -> i8*;
 pub impure fn printf(str fmt, *) -> i32;
 
 type Thing = struct {

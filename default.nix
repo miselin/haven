@@ -18,7 +18,7 @@
 }:
 let
   project_name = "haven";
-  stdinc_c   = "${stdenv.cc.libc.dev}/include";
+  stdinc_c   = "${lib.getDev stdenv.cc.libc}/include";
   compiler_builtins = "${llvmPkgs.clang}/resource-root/include";
   haven_c_flags = "-I${stdinc_c};-I${compiler_builtins}";
 

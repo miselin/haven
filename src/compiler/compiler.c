@@ -32,6 +32,7 @@ struct compiler *new_compiler(int argc, const char *argv[]) {
     free(result);
     return NULL;
   }
+  compiler_apply_platform_defaults(result);
   result->type_repository = new_type_repository(result);
   result->cimporter = cimport_create(result);
   return result;
@@ -95,6 +96,7 @@ void destroy_compiler(struct compiler *compiler) {
   }
   free((void *)compiler->input_file);
   free((void *)compiler->output_file);
+  free((void *)compiler->sysroot);
   if (compiler->parser) {
     destroy_parser(compiler->parser);
   }
