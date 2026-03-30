@@ -3,6 +3,7 @@
 from lark import Lark, logger
 import sys, pathlib
 import logging
+import re
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -24,8 +25,22 @@ if PARSER == "earley":
 parser = Lark(grammar, **parser_kwargs)
 
 
+NESTED_CLOSER = re.compile(r">>(?=\s*[>,;)\]}])")
+
+
+def normalize_nested_closers(src: str) -> str:
+    # The OCaml parser accepts adjacent closing angle brackets in nested
+    # Vec/Mat/type syntax. Lark tokenizes those as a single shift operator,
+    # so we split only delimiter-adjacent closers before validation.
+    while True:
+        normalized = NESTED_CLOSER.sub("> >", src)
+        if normalized == src:
+            return src
+        src = normalized
+
+
 def validate(path):
-    src = pathlib.Path(path).read_text()
+    src = normalize_nested_closers(pathlib.Path(path).read_text())
     try:
         tree = parser.parse(src)
         print(f"OK: {path}")
