@@ -108,7 +108,7 @@ let server_capabilities () : ServerCapabilities.t =
     ~textDocumentSync:
       (`TextDocumentSyncOptions
          (TextDocumentSyncOptions.create ~openClose:true
-            ~change:TextDocumentSyncKind.Full ()))
+            ~change:TextDocumentSyncKind.Incremental ()))
     ~documentFormattingProvider:(`Bool true)
     ~hoverProvider:(`Bool true)
     ~semanticTokensProvider:

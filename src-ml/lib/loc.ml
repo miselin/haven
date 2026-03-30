@@ -10,10 +10,16 @@ let pos_key (pos : Lexing.position) = (pos.pos_fname, pos.pos_cnum)
 let pos_before (a : Lexing.position) (b : Lexing.position) =
   a.pos_cnum < b.pos_cnum
 
+let same_file (a : Lexing.position) (b : Lexing.position) =
+  String.equal a.pos_fname b.pos_fname
+
 let contains_position loc pos =
-  (not (pos_before pos loc.start_pos)) && not (pos_before loc.end_pos pos)
+  same_file loc.start_pos pos
+  && (not (pos_before pos loc.start_pos))
+  && not (pos_before loc.end_pos pos)
 
 let overlaps_range loc range =
-  not
-    (pos_before loc.end_pos range.start_pos
-    || pos_before range.end_pos loc.start_pos)
+  same_file loc.start_pos range.start_pos
+  && not
+       (pos_before loc.end_pos range.start_pos
+       || pos_before range.end_pos loc.start_pos)

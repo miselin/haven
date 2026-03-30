@@ -134,14 +134,42 @@ let open_doc (store : t) (td : TextDocumentItem.t) =
 
 let close_doc (store : t) (uri : DocumentUri.t) = Hashtbl.remove store uri
 
+let line_offsets text =
+  let offsets = ref [ 0 ] in
+  String.iteri
+    (fun index ch ->
+      if ch = '\n' then offsets := (index + 1) :: !offsets)
+    text;
+  Array.of_list (List.rev !offsets)
+
+let offset_of_position text (position : Position.t) =
+  let offsets = line_offsets text in
+  let max_line = max 0 (Array.length offsets - 1) in
+  let line = min position.line max_line in
+  let bol = offsets.(line) in
+  let next_bol =
+    if line + 1 < Array.length offsets then offsets.(line + 1) else String.length text
+  in
+  let line_limit =
+    if next_bol > bol && text.[next_bol - 1] = '\n' then next_bol - 1 else next_bol
+  in
+  let character = min position.character (line_limit - bol) in
+  bol + character
+
+let apply_incremental_change text (range : Range.t) replacement =
+  let start_offset = offset_of_position text range.start in
+  let end_offset = offset_of_position text range.end_ in
+  let end_offset = max start_offset end_offset in
+  String.sub text 0 start_offset ^ replacement
+  ^ String.sub text end_offset (String.length text - end_offset)
+
 let apply_change doc (change : TextDocumentContentChangeEvent.t) =
   match change.range with
   | None ->
       (* Full text replacement *)
       doc.text <- change.text
-  | Some _range ->
-      (* SyncKind = Full so we'll just do full text replacement. This isn't right long-term. *)
-      doc.text <- change.text
+  | Some range ->
+      doc.text <- apply_incremental_change doc.text range change.text
 
 let change_doc (store : t) (d : VersionedTextDocumentIdentifier.t)
     (evs : TextDocumentContentChangeEvent.t list) =

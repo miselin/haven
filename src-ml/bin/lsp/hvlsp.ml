@@ -51,6 +51,15 @@ module Server = struct
             notify_back#send_notification
               (Lsp.Server_notification.PublishDiagnostics params))
 
+      method! on_req_hover ~notify_back:_ ~id:_ ~uri ~pos ~workDoneToken
+          (_doc_state : Linol_lwt.Jsonrpc2.doc_state) =
+        let params =
+          Lsp.Types.HoverParams.create ~position:pos
+            ~textDocument:(Lsp.Types.TextDocumentIdentifier.create ~uri)
+            ?workDoneToken ()
+        in
+        Lwt.return (Haven_lsp.on_hover state params)
+
       method! on_request_unhandled : type r.
           notify_back:Linol_lwt.Jsonrpc2.notify_back ->
           id:Linol_lwt.Jsonrpc2.Req_id.t ->
@@ -58,8 +67,6 @@ module Server = struct
           r Linol_lwt.IO_lwt.t =
         fun ~notify_back ~id req ->
           match req with
-          | Lsp.Client_request.TextDocumentHover params ->
-              Linol_lwt.IO_lwt.return (Haven_lsp.on_hover state params)
           | Lsp.Client_request.SemanticTokensFull params ->
               Linol_lwt.IO_lwt.return
                 (Haven_lsp.on_semantic_tokens_full state params)
