@@ -25,7 +25,7 @@ fn build_cdf(fvec4 probabilities) -> fvec4 {
 }
 
 impure fn cdf_random(fvec4 cdf) -> i32 {
-    let r = as<float>(rand()) / 2147483647.0;
+    let r = rand() / 2147483647.0;
     if r < cdf.x {
         0
     } else if r < cdf.y {
@@ -73,10 +73,10 @@ pub impure fn main() -> i32 {
 
         point = apply(point, xform);
 
-        let sx = as<i32>((800.0 / 2.0) + (point.x * 100.0));
-        let sy = as<i32>(800.0 - (point.y * 100.0));
+        let sx = (800.0 / 2.0) + (point.x * 100.0);
+        let sy = 800.0 - (point.y * 100.0);
         if sx >= 0 && sy >= 0 && sx < 800 && sy < 800 {
-            points->pixels[sx + (sy * 800)] = as<i8>(1);
+            points->pixels[sx + (sy * 800)] = 1;
         };
     };
 
@@ -84,7 +84,7 @@ pub impure fn main() -> i32 {
     iter 0:799 y {
         iter 0:799 x {
             let idx = x + (y * 800);
-            if points->pixels[idx] == as<i8>(1) {
+            if points->pixels[idx] == 1 {
                 printf("%c%c%c", 0, 255, 0);
             } else {
                 printf("%c%c%c", 0, 0, 0);
