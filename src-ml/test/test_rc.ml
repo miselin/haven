@@ -1,5 +1,6 @@
 module Analysis = Haven.Ast.Analysis
 module Llvm_ir = Haven.Ast.Llvm_ir
+module Platform_defaults_common = Haven.Ast.Platform_defaults_common
 
 type rc_case = {
   name : string;
@@ -212,8 +213,13 @@ let compile_case_to_object ~source ~output_path opt_level =
            (format_diagnostic diagnostic))
 
 let link_case_executable ~harness_obj ~sut_obj ~output_path =
+  let linker_args =
+    [ harness_obj; sut_obj ]
+    @ (if Platform_defaults_common.is_linux_host () then [ "-no-pie" ] else [])
+    @ [ "-o"; output_path ]
+  in
   let result =
-    run_command_capture ~prog:"cc" ~args:[ harness_obj; sut_obj; "-o"; output_path ]
+    run_command_capture ~prog:"cc" ~args:linker_args
   in
   require_success ("link " ^ output_path) result
 

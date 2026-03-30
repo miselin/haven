@@ -1,7 +1,5 @@
 let is_host () =
-  match Platform_defaults_common.capture_first_line "uname" [ "-s" ] with
-  | Some "Darwin" -> true
-  | _ -> false
+  Platform_defaults_common.is_darwin_host ()
 
 let resolve_sysroot sysroot =
   let sysroot =

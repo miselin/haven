@@ -87,6 +87,14 @@ let capture_first_line prog args =
             | _ -> None
           with Unix.Unix_error _ -> None))
 
+let host_system () = capture_first_line "uname" [ "-s" ]
+
+let is_darwin_host () =
+  match host_system () with Some "Darwin" -> true | _ -> false
+
+let is_linux_host () =
+  match host_system () with Some "Linux" -> true | _ -> false
+
 let resource_include_dir resource_dir = Filename.concat resource_dir "include"
 
 let maybe_set_sysroot current path =

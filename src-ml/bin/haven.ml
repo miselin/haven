@@ -271,11 +271,15 @@ let summarize_config (config : config) =
     | Some path -> eprintf "sysroot: %s@." path
     | None -> ())
 
+let default_linker_options () =
+  if Haven.Ast.Platform_defaults_common.is_linux_host () then [ "-no-pie" ] else []
+
 let run_linker config ~object_file ~output_file =
   let linker = match config.linker with Some path -> path | None -> "gcc" in
   let args =
     Array.of_list
       (linker :: "-o" :: output_file :: object_file
+     :: default_linker_options ()
      :: (if config.asan then [ "-fsanitize=address" ] else [])
      @ config.linker_options)
   in
