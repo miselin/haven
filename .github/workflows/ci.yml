@@ -1,6 +1,9 @@
 name: Compiler CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 env:
   LLVM_VERSION: "18"
