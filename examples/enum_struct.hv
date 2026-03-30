@@ -1,6 +1,7 @@
 
 type Inner = struct {
     i32 x;
+    i32 y;
 };
 
 type Wrapped = enum {
@@ -9,7 +10,7 @@ type Wrapped = enum {
 };
 
 pub fn main() -> i32 {
-    let Inner inner = { 5 };
+    let Inner inner = { 5, 0 };
     let foo = Wrapped::Inner(inner);
     match foo {
         Inner(x) => x.x,

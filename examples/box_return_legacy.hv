@@ -4,7 +4,7 @@ type Thing = struct {
 };
 
 pub fn new_boxed() -> i32^ {
-    box 5
+    box as<i32>(5)
 }
 
 pub impure fn main() -> i32 {

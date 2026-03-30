@@ -1,13 +1,10 @@
-type Thing = struct {
-    i32^ boxed;
-};
-
 pub fn new_boxed() -> i32^ {
-    box 5
+    box as<i32>(5)
 }
 
 pub impure fn main() -> i32 {
-    let mut Thing t = { new_boxed() };
-    let mut b = box t;
-    unbox b->boxed
+    let mut boxed = new_boxed();
+    let inner = unbox boxed;
+    boxed = nil;
+    inner
 }
