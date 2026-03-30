@@ -9,11 +9,13 @@ ocamlPackages.buildDunePackage {
   pname = "haven";
   version = "1.0.0";
   src = ./.;
+  DUNE_CACHE = "disabled";
 
   nativeBuildInputs = [ ocamlPackages.menhir ];
   propagatedBuildInputs = [
     ocamlPackages.fmt
     ocamlPackages.linol-lwt
+    ocamlPackages.llvm
     ocamlPackages.logs
     ocamlPackages.menhirLib
     ocamlPackages.sedlex
