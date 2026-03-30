@@ -15,23 +15,6 @@ let string_of_category = function
   | Analysis.Cleanup -> "cleanup"
   | Analysis.Ownership -> "ownership"
 
-let loc_to_range (loc : Haven_core.Loc.t) =
-  let start_pos = loc.start_pos in
-  let end_pos = loc.end_pos in
-  let start =
-    Position.create ~line:(start_pos.pos_lnum - 1)
-      ~character:(start_pos.pos_cnum - start_pos.pos_bol)
-  in
-  let end_ =
-    Position.create ~line:(end_pos.pos_lnum - 1)
-      ~character:(end_pos.pos_cnum - end_pos.pos_bol)
-  in
-  Range.create ~start ~end_
-
-let zero_range =
-  let pos = Position.create ~line:0 ~character:0 in
-  Range.create ~start:pos ~end_:pos
-
 let severity_of_level = function
   | Analysis.Error -> DiagnosticSeverity.Error
   | Analysis.Warning -> DiagnosticSeverity.Warning
@@ -49,8 +32,8 @@ let diagnostics_for_doc (doc : Document_store.document) =
   | Some parse_error, _ ->
       let range =
         match parse_error.loc with
-        | Some loc -> loc_to_range loc
-        | None -> zero_range
+        | Some loc -> Lsp_helpers.loc_to_range loc
+        | None -> Lsp_helpers.zero_range
       in
       [
         Diagnostic.create ~message:(`String parse_error.message) ~range
@@ -62,7 +45,7 @@ let diagnostics_for_doc (doc : Document_store.document) =
              String.equal diagnostic.loc.start_pos.pos_fname path)
       |> List.map (fun (diagnostic : Analysis.diagnostic) ->
              Diagnostic.create ~message:(`String diagnostic.message)
-               ~range:(loc_to_range diagnostic.loc)
+               ~range:(Lsp_helpers.loc_to_range diagnostic.loc)
                ~severity:(severity_of_level diagnostic.level)
                ~source:("haven/" ^ string_of_category diagnostic.category)
                ())
@@ -76,51 +59,28 @@ let publish_diagnostics_params (state : state) (uri : DocumentUri.t) =
         (PublishDiagnosticsParams.create
            ~diagnostics:(diagnostics_for_doc doc) ~uri ?version:doc.version ())
 
-let line_offsets text =
-  let offsets = ref [ 0 ] in
-  String.iteri
-    (fun index ch ->
-      if ch = '\n' then offsets := (index + 1) :: !offsets)
-    text;
-  Array.of_list (List.rev !offsets)
-
-let lex_position_of_lsp_position ~filename ~text (position : Position.t) =
-  let offsets = line_offsets text in
-  let max_line = max 0 (Array.length offsets - 1) in
-  let line = min position.line max_line in
-  let bol = offsets.(line) in
-  let next_bol =
-    if line + 1 < Array.length offsets then offsets.(line + 1) else String.length text
-  in
-  let line_limit =
-    if next_bol > bol && text.[next_bol - 1] = '\n' then next_bol - 1 else next_bol
-  in
-  let character = min position.character (line_limit - bol) in
-  {
-    Lexing.pos_fname = filename;
-    pos_lnum = line + 1;
-    pos_bol = bol;
-    pos_cnum = bol + character;
-  }
-
 let server_capabilities () : ServerCapabilities.t =
   ServerCapabilities.create
     ~textDocumentSync:
       (`TextDocumentSyncOptions
          (TextDocumentSyncOptions.create ~openClose:true
             ~change:TextDocumentSyncKind.Incremental ()))
+    ~definitionProvider:(`Bool true)
+    ~documentHighlightProvider:(`Bool true)
     ~documentFormattingProvider:(`Bool true)
+    ~documentSymbolProvider:(`Bool true)
+    ~foldingRangeProvider:(`Bool true)
     ~hoverProvider:(`Bool true)
+    ~inlayHintProvider:(`Bool true)
+    ~selectionRangeProvider:(`Bool true)
+    ~codeLensProvider:(CodeLensOptions.create ())
+    ~executeCommandProvider:
+      (ExecuteCommandOptions.create ~commands:[ Code_lenses.command_name ] ())
     ~semanticTokensProvider:
       (`SemanticTokensOptions
          (SemanticTokensOptions.create ~full:(`Bool true) ~range:true
             ~legend:Semantic_tokens.legend ()))
     ()
-(* add more as you implement them:
-       ~documentSymbolProvider:(`Bool true)
-       ~foldingRangeProvider:(`Bool true)
-       etc.
-    *)
 
 let on_initialize (_state : state) (params : InitializeParams.t) :
     InitializeResult.t =
@@ -138,26 +98,94 @@ let on_did_change (state : state) (doc : VersionedTextDocumentIdentifier.t)
     (evs : TextDocumentContentChangeEvent.t list) =
   Document_store.change_doc state.docs doc evs
 
+let with_doc state uri f =
+  Option.bind (Document_store.get_doc state.docs uri) f
+
+let with_doc_pipeline state uri f =
+  with_doc state uri (fun (doc : Document_store.document) ->
+      Option.bind doc.pipeline (fun pipeline -> f doc pipeline))
+
+let lex_position_for_doc (doc : Document_store.document) position =
+  let filename = DocumentUri.to_path doc.uri in
+  Lsp_helpers.lex_position_of_lsp_position ~filename ~text:doc.text position
+
 let on_hover (state : state) (params : HoverParams.t) =
-  match Document_store.get_doc state.docs params.textDocument.uri with
-  | None -> None
-  | Some doc -> (
-      match doc.pipeline with
+  with_doc_pipeline state params.textDocument.uri (fun doc pipeline ->
+      let position = lex_position_for_doc doc params.position in
+      match Hover_info.hover_text_at pipeline.typing position with
       | None -> None
-      | Some pipeline -> (
-          let filename = DocumentUri.to_path doc.uri in
-          let position =
-            lex_position_of_lsp_position ~filename ~text:doc.text params.position
+      | Some (loc, contents) ->
+          let markup =
+            MarkupContent.create ~kind:MarkupKind.Markdown ~value:contents
           in
-          match Hover_info.hover_text_at pipeline.typing position with
-          | None -> None
-          | Some (loc, contents) ->
-              let markup =
-                MarkupContent.create ~kind:MarkupKind.Markdown ~value:contents
-              in
-              Some
-                (Hover.create ~contents:(`MarkupContent markup)
-                   ~range:(loc_to_range loc) ())))
+          Some
+            (Hover.create ~contents:(`MarkupContent markup)
+               ~range:(Lsp_helpers.loc_to_range loc) ()))
+
+let on_definition (state : state) (uri : DocumentUri.t) (position : Position.t) =
+  with_doc_pipeline state uri (fun doc pipeline ->
+      let position = lex_position_for_doc doc position in
+      Option.map
+        (fun loc ->
+          let uri = DocumentUri.of_path loc.Haven_core.Loc.start_pos.pos_fname in
+          `Location
+            [
+              Location.create ~uri ~range:(Lsp_helpers.loc_to_range loc);
+            ])
+        (Hover_info.definition_at pipeline.typing position))
+
+let on_document_symbols (state : state) (uri : DocumentUri.t) =
+  match Document_store.get_cst state.docs uri with
+  | None -> None
+  | Some parsed ->
+      Some (`DocumentSymbol (Document_symbols.symbols_for_program parsed))
+
+let on_folding_ranges (state : state) (uri : DocumentUri.t) =
+  match Document_store.get_cst state.docs uri with
+  | None -> None
+  | Some parsed ->
+      Some (Document_structure.folding_ranges parsed)
+
+let on_inlay_hints (state : state) (uri : DocumentUri.t) (range : Range.t) =
+  with_doc_pipeline state uri (fun doc pipeline ->
+      let filename = DocumentUri.to_path doc.uri in
+      let query_range =
+        Lsp_helpers.lex_range_of_lsp_range ~filename ~text:doc.text range
+      in
+      Some (Inlay_hints.hints_for_range pipeline.typing query_range))
+
+let document_highlight_kind = function
+  | `Read -> DocumentHighlightKind.Read
+  | `Write -> DocumentHighlightKind.Write
+  | `Text -> DocumentHighlightKind.Text
+
+let on_document_highlights (state : state) (uri : DocumentUri.t)
+    (position : Position.t) =
+  with_doc_pipeline state uri (fun doc pipeline ->
+      let position = lex_position_for_doc doc position in
+      Some
+        (List.map
+           (fun (highlight : Symbol_resolution.highlight) ->
+             DocumentHighlight.create
+               ~kind:(document_highlight_kind highlight.kind)
+               ~range:(Lsp_helpers.loc_to_range highlight.loc) ())
+           (Symbol_resolution.highlights_at pipeline.typing position)))
+
+let on_selection_ranges (state : state) (uri : DocumentUri.t)
+    (positions : Position.t list) =
+  with_doc state uri (fun doc ->
+      match doc.cst with
+      | None -> None
+      | Some parsed ->
+          let positions = List.map (lex_position_for_doc doc) positions in
+          Some (Document_structure.selection_ranges_at_positions parsed positions))
+
+let on_code_lenses (state : state) (uri : DocumentUri.t) =
+  with_doc_pipeline state uri (fun doc pipeline ->
+      Some (Code_lenses.code_lenses (DocumentUri.to_path doc.uri) pipeline))
+
+let on_execute_command (_state : state) command =
+  if String.equal command Code_lenses.command_name then Some `Null else None
 
 let format_document (state : state) (uri : DocumentUri.t) :
     TextEdit.t list option =
@@ -169,7 +197,6 @@ let format_document (state : state) (uri : DocumentUri.t) :
   match Document_store.get_cst state.docs uri with
   | None -> None
   | Some cst ->
-      (* TODO: this is a full-document rewrite, emit smaller edits? *)
       let newText = Haven.Cst.Emit.emit_program_to_string cst in
       let edit = TextEdit.create ~range:full_range ~newText in
       Some [ edit ]

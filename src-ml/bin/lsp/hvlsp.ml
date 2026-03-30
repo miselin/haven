@@ -60,6 +60,27 @@ module Server = struct
         in
         Lwt.return (Haven_lsp.on_hover state params)
 
+      method! on_req_definition ~notify_back:_ ~id:_ ~uri ~pos ~workDoneToken:_
+          ~partialResultToken:_ (_doc_state : Linol_lwt.Jsonrpc2.doc_state) =
+        Lwt.return (Haven_lsp.on_definition state uri pos)
+
+      method! on_req_symbol ~notify_back:_ ~id:_ ~uri ~workDoneToken:_
+          ~partialResultToken:_ () =
+        Lwt.return (Haven_lsp.on_document_symbols state uri)
+
+      method! on_req_inlay_hint ~notify_back:_ ~id:_ ~uri ~range () =
+        Lwt.return (Haven_lsp.on_inlay_hints state uri range)
+
+      method! on_req_code_lens ~notify_back:_ ~id:_ ~uri ~workDoneToken:_
+          ~partialResultToken:_ (_doc_state : Linol_lwt.Jsonrpc2.doc_state) =
+        Lwt.return
+          (Option.value ~default:[] (Haven_lsp.on_code_lenses state uri))
+
+      method! on_req_execute_command ~notify_back:_ ~id:_ ~workDoneToken:_
+          command _args =
+        Lwt.return
+          (Option.value ~default:`Null (Haven_lsp.on_execute_command state command))
+
       method! on_request_unhandled : type r.
           notify_back:Linol_lwt.Jsonrpc2.notify_back ->
           id:Linol_lwt.Jsonrpc2.Req_id.t ->
@@ -77,6 +98,18 @@ module Server = struct
               Linol_lwt.IO_lwt.return None
           | Lsp.Client_request.TextDocumentFormatting params ->
               Linol_lwt.IO_lwt.return (Haven_lsp.on_formatting state params)
+          | Lsp.Client_request.TextDocumentHighlight params ->
+              Linol_lwt.IO_lwt.return
+                (Haven_lsp.on_document_highlights state params.textDocument.uri
+                   params.position)
+          | Lsp.Client_request.TextDocumentFoldingRange params ->
+              Linol_lwt.IO_lwt.return
+                (Haven_lsp.on_folding_ranges state params.textDocument.uri)
+          | Lsp.Client_request.SelectionRange params ->
+              Linol_lwt.IO_lwt.return
+                (Option.value ~default:[]
+                   (Haven_lsp.on_selection_ranges state params.textDocument.uri
+                      params.positions))
           | _ -> super#on_request_unhandled ~notify_back ~id req
 
       method spawn_query_handler f = Linol_lwt.spawn f
