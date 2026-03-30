@@ -1,5 +1,5 @@
-cimport "stdio.h";
-cimport "stdlib.h";
+pub impure fn printf(str fmt, *) -> i32;
+pub impure fn rand() -> i32;
 import "vec";
 
 pub fn __builtin_ipow(float x, i32 power) -> float intrinsic "llvm.powi" float, i32;

@@ -1,5 +1,6 @@
-cimport "stdio.h";
-cimport "math.h";
+pub impure fn printf(str fmt, *) -> i32;
+impure fn sqrtf(float x) -> float;
+impure fn fabsf(float x) -> float;
 
 type Result = struct {
     float eigenvalue;

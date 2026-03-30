@@ -2,7 +2,7 @@
 pub impure fn malloc(i32 bytes) -> i8*;
 pub impure fn free(i8 *ptr) -> i32;
 pub impure fn printf(str fmt, *) -> i32;
-pub impure fn strcpy(i8 *dest, i8 *src) -> i8*;
+pub impure fn strcpy(i8 *dest, str src) -> i8*;
 
 pub impure fn main() -> i32 {
     let mut s = as<i8*>(malloc(256));

@@ -122,6 +122,28 @@ module Semantic = struct
     | Some actual, Some [ (_, field_ty) ] -> resolved_compatible actual field_ty
     | _ -> false
 
+  let annotate_nil_expr state (expr : Core.expression) resolved_type =
+    let inferred_type = core_type_of_resolved_ty expr.loc resolved_type in
+    Hashtbl.replace state.typed.annotations.exprs (expr_id expr)
+      {
+        inferred_type = Some inferred_type;
+        resolved_type = Some resolved_type;
+        metavar = metavar_of_type inferred_type;
+      }
+
+  let equality_operands_compatible state left_expr right_expr =
+    let left_resolved = expr_resolved_type state left_expr in
+    let right_resolved = expr_resolved_type state right_expr in
+    match (left_expr.value, right_expr.value, left_resolved, right_resolved) with
+    | Core.Nil, _, _, Some expected when resolved_is_pointerish expected ->
+        annotate_nil_expr state left_expr expected;
+        true
+    | _, Core.Nil, Some expected, _ when resolved_is_pointerish expected ->
+        annotate_nil_expr state right_expr expected;
+        true
+    | _, _, Some left, Some right -> resolved_compatible left right
+    | _ -> false
+
   let check_initializer_shape state loc (init : Core.init_list) expected =
     let check_slots slots too_many_message too_few_message mismatch_for_index =
       let actual_count = List.length init.value.exprs in
@@ -343,9 +365,7 @@ module Semantic = struct
           | _ -> None
         in
         let compatible_pair =
-          match (left_resolved, right_resolved) with
-          | Some left, Some right -> resolved_compatible left right
-          | _ -> false
+          equality_operands_compatible state binary.value.left binary.value.right
         in
         (match binary.value.op with
         | Core.Add | Core.Subtract ->

@@ -1,9 +1,11 @@
+pub impure fn malloc(i32 bytes) -> i8*;
+
 type Thing = struct {
     i32 x;
 };
 
 pub impure fn main() -> i32 {
-    let mut boxed = box Thing;
+    let mut boxed = as<Thing*>(malloc(4));
     boxed->x = 5;
     boxed->x
 }

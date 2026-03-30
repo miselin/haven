@@ -256,6 +256,78 @@ pub fn sut() -> i32 {
   in
   assert_has_diagnostics "nil assigned to integer binding" nil_pipeline.semantic.diagnostics;
 
+  let nil_pointer_compare_pipeline =
+    parse_to_core "pub fn main(i32* ptr) -> i32 { if ptr == nil { 0 } else { 1 } }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "pointer nil comparison typing"
+    nil_pointer_compare_pipeline.typing.diagnostics;
+  assert_no_diagnostics "pointer nil comparison semantic"
+    nil_pointer_compare_pipeline.semantic.diagnostics;
+
+  let nil_box_compare_pipeline =
+    parse_to_core "pub fn main(i32^ boxed) -> i32 { if boxed != nil { 1 } else { 0 } }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "box nil comparison typing"
+    nil_box_compare_pipeline.typing.diagnostics;
+  assert_no_diagnostics "box nil comparison semantic"
+    nil_box_compare_pipeline.semantic.diagnostics;
+
+  let nil_string_compare_pipeline =
+    parse_to_core "pub fn main(str value) -> i32 { if value == nil { 0 } else { 1 } }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "string nil comparison typing"
+    nil_string_compare_pipeline.typing.diagnostics;
+  assert_no_diagnostics "string nil comparison semantic"
+    nil_string_compare_pipeline.semantic.diagnostics;
+
+  let nil_numeric_compare_pipeline =
+    parse_to_core "pub fn main(i32 value) -> i32 { if value == nil { 0 } else { 1 } }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "numeric nil comparison should fail"
+    nil_numeric_compare_pipeline.semantic.diagnostics;
+
+  let nil_after_assignment_pipeline =
+    parse_to_core
+      {|
+pub fn main() -> i32 {
+  let mut boxed = box as<i32>(5);
+  boxed = nil;
+  if boxed == nil {
+    0
+  } else {
+    1
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "nil comparison after box assignment typing"
+    nil_after_assignment_pipeline.typing.diagnostics;
+  assert_no_diagnostics "nil comparison after box assignment semantic"
+    nil_after_assignment_pipeline.semantic.diagnostics;
+
+  let nil_in_defer_pipeline =
+    parse_to_core
+      {|
+pub impure fn free(i8 *ptr) -> i32;
+
+pub impure fn main(i8* input) -> i32 {
+  let mut s = input;
+  defer { if s != nil { free(s); }; };
+  0
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "nil comparison inside defer typing"
+    nil_in_defer_pipeline.typing.diagnostics;
+  assert_no_diagnostics "nil comparison inside defer semantic"
+    nil_in_defer_pipeline.semantic.diagnostics;
+
   let verify_unknown_type_pipeline =
     parse_to_core "pub fn main(Missing value) -> void { }" |> Analysis.Pipeline.run_core
   in

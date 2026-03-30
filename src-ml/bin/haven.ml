@@ -278,9 +278,9 @@ let run_linker config ~object_file ~output_file =
   let linker = match config.linker with Some path -> path | None -> "gcc" in
   let args =
     Array.of_list
-      (linker :: "-o" :: output_file :: object_file
-     :: default_linker_options ()
-     :: (if config.asan then [ "-fsanitize=address" ] else [])
+      ([ linker; "-o"; output_file; object_file ]
+     @ default_linker_options ()
+     @ (if config.asan then [ "-fsanitize=address" ] else [])
      @ config.linker_options)
   in
   trace config "phase: link %s@." (String.concat " " (Array.to_list args));
