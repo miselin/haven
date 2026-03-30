@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  llvmPackages,
   ocamlPackages,
   ...
 }:
@@ -11,7 +12,10 @@ ocamlPackages.buildDunePackage {
   src = ./.;
   DUNE_CACHE = "disabled";
 
-  nativeBuildInputs = [ ocamlPackages.menhir ];
+  nativeBuildInputs = [
+    llvmPackages.clang
+    ocamlPackages.menhir
+  ];
   propagatedBuildInputs = [
     ocamlPackages.fmt
     ocamlPackages.linol-lwt
