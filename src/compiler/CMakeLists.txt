@@ -1,7 +1,7 @@
 string(REGEX MATCH "^[0-9]+" LLVM_VERSION_MAJOR "${LLVM_PACKAGE_VERSION}")
 llvm_map_components_to_libnames(llvm_libs -${LLVM_VERSION_MAJOR})
 
-add_library(compiler_c OBJECT compiler.c import.c flags.c search.c diag.c link.c)
+add_library(compiler_c OBJECT compiler.c import.c flags.c search.c diag.c link.c platform.c)
 target_link_libraries(compiler_c PRIVATE haven_compiler_options)
 
 set (COMPILER_BASE_DEPS

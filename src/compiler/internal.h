@@ -105,6 +105,7 @@ FILE *find_file(struct compiler *compiler, const char *filename);
 int find_file_path(struct compiler *compiler, const char *filename, const char **discovered_path);
 
 void add_search_dir(struct compiler *compiler, const char *path);
+void compiler_apply_platform_defaults(struct compiler *compiler);
 
 int compiler_link(struct compiler *compiler, const char *object_file);
 
