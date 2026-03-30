@@ -5,13 +5,16 @@ set -eu
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 REPO_DIR=$(dirname "${SCRIPT_DIR}")
 
-COMPILER=${REPO_DIR}/build/bin/haven
+COMPILER=${REPO_DIR}/src/_build/default/bin/haven.exe
 
 if [ ! -x ${COMPILER} ]; then
-    COMPILER=bin/haven
+    COMPILER=${REPO_DIR}/build/bin/haven
     if [ ! -x ${COMPILER} ]; then
-        echo "Expected a built Haven compiler in build/bin/ or bin/ - build the compiler first."
-        exit 1
+        COMPILER=bin/haven
+        if [ ! -x ${COMPILER} ]; then
+            echo "Expected a built Haven compiler in src/_build/default/bin/, build/bin/, or bin/ - build the compiler first."
+            exit 1
+        fi
     fi
 fi
 

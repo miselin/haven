@@ -12,11 +12,16 @@ bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "dune" {>= "3.19"}
   "ocaml"
-  "llvm"
-  "sedlex"
+  "cmdliner"
+  "fmt"
+  "linol-lwt"
+  "logs"
   "menhir"
+  "menhirLib"
+  "sedlex"
   "unix"
   "yojson"
+  "llvm"
   "odoc" {with-doc}
 ]
 build: [

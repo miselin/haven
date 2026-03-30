@@ -19,8 +19,8 @@
           (old: {
             patches = (old.patches or [ ]) ++ [ ./nix/ocaml-llvm-macos-ext-dll.patch ];
           });
-      haven = pkgs.callPackage ./default.nix { inherit llvmPkgs llvmCmakeDir self; stdenv = llvmPkgs.stdenv; };
-      havenMl = pkgs.callPackage ./src-ml/default.nix {
+      havenLegacy = pkgs.callPackage ./default.nix { inherit llvmPkgs llvmCmakeDir self; stdenv = llvmPkgs.stdenv; };
+      havenOcaml = pkgs.callPackage ./src/default.nix {
         inherit llvmOcaml;
         llvmPackages = llvmPkgs;
         repoSrc = ./.;
@@ -28,20 +28,44 @@
     in {
       apps.default = {
         type = "app";
-        program = "${haven}/bin/haven";
+        program = "${havenOcaml}/bin/haven";
         meta = with pkgs.lib; {
           description = "The Haven programming language";
           license = licenses.mit;
         };
       };
 
-      packages.default = haven;
-      packages.ml = havenMl;
+      packages.default = havenOcaml;
+      packages.ocaml = havenOcaml;
+      packages.ml = havenOcaml;
+      packages.legacy = havenLegacy;
 
-      checks.ml = havenMl;
+      checks.default = havenOcaml;
+      checks.ocaml = havenOcaml;
+      checks.legacy = havenLegacy;
 
       devShells.default = pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [ cmake ninja pkg-config llvmPkgs.clang llvmPkgs.libllvm llvmPkgs.lld gtest gbenchmark doxygen ];
+        nativeBuildInputs = with pkgs; [
+          cmake
+          ninja
+          pkg-config
+          dune_3
+          ocamlPackages.ocaml
+          ocamlPackages.cmdliner
+          ocamlPackages.fmt
+          ocamlPackages.linol-lwt
+          ocamlPackages.logs
+          ocamlPackages.menhir
+          ocamlPackages.sedlex
+          ocamlPackages.yojson
+          llvmPkgs.clang
+          llvmPkgs.libllvm
+          llvmPkgs.lld
+          llvmOcaml
+          gtest
+          gbenchmark
+          doxygen
+        ];
         CMAKE_PREFIX_PATH = llvmCmakeDir;
       };
     });

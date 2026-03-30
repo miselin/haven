@@ -1,4 +1,4 @@
-// ./build/bin/haven examples/syscall.hv --asan --Xl -lruntime --Xl -Lbuild/lib
+// ./src/_build/default/bin/haven.exe examples/syscall.hv --asan --Xl -lruntime --Xl -Lbuild/lib
 
 pub impure fn SYS_write(u32 fd, str buf, u64 count) -> i64;
 

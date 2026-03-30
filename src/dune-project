@@ -19,7 +19,7 @@
  (name haven)
  (synopsis "The Haven compiler")
  (description "The Haven compiler")
- (depends ocaml sedlex menhir unix yojson llvm)
+ (depends ocaml cmdliner fmt linol-lwt logs menhir menhirLib sedlex unix yojson llvm)
  (tags (compiler)))
 
 (using menhir 3.0)

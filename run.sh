@@ -6,8 +6,8 @@ set -o pipefail
 FILENAME=$1
 shift
 
-COMPILER="./build/bin/haven"
-# COMPILER="./build/bin/haven_bootstrap"
+COMPILER="./src/_build/default/bin/haven.exe"
+# LEGACY_COMPILER="./build/bin/haven"
 
 OPT="O2"
 ASAN="--asan"

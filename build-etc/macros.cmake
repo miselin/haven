@@ -85,7 +85,7 @@ macro(add_ocaml_haven_library name source)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-        COMMAND ${CMAKE_SOURCE_DIR}/src-ml/_build/default/bin/haven.exe ${HAVEN_SANITIZER_FLAGS} --trace --debug-ir -c ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMAND ${CMAKE_SOURCE_DIR}/src/_build/default/bin/haven.exe ${HAVEN_SANITIZER_FLAGS} --trace --debug-ir -c ${HAVEN_COMPILE_FLAGS_LIST} ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${source}
         DEPENDS haven_ml_cli ${ARGN}
         COMMENT "Building ${name} from ${source} [ocaml]"
