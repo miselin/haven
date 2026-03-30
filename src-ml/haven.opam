@@ -15,6 +15,7 @@ depends: [
   "sedlex"
   "menhir"
   "unix"
+  "yojson"
   "odoc" {with-doc}
 ]
 build: [

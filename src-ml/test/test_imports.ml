@@ -103,4 +103,99 @@ pub fn main() -> i32 {
       assert_no_diagnostics "include search path typing" imported_pipeline.typing.diagnostics;
       assert_no_diagnostics "include search path verify" imported_pipeline.verify.diagnostics;
       assert_no_diagnostics "include search path semantic" imported_pipeline.semantic.diagnostics;
-      ignore (find_named_function "helper" imported_pipeline.core))
+      ignore (find_named_function "helper" imported_pipeline.core));
+
+  with_temp_dir "haven-cimport-local" (fun root ->
+      write_file (Filename.concat root "add.h")
+        {|
+int add(int left, int right);
+|};
+
+      let add_main_path = Filename.concat root "add-main.hv" in
+      write_file add_main_path
+        {|
+cimport "add.h";
+
+pub impure fn main() -> i32 {
+  add(2, 3)
+}
+|};
+
+      let add_pipeline =
+        Analysis.Pipeline.run_cst ~search_dirs:[ root ] (Haven.Parser.parse_file add_main_path)
+      in
+      assert_no_diagnostics "function-only cimport typing" add_pipeline.typing.diagnostics;
+      assert_no_diagnostics "function-only cimport verify" add_pipeline.verify.diagnostics;
+      assert_no_diagnostics "function-only cimport semantic" add_pipeline.semantic.diagnostics;
+      ignore (find_named_function "add" add_pipeline.core);
+
+      write_file (Filename.concat root "sample.h")
+        {|
+typedef unsigned long size_t;
+typedef struct {
+  int x;
+  int y;
+} Point;
+extern int counter;
+int add(int left, int right);
+typedef int (*callback_t)(int);
+enum Color { Red = 1, Blue = 2 };
+|};
+
+      let main_path = Filename.concat root "main.hv" in
+      write_file main_path
+        {|
+cimport "sample.h";
+
+pub impure fn main() -> i32 {
+  let Point point = { 1, 2 };
+  let size_t n = 0;
+  add(point.x + point.y + Blue, Red) + as<i32>(n)
+}
+|};
+
+      let imported_pipeline =
+        Analysis.Pipeline.run_cst ~search_dirs:[ root ] (Haven.Parser.parse_file main_path)
+      in
+      assert_no_diagnostics "local cimport typing" imported_pipeline.typing.diagnostics;
+      assert_no_diagnostics "local cimport verify" imported_pipeline.verify.diagnostics;
+      assert_no_diagnostics "local cimport semantic" imported_pipeline.semantic.diagnostics;
+      ignore (find_named_function "add" imported_pipeline.core);
+      ignore (find_named_function "main" imported_pipeline.core));
+
+  let stdio_pipeline =
+    Analysis.Pipeline.run_cst
+      (Haven.Parser.parse_string
+         {|
+cimport "stdio.h";
+
+pub impure fn main() -> i32 {
+  printf("hi\n");
+  0
+}
+|})
+  in
+  assert_no_diagnostics "system cimport typing" stdio_pipeline.typing.diagnostics;
+  assert_no_diagnostics "system cimport verify" stdio_pipeline.verify.diagnostics;
+  assert_no_diagnostics "system cimport semantic" stdio_pipeline.semantic.diagnostics;
+  let printf_decl = find_named_function "printf" stdio_pipeline.core in
+  assert_true "expected printf to remain variadic" printf_decl.value.vararg;
+
+  let stdlib_pipeline =
+    Analysis.Pipeline.run_cst
+      (Haven.Parser.parse_string
+         {|
+cimport "stdlib.h";
+
+pub impure fn main() -> i32 {
+  let ptr = malloc(16);
+  free(ptr);
+  rand()
+}
+|})
+  in
+  assert_no_diagnostics "stdlib cimport typing" stdlib_pipeline.typing.diagnostics;
+  assert_no_diagnostics "stdlib cimport verify" stdlib_pipeline.verify.diagnostics;
+  assert_no_diagnostics "stdlib cimport semantic" stdlib_pipeline.semantic.diagnostics;
+  ignore (find_named_function "malloc" stdlib_pipeline.core);
+  ignore (find_named_function "free" stdlib_pipeline.core)

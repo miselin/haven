@@ -88,7 +88,9 @@ and expand_top_decl state ~current_file (decl : Cst.top_decl) : Cst.top_decl lis
   match decl.value with
   | Cst.Import import_path ->
       expand_import state ~current_file import_path.value import_path.loc
-  | Cst.CImport _ | Cst.Foreign _ | Cst.FDecl _ | Cst.TDecl _ | Cst.VDecl _ ->
+  | Cst.CImport import_path ->
+      expand_cimport state ~current_file import_path.value import_path.loc
+  | Cst.Foreign _ | Cst.FDecl _ | Cst.TDecl _ | Cst.VDecl _ ->
       [ decl ]
 
 and expand_import state ~current_file import_path loc =
@@ -115,6 +117,14 @@ and expand_import state ~current_file import_path loc =
                 (Printf.sprintf "failed to load Haven import %S from %s: %s"
                    import_path current_file (Printexc.to_string exn));
               []))
+
+and expand_cimport state ~current_file import_path loc =
+  let expanded =
+    Cimport.expand_header ~search_dirs:state.search_dirs ~current_file ~header:import_path ~loc
+  in
+  state.diagnostics_rev <-
+    List.rev_append (List.rev expanded.diagnostics) state.diagnostics_rev;
+  expanded.decls
 
 let expand_cst ?(search_dirs = []) parsed =
   let state = create_state ~search_dirs () in
