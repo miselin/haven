@@ -17,13 +17,17 @@ And, all else aside, I really just wanted to build a language that's optimized f
 
 ## The Compilers
 
-This repository is split into two compilers:
+This repository currently contains three compiler implementations:
 
-1. The initial compiler, built in C, in `src` and `include`, and
-2. The self-hosted compiler, written in Haven, currently in `src-new`.
+1. The mainline compiler, written in OCaml, in `src`.
+2. The original compiler, written in C, in `legacy/src` and `legacy/include`.
+3. The experimental self-hosted compiler, written in Haven, in `src-new`.
 
-The initial compiler in C is hardly production quality, and I'm trying to minimize how much additional effort
-I invest into it outside of necessary additions or fixes to support the self-hosting effort.
+The OCaml compiler is the maintained implementation and the default build target throughout the repository.
+The C compiler is deprecated and retained as a historical bootstrap artifact.
+It can still be built through CMake with `-DWITH_LEGACY_COMPILER=ON`.
+`nix build` and plain CMake now both target the OCaml compiler by default; use `nix build .#legacy`
+when you explicitly want the deprecated C compiler path.
 
 ## Fractal Example
 

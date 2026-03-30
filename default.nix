@@ -37,6 +37,7 @@ stdenv.mkDerivation {
   cmakeFlags = [
     "-DLLVM_DIR=${llvmCmakeDir}"
     "-DHAVEN_C_FLAGS=${lib.escapeShellArg haven_c_flags}"
+    "-DWITH_LEGACY_COMPILER=ON"
   ];
 
   postPatch = ''

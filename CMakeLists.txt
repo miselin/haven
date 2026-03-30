@@ -1,26 +1,59 @@
 cmake_minimum_required(VERSION 3.28)
-project(haven C CXX ASM)
+project(haven LANGUAGES NONE)
 
 cmake_policy(SET CMP0171 NEW)
 
-include("CMakeDependentOption")
-include(CheckCCompilerFlag)
-
 include(build-etc/config.cmake)
-include(build-etc/macros.cmake)
+option(WITH_LEGACY_COMPILER "build the legacy C bootstrap compiler" OFF)
 
-find_library(MALLOC NAMES jemalloc tcmalloc)
+find_program(DUNE_EXECUTABLE dune)
+if (NOT DUNE_EXECUTABLE AND NOT WITH_LEGACY_COMPILER)
+    message(FATAL_ERROR "Dune is required to build the mainline OCaml Haven compiler")
+endif ()
 
-find_package(LLVM REQUIRED CONFIG)
-find_package(Clang REQUIRED CONFIG)
-find_package(GTest REQUIRED)
-find_package(benchmark REQUIRED)
-find_package(Doxygen)
+set(HAVEN_OCAML_BUILD_DIR "${CMAKE_SOURCE_DIR}/src/_build/default")
+if (DUNE_EXECUTABLE)
+    if (WITH_LEGACY_COMPILER)
+        add_custom_target(haven_ml_cli
+            COMMAND ${DUNE_EXECUTABLE} build bin/haven.exe bin/hvfmt.exe bin/hvast.exe bin/lsp/hvlsp.exe
+            BYPRODUCTS
+                ${HAVEN_OCAML_BUILD_DIR}/bin/haven.exe
+                ${HAVEN_OCAML_BUILD_DIR}/bin/hvfmt.exe
+                ${HAVEN_OCAML_BUILD_DIR}/bin/hvast.exe
+                ${HAVEN_OCAML_BUILD_DIR}/bin/lsp/hvlsp.exe
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src
+            COMMENT "Building mainline OCaml Haven compiler")
+    else ()
+        add_custom_target(haven_ml_cli ALL
+            COMMAND ${DUNE_EXECUTABLE} build bin/haven.exe bin/hvfmt.exe bin/hvast.exe bin/lsp/hvlsp.exe
+            BYPRODUCTS
+                ${HAVEN_OCAML_BUILD_DIR}/bin/haven.exe
+                ${HAVEN_OCAML_BUILD_DIR}/bin/hvfmt.exe
+                ${HAVEN_OCAML_BUILD_DIR}/bin/hvast.exe
+                ${HAVEN_OCAML_BUILD_DIR}/bin/lsp/hvlsp.exe
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src
+            COMMENT "Building mainline OCaml Haven compiler")
+    endif ()
+endif ()
 
-include_directories(${LLVM_INCLUDE_DIRS})
-separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
-add_definitions(${LLVM_DEFINITIONS_LIST})
-link_directories(${LLVM_LIBRARY_DIRS})
+if (WITH_LEGACY_COMPILER)
+    enable_language(C CXX ASM)
+
+    include(CheckCCompilerFlag)
+    include(build-etc/macros.cmake)
+
+    find_library(MALLOC NAMES jemalloc tcmalloc)
+
+    find_package(LLVM REQUIRED CONFIG)
+    find_package(Clang REQUIRED CONFIG)
+    find_package(GTest REQUIRED)
+    find_package(benchmark REQUIRED)
+    find_package(Doxygen)
+
+    include_directories(${LLVM_INCLUDE_DIRS})
+    separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+    add_definitions(${LLVM_DEFINITIONS_LIST})
+    link_directories(${LLVM_LIBRARY_DIRS})
 
 # Possibly enable ASAN/TSAN/etc
 option(ASAN "address sanitizer" OFF)
@@ -81,43 +114,41 @@ set(HAVEN_C_FLAGS "${HAVEN_DEFAULT_C_FLAGS}" CACHE STRING "C flags to pass to Ha
 string(REPLACE ";" " " HAVEN_C_FLAGS "${HAVEN_C_FLAGS}")
 
 # Flags for compiling Haven code
-set(HAVEN_BOOTSTRAP_COMPILE_FLAGS "${HAVEN_C_FLAGS} --O2" CACHE STRING "flags to use when compiling Haven code with the bootstrap compiler")
-set(HAVEN_COMPILE_FLAGS "${HAVEN_C_FLAGS} --O2" CACHE STRING "flags to use when compiling Haven code with the main compiler")
+    set(HAVEN_BOOTSTRAP_COMPILE_FLAGS "${HAVEN_C_FLAGS} --O2" CACHE STRING "flags to use when compiling Haven code with the bootstrap compiler")
+    set(HAVEN_COMPILE_FLAGS "${HAVEN_C_FLAGS} --O2" CACHE STRING "flags to use when compiling Haven code with the main compiler")
 
-include(build-etc/compiler.cmake)
+    include(build-etc/compiler.cmake)
 
-find_program(DUNE_EXECUTABLE dune)
-if (DUNE_EXECUTABLE)
-    add_custom_target(haven_ml_cli
-        COMMAND ${DUNE_EXECUTABLE} build bin/haven.exe
-        BYPRODUCTS ${CMAKE_SOURCE_DIR}/src-ml/_build/default/bin/haven.exe
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src-ml
-        COMMENT "Building OCaml Haven compiler")
+    # Use jemalloc?
+    if (OTHER_MALLOC AND MALLOC)
+        set (CMAKE_C_STANDARD_LIBRARIES "${CMAKE_C_STANDARD_LIBRARIES} ${MALLOC}")
+        set (CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${MALLOC}")
+    endif ()
+
+    include_directories(legacy/include legacy/src)
+
+    enable_testing()
+
+    add_subdirectory(legacy/src legacy-src)
+    add_subdirectory(src-new)
+    add_subdirectory(tests)
+    add_subdirectory(bench)
+
+    if (DOXYGEN_FOUND)
+        doxygen_add_docs(doxygen legacy/src legacy/include)
+    endif ()
+
+    include(CTest)
+    install(TARGETS haven havenfmt hvast hdr2haven runtime
+            RUNTIME DESTINATION bin
+            LIBRARY DESTINATION lib
+            ARCHIVE DESTINATION lib
+            INCLUDES DESTINATION include)
+else ()
+    install(PROGRAMS
+        ${HAVEN_OCAML_BUILD_DIR}/bin/haven.exe
+        ${HAVEN_OCAML_BUILD_DIR}/bin/hvfmt.exe
+        DESTINATION bin)
+    install(PROGRAMS ${HAVEN_OCAML_BUILD_DIR}/bin/hvast.exe DESTINATION bin RENAME hvast-ml)
+    install(PROGRAMS ${HAVEN_OCAML_BUILD_DIR}/bin/lsp/hvlsp.exe DESTINATION bin RENAME haven-lsp)
 endif ()
-
-# Use jemalloc?
-if (OTHER_MALLOC AND MALLOC)
-    set (CMAKE_C_STANDARD_LIBRARIES "${CMAKE_C_STANDARD_LIBRARIES} ${MALLOC}")
-    set (CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${MALLOC}")
-endif ()
-
-include_directories(include src)
-
-enable_testing()
-
-add_subdirectory(src)
-add_subdirectory(src-new)
-add_subdirectory(tests)
-add_subdirectory(bench)
-
-if (DOXYGEN_FOUND)
-    doxygen_add_docs(doxygen src include)
-endif ()
-
-include(CTest)
-
-install(TARGETS haven havenfmt runtime
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
-        INCLUDES DESTINATION include)

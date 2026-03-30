@@ -20,6 +20,7 @@ ocamlPackages.buildDunePackage {
     ocamlPackages.menhir
   ];
   propagatedBuildInputs = [
+    ocamlPackages.cmdliner
     ocamlPackages.fmt
     ocamlPackages.linol-lwt
     llvmOcaml
@@ -29,11 +30,18 @@ ocamlPackages.buildDunePackage {
   ];
 
   buildPhase = ''
-    # Keep the Nix build focused on the OCaml build/test entrypoint.
-    dune build @runtest
+    runHook preBuild
+    dune build @runtest bin/haven.exe bin/hvfmt.exe bin/hvast.exe bin/lsp/hvlsp.exe
+    runHook postBuild
   '';
 
   installPhase = ''
-    mkdir -p $out
+    runHook preInstall
+    mkdir -p $out/bin
+    cp _build/default/bin/haven.exe $out/bin/haven
+    cp _build/default/bin/hvfmt.exe $out/bin/hvfmt
+    cp _build/default/bin/hvast.exe $out/bin/hvast-ml
+    cp _build/default/bin/lsp/hvlsp.exe $out/bin/haven-lsp
+    runHook postInstall
   '';
 }
