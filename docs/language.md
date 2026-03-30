@@ -12,7 +12,9 @@ In Haven, mutability is opt-in, not opt-out. Variables that you expect to modify
 
 ### Default Pure
 
-All functions are assumed "pure" (they do not read or write memory) unless explicitly annotated as `impure`.
+All functions are assumed pure unless explicitly annotated as `impure`. In practice, purity tracks observable side
+effects such as impure calls and mutating or loading through references, cells, or boxes. Pure functions may still
+perform ordinary local computation and local reassignment.
 
 ## Identifiers
 
@@ -159,7 +161,7 @@ type Result = enum <T> {
     Error
 };
 
-fn thing() -> Result<i32> {
+fn thing() -> Result::<i32> {
     Result::<i32>::Ok(5)
 }
 ```
@@ -208,7 +210,7 @@ of an asterisk (`*`):
 fn example(i32^ boxed) -> i32;
 ```
 
-To directly mutate the value of a box without using `load` or `store`, you can use the `:=` assignment
+To directly mutate the value of a box, use the `:=` mutation
 operator:
 
 ```
@@ -229,7 +231,7 @@ control the mutability of the stored value. In the example above, `:=` would be 
 Import declarations may only appear at the file scope. An import loads the contents of the imported file, allowing definitions from that file to be used locally.
 
 ```
-import vec // imports vec.hv
+import "vec.hv";
 ```
 
 #### C Imports
@@ -240,7 +242,7 @@ You need to pass `--bootstrap` to the compiler as C imports are currently primar
 compiler bootstrap phases. They may become more readily available once a few ergonomics issues are worked out.
 
 ```
-cimport "stdio.h" // imports declarations from stdio.h as Haven declarations
+cimport "stdio.h";
 ```
 
 #### Foreign Interfaces
@@ -274,7 +276,7 @@ Type declarations (`type X = ...`) may only appear at the file scope.
 File scope variables are split into two categories:
 
 - `data`, for constant, immutable data used by the program without modification, and
-- `state`, for data with a compile-time default value, but mutable at runtime
+- `state`, for mutable program state that may be initialized either from a constant expression or from startup code
 
 ```
 data i32 x = 1234; // constant, local
@@ -287,6 +289,7 @@ pub state i32 y = 5678; // mutable, global linkage
 ```
 
 For `pub` data and state, an initializer may be ommitted to create a reference to be resolved by the linker.
+Non-constant global initializers are lowered to program startup initialization before user code runs.
 
 #### Function Scope
 
@@ -305,8 +308,8 @@ Variables at function scope must be initialized.
 Functions can be forward-declared without a body.
 
 ```
-[pub] [impure] <ident>(<arg-list>) -> <ret-ty>;
-[pub] [impure] <ident>(<arg-list>) -> <ret-ty> { <body> }
+[pub] [impure] fn <ident>(<arg-list>) -> <ret-ty>;
+[pub] [impure] fn <ident>(<arg-list>) -> <ret-ty> { <body> }
 ```
 
 Specifying `pub` on declarations that have no definitions will create an external reference to the function.
@@ -316,7 +319,7 @@ Specifying `impure` on declarations will mark the function as impure, which mean
 An argument list can be ended with `*` to indicate that the function accepts a variable number of arguments:
 
 ```
-pub fn printf(str format, *);
+pub fn printf(str format, *) -> i32;
 ```
 
 > [!WARNING]
@@ -325,9 +328,9 @@ pub fn printf(str format, *);
 The following example shows usage of both a declaration and a defined function:
 
 ```
-pub fn i32 printf(str fmt, *);
+pub fn printf(str fmt, *) -> i32;
 
-pub fn i32 main() {
+pub fn main() -> i32 {
     printf("Hello, world!\n");
     0
 }
@@ -397,12 +400,22 @@ while 1 {
 };
 ```
 
-### store
+### until
 
-The `store` instruction stores a value into the memory pointed to by a pointer:
+The `until` statement is sugar for `while !cond`:
 
 ```
-store ptr 5;
+until done {
+    // ...
+};
+```
+
+### Mutation
+
+The `:=` operator mutates the value referenced by a pointer, cell, or box:
+
+```
+ptr := 5;
 ```
 
 The equivalent syntax in C would be `*ptr = 5`.
@@ -418,6 +431,7 @@ ret <value>;
 ### defer
 
 The `defer` statement defers the execution of an expression to run right before the current function returns.
+On function exit, deferred expressions run before the compiler's ownership cleanup for that scope.
 
 In this example, the string "hello from defer" is printed after the string "Hello, world!". `defer` can be used anywhere within a function and can be very useful for memory and error management.
 
@@ -443,7 +457,7 @@ A constant value can be used anywhere that an expression is expected:
 let integer = 5;
 let number = 5.0;
 let text = "hello";
-let vec = <1.0, 2.0, 3.0>;
+let vec = Vec<1.0, 2.0, 3.0>;
 let s obj = { 1, 2, 3 };
 let foo = Numbers::One;
 ```

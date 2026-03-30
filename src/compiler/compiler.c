@@ -95,6 +95,7 @@ void destroy_compiler(struct compiler *compiler) {
   }
   free((void *)compiler->input_file);
   free((void *)compiler->output_file);
+  free((void *)compiler->sysroot);
   if (compiler->parser) {
     destroy_parser(compiler->parser);
   }

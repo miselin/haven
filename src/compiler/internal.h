@@ -68,6 +68,7 @@ struct imported_file {
 struct compiler {
   const char *input_file;
   const char *output_file;
+  const char *sysroot;
 
   FILE *out;
 

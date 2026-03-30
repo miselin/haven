@@ -80,11 +80,11 @@ impure fn string_literal(FILE *fp) -> Token {
             break;
         };
 
-        store (buf + i) c;
+        (buf + i) := c;
         i = i + 1;
     };
 
-    store (buf + i) as i8 0;
+    (buf + i) := as i8 0;
 
     Token::String(buf)
 }
@@ -116,7 +116,7 @@ impure fn identifier(FILE *fp, i8 first_char) -> Token {
     let mut buf = malloc(256);
     let mut i32 i = 0;
 
-    store (buf + i) first_char;
+    (buf + i) := first_char;
     i = 1;
 
     while 1 {
@@ -130,11 +130,11 @@ impure fn identifier(FILE *fp, i8 first_char) -> Token {
             break;
         };
 
-        store (buf + i) c;
+        (buf + i) := c;
         i = i + 1;
     };
 
-    store (buf + i) as i8 0;
+    (buf + i) := as i8 0;
 
     Token::Ident(buf)
 }

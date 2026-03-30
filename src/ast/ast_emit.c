@@ -155,7 +155,7 @@ static int code_emit_stmt(FILE *stream, struct ast_stmt *ast, int indent) {
     case AST_STMT_TYPE_STORE:
       print_indent(stream, indent);
       code_emit_expr(stream, ast->stmt.store.lhs, indent);
-      fprintf(stream, " = ");
+      fprintf(stream, " := ");
       code_emit_expr(stream, ast->stmt.store.rhs, indent);
       break;
 

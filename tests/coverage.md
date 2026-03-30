@@ -5,7 +5,7 @@
 - [x] expression
 - [x] let
 - [x] iter
-- [x] store
+- [x] :=
 - [x] ret
 - [x] defer
 

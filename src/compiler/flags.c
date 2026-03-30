@@ -36,6 +36,7 @@ static void usage(void) {
   fprintf(stderr, "  --verbose      enable internal compiler logging\n");
   fprintf(stderr, "  --trace        enable even more verbose internal compiler logging\n");
   fprintf(stderr, "  -I <path>      add a path to the import search path\n");
+  fprintf(stderr, "  -isysroot <p>  use <p> as the SDK/sysroot for cimport\n");
   fprintf(stderr, "  --no-preamble  do not emit the default preamble\n");
   fprintf(stderr,
           "  --Xl <flag>    pass <flag> to the linker; use commas to merge multiple words\n");
@@ -50,6 +51,30 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
     // used for testing - retain default values
     return 0;
   }
+
+  char **filtered_argv = calloc((size_t)argc + 1, sizeof(char *));
+  if (!filtered_argv) {
+    return -1;
+  }
+
+  int filtered_argc = 0;
+  filtered_argv[filtered_argc++] = argv[0];
+  for (int i = 1; i < argc; ++i) {
+    if (strcmp(argv[i], "-isysroot") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "missing argument for -isysroot\n");
+        free(filtered_argv);
+        return -1;
+      }
+
+      free((void *)into->sysroot);
+      into->sysroot = copy_to_heap(argv[++i]);
+      continue;
+    }
+
+    filtered_argv[filtered_argc++] = argv[i];
+  }
+  filtered_argv[filtered_argc] = NULL;
 
   if (!isatty(2)) {
     // into->flags[0] |= FLAG_NO_COLOR;
@@ -80,7 +105,8 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
                                   {0, 0, 0, 0}};
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "co:SI:", long_options, &index)) != -1) {
+  optind = 1;
+  while ((opt = getopt_long(filtered_argc, filtered_argv, "co:SI:", long_options, &index)) != -1) {
     switch (opt) {
       case 'c':
         into->output_format = OutputObject;
@@ -95,6 +121,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         char *fullpath = realpath(optarg, NULL);
         if (!fullpath) {
           fprintf(stderr, "failed to resolve include path %s: %s\n", optarg, strerror(errno));
+          free(filtered_argv);
           return -1;
         }
 
@@ -102,6 +129,8 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         stat(fullpath, &st);
         if (!S_ISDIR(st.st_mode)) {
           fprintf(stderr, "not a directory: %s\n", fullpath);
+          free(fullpath);
+          free(filtered_argv);
           return -1;
         }
 
@@ -183,20 +212,23 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
         break;
       default:
         usage();
+        free(filtered_argv);
         return -1;
     }
   }
 
-  for (int i = optind; i < argc; ++i) {
+  for (int i = optind; i < filtered_argc; ++i) {
     if (into->input_file) {
       fprintf(stderr, "multiple input files specified\n");
+      free(filtered_argv);
       return -1;
     }
 
     // add the directory of the input file to the search path
-    char *input_file_abs = realpath(argv[i], NULL);
+    char *input_file_abs = realpath(filtered_argv[i], NULL);
     if (!input_file_abs) {
-      fprintf(stderr, "failed to resolve input path %s: %s\n", argv[i], strerror(errno));
+      fprintf(stderr, "failed to resolve input path %s: %s\n", filtered_argv[i], strerror(errno));
+      free(filtered_argv);
       return -1;
     }
 
@@ -210,6 +242,7 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
 
   if (!into->input_file) {
     usage();
+    free(filtered_argv);
     return -1;
   }
 
@@ -242,5 +275,6 @@ int parse_flags(struct compiler *into, int argc, char *const argv[]) {
     fprintf(stderr, "relocations type: %d\n", into->relocations_type);
   }
 
+  free(filtered_argv);
   return 0;
 }

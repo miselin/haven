@@ -209,7 +209,8 @@ LLVMValueRef emit_expr_into(struct codegen *codegen, struct ast_expr *ast, LLVMV
           if (node->expr->ty->ty == AST_TYPE_FLOAT && num_args >= named_param_count) {
             // vararg floats need to be promoted to doubles for C compatibility
             args[num_args + is_complex] = LLVMBuildFPExt(
-                codegen->llvm_builder, args[num_args + is_complex], LLVMDoubleType(), "fpext");
+                codegen->llvm_builder, args[num_args + is_complex],
+                LLVMDoubleTypeInContext(codegen->llvm_context), "fpext");
           }
           if (node->expr->ty->ty == AST_TYPE_BOX) {
             // need to ref the box as it's being passed to a function

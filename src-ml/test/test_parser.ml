@@ -17,4 +17,7 @@ let run () =
     "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1 }; thing.value }";
 
   assert_parse_error_contains "initializer trailing comma" "parse error"
-    "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1, }; thing.value }"
+    "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1, }; thing.value }";
+
+  assert_parse_error_contains "legacy store statement removed" "parse error"
+    "pub impure fn main() -> void { let mut i32 x = 0; store ref x as<i32>(1); }"

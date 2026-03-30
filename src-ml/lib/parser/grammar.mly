@@ -32,7 +32,7 @@
 %token PUB FN MUT IF ELSE LET WHILE UNTIL BREAK CONTINUE MATCH AS ITER
 %token LOAD RET STRUCT TYPE NIL DEFER IMPURE ENUM IMPORT CIMPORT SIZE
 %token BOX UNBOX INTRINSIC FOREIGN DATA STATE VEC MAT FUNCTION
-%token VAFUNCTION CELL REF STORE
+%token VAFUNCTION CELL REF
 
 (* Operator precedence table *)
 %left LOGIC_OR
@@ -170,7 +170,6 @@ stmt_inner:
   | UNTIL c=expr b=block { While (mk_loc $startpos $endpos { cond = mk_unary $startpos(c) $endpos(c) Not c; body = b }) }
   | BREAK { Break }
   | CONTINUE { Continue }
-  | STORE t=expr v=expr { Expression (mk_binary $startpos $endpos Mutate t v) }
   | e=expr { Expression e }
   | { Empty }
   ;

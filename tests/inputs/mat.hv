@@ -3,34 +3,34 @@ pub fn printf(str fmt, *) -> i32;
 pub impure fn madd(mat3x3 *out, mat3x3 *a, mat3x3 *b) -> void {
     let a_ = load a;
     let b_ = load b;
-    store out a_ + b_;
+    out := a_ + b_;
 }
 
 pub impure fn mscale(mat3x3 *out, mat3x3 *a, float b) -> void {
     let a_ = load a;
-    store out a_ * b
+    out := a_ * b
 }
 
 pub impure fn msub(mat3x3 *out, mat3x3 *a, mat3x3 *b) -> void {
     let a_ = load a;
     let b_ = load b;
-    store out a_ - b_;
+    out := a_ - b_;
 }
 
 pub impure fn mmult(mat3x3 *out, mat3x3 *a, mat3x3 *b) -> void {
     let a_ = load a;
     let b_ = load b;
-    store out a_ * b_;
+    out := a_ * b_;
 }
 
 pub impure fn vec_mult_mat(fvec3 *out, fvec3 *a, mat3x3 *b) -> void {
     let a_ = load a;
     let b_ = load b;
-    store out a_ * b_;
+    out := a_ * b_;
 }
 
 pub impure fn mat_row(mat3x3 *m, fvec3 *out, i32 row) -> void {
     let m_ = load m;
     let vec = m_[row];
-    store out vec;
+    out := vec;
 }

@@ -1,4 +1,5 @@
-llvm_map_components_to_libnames(llvm_libs -18)
+string(REGEX MATCH "^[0-9]+" LLVM_VERSION_MAJOR "${LLVM_PACKAGE_VERSION}")
+llvm_map_components_to_libnames(llvm_libs -${LLVM_VERSION_MAJOR})
 
 add_library(compiler_c OBJECT compiler.c import.c flags.c search.c diag.c link.c)
 target_link_libraries(compiler_c PRIVATE haven_compiler_options)
@@ -27,11 +28,17 @@ set (COMPILER_BOOTSTRAP_DEPS
     $<TARGET_OBJECTS:pass_purity>
 )
 
-set (COMPILER_DEPS
-    ${COMPILER_BASE_DEPS}
-    $<TARGET_OBJECTS:utilities>
-    $<TARGET_OBJECTS:pass_haven_purity>
-)
+if (APPLE)
+    set (COMPILER_DEPS
+        ${COMPILER_BOOTSTRAP_DEPS}
+    )
+else ()
+    set (COMPILER_DEPS
+        ${COMPILER_BASE_DEPS}
+        $<TARGET_OBJECTS:utilities>
+        $<TARGET_OBJECTS:pass_haven_purity>
+    )
+endif ()
 
 set (LLVM_LIBS libclang ${llvm_libs})
 
@@ -40,5 +47,9 @@ target_link_libraries(compiler_bootstrap PUBLIC ${LLVM_LIBS})
 target_link_libraries(compiler_bootstrap PRIVATE haven_compiler_options)
 
 add_library(compiler STATIC ${COMPILER_DEPS})
-target_link_libraries(compiler PUBLIC ${LLVM_LIBS} utilities_haven pass_haven_purity)
+if (APPLE)
+    target_link_libraries(compiler PUBLIC ${LLVM_LIBS})
+else ()
+    target_link_libraries(compiler PUBLIC ${LLVM_LIBS} utilities_haven pass_haven_purity)
+endif ()
 target_link_libraries(compiler PRIVATE haven_compiler_options)

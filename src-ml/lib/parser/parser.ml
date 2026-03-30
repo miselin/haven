@@ -53,7 +53,6 @@ let keywords =
          ("Cell", Grammar.CELL);
          ("load", Grammar.LOAD);
          ("ref", Grammar.REF);
-         ("store", Grammar.STORE);
        ])
 
 let keyword_or_ident s =
@@ -180,7 +179,6 @@ let token_to_string = function
   | Grammar.MATCH -> "match"
   | Grammar.WHILE -> "while"
   | Grammar.UNTIL -> "until"
-  | Grammar.STORE -> "store"
   | Grammar.LPAREN -> "("
   | Grammar.RPAREN -> ")"
   | Grammar.LBRACE -> "{"

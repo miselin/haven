@@ -193,12 +193,12 @@ pub impure fn trie_lookup(Trie *trie, i8 *key) -> i8* {
             match node->value {
                 TrieValue::Value(value) => {
                     value
-                }
+                },
                 _ => {
                     as<i8*>(0)
                 }
             }
-        }
+        },
         _ => {
             as<i8*>(0)
         }
@@ -210,7 +210,7 @@ pub impure fn trie_remove(mut Trie* trie, i8* key) -> void {
     match node {
         LookupResult::Found(node) => {
             node->value = TrieValue::NoValue;
-        }
+        },
         _ => {
             ret;
         }

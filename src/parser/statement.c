@@ -74,17 +74,6 @@ struct ast_stmt *parse_statement(struct parser *parser, int *ended_semi) {
       }
     } break;
 
-    case TOKEN_KW_STORE: {
-      parser_consume_peeked(parser, NULL);
-      result->type = AST_STMT_TYPE_STORE;
-      result->stmt.store.lhs = parse_factor(parser);
-      result->stmt.store.rhs = parse_expression(parser);
-      if (!(result->stmt.store.lhs && result->stmt.store.rhs)) {
-        free(result);
-        return NULL;
-      }
-    } break;
-
     case TOKEN_KW_RETURN:
       parser_consume_peeked(parser, NULL);
       result->type = AST_STMT_TYPE_RETURN;
