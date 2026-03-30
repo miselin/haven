@@ -237,7 +237,7 @@ and literal_desc =
   | Enum of enum_literal
 
 and literal = literal_desc node
-and mat_literal_desc = { rows : vec_literal list }
+and mat_literal_desc = { rows : expression list }
 and vec_literal_desc = { elements : expression list }
 and mat_literal = mat_literal_desc node
 and vec_literal = vec_literal_desc node

@@ -345,7 +345,7 @@ and cst_vec_to_surface (vec : Cst.vec_literal) : Surface.vec_literal =
 
 and cst_mat_to_surface (mat : Cst.mat_literal) : Surface.mat_literal =
   mk_surface_mat mat.loc
-    { Surface.rows = List.map cst_vec_to_surface mat.value.rows }
+    { Surface.rows = List.map cst_expr_to_surface mat.value.rows }
 
 and cst_enum_literal_to_surface (enum : Cst.enum_literal) : Surface.enum_literal =
   mk_surface_enum enum.loc
@@ -587,7 +587,7 @@ and surface_vec_to_core map_expr (vec : Surface.vec_literal) : Core.vec_literal 
 
 and surface_mat_to_core map_expr (mat : Surface.mat_literal) : Core.mat_literal =
   mk_core_mat mat.loc
-    { Core.rows = List.map (surface_vec_to_core map_expr) mat.value.rows }
+    { Core.rows = List.map map_expr mat.value.rows }
 
 and surface_enum_literal_to_core map_expr (enum : Surface.enum_literal) : Core.enum_literal =
   mk_core_enum enum.loc

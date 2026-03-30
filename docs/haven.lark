@@ -139,8 +139,7 @@ literal: HEX
        | mat_literal
        | vec_literal
 
-mat_literal: "Mat" "<" mat_row ("," mat_row)* ">"
-mat_row: vec_literal
+mat_literal: "Mat" "<" unary ("," unary)* ">"
 
 vec_literal: "Vec" "<" unary vec_literal_tail? ">"
 vec_literal_tail: "," unary ("," unary)*

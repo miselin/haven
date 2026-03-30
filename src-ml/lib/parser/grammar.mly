@@ -291,7 +291,7 @@ noninteger_literal:
   | e=enum_literal { mk_loc $startpos $endpos (Enum e) }
   ;
 
-mat_literal: MAT LT rows=separated_nonempty_list(COMMA, vec_literal) GT { mk_loc $startpos $endpos { rows } } ;
+mat_literal: MAT LT rows=separated_nonempty_list(COMMA, unary) GT { mk_loc $startpos $endpos { rows } } ;
 vec_literal: VEC u=delimited(LT, separated_nonempty_list(COMMA, unary), GT) { mk_loc $startpos $endpos { elements = u } } ;
 
 enum_literal:

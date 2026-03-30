@@ -27,7 +27,7 @@ type config = {
   no_color : bool;
   no_preamble : bool;
   asan : bool;
-  bootstrap : bool;
+  sysroot : string option;
   linker : string option;
   linker_options : string list;
   only_parse : bool;
@@ -162,7 +162,7 @@ let parse_args argv =
   let no_color = ref false in
   let no_preamble = ref false in
   let asan = ref false in
-  let bootstrap = ref false in
+  let sysroot = ref None in
   let linker = ref None in
   let linker_options_rev = ref [] in
   let only_parse = ref false in
@@ -201,12 +201,12 @@ let parse_args argv =
         ("--verbose", Arg.Set verbose, " enable driver logging");
         ("--trace", Arg.Set trace_logs, " enable phase-level driver tracing");
         ("-I", Arg.String add_include_dir, " <path> add a path to the import search path");
-        ("--no-preamble", Arg.Set no_preamble, " accept the C driver flag (currently a no-op)");
+        ("-isysroot", Arg.String (fun value -> sysroot := Some value), " <path> use <path> as the SDK/sysroot for cimport");
+        ("--no-preamble", Arg.Set no_preamble, " do not emit the default preamble");
         ("--Xl", Arg.String add_linker_option, " <flag> pass <flag> to the linker");
         ("--ld", Arg.String (fun value -> linker := Some value), " <path> use <path> as the linker");
         ("--no-color", Arg.Set no_color, " disable color in diagnostics");
         ("--asan", Arg.Set asan, " accept the ASan flag and pass it through when linking");
-        ("--bootstrap", Arg.Set bootstrap, " accept bootstrap mode for CLI parity");
         ("--only-parse", Arg.Set only_parse, " stop after parsing");
       ]
   in
@@ -227,7 +227,7 @@ let parse_args argv =
       no_color = !no_color;
       no_preamble = !no_preamble;
       asan = !asan;
-      bootstrap = !bootstrap;
+      sysroot = !sysroot;
       linker = !linker;
       linker_options = List.rev !linker_options_rev;
       only_parse = !only_parse;
@@ -267,7 +267,9 @@ let summarize_config (config : config) =
     eprintf "output format: %s@." (string_of_output_mode config.output_mode);
     if config.no_color then eprintf "no color: true@.";
     if config.no_preamble then eprintf "no preamble: true@.";
-    if config.bootstrap then eprintf "bootstrap: true@.")
+    match config.sysroot with
+    | Some path -> eprintf "sysroot: %s@." path
+    | None -> ())
 
 let run_linker config ~object_file ~output_file =
   let linker = match config.linker with Some path -> path | None -> "gcc" in
@@ -297,7 +299,11 @@ let with_temp_object_file f =
   Fun.protect ~finally:(fun () -> if Sys.file_exists path then Sys.remove path) (fun () -> f path)
 
 let codegen_options (config : config) =
-  { Llvm_ir.opt_level = config.opt_level; debug_llvm = config.debug_llvm }
+  {
+    Llvm_ir.opt_level = config.opt_level;
+    debug_llvm = config.debug_llvm;
+    emit_preamble = not config.no_preamble;
+  }
 
 let main () =
   let config = parse_args Sys.argv in
@@ -316,7 +322,7 @@ let main () =
     if config.debug_ast then emit_debug_ast "== Parsed AST ==" (Convert.core_of_cst parsed);
     exit 0);
   trace config "phase: import expansion@.";
-  let expanded = Imports.expand_cst ~search_dirs:config.include_dirs parsed in
+  let expanded = Imports.expand_cst ~search_dirs:config.include_dirs ?sysroot:config.sysroot parsed in
   if expanded.diagnostics <> [] then (
     List.iter print_diagnostic expanded.diagnostics;
     exit 1);

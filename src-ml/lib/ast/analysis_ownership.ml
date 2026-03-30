@@ -263,10 +263,7 @@ module Ownership = struct
         | Core.Vector vec ->
             List.iter (visit_expression state scopes) vec.value.elements
         | Core.Matrix mat ->
-            List.iter
-              (fun (row : Core.vec_literal) ->
-                List.iter (visit_expression state scopes) row.value.elements)
-              mat.value.rows
+            List.iter (visit_expression state scopes) mat.value.rows
         | Core.Enum enum_lit ->
             List.iter (visit_expression state scopes) enum_lit.value.wrapped
         | Core.Integer _ | Core.Bool _ | Core.Float _ | Core.String _ | Core.Char _ ->

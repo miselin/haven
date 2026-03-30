@@ -20,9 +20,10 @@ type opt_level =
 type codegen_options = {
   opt_level : opt_level;
   debug_llvm : bool;
+  emit_preamble : bool;
 }
 
-let default_codegen_options = { opt_level = O0; debug_llvm = false }
+let default_codegen_options = { opt_level = O0; debug_llvm = false; emit_preamble = true }
 
 type symbol =
   | Function_symbol of {
@@ -74,7 +75,7 @@ type t = {
   builder : Llvm.llbuilder;
   target_machine : Llvm_target.TargetMachine.t;
   data_layout : Llvm_target.DataLayout.t;
-  preamble : preamble;
+  preamble : preamble option;
   type_env : Analysis.type_env;
   expr_annotations : (string, Analysis.expr_annotation) Hashtbl.t;
   binding_annotations : (string, Analysis.binding_annotation) Hashtbl.t;
@@ -400,8 +401,13 @@ let build_vector_value t vector_ty values =
     (Llvm.undef vector_ty)
     (List.mapi (fun index value -> (index, value)) values)
 
-let flatten_matrix_rows (mat : Core.mat_literal) =
-  List.concat_map (fun (row : Core.vec_literal) -> row.value.elements) mat.value.rows
+let require_preamble t ?loc feature =
+  match t.preamble with
+  | Some preamble -> preamble
+  | None ->
+      fail ?loc
+        "LLVM lowering for %s requires the default preamble; rerun without --no-preamble"
+        feature
 
 let matrix_row_base_ptr t matrix_storage (mat : Haven_token.Token.mat_type) row_index =
   let raw = Llvm.build_pointercast matrix_storage (ptr_type t) "matrix.row.raw" t.builder in
@@ -493,7 +499,9 @@ let create_context ?(options = default_codegen_options) (pipeline : Analysis.Pip
   Llvm.set_data_layout (Llvm_target.DataLayout.as_string data_layout) llmodule;
   let builder = Llvm.builder context in
   let type_env = Analysis.type_env_of_program pipeline.cleaned.program in
-  let preamble = create_preamble context llmodule in
+  let preamble =
+    if options.emit_preamble then Some (create_preamble context llmodule) else None
+  in
   {
     pipeline;
     context;
@@ -598,12 +606,33 @@ and constant_of_literal t loc resolved (lit : Core.literal) =
              (Array.of_list (List.map Option.get values)))
       else None)
   | Core.Matrix mat, Analysis.ResolvedMatrix resolved_mat -> (
-      let values = List.map (constant_of_expr t) (flatten_matrix_rows mat) in
+      let values =
+        List.map
+          (fun (row : Core.expression) ->
+            match expr_resolved_type t row with
+            | Analysis.ResolvedVec vec when vec.dimension = resolved_mat.columns -> (
+                match constant_of_expr t row with
+                | Some row_value ->
+                    Some
+                      (List.init resolved_mat.columns (fun index ->
+                           Llvm.const_extractelement row_value (const_i32 t index)))
+                | None -> None)
+            | Analysis.ResolvedVec vec ->
+                fail ~loc:row.loc
+                  "matrix row has width %d but the matrix expects width %d during LLVM lowering"
+                  vec.dimension resolved_mat.columns
+            | _ ->
+                fail ~loc:row.loc
+                  "matrix rows must be vector expressions during LLVM lowering")
+          mat.value.rows
+      in
       if List.for_all Option.is_some values then
         let vector_ty = llvm_matrix_flat_type t resolved_mat in
         Some
           (Llvm.const_bitcast
-             (Llvm.const_vector (Array.of_list (List.map Option.get values)))
+             (Llvm.const_vector
+                (Array.of_list
+                   (List.concat (List.map Option.get values))))
              vector_ty)
       else None)
   | _ -> None
@@ -705,11 +734,13 @@ let emit_cast t value source target =
           (mangle_resolved_ty source) (mangle_resolved_ty target)
 
 let emit_box_ref t box =
-  ignore (Llvm.build_call t.preamble.box_ref_ty t.preamble.box_ref [| box |] "" t.builder)
+  let preamble = require_preamble t "box retain/release" in
+  ignore (Llvm.build_call preamble.box_ref_ty preamble.box_ref [| box |] "" t.builder)
 
 let emit_box_unref t box =
+  let preamble = require_preamble t "box retain/release" in
   ignore
-    (Llvm.build_call t.preamble.box_unref_ty t.preamble.box_unref [| box |] "" t.builder)
+    (Llvm.build_call preamble.box_unref_ty preamble.box_unref [| box |] "" t.builder)
 
 let ensure_storage t resolved value =
   let slot = build_alloca t (llvm_type_of_resolved t resolved) "spill" in
@@ -1147,11 +1178,22 @@ and emit_literal t (expr : Core.expression) lit =
             elements
       | Core.Matrix mat, Analysis.ResolvedMatrix resolved_mat ->
           let elements =
-            List.map
-              (fun element ->
-                let value = emit_expr t element in
-                emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
-              (flatten_matrix_rows mat)
+            List.concat_map
+              (fun (row : Core.expression) ->
+                match expr_resolved_type t row with
+                | Analysis.ResolvedVec vec when vec.dimension = resolved_mat.columns ->
+                    let row_value = emit_expr t row in
+                    List.init resolved_mat.columns (fun index ->
+                        Llvm.build_extractelement row_value (const_i32 t index)
+                          "matrix.row.element" t.builder)
+                | Analysis.ResolvedVec vec ->
+                    fail ~loc:row.loc
+                      "matrix row has width %d but the matrix expects width %d during LLVM lowering"
+                      vec.dimension resolved_mat.columns
+                | _ ->
+                    fail ~loc:row.loc
+                      "matrix rows must be vector expressions during LLVM lowering")
+              mat.value.rows
           in
           build_vector_value t (llvm_matrix_flat_type t resolved_mat) elements
       | _ ->
@@ -1629,7 +1671,7 @@ and emit_expr t (expr : Core.expression) =
   emit_after_expr_actions t expr value;
   value
 
-and emit_box_expr t (_expr : Core.expression) inner =
+and emit_box_expr t (expr : Core.expression) inner =
   let inner_resolved = expr_resolved_type t inner in
   let box_layout = emit_box_layout t inner_resolved in
   let box_size =
@@ -1646,7 +1688,8 @@ and emit_box_expr t (_expr : Core.expression) inner =
         Llvm_target.DataLayout.abi_size (llvm_type_of_resolved t inner_resolved) t.data_layout
         |> Int64.to_int
       in
-      Llvm.build_call t.preamble.new_box_ty t.preamble.new_box
+      let preamble = require_preamble t ~loc:expr.loc "box allocation" in
+      Llvm.build_call preamble.new_box_ty preamble.new_box
         [|
           payload_ptr;
           Llvm.const_int (i32_type t) box_size;

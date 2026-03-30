@@ -7,14 +7,16 @@ type state = {
   seen : (string, unit) Hashtbl.t;
   active : (string, unit) Hashtbl.t;
   search_dirs : string list;
+  sysroot : string option;
   mutable diagnostics_rev : diagnostic list;
 }
 
-let create_state ?(search_dirs = []) () =
+let create_state ?(search_dirs = []) ?sysroot () =
   {
     seen = Hashtbl.create 32;
     active = Hashtbl.create 32;
     search_dirs;
+    sysroot;
     diagnostics_rev = [];
   }
 
@@ -120,13 +122,14 @@ and expand_import state ~current_file import_path loc =
 
 and expand_cimport state ~current_file import_path loc =
   let expanded =
-    Cimport.expand_header ~search_dirs:state.search_dirs ~current_file ~header:import_path ~loc
+    Cimport.expand_header ~search_dirs:state.search_dirs ~sysroot:state.sysroot ~current_file
+      ~header:import_path ~loc
   in
   state.diagnostics_rev <-
     List.rev_append (List.rev expanded.diagnostics) state.diagnostics_rev;
   expanded.decls
 
-let expand_cst ?(search_dirs = []) parsed =
-  let state = create_state ~search_dirs () in
+let expand_cst ?(search_dirs = []) ?sysroot parsed =
+  let state = create_state ~search_dirs ?sysroot () in
   let parsed = expand_program state parsed in
   { parsed; diagnostics = List.rev state.diagnostics_rev }

@@ -201,7 +201,7 @@ module ConstantFold = struct
     { loc = vec.loc; value = { elements = List.map fold_expression vec.value.elements } }
 
   and fold_mat_literal (mat : Core.mat_literal) =
-    { loc = mat.loc; value = { rows = List.map fold_vec_literal mat.value.rows } }
+    { loc = mat.loc; value = { rows = List.map fold_expression mat.value.rows } }
 
   and fold_enum_literal (enum : Core.enum_literal) =
     { enum with value = { enum.value with wrapped = List.map fold_expression enum.value.wrapped } }

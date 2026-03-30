@@ -837,13 +837,16 @@ let prune_unlowerable_decls decls =
   in
   loop decls
 
-let include_args search_dirs current_file =
+let include_args ?sysroot search_dirs current_file =
   let current_dir = Filename.dirname current_file in
   let dirs =
     current_dir
     :: List.filter (fun dir -> not (String.equal dir current_dir)) search_dirs
   in
-  List.concat_map (fun dir -> [ "-I"; dir ]) dirs
+  let include_dirs = List.concat_map (fun dir -> [ "-I"; dir ]) dirs in
+  match sysroot with
+  | Some path -> "-isysroot" :: path :: include_dirs
+  | None -> include_dirs
 
 let top_level_nodes ast =
   let nodes = yojson_list "inner" ast in
@@ -854,7 +857,7 @@ let top_level_nodes ast =
   in
   drop_prelude nodes
 
-let expand_header ~search_dirs ~current_file ~header ~loc =
+let expand_header ~search_dirs ~sysroot ~current_file ~header ~loc =
   let diagnostics_rev = ref [] in
   match load_target_info () with
   | Error message ->
@@ -871,7 +874,7 @@ let expand_header ~search_dirs ~current_file ~header ~loc =
           "-x";
           "c";
         ]
-        @ include_args search_dirs current_file
+        @ include_args ?sysroot search_dirs current_file
         @ [ wrapper ]
       in
       let result = run_command_capture ~prog:"clang" ~args:command () in

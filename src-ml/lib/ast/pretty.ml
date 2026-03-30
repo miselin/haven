@@ -108,7 +108,7 @@ and pp_surface_vec fmt (vec : Surface.vec_literal) =
 
 and pp_surface_mat fmt (mat : Surface.mat_literal) =
   fprintf fmt "Mat(%a)"
-    (pp_print_list ~pp_sep pp_surface_vec)
+    (pp_print_list ~pp_sep pp_surface_expression)
     mat.value.rows
 
 and pp_surface_expression fmt (expr : Surface.expression) =
@@ -337,7 +337,7 @@ and pp_core_vec fmt (vec : Core.vec_literal) =
 
 and pp_core_mat fmt (mat : Core.mat_literal) =
   fprintf fmt "Mat(%a)"
-    (pp_print_list ~pp_sep pp_core_vec)
+    (pp_print_list ~pp_sep pp_core_expression)
     mat.value.rows
 
 and pp_core_expression fmt (expr : Core.expression) =

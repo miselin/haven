@@ -30,8 +30,8 @@ module Pipeline = struct
     let cleaned = Cleanup.run typing in
     { core; typing; verify; semantic; purity; ownership; cfold; cleaned }
 
-  let run_cst ?(search_dirs = []) parsed =
-    let expanded = Imports.expand_cst ~search_dirs parsed in
+  let run_cst ?(search_dirs = []) ?sysroot parsed =
+    let expanded = Imports.expand_cst ~search_dirs ?sysroot parsed in
     let result = run_core (Convert.core_of_expanded_cst expanded.parsed) in
     let typing =
       {

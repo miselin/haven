@@ -121,7 +121,7 @@ let rec walk_literal predicate acc lit =
       acc
   | Matrix m ->
       let acc = add_if predicate (MatLiteral m) acc in
-      List.fold_left (walk_vec_literal predicate) acc m.value.rows
+      List.fold_left (walk_expression predicate) acc m.value.rows
   | Vector v ->
       let acc = add_if predicate (VecLiteral v) acc in
       walk_vec_literal predicate acc v

@@ -44,7 +44,7 @@ let rec pp_vec_literal fmt (vec : vec_literal) =
 and pp_mat_literal fmt (mat : mat_literal) =
   let mat = unwrap mat in
   fprintf fmt "@[<hv 2>Mat(@,%a@,)@]"
-    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_vec_literal)
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expression)
     mat.rows
 
 and pp_literal fmt lit =

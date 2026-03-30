@@ -32,6 +32,7 @@ let rc_cases =
     { name = "iter_down"; expected_rc = 0 };
     { name = "llist"; expected_rc = 1 };
     { name = "comment"; expected_rc = 0 };
+    { name = "preproc"; expected_rc = 0 };
     { name = "if"; expected_rc = 1 };
     { name = "unary"; expected_rc = -12 };
     { name = "printf"; expected_rc = 4 };
@@ -48,6 +49,7 @@ let rc_cases =
     { name = "enum_template_multi"; expected_rc = 0 };
     { name = "struct_ret"; expected_rc = 6 };
     { name = "match_stmt"; expected_rc = 5 };
+    { name = "mat_extract"; expected_rc = 2 };
     { name = "array_local"; expected_rc = 16 };
   ]
 
@@ -192,7 +194,7 @@ let compile_case_to_object ~source ~output_path opt_level =
   match pipeline_errors pipeline with
   | [] ->
       let module_ir =
-        Llvm_ir.compile ~options:{ Llvm_ir.opt_level; debug_llvm = false } pipeline
+        Llvm_ir.compile ~options:{ Llvm_ir.opt_level; debug_llvm = false; emit_preamble = true } pipeline
       in
       Llvm_ir.emit_object_file module_ir output_path
   | diagnostic :: _ ->

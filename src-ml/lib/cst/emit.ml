@@ -198,7 +198,7 @@ and emit_mat_literal ~comments fmt (mat : mat_literal) =
   fprintf fmt "Mat<%a>"
     (pp_print_list
        ~pp_sep:(fun fmt () -> fprintf fmt ", ")
-       (emit_vec_literal ~comments))
+       (fun fmt e -> emit_expression ~ctx_prec:0 ~indent:0 ~comments fmt e))
     mat.rows
 
 and emit_binary_literal fmt i =

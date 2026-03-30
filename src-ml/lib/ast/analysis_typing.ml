@@ -563,25 +563,43 @@ module Typing = struct
             };
         }
       | Core.Matrix mat ->
+        let row_expected =
+          match expected_type with
+          | Some (ResolvedMatrix matrix) ->
+              Some (ResolvedVec { kind = FloatVec; dimension = matrix.columns })
+          | _ -> None
+        in
         let rows =
           List.map
-            (fun (row : Core.vec_literal) ->
-              let row_expected =
-                match expected_type with
-                | Some (ResolvedMatrix matrix) ->
-                    Some (ResolvedVec { kind = FloatVec; dimension = matrix.columns })
-                | _ -> None
-              in
-              infer_literal state env ~expected_type:row_expected row.loc
-                (mk_literal row.loc (Core.Vector row)))
+            (fun (row : Core.expression) ->
+              infer_value_expression state env ~expected_type:row_expected row)
             mat.value.rows
         in
-        let columns =
-          match mat.value.rows with
-          | row :: _ -> List.length row.value.elements
-          | [] -> 0
+        let inferred_row_dimension =
+          List.find_map
+            (fun (ann : expr_annotation) ->
+              match ann.resolved_type with
+              | Some (ResolvedVec vec) -> Some vec.dimension
+              | _ -> None)
+            rows
         in
-        ignore rows;
+        let columns =
+          match expected_type with
+          | Some (ResolvedMatrix matrix) -> matrix.columns
+          | _ -> Option.value ~default:0 inferred_row_dimension
+        in
+        List.iter2
+          (fun (row : Core.expression) (ann : expr_annotation) ->
+            match ann.resolved_type with
+            | Some (ResolvedVec vec) when vec.dimension = columns -> ()
+            | Some (ResolvedVec _) ->
+                add_diagnostic state Error row.loc
+                  "matrix literal rows must all have the same vector width"
+            | Some _ ->
+                add_diagnostic state Error row.loc
+                  "matrix literal rows must be vector expressions"
+            | None -> ())
+          mat.value.rows rows;
         {
           inferred_type =
             Some
