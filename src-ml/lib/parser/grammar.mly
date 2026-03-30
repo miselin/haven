@@ -131,8 +131,8 @@ struct_field: t=haven_type n=identifier SEMICOLON {
 
 enum_decl: ENUM g=enum_generics? LBRACE v=separated_nonempty_list(COMMA, enum_variant) RBRACE { mk_loc $startpos $endpos { generics = Option.value ~default:[] g; variants = v } } ;
 enum_generics: g=delimited(LT, separated_list(COMMA, identifier), GT) { g } ;
-enum_variant: i=identifier t=option(enum_wrapped_type) { mk_loc $startpos $endpos { name = i; inner_ty = t }} ;
-enum_wrapped_type: LPAREN t=haven_type RPAREN { t } ;
+enum_variant: i=identifier t=option(enum_wrapped_type) { mk_loc $startpos $endpos { name = i; inner_tys = Option.value ~default:[] t }} ;
+enum_wrapped_type: LPAREN ts=separated_nonempty_list(COMMA, haven_type) RPAREN { ts } ;
 
 global_decl: p=boption(PUB) d=global_decl_inner SEMICOLON { mk_loc $startpos $endpos { d.value with public = p } } ;
 global_decl_inner:

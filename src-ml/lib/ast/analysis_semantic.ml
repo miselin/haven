@@ -462,15 +462,16 @@ module Semantic = struct
                             | _ -> ())
                           enum.value.enum_name;
                         (match (inner_ty, enum.value.binding) with
-                        | Some _, [] ->
+                        | _ :: _, [] ->
                             add_diagnostic state Error arm.loc
                               "enum pattern requires a binding or explicit (_) payload"
-                        | None, _ :: _ ->
+                        | [], _ :: _ ->
                             add_diagnostic state Error arm.loc
                               "enum pattern does not take payload bindings"
-                        | Some _, _ :: _ :: _ ->
+                        | payload_tys, bindings
+                          when List.length payload_tys <> List.length bindings ->
                             add_diagnostic state Error arm.loc
-                              "enum pattern currently supports only one payload binding"
+                              "enum pattern payload binding count does not match the variant"
                         | _ -> ()))
                 | Core.PatternDefault | Core.PatternLiteral _ -> ())
               match_expr.value.arms
@@ -556,9 +557,12 @@ module Semantic = struct
                       lookup_enum_variant state.type_env call.loc enum_ty
                         enum_lit.value.enum_variant.value
                     with
-                    | Some (_, Some expected) -> (
-                        match call.value.params with
-                        | [ arg ] -> (
+                    | Some (_, expected_payloads) ->
+                        if List.length call.value.params <> List.length expected_payloads then
+                          add_diagnostic state Error call.loc
+                            "enum constructor payload count does not match the variant";
+                        List.iter2
+                          (fun (arg : Core.expression) expected ->
                             match expr_annotation state arg with
                             | Some { resolved_type = Some actual; _ }
                               when not (resolved_compatible actual expected)
@@ -570,8 +574,13 @@ module Semantic = struct
                                   add_diagnostic state Error arg.loc
                                     "nil is only valid for pointer-like enum payloads"
                             | _ -> ())
-                        | _ -> ())
-                    | Some (_, None) | None -> ())
+                          (List.filteri
+                             (fun index _ -> index < List.length expected_payloads)
+                             call.value.params)
+                          (List.filteri
+                             (fun index _ -> index < List.length call.value.params)
+                             expected_payloads)
+                    | None -> ())
                 | _ -> ())
             | _ -> ())
         | _ -> ())

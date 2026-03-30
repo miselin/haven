@@ -205,9 +205,11 @@ let struct_field_contents (field : Core.struct_field) =
 
 let enum_variant_contents (variant : Core.enum_variant) =
   let payload =
-    match variant.value.inner_ty with
-    | None -> ""
-    | Some ty -> Printf.sprintf "(%s)" (format_core_type ty)
+    match variant.value.inner_tys with
+    | [] -> ""
+    | tys ->
+        Printf.sprintf "(%s)"
+          (String.concat ", " (List.map format_core_type tys))
   in
   hover_block (Printf.sprintf "variant %s%s" variant.value.name.value payload)
 
@@ -217,6 +219,17 @@ let pattern_binding_contents loc name resolved_ty =
       hover_block
         (Printf.sprintf "pattern %s: %s" name (format_resolved_type loc ty))
   | None -> hover_block (Printf.sprintf "pattern %s" name)
+
+let rec bind_pattern_payloads bindings payload_tys f acc =
+  match bindings with
+  | [] -> acc
+  | binding :: rest ->
+      let payload_ty, rest_payload_tys =
+        match payload_tys with
+        | payload_ty :: rest_payload_tys -> (Some payload_ty, rest_payload_tys)
+        | [] -> (None, [])
+      in
+      bind_pattern_payloads rest rest_payload_tys f (f acc binding payload_ty)
 
 let root_bindings (typing : Analysis.typing_result) =
   List.fold_left
@@ -306,11 +319,12 @@ and bind_pattern state env scrutinee_resolved (pattern : Core.match_pattern) =
           maybe_pick_binding state enum.value.enum_variant.loc 35
             (make_binding (enum_variant_contents variant) variant.value.name.loc))
         resolved_variant;
-      let payload_ty =
-        Option.bind resolved_variant (fun (_variant, inner_ty) -> inner_ty)
+      let payload_tys =
+        Option.value ~default:[]
+          (Option.map (fun (_variant, inner_tys) -> inner_tys) resolved_variant)
       in
-      List.fold_left
-        (fun env (binding : Core.pattern_binding) ->
+      bind_pattern_payloads enum.value.binding payload_tys
+        (fun env (binding : Core.pattern_binding) payload_ty ->
           match binding.value with
           | Core.BindingIgnored ->
               env
@@ -322,7 +336,7 @@ and bind_pattern state env scrutinee_resolved (pattern : Core.match_pattern) =
               in
               maybe_pick_binding state id.loc 40 binding;
               bind_current env id.value binding)
-        env enum.value.binding
+        env
 
 and enum_literal_hover state expr (enum_lit : Core.enum_literal) =
   let expr_resolved_type =
@@ -471,7 +485,7 @@ let walk_type_decl state (decl : Core.type_decl) =
         (fun (variant : Core.enum_variant) ->
           maybe_pick_binding state variant.value.name.loc 40
             (make_binding (enum_variant_contents variant) variant.value.name.loc);
-          Option.iter (walk_type state) variant.value.inner_ty)
+          List.iter (walk_type state) variant.value.inner_tys)
         enum_decl.value.variants
   | TypeDeclForward -> ()
 
@@ -606,11 +620,12 @@ let highlight_match_pattern state env scrutinee_resolved
           if same_loc variant.value.name.loc state.target_loc then
             add_highlight state enum.value.enum_variant.loc `Text)
         resolved_variant;
-      let payload_ty =
-        Option.bind resolved_variant (fun (_variant, inner_ty) -> inner_ty)
+      let payload_tys =
+        Option.value ~default:[]
+          (Option.map (fun (_variant, inner_tys) -> inner_tys) resolved_variant)
       in
-      List.fold_left
-        (fun env (binding : Core.pattern_binding) ->
+      bind_pattern_payloads enum.value.binding payload_tys
+        (fun env (binding : Core.pattern_binding) payload_ty ->
           match binding.value with
           | Core.BindingIgnored ->
               env
@@ -622,7 +637,7 @@ let highlight_match_pattern state env scrutinee_resolved
               in
               maybe_add_binding_highlight state id.loc `Write binding_info;
               bind_current env id.value binding_info)
-        (push_scope env) enum.value.binding
+        (push_scope env)
 
 let rec highlight_expression state env (expr : Core.expression) =
   match expr.value with
@@ -770,7 +785,7 @@ let highlight_type_decl state (decl : Core.type_decl) =
         (fun (variant : Core.enum_variant) ->
           if same_loc variant.value.name.loc state.target_loc then
             add_highlight state variant.value.name.loc `Text;
-          Option.iter (highlight_type state) variant.value.inner_ty)
+          List.iter (highlight_type state) variant.value.inner_tys)
         enum_decl.value.variants
   | TypeDeclForward -> ()
 

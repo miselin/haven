@@ -45,7 +45,7 @@ struct_field: type IDENT ";"
 enum_decl: "enum" enum_generics? "{" enum_variant_list? "}"
 enum_generics: "<" IDENT ("," IDENT)* ">"
 enum_variant_list: enum_variant ("," enum_variant)* (",")?
-enum_variant: IDENT ("(" type ")")?
+enum_variant: IDENT ("(" type ("," type)* ")")?
 
 global_decl: visibility? (global_data | global_state) ";"
 global_data: "data" global_binding

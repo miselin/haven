@@ -201,6 +201,36 @@ pub fn sut() -> i32 {
   assert_no_diagnostics "assignment-driven enum constructor semantics"
     assignment_enum_pipeline.semantic.diagnostics;
 
+  let multi_payload_enum_pipeline =
+    parse_to_core
+      {|
+type Pair = enum {
+  Both(i32, i32),
+  Empty
+};
+
+fn make_pair() -> Pair {
+  Both(2, 3)
+}
+
+pub fn sut() -> i32 {
+  match make_pair() {
+    Both(left, right) => left + right,
+    _ => 0
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "multi-payload enum constructor typing"
+    multi_payload_enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "multi-payload enum verify"
+    multi_payload_enum_pipeline.verify.diagnostics;
+  assert_no_diagnostics "multi-payload enum semantics"
+    multi_payload_enum_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "multi-payload enum ownership"
+    multi_payload_enum_pipeline.ownership.diagnostics;
+
   let statement_match_pipeline =
     parse_to_core
       {|
@@ -369,6 +399,27 @@ pub fn sut() -> i32 {
   in
   assert_has_diagnostics "enum payload pattern without binding"
     bad_pattern_pipeline.semantic.diagnostics;
+
+  let bad_multi_payload_pattern_pipeline =
+    parse_to_core
+      {|
+type Pair = enum {
+  Both(i32, i32),
+  Empty
+};
+
+pub fn sut() -> i32 {
+  let Pair value = Pair::Both(2, 3);
+  match value {
+    Both(left) => left,
+    _ => 0
+  }
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "multi-payload enum pattern with wrong binding count"
+    bad_multi_payload_pattern_pipeline.semantic.diagnostics;
 
   let non_exhaustive_match_pipeline =
     parse_to_core "pub fn main() -> i32 { match 5 { 5 => 5 } }" |> Analysis.Pipeline.run_core

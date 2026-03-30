@@ -126,21 +126,34 @@ and walk_match_arm typing type_env query_range scrutinee_resolved acc
     | Core.PatternDefault | PatternLiteral _ ->
         acc
     | Core.PatternEnum enum ->
-        let payload_ty =
+        let payload_tys =
           Option.bind scrutinee_resolved (fun resolved ->
               Option.bind
                 (Analysis.lookup_enum_variant type_env arm.value.pattern.loc resolved
                    enum.value.enum_variant.value)
-                (fun (_variant, inner_ty) -> inner_ty))
+                (fun (_variant, inner_tys) -> Some inner_tys))
         in
-        List.fold_left
-          (fun acc (binding : Core.pattern_binding) ->
-            match (binding.value, payload_ty) with
-            | Core.BindingNamed id, Some ty ->
-                maybe_add_hint query_range acc id.loc (format_resolved_type id.loc ty)
-            | _ ->
-                acc)
-          acc enum.value.binding
+        let rec add_binding_hints acc bindings payload_tys =
+          match bindings with
+          | [] -> acc
+          | (binding : Core.pattern_binding) :: rest ->
+              let payload_ty, rest_payload_tys =
+                match payload_tys with
+                | Some (payload_ty :: rest_payload_tys) ->
+                    (Some payload_ty, Some rest_payload_tys)
+                | _ ->
+                    (None, None)
+              in
+              let acc =
+                match (binding.value, payload_ty) with
+                | Core.BindingNamed id, Some ty ->
+                    maybe_add_hint query_range acc id.loc (format_resolved_type id.loc ty)
+                | _ ->
+                    acc
+              in
+              add_binding_hints acc rest rest_payload_tys
+        in
+        add_binding_hints acc enum.value.binding payload_tys
   in
   walk_expression typing type_env query_range acc arm.value.expr
 

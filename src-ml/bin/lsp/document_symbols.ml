@@ -39,9 +39,9 @@ let variable_detail (decl : Cst.var_decl) =
 let field_detail (field : Cst.struct_field) = type_text field.value.ty
 
 let variant_detail (variant : Cst.enum_variant) =
-  match variant.value.inner_ty with
-  | None -> None
-  | Some ty -> Some (type_text ty)
+  match variant.value.inner_tys with
+  | [] -> None
+  | tys -> Some (String.concat ", " (List.map type_text tys))
 
 let make_symbol ?children ?detail ~kind ~name ~range ~selection_range () =
   DocumentSymbol.create ?children ?detail ~kind ~name ~range

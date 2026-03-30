@@ -626,16 +626,21 @@ let rec lookup_enum_decl type_env loc ty =
 let lookup_enum_variant type_env loc ty variant_name =
   match lookup_enum_decl type_env loc ty with
   | Some (decl, subst) ->
-      List.find_opt
+      Option.bind
+        (List.find_opt
+           (fun (variant : Core.enum_variant) ->
+             String.equal variant.value.name.value variant_name)
+           decl.value.variants)
         (fun (variant : Core.enum_variant) ->
-          String.equal variant.value.name.value variant_name)
-        decl.value.variants
-      |> Option.map (fun (variant : Core.enum_variant) ->
-             let inner_ty =
-               Option.bind variant.value.inner_ty
-                 (resolve_core_type type_env [] subst loc)
-             in
-             (variant, inner_ty))
+          let rec resolve_payloads acc = function
+            | [] -> Some (List.rev acc)
+            | ty :: rest -> (
+                match resolve_core_type type_env [] subst loc ty with
+                | Some resolved -> resolve_payloads (resolved :: acc) rest
+                | None -> None)
+          in
+          Option.map (fun payload_tys -> (variant, payload_tys))
+            (resolve_payloads [] variant.value.inner_tys))
   | None -> None
 
 let rec lookup_struct_fields type_env loc ty =
@@ -702,14 +707,14 @@ let rec resolved_contains_box_ownership type_env active loc ty =
             | Some (_, subst) ->
                 List.exists
                   (fun (variant : Core.enum_variant) ->
-                    match variant.value.inner_ty with
-                    | Some inner_ty -> (
+                    List.exists
+                      (fun inner_ty ->
                         match resolve_core_type type_env [] subst variant.loc inner_ty with
                         | Some variant_ty ->
                             resolved_contains_box_ownership type_env (name :: active)
                               variant.loc variant_ty
                         | None -> false)
-                    | None -> false)
+                      variant.value.inner_tys)
                   decl.value.variants
             | None -> false)
         | Some TypeForward | None -> false)

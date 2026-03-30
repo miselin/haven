@@ -258,7 +258,9 @@ and walk_struct_decl predicate acc decl =
 and walk_enum_decl predicate acc decl =
   let acc = add_if predicate (EnumDecl decl) acc in
   List.fold_left
-    (fun acc v -> add_if predicate (EnumVariant v) acc)
+    (fun acc v ->
+      let acc = add_if predicate (EnumVariant v) acc in
+      List.fold_left (walk_haven_type predicate) acc v.value.inner_tys)
     acc decl.value.variants
 
 and walk_type_decl predicate acc ty =

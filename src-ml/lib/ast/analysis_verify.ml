@@ -163,12 +163,12 @@ module Verify = struct
         in
         List.iter
           (fun (variant : Core.enum_variant) ->
-            Option.iter
+            List.iter
               (verify_declared_type_with_subst state variant.loc
                  (Printf.sprintf "enum variant %s::%s" decl.value.name.value
                     variant.value.name.value)
                  subst)
-              variant.value.inner_ty)
+              variant.value.inner_tys)
           enum_decl.value.variants
     | Core.TypeDeclForward -> ()
 

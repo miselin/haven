@@ -23,6 +23,7 @@ let rc_cases =
     { name = "match"; expected_rc = 0 };
     { name = "enum"; expected_rc = 2 };
     { name = "enum_nobind"; expected_rc = 0 };
+    { name = "enum_multi_payload"; expected_rc = 5 };
     { name = "ptr"; expected_rc = 5 };
     { name = "array"; expected_rc = 16 };
     { name = "defer"; expected_rc = 1 };

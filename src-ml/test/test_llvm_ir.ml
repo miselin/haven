@@ -76,6 +76,25 @@ pub fn main() -> void {}
   assert_true "matrix row access should lower through scalar row addressing"
     (string_contains field_ir "getelementptr inbounds float");
 
+  let multi_payload_enum_ir =
+    emit_ir
+      {|
+type Pair = enum {
+  Both(i32, i32),
+  Empty
+};
+
+pub fn sum(Pair value) -> i32 {
+  match value {
+    Both(left, right) => left + right,
+    _ => 0
+  }
+}
+|}
+  in
+  assert_true "multi-payload enums should lower payload storage as a struct"
+    (string_contains multi_payload_enum_ir "{ i32, i32 }");
+
   let literal_ir =
     emit_ir
       {|

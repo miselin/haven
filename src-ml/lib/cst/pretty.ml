@@ -278,8 +278,9 @@ let pp_struct_decl fmt (d : struct_decl) =
 
 let pp_enum_variant fmt (v : enum_variant) =
   let v = unwrap v in
-  fprintf fmt "Variant(%a, inner=%a)" pp_identifier v.name
-    (pp_print_option pp_type) v.inner_ty
+  fprintf fmt "Variant(%a, inner=[%a])" pp_identifier v.name
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_type)
+    v.inner_tys
 
 let pp_enum_decl fmt (d : enum_decl) =
   let d = unwrap d in

@@ -13,6 +13,9 @@ let run () =
   assert_parse_ok "matrix literal accepts vector expressions"
     "pub fn main() -> i32 { let v = Vec<3.0, 4.0>; let x = Mat<Vec<1.0, 0.0>, v>; 0 }";
 
+  assert_parse_ok "multi-payload enum variants"
+    "type Pair = enum { Both(i32, i32), Empty }; pub fn main() -> i32 { 0 }";
+
   assert_parse_ok "comma-separated match arms"
     "pub fn main() -> i32 { match 5 { 5 => 0, _ => 1 } }";
 

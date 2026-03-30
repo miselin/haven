@@ -335,14 +335,19 @@ and llvm_enum_type t ?loc resolved decl =
       let payload_types =
         List.filter_map
           (fun (variant : Core.enum_variant) ->
-            match variant.value.inner_ty with
-            | None -> None
-            | Some inner_ty -> (
-                match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
-                | Some resolved_inner -> Some (variant, resolved_inner)
-                | None ->
-                    fail ~loc:variant.loc "failed to resolve enum payload for %s"
-                      variant.value.name.value))
+            match variant.value.inner_tys with
+            | [] -> None
+            | inner_tys ->
+                let rec resolve_payloads acc = function
+                  | [] -> List.rev acc
+                  | inner_ty :: rest -> (
+                      match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
+                      | Some resolved_inner -> resolve_payloads (resolved_inner :: acc) rest
+                      | None ->
+                          fail ~loc:variant.loc "failed to resolve enum payload for %s"
+                            variant.value.name.value)
+                in
+                Some (variant, resolve_payloads [] inner_tys))
           decl.value.variants
       in
       if payload_types = [] then
@@ -355,10 +360,10 @@ and llvm_enum_type t ?loc resolved decl =
         Hashtbl.add t.enum_types key ty;
         let max_payload_size =
           List.fold_left
-            (fun size (_, payload_ty) ->
+            (fun size (_, payload_tys) ->
               let payload_size =
                 Llvm_target.DataLayout.abi_size
-                  (llvm_type_of_resolved t ~loc:(with_default dummy_loc loc) payload_ty)
+                  (llvm_enum_payload_type t ~loc:(with_default dummy_loc loc) payload_tys)
                   t.data_layout
                 |> Int64.to_int
               in
@@ -370,6 +375,37 @@ and llvm_enum_type t ?loc resolved decl =
         in
         Llvm.struct_set_body ty body false;
         ty
+
+and llvm_enum_payload_type t ?loc payload_tys =
+  match payload_tys with
+  | [] -> fail ?loc "enum payload type requested for empty payload"
+  | [ payload_ty ] ->
+      llvm_type_of_resolved t ~loc:(with_default dummy_loc loc) payload_ty
+  | _ ->
+      Llvm.struct_type t.context
+        (Array.of_list
+           (List.map
+              (llvm_type_of_resolved t ~loc:(with_default dummy_loc loc))
+              payload_tys))
+
+and enum_payload_fields t ?loc payload_tys buf_ptr =
+  match payload_tys with
+  | [] -> []
+  | [ payload_ty ] ->
+      [ (payload_ty, Llvm.build_pointercast buf_ptr (ptr_type t) "enum.payload.ptr" t.builder) ]
+  | _ ->
+      let payload_struct_ty =
+        llvm_enum_payload_type t ?loc payload_tys
+      in
+      let payload_ptr =
+        Llvm.build_pointercast buf_ptr (ptr_type t) "enum.payload.ptr" t.builder
+      in
+      List.mapi
+        (fun index payload_ty ->
+          ( payload_ty,
+            Llvm.build_struct_gep payload_struct_ty payload_ptr index "enum.payload.field"
+              t.builder ))
+        payload_tys
 
 let declare_matrix_multiply_intrinsic t ?loc result_ty lhs_ty rhs_ty =
   let name =
@@ -639,10 +675,10 @@ and constant_of_literal t loc resolved (lit : Core.literal) =
 
 and constant_of_enum_literal t loc resolved (enum_lit : Core.enum_literal) =
   match Analysis.lookup_enum_variant t.type_env loc resolved enum_lit.value.enum_variant.value with
-  | Some (_, None) ->
+  | Some (_, []) ->
       let tag = enum_tag_value enum_lit.value.enum_variant.value resolved t.type_env loc in
       Some (Llvm.const_int (i32_type t) tag)
-  | Some (_, Some _) | None -> None
+  | Some (_, _ :: _) | None -> None
 
 and constant_of_initializer t loc resolved init =
   match resolved with
@@ -817,15 +853,24 @@ and emit_ownership_on_enum t kind resolved decl storage =
       let owned_variants =
         List.filter_map
           (fun (variant : Core.enum_variant) ->
-            match variant.value.inner_ty with
-            | Some inner_ty -> (
-                match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
-                | Some resolved_inner
-                  when Analysis.resolved_contains_box_ownership t.type_env [] variant.loc
-                         resolved_inner ->
-                    Some (variant, resolved_inner)
-                | Some _ | None -> None)
-            | None -> None)
+            let rec resolve_payloads acc = function
+              | [] -> List.rev acc
+              | inner_ty :: rest -> (
+                  match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
+                  | Some resolved_inner -> resolve_payloads (resolved_inner :: acc) rest
+                  | None ->
+                      fail ~loc:variant.loc "failed to resolve enum payload for %s"
+                        variant.value.name.value)
+            in
+            match resolve_payloads [] variant.value.inner_tys with
+            | [] -> None
+            | payload_tys ->
+                if
+                  List.exists
+                    (Analysis.resolved_contains_box_ownership t.type_env [] variant.loc)
+                    payload_tys
+                then Some (variant, payload_tys)
+                else None)
           decl.value.variants
       in
       if owned_variants <> [] then (
@@ -839,7 +884,7 @@ and emit_ownership_on_enum t kind resolved decl storage =
         let default_block = Llvm.append_block t.context "enum.own.default" fn_value in
         let switch = Llvm.build_switch tag default_block (List.length owned_variants) t.builder in
         List.iter
-          (fun ((variant : Core.enum_variant), resolved_inner) ->
+          (fun ((variant : Core.enum_variant), payload_tys) ->
             let tag_value =
               enum_tag_value variant.value.name.value resolved t.type_env variant.loc
             in
@@ -848,18 +893,13 @@ and emit_ownership_on_enum t kind resolved decl storage =
             in
             Llvm.add_case switch (Llvm.const_int (i32_type t) tag_value) arm_block;
             Llvm.position_at_end arm_block t.builder;
-            let payload_ptr =
-              Llvm.build_bitcast buf_ptr (ptr_type t) "enum.payload.raw" t.builder
-            in
-            let typed_ptr =
-              Llvm.build_pointercast payload_ptr (ptr_type t) "enum.payload.ptr" t.builder
-            in
-            let typed_slot =
-              ensure_storage t resolved_inner
-                (Llvm.build_load (llvm_type_of_resolved t resolved_inner) typed_ptr
-                   "enum.payload.value" t.builder)
-            in
-            emit_ownership_on_storage t kind resolved_inner typed_slot;
+            List.iter
+              (fun (payload_ty, payload_ptr) ->
+                if
+                  Analysis.resolved_contains_box_ownership t.type_env [] variant.loc
+                    payload_ty
+                then emit_ownership_on_storage t kind payload_ty payload_ptr)
+              (enum_payload_fields t ~loc:variant.loc payload_tys buf_ptr);
             ignore (Llvm.build_br end_block t.builder))
           owned_variants;
         Llvm.position_at_end default_block t.builder;
@@ -1259,10 +1299,10 @@ and emit_enum_literal t (expr : Core.expression) (enum_lit : Core.enum_literal) 
   match resolved with
   | Analysis.ResolvedNamed _ -> (
       match Analysis.lookup_enum_variant t.type_env expr.loc resolved enum_lit.value.enum_variant.value with
-      | Some (_, None) ->
+      | Some (_, []) ->
           Llvm.const_int (i32_type t)
             (enum_tag_value enum_lit.value.enum_variant.value resolved t.type_env expr.loc)
-      | Some (_, Some inner_ty) ->
+      | Some (_, payload_tys) ->
           let enum_ty = llvm_type_of_resolved t resolved in
           let slot = build_alloca t enum_ty "enum.literal" in
           let tag_ptr = Llvm.build_struct_gep enum_ty slot 0 "enum.tag" t.builder in
@@ -1272,24 +1312,22 @@ and emit_enum_literal t (expr : Core.expression) (enum_lit : Core.enum_literal) 
                (Llvm.const_int (i32_type t)
                   (enum_tag_value enum_lit.value.enum_variant.value resolved t.type_env expr.loc))
                tag_ptr t.builder);
-          (match enum_lit.value.wrapped with
-          | [ wrapped ] ->
+          if List.length enum_lit.value.wrapped <> List.length payload_tys then
+            fail ~loc:expr.loc "enum constructor payload count does not match the variant";
+          List.iter2
+            (fun wrapped (payload_ty, payload_ptr) ->
               let payload = emit_expr t wrapped in
-              let payload_ptr =
-                Llvm.build_bitcast buf_ptr (ptr_type t) "enum.payload.raw" t.builder
-              in
               let payload_slot =
-                ensure_storage t inner_ty
-                  (emit_cast t payload (expr_resolved_type t wrapped) inner_ty)
+                ensure_storage t payload_ty
+                  (emit_cast t payload (expr_resolved_type t wrapped) payload_ty)
               in
               let payload_value =
-                Llvm.build_load (llvm_type_of_resolved t inner_ty) payload_slot "enum.payload"
+                Llvm.build_load (llvm_type_of_resolved t payload_ty) payload_slot "enum.payload"
                   t.builder
               in
-              ignore (Llvm.build_store payload_value payload_ptr t.builder)
-          | [] -> ()
-          | _ ->
-              fail ~loc:expr.loc "enum constructors with multiple payload values are unsupported");
+              ignore (Llvm.build_store payload_value payload_ptr t.builder))
+            enum_lit.value.wrapped
+            (enum_payload_fields t ~loc:expr.loc payload_tys buf_ptr);
           Llvm.build_load enum_ty slot "enum.literal.value" t.builder
       | None ->
           fail ~loc:expr.loc "failed to resolve enum literal during LLVM lowering")
@@ -1454,49 +1492,90 @@ and emit_enum_constructor_call t (expr : Core.expression) (call : Core.call)
     }
 
 and emit_call t (expr : Core.expression) (call : Core.call) =
-  let target_resolved = expr_resolved_type t call.value.target in
-  match target_resolved with
-  | Analysis.ResolvedNamed _ -> (
-      match call.value.target.value with
-      | Core.Literal literal -> (
-          match literal.value with
-          | Core.Enum enum_lit -> emit_enum_constructor_call t expr call enum_lit
+  let emit_function_call params ret vararg =
+    let target_value = emit_expr t call.value.target in
+    let args =
+      Array.of_list
+        (List.mapi
+           (fun index arg ->
+             let arg_value = emit_expr t arg in
+             let arg_resolved = expr_resolved_type t arg in
+             if vararg && index >= List.length params && Analysis.equal_resolved_type arg_resolved Analysis.ResolvedFloat then
+               Llvm.build_fpext arg_value (double_type t) "vararg.float" t.builder
+             else
+               let expected =
+                 match List.nth_opt params index with
+                 | Some ty -> ty
+                 | None -> arg_resolved
+               in
+               emit_cast t arg_value arg_resolved expected)
+           call.value.params)
+    in
+    let fn_ty =
+      if vararg then
+        Llvm.var_arg_function_type (llvm_type_of_resolved t ret)
+          (Array.of_list (List.map (llvm_type_of_resolved t) params))
+      else
+        Llvm.function_type (llvm_type_of_resolved t ret)
+          (Array.of_list (List.map (llvm_type_of_resolved t) params))
+    in
+    let result =
+      Llvm.build_call fn_ty target_value args
+        (if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then "" else "call")
+        t.builder
+    in
+    if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then unit_value t else result
+  in
+  let emit_expected_enum_constructor (id : Core.identifier) enum_ty enum_name =
+    match Analysis.lookup_enum_variant t.type_env call.loc enum_ty id.value with
+    | Some _ ->
+        Some
+          (emit_enum_literal t expr
+             {
+               value =
+                 {
+                   enum_name = { id with value = enum_name };
+                   enum_variant = id;
+                   types = [];
+                   wrapped = call.value.params;
+                 };
+               loc = call.loc;
+             })
+    | None ->
+        None
+  in
+  match call.value.target.value with
+  | Core.Identifier id -> (
+      match expr_resolved_type t expr with
+      | Analysis.ResolvedNamed (enum_name, _) as enum_ty -> (
+          match emit_expected_enum_constructor id enum_ty enum_name with
+          | Some value -> value
+          | None -> (
+              match expr_resolved_type t call.value.target with
+              | Analysis.ResolvedFunction (params, ret, vararg) ->
+                  emit_function_call params ret vararg
+              | Analysis.ResolvedNamed _ ->
+                  fail ~loc:expr.loc "call target is not callable during LLVM lowering"
+              | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering"))
+      | _ -> (
+          match expr_resolved_type t call.value.target with
+          | Analysis.ResolvedFunction (params, ret, vararg) ->
+              emit_function_call params ret vararg
+          | Analysis.ResolvedNamed _ ->
+              fail ~loc:expr.loc "call target is not callable during LLVM lowering"
+          | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering"))
+  | _ -> (
+      match expr_resolved_type t call.value.target with
+      | Analysis.ResolvedNamed _ -> (
+          match call.value.target.value with
+          | Core.Literal literal -> (
+              match literal.value with
+              | Core.Enum enum_lit -> emit_enum_constructor_call t expr call enum_lit
+              | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
           | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
+      | Analysis.ResolvedFunction (params, ret, vararg) ->
+          emit_function_call params ret vararg
       | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
-  | Analysis.ResolvedFunction (params, ret, vararg) ->
-      let target_value = emit_expr t call.value.target in
-      let args =
-        Array.of_list
-          (List.mapi
-             (fun index arg ->
-               let arg_value = emit_expr t arg in
-               let arg_resolved = expr_resolved_type t arg in
-               if vararg && index >= List.length params && Analysis.equal_resolved_type arg_resolved Analysis.ResolvedFloat then
-                 Llvm.build_fpext arg_value (double_type t) "vararg.float" t.builder
-               else
-                 let expected =
-                   match List.nth_opt params index with
-                   | Some ty -> ty
-                   | None -> arg_resolved
-                 in
-                 emit_cast t arg_value arg_resolved expected)
-             call.value.params)
-      in
-      let fn_ty =
-        if vararg then
-          Llvm.var_arg_function_type (llvm_type_of_resolved t ret)
-            (Array.of_list (List.map (llvm_type_of_resolved t) params))
-        else
-          Llvm.function_type (llvm_type_of_resolved t ret)
-            (Array.of_list (List.map (llvm_type_of_resolved t) params))
-      in
-      let result =
-        Llvm.build_call fn_ty target_value args
-          (if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then "" else "call")
-          t.builder
-      in
-      if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then unit_value t else result
-  | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering"
 
 and emit_match t (expr : Core.expression) (match_expr : Core.match_expr) =
   let result_ty = expr_resolved_type t expr in
@@ -1587,30 +1666,29 @@ and emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot end_bl
 and bind_enum_pattern_payload t enum_pat scrutinee_ty storage =
   match Analysis.lookup_enum_variant t.type_env enum_pat.loc scrutinee_ty
           enum_pat.value.enum_variant.value with
-  | Some (_, Some inner_ty) -> (
-      match enum_pat.value.binding with
-      | [ binding ] -> (
+  | Some (_, []) -> ()
+  | Some (_, payload_tys) ->
+      if List.length enum_pat.value.binding <> List.length payload_tys then
+        fail ~loc:enum_pat.loc
+          "enum pattern payload binding count does not match the variant";
+      let enum_ty = llvm_type_of_resolved t scrutinee_ty in
+      let buf_ptr = Llvm.build_struct_gep enum_ty storage 1 "match.buf" t.builder in
+      List.iter2
+        (fun (binding : Core.pattern_binding) (payload_ty, payload_ptr) ->
           match binding.value with
           | Core.BindingIgnored -> ()
           | Core.BindingNamed id ->
-              let enum_ty = llvm_type_of_resolved t scrutinee_ty in
-              let buf_ptr = Llvm.build_struct_gep enum_ty storage 1 "match.buf" t.builder in
-              let payload_ptr =
-                Llvm.build_bitcast buf_ptr (ptr_type t) "match.payload.raw" t.builder
-              in
               let payload_value =
-                Llvm.build_load (llvm_type_of_resolved t inner_ty) payload_ptr
+                Llvm.build_load (llvm_type_of_resolved t payload_ty) payload_ptr
                   "match.payload" t.builder
               in
-              let slot = build_alloca t (llvm_type_of_resolved t inner_ty) id.value in
+              let slot = build_alloca t (llvm_type_of_resolved t payload_ty) id.value in
               ignore (Llvm.build_store payload_value slot t.builder);
               add_symbol t id.value
-                (Variable_symbol { storage = slot; resolved_type = inner_ty; is_mutable = false }))
-      | [] -> ()
-      | _ ->
-          fail ~loc:enum_pat.loc
-            "enum patterns with multiple bindings are unsupported during LLVM lowering")
-  | Some (_, None) | None -> ()
+                (Variable_symbol { storage = slot; resolved_type = payload_ty; is_mutable = false }))
+        enum_pat.value.binding
+        (enum_payload_fields t ~loc:enum_pat.loc payload_tys buf_ptr)
+  | None -> ()
 
 and emit_deferred_exprs t =
   let fn = current_function t in

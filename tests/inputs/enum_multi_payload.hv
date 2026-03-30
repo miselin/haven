@@ -1,0 +1,16 @@
+
+type Pair = enum {
+    Both(i32, i32),
+    Empty
+};
+
+impure fn make_pair() -> Pair {
+    Both(2, 3)
+}
+
+pub impure fn sut() -> i32 {
+    match make_pair() {
+        Both(left, right) => left + right,
+        _ => 0
+    }
+}

@@ -137,14 +137,17 @@ module Ownership = struct
 
   and emit_enum_payload_retains state reason expected (enum_lit : Core.enum_literal) =
     match lookup_enum_variant state.type_env enum_lit.loc expected enum_lit.value.enum_variant.value with
-    | Some (_, Some inner_ty) -> (
-        match enum_lit.value.wrapped with
-        | [ wrapped ] -> emit_retains_for_transfer state reason inner_ty wrapped
-        | [] -> ()
-        | _ ->
-            add_diagnostic state Warning enum_lit.loc
-              "ownership analysis only handles one enum payload value today")
-    | Some (_, None) | None -> ()
+    | Some (_, payload_tys) ->
+        List.iter2
+          (fun payload_ty wrapped ->
+            emit_retains_for_transfer state reason payload_ty wrapped)
+          (List.filteri
+             (fun index _ -> index < List.length enum_lit.value.wrapped)
+             payload_tys)
+          (List.filteri
+             (fun index _ -> index < List.length payload_tys)
+             enum_lit.value.wrapped)
+    | None -> ()
 
   and emit_retains_for_call state reason (call : Core.call) =
     match expr_annotation state call.value.target with
@@ -171,14 +174,17 @@ module Ownership = struct
   and emit_retains_for_expected_enum_call state reason expected (call : Core.call) =
     let emit_variant_retains variant_name =
       match lookup_enum_variant state.type_env call.loc expected variant_name with
-      | Some (_, Some inner_ty) -> (
-          match call.value.params with
-          | [ wrapped ] -> emit_retains_for_transfer state reason inner_ty wrapped
-          | [] -> ()
-          | _ ->
-              add_diagnostic state Warning call.loc
-                "ownership analysis only handles one enum payload value today")
-      | Some (_, None) | None -> ()
+      | Some (_, payload_tys) ->
+          List.iter2
+            (fun payload_ty wrapped ->
+              emit_retains_for_transfer state reason payload_ty wrapped)
+            (List.filteri
+               (fun index _ -> index < List.length call.value.params)
+               payload_tys)
+            (List.filteri
+               (fun index _ -> index < List.length payload_tys)
+               call.value.params)
+      | None -> ()
     in
     match call.value.target.value with
     | Core.Identifier id -> emit_variant_retains id.value

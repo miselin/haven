@@ -161,7 +161,7 @@ and cst_enum_variant_to_surface (variant : Cst.enum_variant) : Surface.enum_vari
   let value =
     {
       Surface.name = cst_identifier_to_surface variant.value.name;
-      inner_ty = Option.map cst_type_to_surface variant.value.inner_ty;
+      inner_tys = List.map cst_type_to_surface variant.value.inner_tys;
     }
   in
   mk_surface variant.loc value
@@ -765,7 +765,7 @@ and surface_enum_variant_to_core _st (variant : Surface.enum_variant) :
   mk_core variant.loc
     {
       Core.name = surface_identifier_to_core variant.value.name;
-      inner_ty = Option.map surface_type_to_core variant.value.inner_ty;
+      inner_tys = List.map surface_type_to_core variant.value.inner_tys;
     }
 
 and surface_foreign_to_core st (foreign : Surface.foreign) : Core.foreign =

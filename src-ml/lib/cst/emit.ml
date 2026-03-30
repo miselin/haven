@@ -565,8 +565,14 @@ let emit_struct_decl fmt (d : struct_decl) =
 let emit_enum_variant fmt (v : enum_variant) =
   let v = unwrap v in
   fprintf fmt "%a%a" emit_identifier v.name
-    (pp_print_option (fun fmt inner -> fprintf fmt "(%a)" emit_type inner))
-    v.inner_ty
+    (fun fmt inners ->
+      match inners with
+      | [] -> ()
+      | _ ->
+          fprintf fmt "(%a)"
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") emit_type)
+            inners)
+    v.inner_tys
 
 let emit_enum_decl fmt (d : enum_decl) =
   let d = unwrap d in

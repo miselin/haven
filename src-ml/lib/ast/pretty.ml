@@ -248,8 +248,8 @@ let pp_surface_struct_field fmt (field : Surface.struct_field) =
     field.value.name
 
 let pp_surface_enum_variant fmt (variant : Surface.enum_variant) =
-  fprintf fmt "Variant(%a, inner=%a)" pp_surface_identifier variant.value.name
-    (pp_print_option pp_surface_type) variant.value.inner_ty
+  fprintf fmt "Variant(%a, inner=[%a])" pp_surface_identifier variant.value.name
+    (pp_print_list ~pp_sep pp_surface_type) variant.value.inner_tys
 
 let pp_surface_type_decl_data fmt = function
   | Surface.TypeDeclAlias ty -> fprintf fmt "Alias(%a)" pp_surface_type ty
@@ -478,8 +478,8 @@ let pp_core_struct_field fmt (field : Core.struct_field) =
     field.value.name
 
 let pp_core_enum_variant fmt (variant : Core.enum_variant) =
-  fprintf fmt "Variant(%a, inner=%a)" pp_core_identifier variant.value.name
-    (pp_print_option pp_core_type) variant.value.inner_ty
+  fprintf fmt "Variant(%a, inner=[%a])" pp_core_identifier variant.value.name
+    (pp_print_list ~pp_sep pp_core_type) variant.value.inner_tys
 
 let pp_core_type_decl_data fmt = function
   | Core.TypeDeclAlias ty -> fprintf fmt "Alias(%a)" pp_core_type ty

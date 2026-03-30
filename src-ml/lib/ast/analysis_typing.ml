@@ -238,8 +238,8 @@ module Typing = struct
                   }
               | None -> (
                   match expected_enum_variant state expr.loc expected_type id.value with
-                  | Some (_, None) -> annotation_of_resolved expr.loc expected_type
-                  | Some (_, Some _) -> unknown_expr_annotation
+                  | Some (_, []) -> annotation_of_resolved expr.loc expected_type
+                  | Some (_, _ :: _) -> unknown_expr_annotation
                   | None ->
                       add_diagnostic state Error expr.loc
                         (Printf.sprintf "unknown identifier %s" id.value);
@@ -895,43 +895,53 @@ module Typing = struct
     | Core.PatternDefault | Core.PatternLiteral _ -> push_scope env
     | Core.PatternEnum enum ->
         let initial = push_scope env in
-        List.fold_left
-          (fun env (binding : Core.pattern_binding) ->
-            match binding.value with
-            | Core.BindingIgnored -> env
-            | Core.BindingNamed id ->
-                let binding_ann =
-                  match Hashtbl.find_opt state.annotations.exprs (expr_id scrutinee) with
-                  | Some { resolved_type = Some scrutinee_ty; _ } -> (
-                      match
-                        lookup_enum_variant state.type_env pattern.loc scrutinee_ty
-                          enum.value.enum_variant.value
-                      with
-                      | Some (_, Some inner_ty) ->
-                          let ty = core_type_of_resolved_ty binding.loc inner_ty in
-                          {
-                            inferred_type = Some ty;
-                            resolved_type = Some inner_ty;
-                            metavar = metavar_of_type ty;
-                            is_mutable = false;
-                          }
-                      | Some (_, None) | None ->
-                          {
-                            inferred_type = None;
-                            resolved_type = None;
-                            metavar = unknown_metavar;
-                            is_mutable = false;
-                          })
-                  | _ ->
-                      {
-                        inferred_type = None;
-                        resolved_type = None;
-                        metavar = unknown_metavar;
-                        is_mutable = false;
-                      }
-                in
-                bind_current env id.value binding_ann)
-          initial enum.value.binding
+        let payload_tys =
+          match Hashtbl.find_opt state.annotations.exprs (expr_id scrutinee) with
+          | Some { resolved_type = Some scrutinee_ty; _ } -> (
+              match
+                lookup_enum_variant state.type_env pattern.loc scrutinee_ty
+                  enum.value.enum_variant.value
+              with
+              | Some (_, payload_tys) -> payload_tys
+              | None -> [])
+          | _ -> []
+        in
+        let binding_annotation loc payload_ty =
+          match payload_ty with
+          | Some payload_ty ->
+              let ty = core_type_of_resolved_ty loc payload_ty in
+              {
+                inferred_type = Some ty;
+                resolved_type = Some payload_ty;
+                metavar = metavar_of_type ty;
+                is_mutable = false;
+              }
+          | None ->
+              {
+                inferred_type = None;
+                resolved_type = None;
+                metavar = unknown_metavar;
+                is_mutable = false;
+              }
+        in
+        let rec bind_payloads env bindings payloads =
+          match bindings with
+          | [] -> env
+          | (binding : Core.pattern_binding) :: rest ->
+              let payload_ty, rest_payloads =
+                match payloads with
+                | payload_ty :: rest_payloads -> (Some payload_ty, rest_payloads)
+                | [] -> (None, [])
+              in
+              let env =
+                match binding.value with
+                | Core.BindingIgnored -> env
+                | Core.BindingNamed id ->
+                    bind_current env id.value (binding_annotation binding.loc payload_ty)
+              in
+              bind_payloads env rest rest_payloads
+        in
+        bind_payloads initial enum.value.binding payload_tys
 
   and infer_call state env ~(expected_type : resolved_ty option) _loc
       (call : Core.call) : expr_annotation =
@@ -942,13 +952,20 @@ module Typing = struct
           ignore (infer_value_expression state env ~expected_type:expected expr))
         call.value.params
     in
-    let infer_enum_constructor enum_ty inner_ty =
+    let infer_enum_constructor enum_ty payload_tys =
       infer_args_with_expected
-        (match (inner_ty, call.value.params) with
-        | Some expected_inner, [ _ ] -> [ Some expected_inner ]
-        | _ -> List.init (List.length call.value.params) (fun _ -> None));
-      match (inner_ty, call.value.params) with
-      | None, [] | Some _, [ _ ] ->
+        (if List.length payload_tys = List.length call.value.params then
+           List.map Option.some payload_tys
+         else List.init (List.length call.value.params) (fun _ -> None));
+      match (payload_tys, call.value.params) with
+      | [], [] ->
+          let ty = core_type_of_resolved_ty call.loc enum_ty in
+          {
+            inferred_type = Some ty;
+            resolved_type = Some enum_ty;
+            metavar = metavar_of_type ty;
+          }
+      | _ when List.length payload_tys = List.length call.value.params ->
           let ty = core_type_of_resolved_ty call.loc enum_ty in
           {
             inferred_type = Some ty;
@@ -960,9 +977,9 @@ module Typing = struct
     match call.value.target.value with
     | Core.Identifier id -> (
         match expected_enum_variant state call.loc expected_type id.value with
-        | Some (_, inner_ty) -> (
+        | Some (_, payload_tys) -> (
             match expected_type with
-            | Some enum_ty -> infer_enum_constructor enum_ty inner_ty
+            | Some enum_ty -> infer_enum_constructor enum_ty payload_tys
             | None -> unknown_expr_annotation)
         | None ->
             let target_ann = infer_expression state env call.value.target in
@@ -993,7 +1010,7 @@ module Typing = struct
                   lookup_enum_variant state.type_env call.loc enum_ty
                     enum_lit.value.enum_variant.value
                 with
-                | Some (_, inner_ty) -> infer_enum_constructor enum_ty inner_ty
+                | Some (_, payload_tys) -> infer_enum_constructor enum_ty payload_tys
                 | None -> unknown_expr_annotation)
             | _ -> (
                 match target_ann.inferred_type with
