@@ -3,7 +3,8 @@
  (public_name haven.ast)
  (modules analysis_cfold analysis analysis_cleanup analysis_ownership
   analysis_purity analysis_semantic analysis_types analysis_typing
-  analysis_verify ast cimport convert core_ast imports llvm_ir platform_defaults
-  pretty surface_ast)
+  analysis_verify ast cimport convert core_ast imports llvm_ir
+  platform_defaults platform_defaults_common platform_defaults_darwin
+  platform_defaults_unix pretty surface_ast)
  (libraries haven_core haven_token haven_cst haven_parser unix yojson llvm
   llvm.analysis llvm.target llvm.passbuilder llvm.bitwriter llvm.all_backends))
