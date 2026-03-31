@@ -1,8 +1,11 @@
 pub impure fn printf(str fmt, *) -> i32;
+
 pub impure fn rand() -> i32;
+
 import "vec";
 
 pub fn __builtin_ipow(float x, i32 power) -> float intrinsic "llvm.powi" float, i32;
+
 pub fn __builtin_ceilf(float x) -> float intrinsic "llvm.ceil" float;
 
 type TraceData = struct {
@@ -36,6 +39,7 @@ data i32[9] G = {
 data float RAND_MAX = 2147483647.0;
 
 impure fn S(fvec3 o, fvec3 d) -> fvec3;
+
 impure fn T(fvec3 o, fvec3 d) -> TraceResult;
 
 impure fn R() -> float {
@@ -51,21 +55,26 @@ pub impure fn main() -> i32 {
     let ydim = xdim;
 
     printf("P6 %d %d 255 ", xdim + 1, ydim + 1);
+
     let g = {
         let vec = Vec<-6.0, -16.0, 0.0>;
+
         vnorm(vec)
     };
     let a = {
         let cross = vcross(Vec<0.0, 0.0, 1.0>, g);
+
         vnorm(cross) * 0.002
     };
     let b = {
         let norm = vnorm(vcross(g, a));
+
         norm * 0.002
     };
     let c = {
         let sum = a + b;
         let mul = sum * -256.0;
+
         mul + g
     };
 
@@ -78,27 +87,24 @@ pub impure fn main() -> i32 {
                     {
                         let r = R() - 0.5;
                         let delta = a * r;
+
                         delta * 99.9
-                    } +
-                    {
+                    } + {
                         let r = R() - 0.5;
                         let delta = b * r;
+
                         delta * 99.9
                     }
                 };
-
                 let contrib = {
                     let origin = Vec<17.0, 16.0, 8.0> + t;
                     let dir = {
                         let negt = t * -1.0;
-
                         let xnudge = R() + as<float>(x);
                         let ynudge = R() + as<float>(y);
-
                         let anudge = a * xnudge;
                         let bnudge = b * ynudge;
                         let nudge = anudge + bnudge + c;
-
                         let inner = nudge * 16.0;
                         let outer = negt + inner;
 
@@ -120,6 +126,7 @@ pub impure fn main() -> i32 {
 
 impure fn shadow_ray(fvec3 h, fvec3 l, fvec3 n, float t) -> ShadowResult {
     let LdN = vdot(l, n);
+
     if LdN < 0.0 {
         ShadowResult::Shadow
     } else {
@@ -129,10 +136,9 @@ impure fn shadow_ray(fvec3 h, fvec3 l, fvec3 n, float t) -> ShadowResult {
             _ => ShadowResult::Shadow
         }
     }
-}
-
-impure fn S(fvec3 o, fvec3 d) -> fvec3 {
+}impure fn S(fvec3 o, fvec3 d) -> fvec3 {
     let m = T(o, d);
+
     match m {
         Sky => {
             Vec<0.7, 0.6, 1.0> * __builtin_ipow(1.0 - d.z, 4)
@@ -154,6 +160,7 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
             } else {
                 Vec<3.0, 3.0, 3.0>
             };
+
             floorsquare * mul
         },
         Ball(dat) => {
@@ -166,14 +173,19 @@ impure fn S(fvec3 o, fvec3 d) -> fvec3 {
             };
             let r = {
                 let inner = vdot(dat.n, d) * -2.0;
+
                 d + (dat.n * inner)
             };
-
             let LdR = vdot(l, r);
-            let p = if (b > 0.0) { __builtin_ipow(LdR, 99) } else { 0.0 };
+            let p = if (b > 0.0) {
+                __builtin_ipow(LdR, 99)
+            } else {
+                0.0
+            };
             let base = Vec<p, p, p>;
             let bounce = S(h, r) * 0.5;
             let contrib = base + bounce;
+
             contrib
         },
         _ => Vec<0.0, 0.0, 0.0>
@@ -184,10 +196,16 @@ impure fn T(fvec3 o, fvec3 d) -> TraceResult {
     let mut result = TraceResult::Sky;
     let mut t = 1000000000.0;
     let p = -(o.z) / (d.z);
+
     if 0.01 < p {
-        let TraceData inner = {p, Vec<0.0, 0.0, 1.0>};
+        let TraceData inner = {
+            p,
+            Vec<0.0, 0.0, 1.0>
+        };
         let n = inner.n;
+
         t = p;
+
         result = TraceResult::Ground(inner);
     };
 
@@ -195,6 +213,7 @@ impure fn T(fvec3 o, fvec3 d) -> TraceResult {
         iter 0:8 j {
             let bit = 1 << k;
             let lookup = as<i64>(G[j]);
+
             if (lookup & bit) != 0 {
                 let p = o + Vec<(as<float>(-k)), 0.0, (as<float>(-j) - 4.0)>;
                 let b = vdot(p, d);
@@ -207,7 +226,11 @@ impure fn T(fvec3 o, fvec3 d) -> TraceResult {
 
                     if (s < t) && (s > 0.01) {
                         let dir_dist = d * s;
-                        let TraceData inner = {s, vnorm(dir_dist + p)};
+                        let TraceData inner = {
+                            s,
+                            vnorm(dir_dist + p)
+                        };
+
                         result = TraceResult::Ball(inner);
 
                         // currently the closest object
