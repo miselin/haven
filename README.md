@@ -29,6 +29,20 @@ It can still be built through CMake with `-DWITH_LEGACY_COMPILER=ON`.
 `nix build` and plain CMake now both target the OCaml compiler by default; use `nix build .#legacy`
 when you explicitly want the deprecated C compiler path.
 
+## AI Usage in Haven Development
+
+I use AI (Codex) to support developing Haven, starting with the OCaml mainline compiler.
+
+The legacy C compiler remains in this repository under `legacy/src` and was largely written by hand, using
+the book [Writing a C Compiler](https://norasandler.com/book/) by Nora Sandler as a guide. Haven was not
+my first compiler from that book, but it is the first that I've made public. What you will find if you
+read the C code is a functional compiler with LLVM IR generation, a compiler driver, and a few compiler passes.
+
+Here's the thing. I like writing code! But I want to write _Haven_ code, and I increasingly recognize that I don't
+want to write a compiler, nor have the time for it, really. I have inspiration for what Haven should look like and
+how it should work. AI tools allow me to arrive at that goal. I review the diffs and stay fully in the loop of every
+change to make sure things don't go wildly off track.
+
 ## Fractal Example
 
 This example shows some of the Haven syntax and its native vector and matrix support.
