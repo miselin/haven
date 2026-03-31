@@ -1290,20 +1290,66 @@ module Typing = struct
         { inferred_type = Some ty; resolved_type = Some resolved_type; metavar = metavar_of_type ty }
     | None, None, None, None -> unknown_expr_annotation
 
-  let run (program : Core.parsed_program) =
+  let make_state (program : Core.parsed_program) =
     let type_env = type_env_of_program program.program in
-    let state =
-      {
-        annotations = make_annotations ();
-        diagnostics_rev = [];
-        globals = String_map.empty;
-        type_env;
-        functions = collect_functions program.program;
-        active_specializations = [];
-      }
-    in
+    {
+      annotations = make_annotations ();
+      diagnostics_rev = [];
+      globals = String_map.empty;
+      type_env;
+      functions = collect_functions program.program;
+      active_specializations = [];
+    }
+
+  let globals_env state = [ state.globals ]
+
+  let analyze_function_body_with_state state (program : Core.parsed_program)
+      ?(active_specializations = []) ?param_bindings (fn : Core.function_decl) =
+    state.active_specializations <- active_specializations;
     collect_globals state program.program;
-    let globals_env () = [ state.globals ] in
+    let env = push_scope (globals_env state) in
+    let return_expected =
+      Option.bind fn.value.return_type (resolve_core_type state.type_env [] [] fn.loc)
+    in
+    let env =
+      match param_bindings with
+      | Some bindings ->
+          List.fold_left2
+            (fun env (param : Core.param) binding ->
+              bind_current env param.value.name.value binding)
+            env fn.value.params.value.params bindings
+      | None ->
+          List.fold_left
+            (fun env (param : Core.param) ->
+              let binding =
+                binding_from_type ~is_mutable:false state.type_env param.value.ty
+              in
+              bind_current env param.value.name.value binding)
+            env fn.value.params.value.params
+    in
+    match fn.value.definition with
+    | Some body ->
+        infer_block state env ~result_expected:return_expected ~return_expected body
+    | None -> unknown_expr_annotation
+
+  let analyze_function_body (program : Core.parsed_program)
+      ?(active_specializations = []) ?param_bindings (fn : Core.function_decl) =
+    let state = make_state program in
+    let body_result =
+      analyze_function_body_with_state state program ~active_specializations
+        ?param_bindings fn
+    in
+    ( {
+        program;
+        annotations = state.annotations;
+        diagnostics = List.rev state.diagnostics_rev;
+      },
+      body_result )
+
+  let run (program : Core.parsed_program) =
+    let state = make_state program in
+    collect_globals state program.program;
+    let globals_env () = globals_env state in
     List.iter
       (fun (decl : Core.top_decl) ->
         match decl.value with

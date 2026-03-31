@@ -80,4 +80,30 @@ let run () =
   assert_no_diagnostics "specialization call verify"
     specialization_call_pipeline.verify.diagnostics;
   assert_no_diagnostics "specialization call semantic"
-    specialization_call_pipeline.semantic.diagnostics
+    specialization_call_pipeline.semantic.diagnostics;
+  let specialization_core =
+    Haven.Ast.Pretty.core_program_to_string specialization_call_pipeline.cleaned
+  in
+  assert_true "specialized pipeline should emit a concrete clone"
+    (string_contains specialization_core "vadd__spec__fvec3__fvec3");
+  assert_true "specialized pipeline should erase hole types from the lowered program"
+    (not (string_contains specialization_core "fvec?"));
+
+  let shape_property_pipeline =
+    parse_to_core
+      "fn width(mat? m) { m.cols }\n\
+       pub fn main() -> u32 {\n\
+       \  width(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>)\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "shape property typing" shape_property_pipeline.typing.diagnostics;
+  assert_no_diagnostics "shape property verify" shape_property_pipeline.verify.diagnostics;
+  assert_no_diagnostics "shape property semantic" shape_property_pipeline.semantic.diagnostics;
+  let shape_property_core =
+    Haven.Ast.Pretty.core_program_to_string shape_property_pipeline.cleaned
+  in
+  assert_true "shape property specialization should clone the function"
+    (string_contains shape_property_core "width__spec__mat2x2");
+  assert_true "shape properties should lower to integer literals before LLVM"
+    (string_contains shape_property_core "Literal(2)")

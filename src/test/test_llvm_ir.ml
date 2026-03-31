@@ -106,4 +106,28 @@ pub fn main() -> void {}
   assert_true "non-constant vector literals should be assembled with insertelement"
     (string_contains literal_ir "define <3 x float> @make_vec");
   assert_true "non-constant matrix literals should lower to their flat vector form"
-    (string_contains literal_ir "define <4 x float> @make_mat")
+    (string_contains literal_ir "define <4 x float> @make_mat");
+
+  let specialization_ir =
+    emit_ir
+      {|
+fn vadd(fvec? a, fvec? b) { a + b }
+pub fn main() -> fvec3 { vadd(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>) }
+|}
+  in
+  assert_true "specialization should clone concrete vector variants before LLVM"
+    (string_contains specialization_ir "@vadd__spec__fvec3__fvec3");
+  assert_true "specialized vector addition should lower with concrete vector ops"
+    (string_contains specialization_ir "fadd <3 x float>");
+
+  let shape_property_ir =
+    emit_ir
+      {|
+fn width(mat? m) { m.cols }
+pub fn main() -> u32 { width(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>) }
+|}
+  in
+  assert_true "shape property specialization should lower concrete matrix helpers"
+    (string_contains shape_property_ir "@width__spec__mat2x2");
+  assert_true "shape properties should lower as plain integer constants"
+    (string_contains shape_property_ir "store i32 2")
