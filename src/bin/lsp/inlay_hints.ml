@@ -46,6 +46,10 @@ let rec walk_expression typing type_env query_range acc (expr : Core.expression)
       acc
   | ToBool inner | SizeExpr inner | BoxExpr inner | Unbox inner | Ref inner | Load inner ->
       walk_expression typing type_env query_range acc inner
+  | BoxConstruct box ->
+      List.fold_left
+        (walk_expression typing type_env query_range)
+        acc box.value.args
   | Initializer init ->
       List.fold_left
         (walk_expression typing type_env query_range)

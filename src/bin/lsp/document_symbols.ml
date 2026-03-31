@@ -59,6 +59,34 @@ let variant_symbol (variant : Cst.enum_variant) =
     ~selection_range:(Lsp_helpers.loc_to_range variant.value.name.loc)
     ?detail:(variant_detail variant) ()
 
+let extend_item_symbol (item : Cst.extend_item) =
+  match item.value with
+  | Cst.ExtendConstruct construct ->
+      make_symbol ~kind:SymbolKind.Constructor ~name:"construct"
+        ~range:(Lsp_helpers.loc_to_range item.loc)
+        ~selection_range:(Lsp_helpers.loc_to_range construct.loc)
+        ?detail:
+          (Some
+             (Printf.sprintf "(%s)"
+                (String.concat ", "
+                   (List.map
+                      (fun (param : Cst.param) -> type_text param.value.ty)
+                      construct.value.params))))
+        ()
+  | Cst.ExtendDestruct block ->
+      make_symbol ~kind:SymbolKind.Method ~name:"destruct"
+        ~range:(Lsp_helpers.loc_to_range item.loc)
+        ~selection_range:(Lsp_helpers.loc_to_range block.loc) ()
+
+let extend_symbol (ext : Cst.type_extend) =
+  make_symbol
+    ~kind:SymbolKind.Object
+    ~name:(Printf.sprintf "extend %s" ext.value.target.value)
+    ~range:(Lsp_helpers.loc_to_range ext.loc)
+    ~selection_range:(Lsp_helpers.loc_to_range ext.value.target.loc)
+    ~children:(List.map extend_item_symbol ext.value.items)
+    ()
+
 let function_symbol (fn : Cst.function_decl) =
   make_symbol ~kind:SymbolKind.Function ~name:fn.value.name.value
     ~range:(Lsp_helpers.loc_to_range fn.loc)
@@ -102,6 +130,8 @@ let symbols_for_program (parsed : Cst.parsed_program) =
         [ variable_symbol var_decl ]
     | Cst.TDecl type_decl ->
         [ type_symbol type_decl ]
+    | Cst.Extend ext ->
+        [ extend_symbol ext ]
     | Cst.Foreign foreign ->
         List.map function_symbol foreign.value.decls
     | Cst.Import _ | Cst.CImport _ ->

@@ -476,6 +476,9 @@ and walk_expression state env (expr : Core.expression) =
   | Nil -> ()
   | ToBool inner | SizeExpr inner | BoxExpr inner | Unbox inner | Ref inner | Load inner ->
       walk_expression state env inner
+  | BoxConstruct box ->
+      walk_type state box.value.ty;
+      List.iter (walk_expression state env) box.value.args
   | Initializer init ->
       List.iter (walk_expression state env) init.value.exprs
   | As cast ->
@@ -774,6 +777,9 @@ let rec highlight_expression state env (expr : Core.expression) =
   | Nil -> ()
   | ToBool inner | SizeExpr inner | BoxExpr inner | Unbox inner | Ref inner | Load inner ->
       highlight_expression state env inner
+  | BoxConstruct box ->
+      highlight_type state box.value.ty;
+      List.iter (highlight_expression state env) box.value.args
   | Initializer init ->
       List.iter (highlight_expression state env) init.value.exprs
   | As cast ->
