@@ -199,6 +199,29 @@ let format_diagnostic (diagnostic : Analysis.diagnostic) =
   let col = loc.start_pos.Lexing.pos_cnum - loc.start_pos.Lexing.pos_bol + 1 in
   Printf.sprintf "%s:%d:%d: %s" file line col diagnostic.message
 
+let require_compile_error ~source ~expected_substrings =
+  let parsed = Haven.Parser.parse_file source in
+  let pipeline = Analysis.Pipeline.run_cst parsed in
+  let diagnostics = pipeline_errors pipeline in
+  match diagnostics with
+  | [] ->
+      failwith
+        (Printf.sprintf "expected compiler diagnostics while compiling %s" source)
+  | diagnostic :: _ ->
+      List.iter
+        (fun expected ->
+          if not (Test_support.string_contains diagnostic.message expected) then
+            failwith
+              (Printf.sprintf
+                 "expected diagnostic for %s to include %S, but got:\n%s"
+                 source expected (format_diagnostic diagnostic)))
+        expected_substrings;
+      if pipeline.semantic.diagnostics <> [] then
+        failwith
+          (Printf.sprintf
+             "expected failing compile-time assert to short-circuit later semantic diagnostics for %s"
+             source)
+
 let compile_case_to_object ~source ~output_path opt_level =
   let parsed = Haven.Parser.parse_file source in
   let pipeline = Analysis.Pipeline.run_cst parsed in
@@ -260,6 +283,16 @@ let run_case temp_dir harness_obj root (case : rc_case) (opt : opt_case) =
 
 let run () =
   let root = resolve_repo_root () in
+  let specialization_assert_fail =
+    Filename.concat root "tests/inputs/specialization_assert_fail.hv"
+  in
+  require_compile_error ~source:specialization_assert_fail
+    ~expected_substrings:
+      [
+        "vector dimensions must match";
+        "compile-time assertion failed: a.dim == b.dim";
+        "specialized as: 3 == 2";
+      ];
   Test_support.with_temp_dir "haven-rc" (fun temp_dir ->
       let harness_c = Filename.concat temp_dir "rc_harness.c" in
       let harness_obj = Filename.concat temp_dir "rc_harness.o" in

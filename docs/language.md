@@ -71,6 +71,56 @@ pub fn vector_add(fvec3 a, fvec3 b) -> fvec3 {
 > [!TIP]
 > When integrating Haven with C, `fvecN` is the equivalent of ([non-standard](https://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html)) `typedef float floatN __attribute__((vector_size(sizeof(float)) * N))`.
 
+#### Specialized Vector Functions
+
+Functions may accept vectors of any concrete dimension using `fvec?`.
+
+These are not runtime-sized vectors. Instead, the compiler specializes the function at each call site using the
+concrete argument types from that call.
+
+```
+fn vadd(fvec? a, fvec? b) {
+    @assert a.dim == b.dim, "vector dimensions must match";
+    a + b
+}
+```
+
+Inside such a function:
+
+- `a.dim` is a compile-time property of the specialized vector type
+- omitted return types are inferred after specialization
+- `@assert` conditions must reduce to compile-time constants after specialization
+
+If a compile-time assertion fails, the compiler reports both the original condition and the specialized one:
+
+```
+semantic: error: vector dimensions must match
+  compile-time assertion failed: a.dim == b.dim
+  specialized as: 3 == 2
+```
+
+### Matrices
+
+Haven offers `matMxN` matrix types of floating point numbers.
+
+Like vectors, matrices support specialization holes in function signatures through `mat?`.
+
+```
+fn mat-width(mat? m) {
+    m.cols
+}
+
+fn get-mat-row(mat? m, u32 row) {
+    m[row]
+}
+```
+
+Inside specialized matrix functions:
+
+- `m.rows` and `m.cols` are compile-time properties
+- indexing a concrete `matMxN` yields an `fvecN`
+- specialized functions are cloned before LLVM lowering, so hole types do not reach IR
+
 ### Strings
 
 The `str` type carries string data. It is essentially a `const char *` under the hood.
