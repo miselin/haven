@@ -122,13 +122,13 @@ let function_signature (fn : Core.function_decl) =
            "fn";
          ])
   in
-  let return_type =
+  let return_suffix =
     match fn.value.return_type with
-    | Some ty -> format_core_type ty
-    | None -> "void"
+    | Some ty -> " -> " ^ format_core_type ty
+    | None -> ""
   in
-  Printf.sprintf "%s %s(%s) -> %s" prefix fn.value.name.value
-    (String.concat ", " params) return_type
+  Printf.sprintf "%s %s(%s)%s" prefix fn.value.name.value
+    (String.concat ", " params) return_suffix
 
 let type_decl_summary (decl : Core.type_decl) =
   match decl.value.data with

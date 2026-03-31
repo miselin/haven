@@ -190,17 +190,17 @@ let on_execute_command (_state : state) command =
 
 let format_document (state : state) (uri : DocumentUri.t) :
     TextEdit.t list option =
-  let full_range =
-    let start_pos = { Position.line = 0; character = 0 } in
-    let end_pos = { Position.line = max_int; character = 0 } in
-    { Range.start = start_pos; end_ = end_pos }
-  in
-  match Document_store.get_cst state.docs uri with
+  match Document_store.get_doc state.docs uri with
   | None -> None
-  | Some cst ->
+  | Some doc -> (
+      match doc.cst with
+      | None -> None
+      | Some cst ->
       let newText = Haven.Cst.Emit.emit_program_to_string cst in
-      let edit = TextEdit.create ~range:full_range ~newText in
-      Some [ edit ]
+      let edit =
+        TextEdit.create ~range:(Lsp_helpers.full_document_range doc.text) ~newText
+      in
+      Some [ edit ])
 
 let on_formatting (state : state) (params : DocumentFormattingParams.t) :
     TextEdit.t list option =

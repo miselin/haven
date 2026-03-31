@@ -24,12 +24,12 @@ let function_detail (fn : Cst.function_decl) =
            "fn";
          ])
   in
-  let return_type =
+  let return_suffix =
     match fn.value.return_type with
-    | Some ty -> type_text ty
-    | None -> "void"
+    | Some ty -> " -> " ^ type_text ty
+    | None -> ""
   in
-  Printf.sprintf "%s (%s) -> %s" prefix (String.concat ", " params) return_type
+  Printf.sprintf "%s (%s)%s" prefix (String.concat ", " params) return_suffix
 
 let variable_detail (decl : Cst.var_decl) =
   Printf.sprintf "%s%s"

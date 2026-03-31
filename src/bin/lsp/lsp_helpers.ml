@@ -16,6 +16,16 @@ let loc_to_range (loc : Haven_core.Loc.t) =
   Range.create ~start:(position_of_lex_position loc.start_pos)
     ~end_:(position_of_lex_position loc.end_pos)
 
+let end_position_of_text text =
+  let offsets = line_offsets text in
+  let last_line = max 0 (Array.length offsets - 1) in
+  let bol = offsets.(last_line) in
+  Position.create ~line:last_line ~character:(String.length text - bol)
+
+let full_document_range text =
+  Range.create ~start:(Position.create ~line:0 ~character:0)
+    ~end_:(end_position_of_text text)
+
 let lex_position_of_lsp_position ~filename ~text (position : Position.t) =
   let offsets = line_offsets text in
   let max_line = max 0 (Array.length offsets - 1) in
