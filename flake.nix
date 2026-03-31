@@ -42,7 +42,6 @@
 
       checks.default = havenOcaml;
       checks.ocaml = havenOcaml;
-      checks.legacy = havenLegacy;
 
       devShells.default = pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
