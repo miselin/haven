@@ -7,6 +7,7 @@ top_decl ::= import
            | foreign_block
            | fn_decl
            | tydecl
+           | extend_decl
            | global_decl
 
 import ::= 'import' STRING ';'
@@ -38,6 +39,12 @@ tydecl ::= 'type' IDENT ( '=' type_body )? ';'
 type_body ::= type
            | struct_decl
            | enum_decl
+
+extend_decl ::= 'extend' IDENT 'with' '{' extend_item* '}'
+extend_item ::= 'construct' block
+              | 'construct' '(' param_list? ')' block
+              | 'destruct' block
+param_list ::= param (',' param)*
 
 struct_decl ::= 'struct' '{' struct_field+ '}'
 struct_field ::= type IDENT ';'

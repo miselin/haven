@@ -34,7 +34,7 @@
 %token PUB FN MUT IF ELSE LET WHILE UNTIL BREAK CONTINUE MATCH AS ITER
 %token LOAD RET STRUCT TYPE NIL DEFER IMPURE ENUM IMPORT CIMPORT SIZE
 %token BOX UNBOX INTRINSIC FOREIGN DATA STATE VEC MAT FUNCTION
-%token VAFUNCTION CELL REF
+%token VAFUNCTION CELL REF EXTEND WITH CONSTRUCT DESTRUCT
 
 (* Operator precedence table *)
 %left LOGIC_OR
@@ -66,6 +66,7 @@ top_decl:
   | i=cimport_decl { mk_loc $startpos $endpos (CImport i) }
   | f=foreign_decl { mk_loc $startpos $endpos (Foreign f) }
   | t=type_decl { mk_loc $startpos $endpos (TDecl t) }
+  | e=extend_decl { mk_loc $startpos $endpos (Extend e) }
   | v=global_decl { mk_loc $startpos $endpos (VDecl v) }
   ;
 
@@ -118,6 +119,21 @@ param: t=haven_type n=identifier { mk_loc $startpos $endpos { name = n; ty = t }
 type_decl:
   | TYPE i=identifier EQUAL t=type_defn SEMICOLON { mk_loc $startpos $endpos { name = i; data = t } }
   | TYPE i=identifier SEMICOLON { mk_loc $startpos $endpos { name = i; data = TypeDeclForward } }
+  ;
+extend_decl:
+  EXTEND i=identifier WITH LBRACE items=list(extend_item) RBRACE
+    { mk_loc $startpos $endpos { target = i; items } }
+  ;
+extend_item:
+  | CONSTRUCT b=block {
+      let construct : lifecycle_construct_desc = { params = []; body = b } in
+      mk_loc $startpos $endpos (ExtendConstruct (mk_loc $startpos $endpos construct))
+    }
+  | CONSTRUCT LPAREN ps=separated_list(COMMA, param) RPAREN b=block {
+      let construct : lifecycle_construct_desc = { params = ps; body = b } in
+      mk_loc $startpos $endpos (ExtendConstruct (mk_loc $startpos $endpos construct))
+    }
+  | DESTRUCT b=block { mk_loc $startpos $endpos (ExtendDestruct b) }
   ;
 type_defn:
   | t=haven_type { TypeDeclAlias t }

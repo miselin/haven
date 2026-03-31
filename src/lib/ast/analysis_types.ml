@@ -4,6 +4,8 @@ open Haven_core
 module Core = Core_ast
 module String_map = Map.Make (String)
 
+let dummy_loc = { Loc.start_pos = Lexing.dummy_pos; end_pos = Lexing.dummy_pos }
+
 type type_class =
   | TypeClassUnknown
   | TypeClassNumeric
@@ -58,9 +60,14 @@ type resolved_ty =
 
 type type_decl_info =
   | TypeAlias of Core.haven_type
-  | TypeStruct of Core.struct_decl
-  | TypeEnum of Core.enum_decl
-  | TypeForward
+  | TypeStruct of Core.struct_decl * type_lifecycle
+  | TypeEnum of Core.enum_decl * type_lifecycle
+  | TypeForward of type_lifecycle
+
+and type_lifecycle = {
+  construct : Core.function_decl option;
+  destruct : Core.function_decl option;
+}
 
 type type_env = type_decl_info String_map.t
 
@@ -407,6 +414,7 @@ let rec core_type_of_resolved_ty loc = function
                };
              loc;
            })
+  | ResolvedGenericParam name -> mk_type loc (Core.CustomType { name = mk_identifier loc name })
   | ResolvedNamed (name, []) ->
       mk_type loc (Core.CustomType { name = mk_identifier loc name })
   | ResolvedNamed (name, args) ->
@@ -420,8 +428,27 @@ let rec core_type_of_resolved_ty loc = function
                };
              loc;
            })
-  | ResolvedGenericParam name ->
-      mk_type loc (Core.CustomType { name = mk_identifier loc name })
+
+let rec string_of_resolved_ty = function
+  | ResolvedInt (_, bits) -> Printf.sprintf "i%d" bits
+  | ResolvedFloat -> "float"
+  | ResolvedString -> "str"
+  | ResolvedVoid -> "void"
+  | ResolvedVec vec -> Printf.sprintf "vec%d" vec.dimension
+  | ResolvedMatrix mat -> Printf.sprintf "mat%dx%d" mat.rows mat.columns
+  | ResolvedVecHole -> "vec?"
+  | ResolvedMatrixHole -> "mat?"
+  | ResolvedPointer inner -> string_of_resolved_ty inner ^ "*"
+  | ResolvedBox inner -> string_of_resolved_ty inner ^ "^"
+  | ResolvedCell inner -> "cell<" ^ string_of_resolved_ty inner ^ ">"
+  | ResolvedArray (inner, count) ->
+      Printf.sprintf "%s[%d]" (string_of_resolved_ty inner) count
+  | ResolvedFunction _ -> "fn"
+  | ResolvedGenericParam name -> name
+  | ResolvedNamed (name, []) -> name
+  | ResolvedNamed (name, args) ->
+      Printf.sprintf "%s<%s>" name
+        (String.concat ", " (List.map string_of_resolved_ty args))
 
 let resolved_is_bool = function ResolvedInt (Unsigned, 1) -> true | _ -> false
 
@@ -556,17 +583,38 @@ let type_env_of_program (program : Core.program) =
     (fun env (decl : Core.top_decl) ->
       match decl.value with
       | Core.TDecl type_decl -> (
+          let lifecycle =
+            { construct = type_decl.value.construct; destruct = type_decl.value.destruct }
+          in
           match type_decl.value.data with
           | Core.TypeDeclAlias ty ->
               String_map.add type_decl.value.name.value (TypeAlias ty) env
           | Core.TypeDeclStruct struct_decl ->
-              String_map.add type_decl.value.name.value (TypeStruct struct_decl) env
+              String_map.add type_decl.value.name.value (TypeStruct (struct_decl, lifecycle)) env
           | Core.TypeDeclEnum enum_decl ->
-              String_map.add type_decl.value.name.value (TypeEnum enum_decl) env
+              String_map.add type_decl.value.name.value (TypeEnum (enum_decl, lifecycle)) env
           | Core.TypeDeclForward ->
-              String_map.add type_decl.value.name.value TypeForward env)
+              String_map.add type_decl.value.name.value (TypeForward lifecycle) env)
       | _ -> env)
     String_map.empty program.value.decls
+
+let lookup_type_lifecycle type_env name =
+  match String_map.find_opt name type_env with
+  | Some (TypeStruct (_, lifecycle))
+  | Some (TypeEnum (_, lifecycle))
+  | Some (TypeForward lifecycle) ->
+      Some lifecycle
+  | Some (TypeAlias _) | None -> None
+
+let lifecycle_user_params (fn_decl : Core.function_decl) =
+  match fn_decl.value.params.value.params with
+  | _self :: params -> params
+  | [] -> []
+
+let lifecycle_has_default_construct (lifecycle : type_lifecycle) =
+  match lifecycle.construct with
+  | Some fn_decl -> lifecycle_user_params fn_decl = []
+  | None -> true
 
 let resolve_array_count (lit : Core.literal) =
   match lit.value with Core.Integer count when count >= 0 -> Some count | _ -> None
@@ -598,7 +646,7 @@ let rec resolve_named_type type_env active subst loc name args =
         match String_map.find_opt name type_env with
         | Some (TypeAlias ty) when args = [] ->
             resolve_core_type type_env (name :: active) subst loc ty
-        | Some (TypeStruct _) | Some (TypeEnum _) | Some TypeForward ->
+        | Some (TypeStruct _) | Some (TypeEnum _) | Some (TypeForward _) ->
             Some (ResolvedNamed (name, args))
         | Some (TypeAlias _) -> None
         | None -> None)
@@ -661,6 +709,41 @@ and resolve_core_type type_env active subst loc (ty : Core.haven_type) =
           resolve_named_type type_env active subst loc templ.value.outer.value args
       | None -> None)
 
+let rec resolved_default_constructible type_env = function
+  | ResolvedInt _
+  | ResolvedFloat
+  | ResolvedString
+  | ResolvedVoid
+  | ResolvedVec _
+  | ResolvedMatrix _
+  | ResolvedVecHole
+  | ResolvedMatrixHole
+  | ResolvedPointer _
+  | ResolvedBox _
+  | ResolvedCell _
+  | ResolvedFunction _ ->
+      true
+  | ResolvedGenericParam _ -> false
+  | ResolvedArray (inner, _) -> resolved_default_constructible type_env inner
+  | ResolvedNamed (name, _) -> (
+      match String_map.find_opt name type_env with
+      | Some (TypeAlias ty) -> (
+          match resolve_core_type type_env [] [] dummy_loc ty with
+          | Some resolved -> resolved_default_constructible type_env resolved
+          | None -> false)
+      | Some (TypeStruct (decl, lifecycle)) ->
+          lifecycle_has_default_construct lifecycle
+          &&
+          List.for_all
+            (fun (field : Core.struct_field) ->
+              match resolve_core_type type_env [] [] field.loc field.value.ty with
+              | Some resolved -> resolved_default_constructible type_env resolved
+              | None -> false)
+            decl.value.fields
+      | Some (TypeEnum (_, lifecycle)) | Some (TypeForward lifecycle) ->
+          lifecycle_has_default_construct lifecycle
+      | None -> false)
+
 let wider_numeric_type loc (left : Core.haven_type) (right : Core.haven_type) =
   match (left.value, right.value) with
   | Core.FloatType, _ | _, Core.FloatType -> float_type loc
@@ -679,7 +762,7 @@ let rec lookup_enum_decl type_env loc ty =
   match ty with
   | ResolvedNamed (name, args) -> (
       match lookup_named_type type_env name with
-      | Some (TypeEnum decl) ->
+      | Some (TypeEnum (decl, _)) ->
           Option.map
             (fun subst -> (decl, subst))
             (zip_lists (List.map (fun (id : Core.identifier) -> id.value) decl.value.generics) args)
@@ -714,7 +797,7 @@ let rec lookup_struct_fields type_env loc ty =
   match ty with
   | ResolvedNamed (name, _args) -> (
       match lookup_named_type type_env name with
-      | Some (TypeStruct decl) ->
+      | Some (TypeStruct (decl, _)) ->
           let resolve_field (field : Core.struct_field) =
             Option.map
               (fun ty -> (field.value.name.value, ty))
@@ -762,7 +845,7 @@ let rec resolved_contains_box_ownership type_env active loc ty =
             | Some alias_ty ->
                 resolved_contains_box_ownership type_env (name :: active) loc alias_ty
             | None -> false)
-        | Some (TypeStruct decl) ->
+        | Some (TypeStruct (decl, _)) ->
             List.exists
               (fun (field : Core.struct_field) ->
                 match resolve_core_type type_env [] [] field.loc field.value.ty with
@@ -771,7 +854,7 @@ let rec resolved_contains_box_ownership type_env active loc ty =
                       field_ty
                 | None -> false)
               decl.value.fields
-        | Some (TypeEnum decl) -> (
+        | Some (TypeEnum (decl, _)) -> (
             match lookup_enum_decl type_env loc resolved with
             | Some (_, subst) ->
                 List.exists
@@ -786,7 +869,7 @@ let rec resolved_contains_box_ownership type_env active loc ty =
                       variant.value.inner_tys)
                   decl.value.variants
             | None -> false)
-        | Some TypeForward | None -> false)
+        | Some (TypeForward _) | None -> false)
 
 let resolved_deref_once = function
   | ResolvedPointer inner | ResolvedBox inner | ResolvedCell inner -> Some inner
@@ -821,5 +904,17 @@ let is_lvalue (expr : Core.expression) =
     | Core.Unbox inner -> loop inner
     | Core.Load inner -> loop inner
     | _ -> false
+  in
+  loop expr
+
+let assignment_requires_mutable_root (expr : Core.expression) =
+  let rec loop (expr : Core.expression) =
+    match expr.value with
+    | Core.Identifier _ -> true
+    | Core.Field field ->
+        if field.value.arrow then false else loop field.value.target
+    | Core.Index index -> loop index.value.target
+    | Core.Unbox _ | Core.Load _ -> false
+    | _ -> true
   in
   loop expr

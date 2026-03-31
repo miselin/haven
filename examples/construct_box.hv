@@ -1,0 +1,22 @@
+type Buffer = struct {
+    i32 len;
+    i32 cap;
+};
+
+extend Buffer with {
+    construct(i32 cap) {
+        self->len = 0;
+        self->cap = cap;
+    }
+
+    destruct {
+        self->len = 0;
+    }
+}
+
+pub impure fn main() -> i32 {
+    let mut boxed = box Buffer(64);
+    let value = unbox boxed;
+    boxed = nil;
+    value.cap
+}

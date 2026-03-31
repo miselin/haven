@@ -53,6 +53,10 @@ let keywords =
          ("Cell", Grammar.CELL);
          ("load", Grammar.LOAD);
          ("ref", Grammar.REF);
+         ("extend", Grammar.EXTEND);
+         ("with", Grammar.WITH);
+         ("construct", Grammar.CONSTRUCT);
+         ("destruct", Grammar.DESTRUCT);
        ])
 
 let keyword_or_ident s =

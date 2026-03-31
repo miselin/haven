@@ -10,6 +10,102 @@ let emit_ir source =
   assert_no_diagnostics "llvm ir ownership" pipeline.ownership.diagnostics;
   Haven.Ast.Llvm_ir.emit_ir_string pipeline
 
+let next_loc =
+  let counter = ref 0 in
+  fun () ->
+    let start_cnum = !counter * 2 in
+    incr counter;
+    let start_pos : Lexing.position =
+      {
+        pos_fname = "manual-test.hv";
+        pos_lnum = 1;
+        pos_bol = 0;
+        pos_cnum = start_cnum;
+      }
+    in
+    let end_pos = { start_pos with pos_cnum = start_cnum + 1 } in
+    { Haven_core.Loc.start_pos; end_pos }
+
+let node value = { Core.value; loc = next_loc () }
+let ident value = node value
+let ty_i32 = node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 32 })
+let ty_i8 = node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 8 })
+let ty_i8_ptr = node (Core.PointerType ty_i8)
+let ty_void = node Core.VoidType
+let ty_buffer = node (Core.CustomType { name = ident "Buffer" })
+let ty_buffer_cell = node (Core.CellType ty_buffer)
+let int_lit value = node (Core.Literal (node (Core.Integer value)))
+let nil_expr = node Core.Nil
+let box_buffer_expr = node (Core.BoxType ty_buffer)
+
+let field_expr target ~arrow name =
+  node
+    (Core.Field
+       (node
+          {
+            Core.target = target;
+            arrow;
+            field = ident name;
+          }))
+
+let assign_stmt target value =
+  node
+    (Core.Expression
+       (node
+          (Core.Assign
+             (node
+                {
+                  Core.target = target;
+                  value;
+                }))))
+
+let let_stmt ~mut name init_expr =
+  node
+    (Core.Let
+       (node
+          {
+            Core.mut = mut;
+            ty = None;
+            name = ident name;
+            init_expr;
+          }))
+
+let block ?result statements = node { Core.statements = statements; result }
+
+let fn_decl ?(public = false) ?(impure = false) ?(definition = None) ?(params = [])
+    ?(return_type = Some ty_void) name =
+  node
+    {
+      Core.public = public;
+      impure;
+      name = ident name;
+      definition;
+      intrinsic = None;
+      params = node { Core.params = params; vararg = false };
+      return_type;
+      vararg = false;
+    }
+
+let param ty name = node { Core.name = ident name; ty }
+let struct_field ty name = node ({ Core.name = ident name; ty } : Core.struct_field_desc)
+
+let emit_core_ir program =
+  let pipeline = Analysis.Pipeline.run_core { Core.program = program } in
+  let fail_if_diagnostics label diagnostics =
+    if diagnostics <> [] then
+      let messages =
+        String.concat " | "
+          (List.map (fun (diag : Analysis.diagnostic) -> diag.message) diagnostics)
+      in
+      failwith (label ^ ": " ^ messages)
+  in
+  fail_if_diagnostics "core llvm ir typing" pipeline.typing.diagnostics;
+  fail_if_diagnostics "core llvm ir verify" pipeline.verify.diagnostics;
+  fail_if_diagnostics "core llvm ir semantic" pipeline.semantic.diagnostics;
+  fail_if_diagnostics "core llvm ir purity" pipeline.purity.diagnostics;
+  fail_if_diagnostics "core llvm ir ownership" pipeline.ownership.diagnostics;
+  Haven.Ast.Llvm_ir.emit_ir_string pipeline
+
 let run () =
   let main_ir = emit_ir "pub fn main() -> i32 { 7 }" in
   assert_true "main IR should define main"
@@ -163,4 +259,111 @@ pub fn main() -> u32 {
   assert_true "successful compile asserts should not reach LLVM"
     (not (string_contains compile_assert_ir "compile-time assert"));
   assert_true "compile assert specializations should still lower normally"
-    (string_contains compile_assert_ir "@mat_width_eq__spec__mat2x2__mat2x2")
+    (string_contains compile_assert_ir "@mat_width_eq__spec__mat2x2__mat2x2");
+
+  let surface_lifecycle_ir =
+    emit_ir
+      {|
+type Buffer = struct {
+  i8* ptr;
+  i32 len;
+};
+
+extend Buffer with {
+  construct(i32 len) {
+    self->len = len;
+  }
+
+  destruct {
+    self->len = 0;
+  }
+}
+pub impure fn main() -> i32 {
+  let mut boxed = box Buffer(7);
+  boxed = nil;
+  0
+}
+|}
+  in
+  assert_true "surface lifecycle lowering should emit the synthesized constructor"
+    (string_contains surface_lifecycle_ir "define internal void @__haven_construct_Buffer");
+  assert_true "surface lifecycle lowering should emit the synthesized destructor"
+    (string_contains surface_lifecycle_ir "define internal void @__haven_destruct_Buffer");
+  assert_true "surface lifecycle lowering should call the synthesized constructor"
+    (string_contains surface_lifecycle_ir "call void @__haven_construct_Buffer");
+  assert_true "surface lifecycle lowering should call the synthesized destructor"
+    (string_contains surface_lifecycle_ir "call void @__haven_destruct_Buffer");
+
+  let ctor_decl =
+    fn_decl "buffer_construct"
+      ~params:[ param ty_buffer_cell "self" ]
+      ~definition:(Some (block []))
+  in
+  let dtor_decl =
+    fn_decl "buffer_destruct"
+      ~params:[ param ty_buffer_cell "self" ]
+      ~definition:(Some (block []))
+  in
+  let buffer_type =
+    node
+      (Core.TDecl
+         (node
+            {
+              Core.name = ident "Buffer";
+              data =
+                Core.TypeDeclStruct
+                  (node
+                     {
+                       Core.fields =
+                         [
+                           struct_field ty_i8_ptr "data";
+                           struct_field ty_i32 "len";
+                         ];
+                       lifecycle = None;
+                     });
+              construct = Some ctor_decl;
+              destruct = Some dtor_decl;
+            }))
+  in
+  let global_buffer_decl =
+    node
+      {
+        Core.name = ident "GLOBAL_BUFFER";
+        public = false;
+        is_mutable = false;
+        ty = ty_buffer;
+        init_expr = None;
+      }
+  in
+  let main_decl =
+    fn_decl "main" ~public:true ~impure:true ~return_type:(Some ty_i32)
+      ~definition:
+        (Some
+           (block ~result:(int_lit 0)
+              [
+                let_stmt ~mut:true "boxed" box_buffer_expr;
+                assign_stmt (node (Core.Identifier (ident "boxed"))) nil_expr;
+              ]))
+  in
+  let lifecycle_ir =
+    emit_core_ir
+      (node
+         {
+           Core.decls =
+             [
+               buffer_type;
+               node (Core.VDecl global_buffer_decl);
+               node (Core.FDecl ctor_decl);
+               node (Core.FDecl dtor_decl);
+               node (Core.FDecl main_decl);
+             ];
+         })
+  in
+  assert_true "global default initialization should emit a synthesized ctor"
+    (string_contains lifecycle_ir "@__haven_global_init");
+  assert_true "global default initialization should call the type constructor"
+    (string_contains lifecycle_ir "call void @buffer_construct");
+  assert_true "box type construction should call the type constructor"
+    (string_contains lifecycle_ir "call void @buffer_construct");
+  assert_true "final box release should call the type destructor"
+    (string_contains lifecycle_ir "call void @buffer_destruct")

@@ -65,7 +65,7 @@ let folding_ranges (parsed : Cst.parsed_program) =
   let structural =
     Locate.nodes_matching
       (function
-        | Locate.Block _ | StructDecl _ | EnumDecl _ | Foreign _ -> true
+        | Locate.Block _ | StructDecl _ | EnumDecl _ | Foreign _ | TypeExtend _ -> true
         | _ -> false)
       parsed.program
     |> List.filter_map (fun node ->
@@ -78,6 +78,8 @@ let folding_ranges (parsed : Cst.parsed_program) =
                folding_range ~kind:FoldingRangeKind.Region enum_decl.loc
            | Foreign foreign ->
                folding_range ~kind:FoldingRangeKind.Region foreign.loc
+           | TypeExtend ext ->
+               folding_range ~kind:FoldingRangeKind.Region ext.loc
            | _ ->
                None)
   in

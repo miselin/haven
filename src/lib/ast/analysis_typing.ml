@@ -418,6 +418,52 @@ module Typing = struct
                 (resolve_core_type state.type_env [] [] expr.loc ty);
             metavar = metavar_of_type core_ty;
           }
+      | Core.BoxConstruct box ->
+          let core_ty = box_type expr.loc box.value.ty in
+          let resolved_inner = resolve_core_type state.type_env [] [] expr.loc box.value.ty in
+          let infer_constructor_args resolved_inner =
+            let lifecycle_name =
+              match resolved_inner with
+              | ResolvedNamed (name, _) -> name
+              | _ -> string_of_resolved_ty resolved_inner
+            in
+            match lookup_type_lifecycle state.type_env lifecycle_name with
+            | Some { construct = Some fn_decl; _ } ->
+                let params = lifecycle_user_params fn_decl in
+                List.iteri
+                  (fun index (arg : Core.expression) ->
+                    let expected =
+                      nth_or_none
+                        (List.map
+                           (fun (param : Core.param) ->
+                             resolve_core_type state.type_env [] [] param.loc param.value.ty)
+                           params)
+                        index
+                    in
+                    ignore (infer_value_expression state env ~expected_type:expected arg))
+                  box.value.args;
+                if List.length params <> List.length box.value.args then
+                  add_diagnostic state Error expr.loc
+                    (Printf.sprintf
+                       "constructor for %s expects %d argument(s), but %d were provided"
+                       (string_of_resolved_ty resolved_inner)
+                       (List.length params) (List.length box.value.args))
+            | _ ->
+                List.iter
+                  (fun (arg : Core.expression) ->
+                    ignore (infer_value_expression state env arg))
+                  box.value.args;
+                if box.value.args <> [] then
+                  add_diagnostic state Error expr.loc
+                    (Printf.sprintf "type %s does not define a constructor"
+                       (string_of_resolved_ty resolved_inner))
+          in
+          Option.iter infer_constructor_args resolved_inner;
+          {
+            inferred_type = Some core_ty;
+            resolved_type = Option.map (fun ty -> ResolvedBox ty) resolved_inner;
+            metavar = metavar_of_type core_ty;
+          }
       | Core.Unbox inner -> (
           let inner_ann = infer_expression state env inner in
           match inner_ann.resolved_type with

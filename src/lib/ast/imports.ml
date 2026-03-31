@@ -94,7 +94,7 @@ and expand_top_decl state ~current_file (decl : Cst.top_decl) : Cst.top_decl lis
       expand_import state ~current_file import_path.value import_path.loc
   | Cst.CImport import_path ->
       expand_cimport state ~current_file import_path.value import_path.loc
-  | Cst.Foreign _ | Cst.FDecl _ | Cst.TDecl _ | Cst.VDecl _ ->
+  | Cst.Foreign _ | Cst.FDecl _ | Cst.TDecl _ | Cst.VDecl _ | Cst.Extend _ ->
       [ decl ]
 
 and expand_import state ~current_file import_path loc =

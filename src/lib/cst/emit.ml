@@ -602,6 +602,31 @@ let emit_type_decl fmt (ty : type_decl) =
   | TypeDeclEnum e ->
       fprintf fmt "type %a = %a;" emit_identifier ty.name emit_enum_decl e
 
+let emit_extend_item ~comments fmt (item : extend_item) =
+  emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Leading fmt;
+  (match item.value with
+  | ExtendConstruct construct ->
+      if construct.value.params = [] then
+        fprintf fmt "%sconstruct %a" (spaces 1) (emit_block ~indent:1 ~comments)
+          construct.value.body
+      else
+        fprintf fmt "%sconstruct(%a) %a" (spaces 1)
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") emit_param)
+          construct.value.params (emit_block ~indent:1 ~comments) construct.value.body
+  | ExtendDestruct block ->
+      fprintf fmt "%sdestruct %a" (spaces 1) (emit_block ~indent:1 ~comments) block);
+  emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Trailing ~separate:true fmt
+
+let emit_type_extend ~comments fmt (ext : type_extend) =
+  let ext = unwrap ext in
+  fprintf fmt "extend %a with {\n" emit_identifier ext.target;
+  List.iteri
+    (fun idx item ->
+      emit_extend_item ~comments fmt item;
+      if idx < List.length ext.items - 1 then fprintf fmt "\n")
+    ext.items;
+  fprintf fmt "\n}"
+
 let emit_foreign ~comments fmt (f : foreign) =
   let f = unwrap f in
   fprintf fmt "foreign %a {\n" emit_string_lit f.lib;
@@ -624,6 +649,7 @@ let emit_decl ~comments fmt decl =
   (match decl.value with
   | FDecl d -> emit_fdecl ~comments fmt d
   | TDecl t -> emit_type_decl fmt t
+  | Extend e -> emit_type_extend ~comments fmt e
   | VDecl v -> emit_var_decl ~comments fmt v
   | Import i -> fprintf fmt "import %a;" emit_string_lit i
   | CImport i -> fprintf fmt "cimport %a;" emit_string_lit i
