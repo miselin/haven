@@ -7,7 +7,7 @@ module Specialize = struct
     key : string;
     name : string;
     template : Core.function_decl;
-    arg_types : resolved_ty list;
+    param_types : resolved_ty list;
     return_type : resolved_ty;
   }
 
@@ -74,11 +74,11 @@ module Specialize = struct
     | ResolvedVecHole -> "fvec_hole"
     | ResolvedMatrixHole -> "mat_hole"
 
-  let instance_key (fn : Core.function_decl) arg_types =
-    function_id fn ^ "::" ^ String.concat "::" (List.map resolved_name arg_types)
+  let instance_key (fn : Core.function_decl) param_types =
+    function_id fn ^ "::" ^ String.concat "::" (List.map resolved_name param_types)
 
-  let instance_name (fn : Core.function_decl) arg_types =
-    fn.value.name.value ^ "__spec__" ^ String.concat "__" (List.map resolved_name arg_types)
+  let instance_name (fn : Core.function_decl) param_types =
+    fn.value.name.value ^ "__spec__" ^ String.concat "__" (List.map resolved_name param_types)
 
   let collect_functions (program : Core.program) =
     let add_fn map (fn : Core.function_decl) =
@@ -101,8 +101,18 @@ module Specialize = struct
       diagnostics_rev = [];
     }
 
-  let enqueue_instance state (fn : Core.function_decl) arg_types return_type =
-    let key = instance_key fn arg_types in
+  let canonical_param_type type_env (param : Core.param) arg_type =
+    if type_has_specialization_hole param.value.ty then arg_type
+    else
+      match resolve_core_type type_env [] [] param.loc param.value.ty with
+      | Some resolved -> resolved
+      | None -> arg_type
+
+  let canonical_param_types type_env (fn : Core.function_decl) arg_types =
+    List.map2 (canonical_param_type type_env) fn.value.params.value.params arg_types
+
+  let enqueue_instance state (fn : Core.function_decl) param_types return_type =
+    let key = instance_key fn param_types in
     match Hashtbl.find_opt state.instances key with
     | Some existing ->
         if not (equal_resolved_type existing.return_type return_type) then
@@ -115,9 +125,9 @@ module Specialize = struct
         let instance =
           {
             key;
-            name = instance_name fn arg_types;
+            name = instance_name fn param_types;
             template = fn;
-            arg_types;
+            param_types;
             return_type;
           }
         in
@@ -315,8 +325,13 @@ module Specialize = struct
             with
             | true, Some return_type, true ->
                 let arg_types = List.map Option.get arg_types in
+                let param_types =
+                  canonical_param_types
+                    (type_env_of_program state.typed.program.program)
+                    fn arg_types
+                in
                 let specialized_name =
-                  enqueue_instance state fn arg_types return_type
+                  enqueue_instance state fn param_types return_type
                 in
                 {
                   expr with
@@ -429,7 +444,7 @@ module Specialize = struct
       List.map2
         (fun (param : Core.param) arg_type ->
           binding_of_arg_type param.loc arg_type)
-        inst.template.value.params.value.params inst.arg_types
+        inst.template.value.params.value.params inst.param_types
     in
     let temp_typed, _body_result =
       Typing.analyze_function_body state.typed.program
@@ -440,7 +455,7 @@ module Specialize = struct
       (fun diagnostic -> state.diagnostics_rev <- diagnostic :: state.diagnostics_rev)
       (List.rev temp_typed.diagnostics);
     let params =
-      List.map2 specialize_param inst.template.value.params.value.params inst.arg_types
+      List.map2 specialize_param inst.template.value.params.value.params inst.param_types
     in
     {
       inst.template with

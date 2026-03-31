@@ -125,4 +125,26 @@ let run () =
   assert_true "get_mat_row should specialize to a concrete matrix helper"
     (string_contains get_mat_row_core "get_mat_row__spec__mat2x3");
   assert_true "get_mat_row specialization should infer a concrete vector return"
-    (string_contains get_mat_row_core "return=fvec3")
+    (string_contains get_mat_row_core "return=fvec3");
+
+  let specialization_dedup_pipeline =
+    parse_to_core
+      "fn get_mat_row(mat? m, u32 row) { m[row] }\n\
+       pub fn main() -> fvec3 {\n\
+       \  let u32 row = 1;\n\
+       \  get_mat_row(Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>, row)\n\
+       }\n\
+       pub fn other() -> fvec3 {\n\
+       \  get_mat_row(Mat<Vec<7.0, 8.0, 9.0>, Vec<10.0, 11.0, 12.0>>, 1)\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "specialization dedup typing"
+    specialization_dedup_pipeline.typing.diagnostics;
+  let specialization_dedup_core =
+    Haven.Ast.Pretty.core_program_to_string specialization_dedup_pipeline.cleaned
+  in
+  assert_true "equivalent concrete signatures should reuse one specialization"
+    (count_occurrences specialization_dedup_core
+       "name=get_mat_row__spec__mat2x3__u32"
+    = 1)
