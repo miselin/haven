@@ -415,6 +415,9 @@ and walk_statement state env (stmt : Core.statement) =
   | Core.Expression expr ->
       walk_expression state env expr;
       env
+  | CompileAssert compile_assert ->
+      walk_expression state env compile_assert.value.cond;
+      env
   | Let binding ->
       let binding_info =
         make_binding (binding_contents state.typing binding) binding.value.name.loc
@@ -714,6 +717,9 @@ and highlight_statement state env (stmt : Core.statement) =
   match stmt.value with
   | Core.Expression expr ->
       highlight_expression state env expr;
+      env
+  | CompileAssert compile_assert ->
+      highlight_expression state env compile_assert.value.cond;
       env
   | Let binding ->
       let binding_info =
