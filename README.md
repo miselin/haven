@@ -37,11 +37,11 @@ The legacy C compiler remains in this repository under `legacy/src` and was larg
 the book [Writing a C Compiler](https://norasandler.com/book/) by Nora Sandler as a guide. Haven was not
 my first compiler from that book, but it is the first that I've made public. What you will find if you
 read the C code is a functional compiler with LLVM IR generation, a compiler driver, and a few compiler passes.
+It's code that took months to write, and it's still brittle and fragile.
 
-Here's the thing. I like writing code! But I want to write _Haven_ code, and I increasingly recognize that I don't
-want to write a compiler, nor have the time for it, really. I have inspiration for what Haven should look like and
-how it should work. AI tools allow me to arrive at that goal. I review the diffs and stay fully in the loop of every
-change to make sure things don't go wildly off track.
+Here's the thing. I like writing code! But I want to design a language and write _Haven_ code, not so much write
+a compiler. AI tools allow me to explore language design without having to be a compiler expert. I review the diffs
+and stay fully in the loop of every change to make sure things don't go wildly off track.
 
 ## Fractal Example
 
