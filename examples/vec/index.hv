@@ -1,26 +1,38 @@
 pub fn __builtin_sqrtf(float x) -> float intrinsic "llvm.sqrt" float;
 
-fn vadd(fvec3 a, fvec3 b) -> fvec3 {
+fn vadd(fvec? a, fvec? b) {
+    @assert a.dim == b.dim, "vadd requires both vectors to be the same width";
+
     a + b
 }
 
-fn vscale(fvec3 a, float b) -> fvec3 {
+fn vscale(fvec? a, float b) {
     a * b
 }
 
-fn vdot(fvec3 a, fvec3 b) -> float {
+fn vdot(fvec? a, fvec? b) -> float {
+    @assert a.dim == b.dim, "vdot requires both vectors to be the same width";
+
     let mult = a * b;
-    mult.x + mult.y + mult.z
+    let mut accum = 0.0;
+
+    iter 0:(a.dim - 1) i {
+        accum = accum + mult[i];
+    };
+
+    accum
 }
 
 fn vcross(fvec3 a, fvec3 b) -> fvec3 {
     let x = a.y * b.z - a.z * b.y;
     let y = a.z * b.x - a.x * b.z;
     let z = a.x * b.y - a.y * b.x;
+
     Vec<x, y, z>
 }
 
-impure fn vnorm(fvec3 v) -> fvec3 {
+impure fn vnorm(fvec? v) {
     let denom = 1.0 / __builtin_sqrtf(vdot(v, v));
+
     v * denom
 }

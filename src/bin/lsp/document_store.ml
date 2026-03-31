@@ -85,11 +85,23 @@ let location_from_error_message ~filename message =
   in
   Option.bind location_text parse_line_col
 
-let analyze_document uri text =
+let get_text_by_path (store : t) path =
+  Hashtbl.fold
+    (fun _ (doc : document) acc ->
+      match acc with
+      | Some _ -> acc
+      | None ->
+          if String.equal (DocumentUri.to_path doc.uri) path then Some doc.text else None)
+    store None
+
+let analyze_document (store : t) uri text =
   let filename = DocumentUri.to_path uri in
   try
     let cst = Haven.Parser.parse_string ~filename text in
-    let pipeline = Analysis.Pipeline.run_cst cst in
+    let pipeline =
+      Analysis.Pipeline.run_cst ~import_text_resolver:(get_text_by_path store)
+        cst
+    in
     (Some cst, Some pipeline, None)
   with
   | Failure message
@@ -111,11 +123,14 @@ let analyze_document uri text =
       in
       (None, None, Some parse_error)
 
-let reanalyze doc =
-  let cst, pipeline, parse_error = analyze_document doc.uri doc.text in
+let reanalyze store doc =
+  let cst, pipeline, parse_error = analyze_document store doc.uri doc.text in
   doc.cst <- cst;
   doc.pipeline <- pipeline;
   doc.parse_error <- parse_error
+
+let reanalyze_all (store : t) =
+  Hashtbl.iter (fun _ doc -> reanalyze store doc) store
 
 let open_doc (store : t) (td : TextDocumentItem.t) =
   let uri = td.uri in
@@ -129,10 +144,12 @@ let open_doc (store : t) (td : TextDocumentItem.t) =
       parse_error = None;
     }
   in
-  reanalyze doc;
-  Hashtbl.replace store uri doc
+  Hashtbl.replace store uri doc;
+  reanalyze_all store
 
-let close_doc (store : t) (uri : DocumentUri.t) = Hashtbl.remove store uri
+let close_doc (store : t) (uri : DocumentUri.t) =
+  Hashtbl.remove store uri;
+  reanalyze_all store
 
 let line_offsets text =
   let offsets = ref [ 0 ] in
@@ -178,7 +195,29 @@ let change_doc (store : t) (d : VersionedTextDocumentIdentifier.t)
   | Some doc ->
       doc.version <- Some d.version;
       List.iter (apply_change doc) evs;
-      reanalyze doc
+      reanalyze_all store
+
+let save_doc (store : t) (id : TextDocumentIdentifier.t) text =
+  match (Hashtbl.find_opt store id.uri, text) with
+  | Some doc, Some text ->
+      doc.text <- text;
+      reanalyze_all store
+  | Some _doc, None ->
+      reanalyze_all store
+  | None, Some text ->
+      let doc =
+        {
+          uri = id.uri;
+          version = None;
+          text;
+          cst = None;
+          pipeline = None;
+          parse_error = None;
+        }
+      in
+      Hashtbl.replace store id.uri doc;
+      reanalyze_all store
+  | None, None -> ()
 
 let get_text (store : t) (uri : DocumentUri.t) : string option =
   Hashtbl.find_opt store uri |> Option.map (fun d -> d.text)

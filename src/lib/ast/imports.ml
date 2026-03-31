@@ -8,15 +8,17 @@ type state = {
   active : (string, unit) Hashtbl.t;
   search_dirs : string list;
   sysroot : string option;
+  import_text_resolver : (string -> string option) option;
   mutable diagnostics_rev : diagnostic list;
 }
 
-let create_state ?(search_dirs = []) ?sysroot () =
+let create_state ?(search_dirs = []) ?sysroot ?import_text_resolver () =
   {
     seen = Hashtbl.create 32;
     active = Hashtbl.create 32;
     search_dirs;
     sysroot;
+    import_text_resolver;
     diagnostics_rev = [];
   }
 
@@ -110,7 +112,14 @@ and expand_import state ~current_file import_path loc =
           ~finally:(fun () -> Hashtbl.remove state.active key)
           (fun () ->
             try
-              let imported = Parser.parse_file resolved in
+              let imported =
+                match state.import_text_resolver with
+                | Some resolve_text -> (
+                    match resolve_text resolved with
+                    | Some text -> Parser.parse_string ~filename:resolved text
+                    | None -> Parser.parse_file resolved)
+                | None -> Parser.parse_file resolved
+              in
               let expanded = expand_program state imported in
               Hashtbl.add state.seen key ();
               expanded.program.value.decls
@@ -129,8 +138,11 @@ and expand_cimport state ~current_file import_path loc =
     List.rev_append (List.rev expanded.diagnostics) state.diagnostics_rev;
   expanded.decls
 
-let expand_cst ?(search_dirs = []) ?sysroot parsed =
+let expand_cst ?(search_dirs = []) ?sysroot ?import_text_resolver parsed =
   let defaults = Platform_defaults.resolve ~search_dirs ?sysroot () in
-  let state = create_state ~search_dirs:defaults.search_dirs ?sysroot:defaults.sysroot () in
+  let state =
+    create_state ~search_dirs:defaults.search_dirs ?sysroot:defaults.sysroot
+      ?import_text_resolver ()
+  in
   let parsed = expand_program state parsed in
   { parsed; diagnostics = List.rev state.diagnostics_rev }

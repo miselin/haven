@@ -92,8 +92,10 @@ module Pipeline = struct
         }
       else run_analyses specialized.program
 
-  let run_cst ?(search_dirs = []) ?sysroot parsed =
-    let expanded = Imports.expand_cst ~search_dirs ?sysroot parsed in
+  let run_cst ?(search_dirs = []) ?sysroot ?import_text_resolver parsed =
+    let expanded =
+      Imports.expand_cst ~search_dirs ?sysroot ?import_text_resolver parsed
+    in
     let result = run_core (Convert.core_of_expanded_cst expanded.parsed) in
     let typing =
       {

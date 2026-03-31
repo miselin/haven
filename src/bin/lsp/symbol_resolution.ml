@@ -30,6 +30,7 @@ type state = {
   typing : Analysis.typing_result;
   type_env : Analysis.type_env;
   root_env : binding String_map.t;
+  function_decls : Core.function_decl String_map.t;
   type_decls : Core.type_decl String_map.t;
   mutable best : candidate option;
 }
@@ -90,6 +91,11 @@ let expr_annotation typing (expr : Core.expression) =
 let binding_annotation typing (binding : Core.let_stmt) =
   Hashtbl.find_opt typing.Analysis.annotations.bindings (Analysis.binding_id binding)
 
+let expr_resolved_type typing (expr : Core.expression) =
+  match expr_annotation typing expr with
+  | None -> None
+  | Some annotation -> annotation.resolved_type
+
 let type_summary loc inferred resolved =
   match (inferred, resolved) with
   | Some inferred, Some resolved ->
@@ -129,6 +135,30 @@ let function_signature (fn : Core.function_decl) =
   in
   Printf.sprintf "%s %s(%s)%s" prefix fn.value.name.value
     (String.concat ", " params) return_suffix
+
+let function_signature_with_types ~name ~public ~impure ~vararg ~params
+    ~return_type =
+  let params =
+    let params =
+      List.map
+        (fun (param_name, ty) ->
+          Printf.sprintf "%s: %s" param_name (format_core_type ty))
+        params
+    in
+    if vararg then params @ [ "..." ] else params
+  in
+  let prefix =
+    String.concat " "
+      (List.filter
+         (fun part -> not (String.equal part ""))
+         [ if public then "pub" else ""; if impure then "impure" else ""; "fn" ])
+  in
+  let return_suffix =
+    match return_type with
+    | Some ty -> " -> " ^ format_core_type ty
+    | None -> ""
+  in
+  Printf.sprintf "%s %s(%s)%s" prefix name (String.concat ", " params) return_suffix
 
 let type_decl_summary (decl : Core.type_decl) =
   match decl.value.data with
@@ -266,6 +296,21 @@ let type_decls (typing : Analysis.typing_result) =
           decls)
     String_map.empty typing.program.program.value.decls
 
+let function_decls (typing : Analysis.typing_result) =
+  List.fold_left
+    (fun decls (decl : Core.top_decl) ->
+      match decl.value with
+      | Core.FDecl fn ->
+          String_map.add fn.value.name.value fn decls
+      | Core.Foreign foreign ->
+          List.fold_left
+            (fun decls (fn : Core.function_decl) ->
+              String_map.add fn.value.name.value fn decls)
+            decls foreign.value.decls
+      | Core.TDecl _ | Core.VDecl _ | Core.Import _ | Core.CImport _ ->
+          decls)
+    String_map.empty typing.program.program.value.decls
+
 let maybe_pick_type_decl state id priority =
   Option.iter
     (fun decl ->
@@ -340,19 +385,73 @@ and bind_pattern state env scrutinee_resolved (pattern : Core.match_pattern) =
         env
 
 and enum_literal_hover state expr (enum_lit : Core.enum_literal) =
-  let expr_resolved_type =
-    match expr_annotation state.typing expr with
-    | None -> None
-    | Some annotation -> annotation.resolved_type
-  in
   maybe_pick_type_decl state enum_lit.value.enum_name 35;
   Option.iter
     (fun (variant, _inner_ty) ->
       maybe_pick_binding state enum_lit.value.enum_variant.loc 35
         (make_binding (enum_variant_contents variant) variant.value.name.loc))
-    (Option.bind expr_resolved_type (fun resolved ->
+    (Option.bind (expr_resolved_type state.typing expr) (fun resolved ->
          Analysis.lookup_enum_variant state.type_env expr.loc resolved
            enum_lit.value.enum_variant.value))
+
+and specialized_call_hover state (expr : Core.expression) (call : Core.call) =
+  match call.value.target.value with
+  | Core.Identifier id -> (
+      match String_map.find_opt id.value state.function_decls with
+      | None -> ()
+      | Some fn ->
+          if
+            (not (Analysis.function_has_specialization_param fn))
+            || List.length fn.value.params.value.params <> List.length call.value.params
+          then ()
+          else
+            let specialized_params =
+              List.map2
+                (fun (param : Core.param) (arg : Core.expression) ->
+                  if Analysis.type_has_specialization_hole param.value.ty then
+                    Option.map
+                      (fun resolved ->
+                        ( param.value.name.value,
+                          Analysis.core_type_of_resolved_ty arg.loc resolved ))
+                      (expr_resolved_type state.typing arg)
+                  else Some (param.value.name.value, param.value.ty))
+                fn.value.params.value.params call.value.params
+            in
+            match
+              List.fold_right
+                (fun item acc ->
+                  match (item, acc) with
+                  | Some item, Some acc -> Some (item :: acc)
+                  | _ -> None)
+                specialized_params (Some [])
+            with
+            | None -> ()
+            | Some params ->
+                let specialized =
+                  function_signature_with_types ~name:fn.value.name.value
+                    ~public:fn.value.public ~impure:fn.value.impure
+                    ~vararg:fn.value.vararg ~params
+                    ~return_type:
+                      (Option.map
+                         (Analysis.core_type_of_resolved_ty expr.loc)
+                         (expr_resolved_type state.typing expr))
+                in
+                let original = function_signature fn in
+                let hover_text =
+                  if String.equal specialized original then hover_block specialized
+                  else
+                    hover_block
+                      (Printf.sprintf "%s\nspecialized from %s" specialized
+                         original)
+                in
+                maybe_pick state
+                  {
+                    loc = id.loc;
+                    priority = 45;
+                    hover_text = Some hover_text;
+                    definition_loc = Some fn.value.name.loc;
+                  })
+  | _ -> ()
 
 and walk_expression state env (expr : Core.expression) =
   Option.iter
@@ -386,17 +485,14 @@ and walk_expression state env (expr : Core.expression) =
       walk_type state ty
   | Match match_expr ->
       walk_expression state env match_expr.value.expr;
-      let scrutinee_resolved =
-        match expr_annotation state.typing match_expr.value.expr with
-        | Some annotation -> annotation.resolved_type
-        | None -> None
-      in
+      let scrutinee_resolved = expr_resolved_type state.typing match_expr.value.expr in
       List.iter
         (fun (arm : Core.match_arm) ->
           let arm_env = bind_pattern state env scrutinee_resolved arm.value.pattern in
           walk_expression state arm_env arm.value.expr)
         match_expr.value.arms
   | Call call ->
+      specialized_call_hover state expr call;
       walk_expression state env call.value.target;
       List.iter (walk_expression state env) call.value.params
   | Index index ->
@@ -518,6 +614,7 @@ let resolve_at (typing : Analysis.typing_result) position : resolution option =
       typing;
       type_env = Analysis.type_env_of_program typing.program.program;
       root_env = root_bindings typing;
+      function_decls = function_decls typing;
       type_decls = type_decls typing;
       best = None;
     }
