@@ -287,7 +287,8 @@ let rec walk_type state (ty : Core.haven_type) =
       List.iter (walk_type state) templ.value.inner
   | Core.CustomType custom ->
       maybe_pick_type_decl state custom.name 30
-  | NumericType _ | VecType _ | MatrixType _ | FloatType | VoidType | StringType ->
+  | NumericType _ | VecType _ | MatrixType _ | VecHoleType | MatrixHoleType
+  | FloatType | VoidType | StringType ->
       ()
 
 and walk_match_pattern state (pattern : Core.match_pattern) =
@@ -604,7 +605,8 @@ let rec highlight_type state (ty : Core.haven_type) =
       List.iter (highlight_type state) templ.value.inner
   | Core.CustomType custom ->
       maybe_add_type_decl_highlight state `Text custom.name
-  | NumericType _ | VecType _ | MatrixType _ | FloatType | VoidType | StringType ->
+  | NumericType _ | VecType _ | MatrixType _ | VecHoleType | MatrixHoleType
+  | FloatType | VoidType | StringType ->
       ()
 
 let highlight_match_pattern state env scrutinee_resolved
