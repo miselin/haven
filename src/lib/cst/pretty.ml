@@ -68,6 +68,8 @@ and pp_type fmt ty =
   | NumericType n -> fprintf fmt "%s" (numeric_type_to_string n)
   | VecType v -> fprintf fmt "%s" (vec_type_to_string v)
   | MatrixType m -> fprintf fmt "%s" (mat_type_to_string m)
+  | VecHoleType -> fprintf fmt "fvec?"
+  | MatrixHoleType -> fprintf fmt "mat?"
   | FloatType -> fprintf fmt "float"
   | VoidType -> fprintf fmt "void"
   | StringType -> fprintf fmt "str"
@@ -192,6 +194,9 @@ and pp_statement fmt stmt =
       let s = unwrap s in
       fprintf fmt "@[<hv 2>Let(@,mut=%a,@ name=%a,@ init_expr=%a@,)@]"
         pp_print_bool s.mut pp_identifier s.name pp_expression s.init_expr
+  | CompileAssert a ->
+      fprintf fmt "@[<hv 2>CompileAssert(@,cond=%a,@ message=%S@,)@]" pp_expression
+        a.value.cond a.value.message.value
   | Return (Some e) -> fprintf fmt "@[<hv 2>Return(@,%a@,)@]" pp_expression e
   | Return None -> fprintf fmt "Return"
   | Defer e -> fprintf fmt "@[<hv 2>Defer(@,%a@,)@]" pp_expression e

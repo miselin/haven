@@ -99,6 +99,8 @@ and haven_type_desc =
   | NumericType of numeric_type
   | VecType of vec_type
   | MatrixType of mat_type
+  | VecHoleType
+  | MatrixHoleType
   | FloatType
   | VoidType
   | StringType
@@ -181,9 +183,13 @@ and block_item_desc =
 
 and block_item = block_item_desc node
 
+and compile_assert_desc = { cond : expression; message : string node }
+and compile_assert = compile_assert_desc node
+
 and statement_desc =
   | Expression of expression
   | Let of let_stmt
+  | CompileAssert of compile_assert
   | Return of expression option
   | Defer of expression
   | Iter of iter_stmt

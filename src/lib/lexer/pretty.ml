@@ -98,10 +98,13 @@ let pp_token (token : Raw.tok) =
   match token.tok with
   | Trivia trivia -> pp_trivia trivia
   | Ident text -> Printf.printf "IDENT %s\n" text
+  | Directive Assert -> Printf.printf "DIRECTIVE @assert\n"
   | Numeric_type desc ->
       Printf.printf "NUMERIC_TYPE %s\n" (numeric_type_to_string desc)
   | Vec_type desc -> Printf.printf "VEC_TYPE %s\n" (vec_type_to_string desc)
   | Mat_type desc -> Printf.printf "MAT_TYPE %s\n" (mat_type_to_string desc)
+  | Vec_hole_type -> Printf.printf "VEC_HOLE_TYPE fvec?\n"
+  | Mat_hole_type -> Printf.printf "MAT_HOLE_TYPE mat?\n"
   | Float_type -> Printf.printf "FLOAT_TYPE float\n"
   | Void_type -> Printf.printf "VOID_TYPE void\n"
   | Str_type -> Printf.printf "STR_TYPE str\n"

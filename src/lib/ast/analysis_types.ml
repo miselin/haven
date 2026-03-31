@@ -50,6 +50,8 @@ type resolved_ty =
   | ResolvedArray of resolved_ty * int
   | ResolvedVec of vec_type
   | ResolvedMatrix of mat_type
+  | ResolvedVecHole
+  | ResolvedMatrixHole
   | ResolvedFunction of resolved_ty list * resolved_ty * bool
   | ResolvedNamed of string * resolved_ty list
   | ResolvedGenericParam of string
@@ -201,6 +203,33 @@ let numeric_type loc signedness bits =
 let pointer_type loc inner = mk_type loc (Core.PointerType inner)
 let box_type loc inner = mk_type loc (Core.BoxType inner)
 
+let rec type_has_specialization_hole (ty : Core.haven_type) =
+  match ty.value with
+  | Core.VecHoleType | Core.MatrixHoleType -> true
+  | Core.CellType inner
+  | Core.PointerType inner
+  | Core.BoxType inner ->
+      type_has_specialization_hole inner
+  | Core.ArrayType arr -> type_has_specialization_hole arr.value.element
+  | Core.FunctionType fn ->
+      type_has_specialization_hole fn.value.return_type
+      || List.exists type_has_specialization_hole fn.value.param_types
+  | Core.TemplatedType templ ->
+      List.exists type_has_specialization_hole templ.value.inner
+  | Core.NumericType _
+  | Core.VecType _
+  | Core.MatrixType _
+  | Core.FloatType
+  | Core.VoidType
+  | Core.StringType
+  | Core.CustomType _ ->
+      false
+
+let function_has_specialization_param (fn : Core.function_decl) =
+  List.exists
+    (fun (param : Core.param) -> type_has_specialization_hole param.value.ty)
+    fn.value.params.value.params
+
 let type_class_of_type (ty : Core.haven_type) =
   match ty.value with
   | Core.NumericType { signedness = Unsigned; bits = 1 } ->
@@ -214,6 +243,8 @@ let type_class_of_type (ty : Core.haven_type) =
   | Core.ArrayType _ -> [ TypeClassArray ]
   | Core.VecType _ -> [ TypeClassVector ]
   | Core.MatrixType _ -> [ TypeClassMatrix ]
+  | Core.VecHoleType -> [ TypeClassVector ]
+  | Core.MatrixHoleType -> [ TypeClassMatrix ]
   | Core.FunctionType _ -> [ TypeClassFunction ]
   | Core.CustomType custom -> [ TypeClassCustom custom.name.value ]
   | Core.CellType _ -> [ TypeClassPointer ]
@@ -274,6 +305,9 @@ let rec equal_type (left : Core.haven_type) (right : Core.haven_type) =
       a.signedness = b.signedness && a.bits = b.bits
   | Core.VecType a, Core.VecType b -> a = b
   | Core.MatrixType a, Core.MatrixType b -> a = b
+  | Core.VecHoleType, Core.VecHoleType
+  | Core.MatrixHoleType, Core.MatrixHoleType ->
+      true
   | Core.FloatType, Core.FloatType
   | Core.VoidType, Core.VoidType
   | Core.StringType, Core.StringType ->
@@ -327,6 +361,9 @@ let rec equal_resolved_type left right =
       lc = rc && equal_resolved_type le re
   | ResolvedVec left, ResolvedVec right -> left = right
   | ResolvedMatrix left, ResolvedMatrix right -> left = right
+  | ResolvedVecHole, ResolvedVecHole
+  | ResolvedMatrixHole, ResolvedMatrixHole ->
+      true
   | ResolvedFunction (lp, lr, lv), ResolvedFunction (rp, rr, rv) ->
       lv = rv && equal_resolved_type lr rr
       && equal_list equal_resolved_type lp rp
@@ -356,6 +393,8 @@ let rec core_type_of_resolved_ty loc = function
            })
   | ResolvedVec vec -> mk_type loc (Core.VecType vec)
   | ResolvedMatrix mat -> mk_type loc (Core.MatrixType mat)
+  | ResolvedVecHole -> mk_type loc Core.VecHoleType
+  | ResolvedMatrixHole -> mk_type loc Core.MatrixHoleType
   | ResolvedFunction (params, ret, vararg) ->
       mk_type loc
         (Core.FunctionType
@@ -388,8 +427,8 @@ let resolved_is_bool = function ResolvedInt (Unsigned, 1) -> true | _ -> false
 
 let resolved_is_numeric = function ResolvedInt _ | ResolvedFloat -> true | _ -> false
 
-let resolved_is_vector = function ResolvedVec _ -> true | _ -> false
-let resolved_is_matrix = function ResolvedMatrix _ -> true | _ -> false
+let resolved_is_vector = function ResolvedVec _ | ResolvedVecHole -> true | _ -> false
+let resolved_is_matrix = function ResolvedMatrix _ | ResolvedMatrixHole -> true | _ -> false
 
 let resolved_is_pointerish = function
   | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedString -> true
@@ -412,25 +451,51 @@ let resolved_arithmetic_binary_result op left right =
     ResolvedVec right
     when left = right ->
       Some (ResolvedVec left)
+  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+    ResolvedVecHole,
+    ResolvedVecHole ->
+      Some ResolvedVecHole
+  | (Core.Add | Core.Subtract), ResolvedVec concrete, ResolvedVecHole
+  | (Core.Add | Core.Subtract), ResolvedVecHole, ResolvedVec concrete ->
+      Some (ResolvedVec concrete)
   | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedVec vec, ResolvedFloat
   | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedFloat, ResolvedVec vec ->
       Some (ResolvedVec vec)
+  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedVecHole, ResolvedFloat
+  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedFloat, ResolvedVecHole ->
+      Some ResolvedVecHole
   | (Core.Add | Core.Subtract), ResolvedMatrix left, ResolvedMatrix right
     when left.rows = right.rows && left.columns = right.columns ->
       Some
         (ResolvedMatrix
            { kind = combine_matrix_kind left right; rows = left.rows; columns = left.columns })
+  | (Core.Add | Core.Subtract), ResolvedMatrixHole, ResolvedMatrixHole ->
+      Some ResolvedMatrixHole
+  | (Core.Add | Core.Subtract), ResolvedMatrix concrete, ResolvedMatrixHole
+  | (Core.Add | Core.Subtract), ResolvedMatrixHole, ResolvedMatrix concrete ->
+      Some (ResolvedMatrix concrete)
   | Core.Multiply, ResolvedMatrix left, ResolvedMatrix right
     when left.columns = right.rows ->
       Some
         (ResolvedMatrix
            { kind = combine_matrix_kind left right; rows = left.rows; columns = right.columns })
+  | Core.Multiply, ResolvedMatrixHole, ResolvedMatrixHole
+  | Core.Multiply, ResolvedMatrix _, ResolvedMatrixHole
+  | Core.Multiply, ResolvedMatrixHole, ResolvedMatrix _ ->
+      Some ResolvedMatrixHole
   | Core.Multiply, ResolvedMatrix mat, ResolvedFloat
   | Core.Multiply, ResolvedFloat, ResolvedMatrix mat ->
       Some (ResolvedMatrix mat)
+  | Core.Multiply, ResolvedMatrixHole, ResolvedFloat
+  | Core.Multiply, ResolvedFloat, ResolvedMatrixHole ->
+      Some ResolvedMatrixHole
   | Core.Multiply, ResolvedVec (vec : vec_type), ResolvedMatrix mat
     when vec.dimension = mat.rows ->
       Some (ResolvedVec { kind = vec.kind; dimension = mat.columns })
+  | Core.Multiply, ResolvedVecHole, ResolvedMatrix _
+  | Core.Multiply, ResolvedVec _, ResolvedMatrixHole
+  | Core.Multiply, ResolvedVecHole, ResolvedMatrixHole ->
+      Some ResolvedVecHole
   | _ -> None
 
 let rec resolved_compatible actual expected =
@@ -546,6 +611,8 @@ and resolve_core_type type_env active subst loc (ty : Core.haven_type) =
   | Core.VoidType -> Some ResolvedVoid
   | Core.VecType vec -> Some (ResolvedVec vec)
   | Core.MatrixType mat -> Some (ResolvedMatrix mat)
+  | Core.VecHoleType -> Some ResolvedVecHole
+  | Core.MatrixHoleType -> Some ResolvedMatrixHole
   | Core.PointerType inner ->
       Option.map (fun inner -> ResolvedPointer inner)
         (resolve_core_type type_env active subst loc inner)
@@ -679,6 +746,8 @@ let rec resolved_contains_box_ownership type_env active loc ty =
   | ResolvedVoid
   | ResolvedVec _
   | ResolvedMatrix _
+  | ResolvedVecHole
+  | ResolvedMatrixHole
   | ResolvedFunction _
   | ResolvedGenericParam _ ->
       false

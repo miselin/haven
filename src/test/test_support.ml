@@ -20,6 +20,18 @@ let string_contains haystack needle =
   in
   loop 0
 
+let count_occurrences haystack needle =
+  let haystack_len = String.length haystack in
+  let needle_len = String.length needle in
+  let rec loop index count =
+    if needle_len = 0 then count
+    else if index + needle_len > haystack_len then count
+    else if String.sub haystack index needle_len = needle then
+      loop (index + needle_len) (count + 1)
+    else loop (index + 1) count
+  in
+  loop 0 0
+
 let assert_diagnostic_message_contains label needle diagnostics =
   match diagnostics with
   | [] -> failwith (label ^ " expected at least one diagnostic")
@@ -87,6 +99,7 @@ let find_first_let_binding (program : Core.parsed_program) =
         match stmt.value with
         | Core.Let binding -> collect_in_statements (binding :: acc) rest
         | Core.Expression _
+        | Core.CompileAssert _
         | Core.Return _
         | Core.Defer _
         | Core.Break
@@ -132,6 +145,7 @@ let find_let_binding_at index (program : Core.parsed_program) =
             let inner = collect_stmt [] loop.value.body.value.statements in
             collect_stmt (List.rev_append inner bindings) stmt_rest
         | Core.Expression _
+        | Core.CompileAssert _
         | Core.Return _
         | Core.Defer _
         | Core.Break

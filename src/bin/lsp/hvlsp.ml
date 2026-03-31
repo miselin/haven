@@ -22,20 +22,30 @@ module Server = struct
         Logs.info (fun m ->
             m "didOpen: %s (version=%d)" (Lsp.Uri.to_string doc.uri) doc.version);
         Haven_lsp.on_did_open state doc;
-        (match Haven_lsp.publish_diagnostics_params state doc.uri with
-        | None -> Lwt.return_unit
-        | Some params ->
+        Lwt_list.iter_s
+          (fun params ->
             notify_back#send_notification
               (Lsp.Server_notification.PublishDiagnostics params))
+          (Haven_lsp.publish_all_diagnostics_params state)
 
       method on_notif_doc_did_close ~notify_back
           (id : Lsp.Types.TextDocumentIdentifier.t) =
         Logs.info (fun m -> m "didClose: %s" (Lsp.Uri.to_string id.uri));
         Haven_lsp.on_did_close state id;
-        notify_back#send_notification
-          (Lsp.Server_notification.PublishDiagnostics
-             (Lsp.Types.PublishDiagnosticsParams.create ~uri:id.uri ~diagnostics:[]
-                ()))
+        let clear_closed =
+          notify_back#send_notification
+            (Lsp.Server_notification.PublishDiagnostics
+               (Lsp.Types.PublishDiagnosticsParams.create ~uri:id.uri
+                  ~diagnostics:[] ()))
+        in
+        let publish_open =
+          Lwt_list.iter_s
+            (fun params ->
+              notify_back#send_notification
+                (Lsp.Server_notification.PublishDiagnostics params))
+            (Haven_lsp.publish_all_diagnostics_params state)
+        in
+        Lwt.bind clear_closed (fun () -> publish_open)
 
       method on_notif_doc_did_change ~notify_back
           (id : Lsp.Types.VersionedTextDocumentIdentifier.t)
@@ -45,11 +55,22 @@ module Server = struct
             m "didChange: %s (version=%d, %d changes)"
               (Lsp.Uri.to_string id.uri) id.version (List.length changes));
         Haven_lsp.on_did_change state id changes;
-        (match Haven_lsp.publish_diagnostics_params state id.uri with
-        | None -> Lwt.return_unit
-        | Some params ->
+        Lwt_list.iter_s
+          (fun params ->
             notify_back#send_notification
               (Lsp.Server_notification.PublishDiagnostics params))
+          (Haven_lsp.publish_all_diagnostics_params state)
+
+      method! on_notif_doc_did_save ~notify_back
+          (params : Lsp.Types.DidSaveTextDocumentParams.t) =
+        Logs.info (fun m ->
+            m "didSave: %s" (Lsp.Uri.to_string params.textDocument.uri));
+        Haven_lsp.on_did_save state params;
+        Lwt_list.iter_s
+          (fun params ->
+            notify_back#send_notification
+              (Lsp.Server_notification.PublishDiagnostics params))
+          (Haven_lsp.publish_all_diagnostics_params state)
 
       method! on_req_hover ~notify_back:_ ~id:_ ~uri ~pos ~workDoneToken
           (_doc_state : Linol_lwt.Jsonrpc2.doc_state) =

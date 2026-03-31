@@ -84,6 +84,8 @@ and walk_statement typing type_env query_range acc (stmt : Core.statement) =
   match stmt.value with
   | Core.Expression expr ->
       walk_expression typing type_env query_range acc expr
+  | CompileAssert compile_assert ->
+      walk_expression typing type_env query_range acc compile_assert.value.cond
   | Let binding ->
       let acc =
         match (binding.value.ty, binding_annotation typing binding) with

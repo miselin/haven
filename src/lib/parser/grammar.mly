@@ -15,7 +15,9 @@
 %token <Haven_token.Token.numeric_type> NUMERIC_TYPE
 %token <Haven_token.Token.vec_type> VEC_TYPE
 %token <Haven_token.Token.mat_type> MAT_TYPE
+%token VEC_HOLE_TYPE MAT_HOLE_TYPE
 %token FLOAT_TYPE VOID_TYPE STR_TYPE
+%token ASSERT_DIRECTIVE
 %token <int> INT_LIT
 %token <float> FLOAT_LIT
 %token <int> HEX_LIT OCT_LIT BIN_LIT
@@ -163,6 +165,9 @@ stmt_inner:
       Let (mk_loc $startpos $endpos { mut = m; name = n; ty = Some t; init_expr = mk_expr $startpos(i) $endpos(i) (Initializer i); })
     }
   | LET m=boption(MUT) t=haven_type n=identifier EQUAL e=expr { Let (mk_loc $startpos $endpos { mut = m; name = n; ty = Some t; init_expr = e; }) }
+  | ASSERT_DIRECTIVE c=expr COMMA m=STRING_LIT {
+      CompileAssert (mk_loc $startpos $endpos { cond = c; message = mk_id m $startpos(m) $endpos(m) })
+    }
   | RET e=option(expr) { Return e }
   | DEFER e=expr { Defer e }
   | ITER r=iter_range v=identifier b=block { Iter (mk_loc $startpos $endpos { range = r; var = v; body = b }) }
@@ -332,6 +337,8 @@ builtin_type:
   | t=NUMERIC_TYPE { mk_loc $startpos $endpos (NumericType t) }
   | t=VEC_TYPE { mk_loc $startpos $endpos (VecType t) }
   | t=MAT_TYPE { mk_loc $startpos $endpos (MatrixType t) }
+  | VEC_HOLE_TYPE { mk_loc $startpos $endpos VecHoleType }
+  | MAT_HOLE_TYPE { mk_loc $startpos $endpos MatrixHoleType }
   | FLOAT_TYPE { mk_loc $startpos $endpos FloatType }
   | VOID_TYPE { mk_loc $startpos $endpos VoidType }
   | STR_TYPE { mk_loc $startpos $endpos StringType }

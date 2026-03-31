@@ -8,6 +8,8 @@ module Typing = struct
     mutable diagnostics_rev : diagnostic list;
     mutable globals : binding_annotation String_map.t;
     type_env : type_env;
+    functions : Core.function_decl String_map.t;
+    mutable active_specializations : string list;
   }
 
   let add_diagnostic_with_category state category level loc message =
@@ -86,9 +88,10 @@ module Typing = struct
     | Some enum_ty -> lookup_enum_variant state.type_env loc enum_ty variant_name
     | None -> None
 
-  let function_type_of_decl (fn : Core.function_decl) =
-    let return_type = Option.value ~default:(void_type fn.loc) fn.value.return_type in
-    mk_type fn.loc
+  let lookup_function state name = String_map.find_opt name state.functions
+
+  let function_type_with_return loc (fn : Core.function_decl) return_type =
+    mk_type loc
       (Core.FunctionType
          {
            Core.value =
@@ -99,22 +102,89 @@ module Typing = struct
                return_type;
                vararg = fn.value.vararg;
              };
-           loc = fn.loc;
+           loc;
          })
+
+  let function_type_of_decl (fn : Core.function_decl) =
+    let return_type = Option.value ~default:(void_type fn.loc) fn.value.return_type in
+    function_type_with_return fn.loc fn return_type
+
+  let update_function_global state (fn : Core.function_decl)
+      (return_ann : expr_annotation) =
+    let fn_ty =
+      match return_ann.inferred_type with
+      | Some return_ty -> function_type_with_return fn.loc fn return_ty
+      | None -> function_type_of_decl fn
+    in
+    let param_resolved =
+      List.map
+        (fun (param : Core.param) ->
+          resolve_core_type state.type_env [] [] param.loc param.value.ty)
+        fn.value.params.value.params
+    in
+    let resolved_type =
+      let rec collect acc = function
+        | [] -> Some (List.rev acc)
+        | Some ty :: rest -> collect (ty :: acc) rest
+        | None :: _ -> None
+      in
+      match (collect [] param_resolved, return_ann.resolved_type) with
+      | Some params, Some ret -> Some (ResolvedFunction (params, ret, fn.value.vararg))
+      | _ -> resolve_core_type state.type_env [] [] fn.loc fn_ty
+    in
+    state.globals <-
+      String_map.add fn.value.name.value
+        {
+          inferred_type = Some fn_ty;
+          resolved_type;
+          metavar = metavar_of_type fn_ty;
+          is_mutable = false;
+        }
+        state.globals
+
+  let shape_property_annotation loc value =
+    let ty = numeric_type loc Unsigned 32 in
+    {
+      inferred_type = Some ty;
+      resolved_type = Some (ResolvedInt (Unsigned, 32));
+      metavar =
+        metavar_of_type ~constant:(ConstantInt value)
+          ~integer:
+            { exact_value = Some value; minimum_bits = Some 32; signedness = Some Unsigned }
+          ty;
+    }
+
+  let unknown_shape_property_annotation loc =
+    let ty = numeric_type loc Unsigned 32 in
+    {
+      inferred_type = Some ty;
+      resolved_type = Some (ResolvedInt (Unsigned, 32));
+      metavar = metavar_of_type ty;
+    }
 
   let collect_globals state (program : Core.program) =
     let add_global name binding =
       state.globals <- String_map.add name binding state.globals
     in
     let add_function (fn : Core.function_decl) =
-      let ty = function_type_of_decl fn in
-      add_global fn.value.name.value
-        {
-          inferred_type = Some ty;
-          resolved_type = resolve_core_type state.type_env [] [] fn.loc ty;
-          metavar = metavar_of_type ty;
-          is_mutable = false;
-        }
+      match fn.value.return_type with
+      | Some _ ->
+          let ty = function_type_of_decl fn in
+          add_global fn.value.name.value
+            {
+              inferred_type = Some ty;
+              resolved_type = resolve_core_type state.type_env [] [] fn.loc ty;
+              metavar = metavar_of_type ty;
+              is_mutable = false;
+            }
+      | None ->
+          add_global fn.value.name.value
+            {
+              inferred_type = None;
+              resolved_type = None;
+              metavar = unknown_metavar;
+              is_mutable = false;
+            }
     in
     List.iter
       (fun (decl : Core.top_decl) ->
@@ -132,6 +202,18 @@ module Typing = struct
               }
         | Core.TDecl _ | Core.Import _ | Core.CImport _ -> ())
       program.value.decls
+
+  let collect_functions (program : Core.program) =
+    let add_fn map (fn : Core.function_decl) =
+      String_map.add fn.value.name.value fn map
+    in
+    List.fold_left
+      (fun map (decl : Core.top_decl) ->
+        match decl.value with
+        | Core.FDecl fn -> add_fn map fn
+        | Core.Foreign foreign -> List.fold_left add_fn map foreign.value.decls
+        | Core.VDecl _ | Core.TDecl _ | Core.Import _ | Core.CImport _ -> map)
+      String_map.empty program.value.decls
 
   let rec infer_block state env ?(result_expected : resolved_ty option = None)
       ~return_expected (block : Core.block) :
@@ -162,6 +244,9 @@ module Typing = struct
     match stmt.value with
     | Core.Expression expr ->
         ignore (infer_value_expression state env expr);
+        env
+    | Core.CompileAssert compile_assert ->
+        ignore (infer_value_expression state env compile_assert.value.cond);
         env
     | Core.Return expr ->
         Option.iter
@@ -404,28 +489,43 @@ module Typing = struct
                   | None -> unknown_expr_annotation)
               | None -> unknown_expr_annotation)
           | Some (ResolvedVec vec) -> (
-              match vector_field_index field.value.field.value with
-              | Some idx when idx < vec.dimension ->
-                  let core_ty = float_type expr.loc in
-                  {
-                    inferred_type = Some core_ty;
-                    resolved_type = Some ResolvedFloat;
-                    metavar = metavar_of_type core_ty;
-                  }
-              | _ -> unknown_expr_annotation)
+              match field.value.field.value with
+              | "dim" -> shape_property_annotation expr.loc vec.dimension
+              | _ -> (
+                  match vector_field_index field.value.field.value with
+                  | Some idx when idx < vec.dimension ->
+                      let core_ty = float_type expr.loc in
+                      {
+                        inferred_type = Some core_ty;
+                        resolved_type = Some ResolvedFloat;
+                        metavar = metavar_of_type core_ty;
+                      }
+                  | _ -> unknown_expr_annotation))
           | Some (ResolvedMatrix mat) -> (
-              match vector_field_index field.value.field.value with
-              | Some idx when idx < mat.rows ->
-                  let vec_ty =
-                    mk_type expr.loc
-                      (Core.VecType { kind = FloatVec; dimension = mat.columns })
-                  in
-                  {
-                    inferred_type = Some vec_ty;
-                    resolved_type =
-                      Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
-                    metavar = metavar_of_type vec_ty;
-                  }
+              match field.value.field.value with
+              | "rows" -> shape_property_annotation expr.loc mat.rows
+              | "cols" -> shape_property_annotation expr.loc mat.columns
+              | _ -> (
+                  match vector_field_index field.value.field.value with
+                  | Some idx when idx < mat.rows ->
+                      let vec_ty =
+                        mk_type expr.loc
+                          (Core.VecType { kind = FloatVec; dimension = mat.columns })
+                      in
+                      {
+                        inferred_type = Some vec_ty;
+                        resolved_type =
+                          Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
+                        metavar = metavar_of_type vec_ty;
+                      }
+                  | _ -> unknown_expr_annotation))
+          | Some ResolvedVecHole -> (
+              match field.value.field.value with
+              | "dim" -> unknown_shape_property_annotation expr.loc
+              | _ -> unknown_expr_annotation)
+          | Some ResolvedMatrixHole -> (
+              match field.value.field.value with
+              | "rows" | "cols" -> unknown_shape_property_annotation expr.loc
               | _ -> unknown_expr_annotation)
           | _ -> unknown_expr_annotation)
       | Core.Assign write ->
@@ -974,6 +1074,63 @@ module Typing = struct
           }
       | _ -> unknown_expr_annotation
     in
+    let infer_specialized_function_call (fn_decl : Core.function_decl) =
+      let expected_args =
+        List.map
+          (fun (param : Core.param) ->
+            if type_has_specialization_hole param.value.ty then None
+            else resolve_core_type state.type_env [] [] param.loc param.value.ty)
+          fn_decl.value.params.value.params
+      in
+      infer_args_with_expected expected_args;
+      if List.length call.value.params <> List.length fn_decl.value.params.value.params then
+        unknown_expr_annotation
+      else
+        let arg_anns =
+          List.map (infer_value_expression state env) call.value.params
+        in
+        if
+          List.exists
+            (fun (ann : expr_annotation) -> ann.resolved_type = None)
+            arg_anns
+        then
+          unknown_expr_annotation
+        else
+          let specialization_key = function_id fn_decl in
+          if List.mem specialization_key state.active_specializations then
+            unknown_expr_annotation
+          else
+            let temp_state =
+              {
+                state with
+                annotations = make_annotations ();
+                diagnostics_rev = [];
+                active_specializations = specialization_key :: state.active_specializations;
+              }
+            in
+            let local_env = push_scope [ state.globals ] in
+            let local_env =
+              List.fold_left2
+                (fun local_env (param : Core.param) (arg_ann : expr_annotation) ->
+                  bind_current local_env param.value.name.value
+                    {
+                      inferred_type = arg_ann.inferred_type;
+                      resolved_type = arg_ann.resolved_type;
+                      metavar = arg_ann.metavar;
+                      is_mutable = false;
+                    })
+                local_env fn_decl.value.params.value.params arg_anns
+            in
+            let return_expected =
+              Option.bind fn_decl.value.return_type
+                (resolve_core_type state.type_env [] [] fn_decl.loc)
+            in
+            match fn_decl.value.definition with
+            | Some body ->
+                infer_block temp_state local_env ~result_expected:return_expected
+                  ~return_expected body
+            | None -> unknown_expr_annotation
+    in
     match call.value.target.value with
     | Core.Identifier id -> (
         match expected_enum_variant state call.loc expected_type id.value with
@@ -982,24 +1139,28 @@ module Typing = struct
             | Some enum_ty -> infer_enum_constructor enum_ty payload_tys
             | None -> unknown_expr_annotation)
         | None ->
-            let target_ann = infer_expression state env call.value.target in
-            match target_ann.inferred_type with
-            | Some ty -> (
-                match ty.value with
-                | Core.FunctionType fn ->
-                    infer_args_with_expected
-                      (List.map
-                         (fun expected_ty ->
-                           resolve_core_type state.type_env [] [] call.loc expected_ty)
-                         fn.value.param_types);
-                    {
-                      inferred_type = Some fn.value.return_type;
-                      resolved_type =
-                        resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
-                      metavar = metavar_of_type fn.value.return_type;
-                    }
-                | _ -> unknown_expr_annotation)
-            | None -> unknown_expr_annotation)
+            (match lookup_function state id.value with
+            | Some fn_decl when function_has_specialization_param fn_decl ->
+                infer_specialized_function_call fn_decl
+            | _ ->
+                let target_ann = infer_expression state env call.value.target in
+                match target_ann.inferred_type with
+                | Some ty -> (
+                    match ty.value with
+                    | Core.FunctionType fn ->
+                        infer_args_with_expected
+                          (List.map
+                             (fun expected_ty ->
+                               resolve_core_type state.type_env [] [] call.loc expected_ty)
+                             fn.value.param_types);
+                        {
+                          inferred_type = Some fn.value.return_type;
+                          resolved_type =
+                            resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
+                          metavar = metavar_of_type fn.value.return_type;
+                        }
+                    | _ -> unknown_expr_annotation)
+                | None -> unknown_expr_annotation))
     | _ ->
         let target_ann = infer_expression state env call.value.target in
         match (call.value.target.value, target_ann.resolved_type) with
@@ -1078,6 +1239,13 @@ module Typing = struct
               resolved_type = Some ResolvedFloat;
               metavar = metavar_of_type ty;
             }
+        | Core.VecHoleType ->
+            let ty = float_type index.loc in
+            {
+              inferred_type = Some ty;
+              resolved_type = Some ResolvedFloat;
+              metavar = metavar_of_type ty;
+            }
         | Core.MatrixType mat ->
             let ty = mk_type index.loc (Core.VecType { kind = FloatVec; dimension = mat.columns }) in
             {
@@ -1085,6 +1253,9 @@ module Typing = struct
               resolved_type = Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
               metavar = metavar_of_type ty;
             }
+        | Core.MatrixHoleType ->
+            let ty = mk_type index.loc Core.VecHoleType in
+            { inferred_type = Some ty; resolved_type = Some ResolvedVecHole; metavar = metavar_of_type ty }
         | _ -> unknown_expr_annotation)
     | None, Some (ResolvedArray (inner, _) | ResolvedPointer inner | ResolvedBox inner | ResolvedCell inner) ->
         let ty = core_type_of_resolved_ty index.loc inner in
@@ -1099,6 +1270,12 @@ module Typing = struct
           resolved_type = Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
           metavar = metavar_of_type ty;
         }
+    | None, Some ResolvedVecHole ->
+        let ty = float_type index.loc in
+        { inferred_type = Some ty; resolved_type = Some ResolvedFloat; metavar = metavar_of_type ty }
+    | None, Some ResolvedMatrixHole ->
+        let ty = mk_type index.loc Core.VecHoleType in
+        { inferred_type = Some ty; resolved_type = Some ResolvedVecHole; metavar = metavar_of_type ty }
     | None, _ -> unknown_expr_annotation
 
   and infer_write_like state env ~pointee_target (write : Core.write) : expr_annotation =
@@ -1126,18 +1303,66 @@ module Typing = struct
         { inferred_type = Some ty; resolved_type = Some resolved_type; metavar = metavar_of_type ty }
     | None, None, None, None -> unknown_expr_annotation
 
-  let run (program : Core.parsed_program) =
+  let make_state (program : Core.parsed_program) =
     let type_env = type_env_of_program program.program in
-    let state =
-      {
-        annotations = make_annotations ();
-        diagnostics_rev = [];
-        globals = String_map.empty;
-        type_env;
-      }
-    in
+    {
+      annotations = make_annotations ();
+      diagnostics_rev = [];
+      globals = String_map.empty;
+      type_env;
+      functions = collect_functions program.program;
+      active_specializations = [];
+    }
+
+  let globals_env state = [ state.globals ]
+
+  let analyze_function_body_with_state state (program : Core.parsed_program)
+      ?(active_specializations = []) ?param_bindings (fn : Core.function_decl) =
+    state.active_specializations <- active_specializations;
     collect_globals state program.program;
-    let env = [ state.globals ] in
+    let env = push_scope (globals_env state) in
+    let return_expected =
+      Option.bind fn.value.return_type (resolve_core_type state.type_env [] [] fn.loc)
+    in
+    let env =
+      match param_bindings with
+      | Some bindings ->
+          List.fold_left2
+            (fun env (param : Core.param) binding ->
+              bind_current env param.value.name.value binding)
+            env fn.value.params.value.params bindings
+      | None ->
+          List.fold_left
+            (fun env (param : Core.param) ->
+              let binding =
+                binding_from_type ~is_mutable:false state.type_env param.value.ty
+              in
+              bind_current env param.value.name.value binding)
+            env fn.value.params.value.params
+    in
+    match fn.value.definition with
+    | Some body ->
+        infer_block state env ~result_expected:return_expected ~return_expected body
+    | None -> unknown_expr_annotation
+
+  let analyze_function_body (program : Core.parsed_program)
+      ?(active_specializations = []) ?param_bindings (fn : Core.function_decl) =
+    let state = make_state program in
+    let body_result =
+      analyze_function_body_with_state state program ~active_specializations
+        ?param_bindings fn
+    in
+    ( {
+        program;
+        annotations = state.annotations;
+        diagnostics = List.rev state.diagnostics_rev;
+      },
+      body_result )
+
+  let run (program : Core.parsed_program) =
+    let state = make_state program in
+    collect_globals state program.program;
+    let globals_env () = globals_env state in
     List.iter
       (fun (decl : Core.top_decl) ->
         match decl.value with
@@ -1145,22 +1370,25 @@ module Typing = struct
             match fn.value.definition with
             | None -> ()
             | Some body ->
-                let env = push_scope env in
-        let return_expected =
-          Option.bind fn.value.return_type (resolve_core_type state.type_env [] [] fn.loc)
-        in
-        let env =
-          List.fold_left
-            (fun env (param : Core.param) ->
-              let binding =
+                let env = push_scope (globals_env ()) in
+                let return_expected =
+                  Option.bind fn.value.return_type
+                    (resolve_core_type state.type_env [] [] fn.loc)
+                in
+                let env =
+                  List.fold_left
+                    (fun env (param : Core.param) ->
+                      let binding =
                         binding_from_type ~is_mutable:false state.type_env param.value.ty
                       in
                       bind_current env param.value.name.value binding)
                     env fn.value.params.value.params
                 in
-                ignore
-                  (infer_block state env ~result_expected:return_expected ~return_expected
-                     body))
+                let result_ann =
+                  infer_block state env ~result_expected:return_expected ~return_expected body
+                in
+                if function_has_specialization_param fn then
+                  update_function_global state fn result_ann)
         | Core.Foreign foreign ->
             List.iter
               (fun (fn : Core.function_decl) ->
@@ -1171,7 +1399,7 @@ module Typing = struct
                       Option.bind fn.value.return_type
                         (resolve_core_type state.type_env [] [] fn.loc)
                     in
-                    let env = push_scope env in
+                    let env = push_scope (globals_env ()) in
                     let env =
                       List.fold_left
                         (fun env (param : Core.param) ->
@@ -1181,9 +1409,12 @@ module Typing = struct
                           bind_current env param.value.name.value binding)
                         env fn.value.params.value.params
                     in
-                    ignore
-                      (infer_block state env ~result_expected:return_expected
-                         ~return_expected body))
+                    let result_ann =
+                      infer_block state env ~result_expected:return_expected
+                        ~return_expected body
+                    in
+                    if function_has_specialization_param fn then
+                      update_function_global state fn result_ann)
               foreign.value.decls
         | Core.VDecl binding ->
             Option.iter
@@ -1191,7 +1422,7 @@ module Typing = struct
                 let expected_type =
                   resolve_core_type state.type_env [] [] binding.loc binding.value.ty
                 in
-                ignore (infer_value_expression state env ~expected_type init);
+                ignore (infer_value_expression state (globals_env ()) ~expected_type init);
                 ignore
                   (record_binding state
                      {

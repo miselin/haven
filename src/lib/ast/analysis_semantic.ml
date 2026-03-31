@@ -9,6 +9,7 @@ module Semantic = struct
     typed : typing_result;
     mutable diagnostics_rev : diagnostic list;
     type_env : type_env;
+    functions : Core.function_decl String_map.t;
   }
 
   let add_diagnostic_with_category state category level loc message =
@@ -34,14 +35,19 @@ module Semantic = struct
   let expr_annotation state expr =
     Hashtbl.find_opt state.typed.annotations.exprs (expr_id expr)
 
-  let initial_scope typed =
+  let lookup_function state name = String_map.find_opt name state.functions
+
+  let initial_scope (typed : typing_result) =
+    let type_env = type_env_of_program typed.program.program in
     let add_decl scope (decl : Core.top_decl) =
       match decl.value with
       | Core.FDecl fn ->
           String_map.add fn.value.name.value
             {
               inferred_type = Some (Typing.function_type_of_decl fn);
-              resolved_type = None;
+              resolved_type =
+                resolve_core_type type_env [] [] fn.loc
+                  (Typing.function_type_of_decl fn);
               metavar = metavar_of_type (Typing.function_type_of_decl fn);
               is_mutable = false;
             }
@@ -61,7 +67,9 @@ module Semantic = struct
               String_map.add fn.value.name.value
                 {
                   inferred_type = Some (Typing.function_type_of_decl fn);
-                  resolved_type = None;
+                  resolved_type =
+                    resolve_core_type type_env [] [] fn.loc
+                      (Typing.function_type_of_decl fn);
                   metavar = metavar_of_type (Typing.function_type_of_decl fn);
                   is_mutable = false;
                 }
@@ -70,6 +78,18 @@ module Semantic = struct
       | Core.TDecl _ | Core.Import _ | Core.CImport _ -> scope
     in
     List.fold_left add_decl String_map.empty typed.program.program.value.decls
+
+  let collect_functions (program : Core.program) =
+    let add_fn map (fn : Core.function_decl) =
+      String_map.add fn.value.name.value fn map
+    in
+    List.fold_left
+      (fun map (decl : Core.top_decl) ->
+        match decl.value with
+        | Core.FDecl fn -> add_fn map fn
+        | Core.Foreign foreign -> List.fold_left add_fn map foreign.value.decls
+        | Core.VDecl _ | Core.TDecl _ | Core.Import _ | Core.CImport _ -> map)
+      String_map.empty program.value.decls
 
   let duplicate_binding env name =
     match env with
@@ -225,6 +245,9 @@ module Semantic = struct
     match stmt.value with
     | Core.Expression expr ->
         check_expression_in_context state env loop_depth true expr;
+        env
+    | Core.CompileAssert compile_assert ->
+        check_expression state env loop_depth compile_assert.value.cond;
         env
     | Core.Return expr ->
         Option.iter (check_expression state env loop_depth) expr;
@@ -523,7 +546,111 @@ module Semantic = struct
     | Core.Call call ->
         check_expression state env loop_depth call.value.target;
         List.iter (check_expression state env loop_depth) call.value.params;
-        (match expr_annotation state call.value.target with
+        (match (call.value.target.value, expr_annotation state call.value.target) with
+        | Core.Identifier id, _ -> (
+            match lookup_function state id.value with
+            | Some fn_decl when function_has_specialization_param fn_decl ->
+                let actual_arity = List.length call.value.params in
+                let required_arity = List.length fn_decl.value.params.value.params in
+                if actual_arity <> required_arity then
+                  add_diagnostic state Error call.loc
+                    "call argument count does not match the function signature"
+            | _ -> ())
+        | _ -> ());
+        (match call.value.target.value with
+        | Core.Identifier id -> (
+            match lookup_function state id.value with
+            | Some fn_decl when function_has_specialization_param fn_decl -> ()
+            | _ -> (
+                match expr_annotation state call.value.target with
+                | Some { inferred_type = Some ty; _ } -> (
+                    match ty.value with
+                    | Core.FunctionType fn ->
+                        let actual_arity = List.length call.value.params in
+                        let required_arity = List.length fn.value.param_types in
+                        if
+                          actual_arity < required_arity
+                          || ((not fn.value.vararg) && actual_arity > required_arity)
+                        then
+                          add_diagnostic state Error call.loc
+                            "call argument count does not match the function signature";
+                        List.iter2
+                          (fun (arg : Core.expression) expected_ty ->
+                            if arg.value = Core.Nil then
+                              match resolve_core_type state.type_env [] [] arg.loc expected_ty with
+                              | Some resolved when resolved_is_pointerish resolved -> ()
+                              | _ ->
+                                  add_diagnostic state Error arg.loc
+                                    "nil is only valid for pointer-like parameter types")
+                          (List.filteri
+                             (fun index _ -> index < List.length fn.value.param_types)
+                             call.value.params)
+                          (List.filteri
+                             (fun index _ -> index < List.length call.value.params)
+                             fn.value.param_types);
+                        List.iter2
+                          (fun (arg : Core.expression) expected_ty ->
+                            match
+                              ( expr_annotation state arg,
+                                resolve_core_type state.type_env [] [] arg.loc expected_ty )
+                            with
+                            | Some { resolved_type = Some actual; _ }, Some expected
+                              when not (resolved_compatible actual expected)
+                                   && arg.value <> Core.Nil ->
+                                add_diagnostic state Error arg.loc
+                                  "call argument type does not match the function signature"
+                            | _ -> ())
+                          (List.filteri
+                             (fun index _ -> index < List.length fn.value.param_types)
+                             call.value.params)
+                          (List.filteri
+                             (fun index _ -> index < List.length call.value.params)
+                             fn.value.param_types)
+                    | _ -> ())
+                | Some { resolved_type = Some enum_ty; _ } -> (
+                    match call.value.target.value with
+                    | Core.Literal literal -> (
+                        match literal.value with
+                        | Core.Enum enum_lit -> (
+                            match
+                              lookup_enum_variant state.type_env call.loc enum_ty
+                                enum_lit.value.enum_variant.value
+                            with
+                            | Some (_, expected_payloads) ->
+                                if List.length call.value.params <> List.length expected_payloads
+                                then
+                                  add_diagnostic state Error call.loc
+                                    "enum constructor argument count does not match the variant";
+                                List.iter2
+                                  (fun (arg : Core.expression) expected_ty ->
+                                    match
+                                      ( expr_annotation state arg,
+                                        expected_ty,
+                                        arg.value )
+                                    with
+                                    | Some { resolved_type = Some actual; _ }, expected, _
+                                      when not (resolved_compatible actual expected) ->
+                                        add_diagnostic state Error arg.loc
+                                          "enum constructor argument type does not match the variant"
+                                    | _, expected, Core.Nil ->
+                                        if not (resolved_is_pointerish expected) then
+                                          add_diagnostic state Error arg.loc
+                                            "nil is only valid for pointer-like enum payloads"
+                                    | _ -> ())
+                                  (List.filteri
+                                     (fun index _ ->
+                                       index < List.length expected_payloads)
+                                     call.value.params)
+                                  (List.filteri
+                                     (fun index _ ->
+                                       index < List.length call.value.params)
+                                     expected_payloads)
+                            | None -> ())
+                        | _ -> ())
+                    | _ -> ())
+                | _ -> ()))
+        | _ ->
+            (match expr_annotation state call.value.target with
         | Some { inferred_type = Some ty; _ } -> (
             match ty.value with
             | Core.FunctionType fn ->
@@ -603,7 +730,7 @@ module Semantic = struct
                     | None -> ())
                 | _ -> ())
             | _ -> ())
-        | _ -> ())
+        | _ -> ()))
     | Core.Index index ->
         check_expression state env loop_depth index.value.target;
         check_expression state env loop_depth index.value.index
@@ -706,7 +833,12 @@ module Semantic = struct
 
   let run typed : semantic_result =
     let state =
-      { typed; diagnostics_rev = []; type_env = type_env_of_program typed.program.program }
+      {
+        typed;
+        diagnostics_rev = [];
+        type_env = type_env_of_program typed.program.program;
+        functions = collect_functions typed.program.program;
+      }
     in
     let env = [ initial_scope typed ] in
     List.iter
@@ -717,19 +849,20 @@ module Semantic = struct
             | None -> ()
             | Some body ->
                 let return_expected =
-                  let core_ty =
-                    Option.value ~default:(void_type fn.loc) fn.value.return_type
-                  in
-                  resolve_core_type state.type_env [] [] fn.loc core_ty
+                  Option.bind fn.value.return_type
+                    (resolve_core_type state.type_env [] [] fn.loc)
                 in
                 let env = push_scope env in
                 let env =
                   List.fold_left
                     (fun env (param : Core.param) ->
+                      let resolved_type =
+                        resolve_core_type state.type_env [] [] param.loc param.value.ty
+                      in
                       bind_current env param.value.name.value
                         {
                           inferred_type = Some param.value.ty;
-                          resolved_type = None;
+                          resolved_type;
                           metavar = metavar_of_type param.value.ty;
                               is_mutable = false;
                             })
@@ -750,19 +883,20 @@ module Semantic = struct
                 | None -> ()
                 | Some body ->
                     let return_expected =
-                      let core_ty =
-                        Option.value ~default:(void_type fn.loc) fn.value.return_type
-                      in
-                      resolve_core_type state.type_env [] [] fn.loc core_ty
+                      Option.bind fn.value.return_type
+                        (resolve_core_type state.type_env [] [] fn.loc)
                     in
                     let env = push_scope env in
                     let env =
                       List.fold_left
                         (fun env (param : Core.param) ->
+                          let resolved_type =
+                            resolve_core_type state.type_env [] [] param.loc param.value.ty
+                          in
                           bind_current env param.value.name.value
                             {
                               inferred_type = Some param.value.ty;
-                              resolved_type = None;
+                              resolved_type;
                               metavar = metavar_of_type param.value.ty;
                               is_mutable = false;
                             })

@@ -1,8 +1,8 @@
 (library
  (name haven_ast)
  (public_name haven.ast)
- (modules analysis_cfold analysis analysis_cleanup analysis_ownership
-  analysis_purity analysis_semantic analysis_types analysis_typing
+ (modules analysis_asserts analysis_cfold analysis analysis_cleanup analysis_ownership
+  analysis_purity analysis_semantic analysis_specialize analysis_types analysis_typing
   analysis_verify ast cimport convert core_ast imports llvm_ir
   platform_defaults platform_defaults_common platform_defaults_darwin
   platform_defaults_unix pretty surface_ast)

@@ -219,8 +219,12 @@ let collect_lexical_tokens (parsed : CST.parsed_program) =
               (loc_of_raw_tok
                  { tok = entry.token; startp = entry.startp; endp = entry.endp })
         | Lexer.Raw.Ident _ -> acc
-        | Lexer.Raw.Numeric_type _ | Vec_type _ | Mat_type _ | Float_type
-        | Void_type | Str_type ->
+        | Lexer.Raw.Directive Assert ->
+            add_token_for_loc acc ~token_type:"keyword"
+              (loc_of_raw_tok
+                 { tok = entry.token; startp = entry.startp; endp = entry.endp })
+        | Lexer.Raw.Numeric_type _ | Vec_type _ | Mat_type _ | Vec_hole_type
+        | Mat_hole_type | Float_type | Void_type | Str_type ->
             add_token_for_loc acc ~token_type:"type"
               (loc_of_raw_tok
                  { tok = entry.token; startp = entry.startp; endp = entry.endp })

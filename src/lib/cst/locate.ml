@@ -94,7 +94,14 @@ let add_if predicate node acc = if predicate node then node :: acc else acc
 let rec walk_haven_type predicate acc (ty : haven_type) =
   let acc = add_if predicate (HavenType ty) acc in
   match ty.value with
-  | NumericType _ | VecType _ | MatrixType _ | FloatType | VoidType | StringType
+  | NumericType _
+  | VecType _
+  | MatrixType _
+  | VecHoleType
+  | MatrixHoleType
+  | FloatType
+  | VoidType
+  | StringType
     ->
       acc
   | CustomType _ -> acc
@@ -219,6 +226,7 @@ and walk_statement predicate acc stmt =
         | Some t -> walk_haven_type predicate acc t
       in
       walk_expression predicate acc s.value.init_expr
+  | CompileAssert a -> walk_expression predicate acc a.value.cond
   | Return (Some e) -> walk_expression predicate acc e
   | Return None -> acc
   | Defer e -> walk_expression predicate acc e

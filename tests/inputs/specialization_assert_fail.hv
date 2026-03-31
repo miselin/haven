@@ -1,0 +1,9 @@
+fn vadd(fvec? a, fvec? b) {
+    @assert a.dim == b.dim, "vector dimensions must match";
+    a + b
+}
+
+pub fn sut() -> i32 {
+    let sum = vadd(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0>);
+    as<i32>(sum.x)
+}

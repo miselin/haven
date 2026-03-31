@@ -57,6 +57,7 @@ module Verify = struct
   and verify_statement state (stmt : Core.statement) =
     match stmt.value with
     | Core.Expression expr -> verify_expression state expr
+    | Core.CompileAssert compile_assert -> verify_expression state compile_assert.value.cond
     | Core.Return expr -> Option.iter (verify_expression state) expr
     | Core.Defer expr -> verify_expression state expr
     | Core.Let binding ->
@@ -125,12 +126,12 @@ module Verify = struct
     verify_expr_annotation state "expression" expr
 
   let verify_function state (fn : Core.function_decl) =
-    let declared_return =
-      Option.value ~default:(void_type fn.loc) fn.value.return_type
-    in
-    verify_declared_type state fn.loc
-      (Printf.sprintf "function %s return type" fn.value.name.value)
-      declared_return;
+    Option.iter
+      (fun declared_return ->
+        verify_declared_type state fn.loc
+          (Printf.sprintf "function %s return type" fn.value.name.value)
+          declared_return)
+      fn.value.return_type;
     List.iter
       (fun (param : Core.param) ->
         verify_declared_type state param.loc

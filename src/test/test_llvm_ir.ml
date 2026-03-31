@@ -5,6 +5,7 @@ let emit_ir source =
   assert_no_diagnostics "llvm ir typing" pipeline.typing.diagnostics;
   assert_no_diagnostics "llvm ir verify" pipeline.verify.diagnostics;
   assert_no_diagnostics "llvm ir semantic" pipeline.semantic.diagnostics;
+  assert_no_diagnostics "llvm ir asserts" pipeline.asserts.diagnostics;
   assert_no_diagnostics "llvm ir purity" pipeline.purity.diagnostics;
   assert_no_diagnostics "llvm ir ownership" pipeline.ownership.diagnostics;
   Haven.Ast.Llvm_ir.emit_ir_string pipeline
@@ -106,4 +107,60 @@ pub fn main() -> void {}
   assert_true "non-constant vector literals should be assembled with insertelement"
     (string_contains literal_ir "define <3 x float> @make_vec");
   assert_true "non-constant matrix literals should lower to their flat vector form"
-    (string_contains literal_ir "define <4 x float> @make_mat")
+    (string_contains literal_ir "define <4 x float> @make_mat");
+
+  let specialization_ir =
+    emit_ir
+      {|
+fn vadd(fvec? a, fvec? b) { a + b }
+pub fn main() -> fvec3 { vadd(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>) }
+|}
+  in
+  assert_true "specialization should clone concrete vector variants before LLVM"
+    (string_contains specialization_ir "@vadd__spec__fvec3__fvec3");
+  assert_true "specialized vector addition should lower with concrete vector ops"
+    (string_contains specialization_ir "fadd <3 x float>");
+
+  let shape_property_ir =
+    emit_ir
+      {|
+fn width(mat? m) { m.cols }
+pub fn main() -> u32 { width(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>) }
+|}
+  in
+  assert_true "shape property specialization should lower concrete matrix helpers"
+    (string_contains shape_property_ir "@width__spec__mat2x2");
+  assert_true "shape properties should lower as plain integer constants"
+    (string_contains shape_property_ir "store i32 2");
+
+  let get_mat_row_ir =
+    emit_ir
+      {|
+fn get_mat_row(mat? m, u32 row) { m[row] }
+pub fn main() -> fvec3 {
+  get_mat_row(Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>, 1)
+}
+|}
+  in
+  assert_true "get_mat_row should clone a concrete helper before LLVM"
+    (string_contains get_mat_row_ir "@get_mat_row__spec__mat2x3");
+  assert_true "specialized matrix row access should still lower through row addressing"
+    (string_contains get_mat_row_ir "getelementptr inbounds float");
+
+  let compile_assert_ir =
+    emit_ir
+      {|
+fn mat_width_eq(mat? a, mat? b) {
+  @assert a.cols == b.cols, "matrix widths must match";
+  a.cols
+}
+
+pub fn main() -> u32 {
+  mat_width_eq(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>, Mat<Vec<5.0, 6.0>, Vec<7.0, 8.0>>)
+}
+|}
+  in
+  assert_true "successful compile asserts should not reach LLVM"
+    (not (string_contains compile_assert_ir "compile-time assert"));
+  assert_true "compile assert specializations should still lower normally"
+    (string_contains compile_assert_ir "@mat_width_eq__spec__mat2x2__mat2x2")

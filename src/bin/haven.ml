@@ -70,6 +70,7 @@ let collect_pipeline_diagnostics (pipeline : Analysis.Pipeline.result) =
   pipeline.typing.diagnostics
   @ pipeline.verify.diagnostics
   @ pipeline.semantic.diagnostics
+  @ pipeline.asserts.diagnostics
   @ pipeline.purity.diagnostics
   @ pipeline.ownership.diagnostics
 

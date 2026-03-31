@@ -23,6 +23,7 @@ let collect_pipeline_diagnostics (pipeline : Analysis.Pipeline.result) =
   pipeline.typing.diagnostics
   @ pipeline.verify.diagnostics
   @ pipeline.semantic.diagnostics
+  @ pipeline.asserts.diagnostics
   @ pipeline.purity.diagnostics
   @ pipeline.ownership.diagnostics
 
@@ -59,12 +60,21 @@ let publish_diagnostics_params (state : state) (uri : DocumentUri.t) =
         (PublishDiagnosticsParams.create
            ~diagnostics:(diagnostics_for_doc doc) ~uri ?version:doc.version ())
 
+let publish_all_diagnostics_params (state : state) =
+  Hashtbl.fold
+    (fun uri _ acc ->
+      match publish_diagnostics_params state uri with
+      | None -> acc
+      | Some params -> params :: acc)
+    state.docs []
+
 let server_capabilities () : ServerCapabilities.t =
   ServerCapabilities.create
     ~textDocumentSync:
       (`TextDocumentSyncOptions
          (TextDocumentSyncOptions.create ~openClose:true
-            ~change:TextDocumentSyncKind.Incremental ()))
+            ~change:TextDocumentSyncKind.Incremental
+            ~save:(`SaveOptions (SaveOptions.create ~includeText:true ())) ()))
     ~definitionProvider:(`Bool true)
     ~documentHighlightProvider:(`Bool true)
     ~documentFormattingProvider:(`Bool true)
@@ -97,6 +107,9 @@ let on_did_close (state : state) (doc : TextDocumentIdentifier.t) =
 let on_did_change (state : state) (doc : VersionedTextDocumentIdentifier.t)
     (evs : TextDocumentContentChangeEvent.t list) =
   Document_store.change_doc state.docs doc evs
+
+let on_did_save (state : state) (params : DidSaveTextDocumentParams.t) =
+  Document_store.save_doc state.docs params.textDocument params.text
 
 let with_doc state uri f =
   Option.bind (Document_store.get_doc state.docs uri) f
@@ -187,19 +200,51 @@ let on_code_lenses (state : state) (uri : DocumentUri.t) =
 let on_execute_command (_state : state) command =
   if String.equal command Code_lenses.command_name then Some `Null else None
 
+let parse_cst text uri =
+  let filename = DocumentUri.to_path uri in
+  try Some (Haven.Parser.parse_string ~filename text) with _ -> None
+
+let read_file_text path =
+  try
+    let ch = open_in_bin path in
+    Fun.protect
+      ~finally:(fun () -> close_in_noerr ch)
+      (fun () ->
+        let len = in_channel_length ch in
+        really_input_string ch len)
+    |> Option.some
+  with _ -> None
+
 let format_document (state : state) (uri : DocumentUri.t) :
     TextEdit.t list option =
-  let full_range =
-    let start_pos = { Position.line = 0; character = 0 } in
-    let end_pos = { Position.line = max_int; character = 0 } in
-    { Range.start = start_pos; end_ = end_pos }
-  in
-  match Document_store.get_cst state.docs uri with
-  | None -> None
-  | Some cst ->
-      let newText = Haven.Cst.Emit.emit_program_to_string cst in
-      let edit = TextEdit.create ~range:full_range ~newText in
-      Some [ edit ]
+  match Document_store.get_doc state.docs uri with
+  | None ->
+      let path = DocumentUri.to_path uri in
+      Option.bind (read_file_text path) (fun text ->
+          Option.bind (parse_cst text uri) (fun cst ->
+              let newText = Haven.Cst.Emit.emit_program_to_string cst in
+              let edit =
+                TextEdit.create ~range:(Lsp_helpers.full_document_range text)
+                  ~newText
+              in
+              Some [ edit ]))
+  | Some doc -> (
+      match doc.cst with
+      | Some cst ->
+          let newText = Haven.Cst.Emit.emit_program_to_string cst in
+          let edit =
+            TextEdit.create ~range:(Lsp_helpers.full_document_range doc.text)
+              ~newText
+          in
+          Some [ edit ]
+      | None ->
+          Option.bind (parse_cst doc.text uri) (fun cst ->
+              let newText = Haven.Cst.Emit.emit_program_to_string cst in
+              let edit =
+                TextEdit.create ~range:(Lsp_helpers.full_document_range doc.text)
+                  ~newText
+              in
+              Some [ edit ]))
 
 let on_formatting (state : state) (params : DocumentFormattingParams.t) :
     TextEdit.t list option =
