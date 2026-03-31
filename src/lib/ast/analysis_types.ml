@@ -436,6 +436,8 @@ let rec string_of_resolved_ty = function
   | ResolvedVoid -> "void"
   | ResolvedVec vec -> Printf.sprintf "vec%d" vec.dimension
   | ResolvedMatrix mat -> Printf.sprintf "mat%dx%d" mat.rows mat.columns
+  | ResolvedVecHole -> "vec?"
+  | ResolvedMatrixHole -> "mat?"
   | ResolvedPointer inner -> string_of_resolved_ty inner ^ "*"
   | ResolvedBox inner -> string_of_resolved_ty inner ^ "^"
   | ResolvedCell inner -> "cell<" ^ string_of_resolved_ty inner ^ ">"
@@ -714,6 +716,8 @@ let rec resolved_default_constructible type_env = function
   | ResolvedVoid
   | ResolvedVec _
   | ResolvedMatrix _
+  | ResolvedVecHole
+  | ResolvedMatrixHole
   | ResolvedPointer _
   | ResolvedBox _
   | ResolvedCell _

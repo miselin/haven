@@ -235,6 +235,20 @@ module Specialize = struct
         }
     | Core.BoxExpr inner ->
         { expr with value = Core.BoxExpr (rewrite_expression state annotations inner) }
+    | Core.BoxConstruct box ->
+        {
+          expr with
+          value =
+            Core.BoxConstruct
+              {
+                box with
+                value =
+                  {
+                    box.value with
+                    args = List.map (rewrite_expression state annotations) box.value.args;
+                  };
+              };
+        }
     | Core.Unbox inner ->
         { expr with value = Core.Unbox (rewrite_expression state annotations inner) }
     | Core.Ref inner ->

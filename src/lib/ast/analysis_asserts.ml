@@ -125,6 +125,9 @@ module Assert = struct
       | Core.Match _ -> "match { ... }"
       | Core.BoxExpr inner -> "box " ^ render_expression ~ctx_prec:11 inner
       | Core.BoxType _ -> "box <type>"
+      | Core.BoxConstruct box ->
+          Printf.sprintf "box <type>(%s)"
+            (String.concat ", " (List.map render_expression box.value.args))
       | Core.Unbox inner -> "unbox " ^ render_expression ~ctx_prec:11 inner
       | Core.Ref inner -> "ref " ^ render_expression ~ctx_prec:11 inner
       | Core.Load inner -> "load " ^ render_expression ~ctx_prec:11 inner
@@ -197,6 +200,12 @@ module Assert = struct
         Printf.sprintf "%s := %s"
           (render_specialized_expression state write.value.target)
           (render_specialized_expression state write.value.value)
+    | Core.BoxConstruct box ->
+        Printf.sprintf "box <type>(%s)"
+          (String.concat ", "
+             (List.map
+                (fun expr -> render_specialized_expression state expr)
+                box.value.args))
     | (Core.Literal _ | Core.Identifier _ | Core.Block _ | Core.Initializer _ | Core.Match _
       | Core.BoxType _ | Core.SizeType _ | Core.Nil) ->
         render_expression ~ctx_prec expr

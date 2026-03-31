@@ -259,7 +259,7 @@ pub fn main() -> u32 {
   assert_true "successful compile asserts should not reach LLVM"
     (not (string_contains compile_assert_ir "compile-time assert"));
   assert_true "compile assert specializations should still lower normally"
-    (string_contains compile_assert_ir "@mat_width_eq__spec__mat2x2__mat2x2")
+    (string_contains compile_assert_ir "@mat_width_eq__spec__mat2x2__mat2x2");
 
   let surface_lifecycle_ir =
     emit_ir
