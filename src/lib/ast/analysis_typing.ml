@@ -1236,6 +1236,13 @@ module Typing = struct
               resolved_type = Some ResolvedFloat;
               metavar = metavar_of_type ty;
             }
+        | Core.VecHoleType ->
+            let ty = float_type index.loc in
+            {
+              inferred_type = Some ty;
+              resolved_type = Some ResolvedFloat;
+              metavar = metavar_of_type ty;
+            }
         | Core.MatrixType mat ->
             let ty = mk_type index.loc (Core.VecType { kind = FloatVec; dimension = mat.columns }) in
             {
@@ -1243,6 +1250,9 @@ module Typing = struct
               resolved_type = Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
               metavar = metavar_of_type ty;
             }
+        | Core.MatrixHoleType ->
+            let ty = mk_type index.loc Core.VecHoleType in
+            { inferred_type = Some ty; resolved_type = Some ResolvedVecHole; metavar = metavar_of_type ty }
         | _ -> unknown_expr_annotation)
     | None, Some (ResolvedArray (inner, _) | ResolvedPointer inner | ResolvedBox inner | ResolvedCell inner) ->
         let ty = core_type_of_resolved_ty index.loc inner in

@@ -106,4 +106,23 @@ let run () =
   assert_true "shape property specialization should clone the function"
     (string_contains shape_property_core "width__spec__mat2x2");
   assert_true "shape properties should lower to integer literals before LLVM"
-    (string_contains shape_property_core "Literal(2)")
+    (string_contains shape_property_core "Literal(2)");
+
+  let get_mat_row_pipeline =
+    parse_to_core
+      "fn get_mat_row(mat? m, u32 row) { m[row] }\n\
+       pub fn main() -> fvec3 {\n\
+       \  get_mat_row(Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>, 1)\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "get_mat_row typing" get_mat_row_pipeline.typing.diagnostics;
+  assert_no_diagnostics "get_mat_row verify" get_mat_row_pipeline.verify.diagnostics;
+  assert_no_diagnostics "get_mat_row semantic" get_mat_row_pipeline.semantic.diagnostics;
+  let get_mat_row_core =
+    Haven.Ast.Pretty.core_program_to_string get_mat_row_pipeline.cleaned
+  in
+  assert_true "get_mat_row should specialize to a concrete matrix helper"
+    (string_contains get_mat_row_core "get_mat_row__spec__mat2x3");
+  assert_true "get_mat_row specialization should infer a concrete vector return"
+    (string_contains get_mat_row_core "return=fvec3")

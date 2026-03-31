@@ -130,4 +130,18 @@ pub fn main() -> u32 { width(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>) }
   assert_true "shape property specialization should lower concrete matrix helpers"
     (string_contains shape_property_ir "@width__spec__mat2x2");
   assert_true "shape properties should lower as plain integer constants"
-    (string_contains shape_property_ir "store i32 2")
+    (string_contains shape_property_ir "store i32 2");
+
+  let get_mat_row_ir =
+    emit_ir
+      {|
+fn get_mat_row(mat? m, u32 row) { m[row] }
+pub fn main() -> fvec3 {
+  get_mat_row(Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>, 1)
+}
+|}
+  in
+  assert_true "get_mat_row should clone a concrete helper before LLVM"
+    (string_contains get_mat_row_ir "@get_mat_row__spec__mat2x3");
+  assert_true "specialized matrix row access should still lower through row addressing"
+    (string_contains get_mat_row_ir "getelementptr inbounds float")
