@@ -521,6 +521,8 @@ module Semantic = struct
         | _ -> ())
     | Core.BoxExpr inner ->
         check_expression state env loop_depth inner
+    | Core.BoxConstruct box ->
+        List.iter (check_expression state env loop_depth) box.value.args
     | Core.Unbox inner ->
         check_expression state env loop_depth inner;
         (match expr_resolved_type state inner with
@@ -751,14 +753,15 @@ module Semantic = struct
         if not (is_lvalue write.value.target) then
           add_diagnostic state Error expr.loc
             "assignment target must be assignable";
-        Option.iter
-          (fun name ->
-            match lookup env name with
-            | Some binding when not binding.is_mutable ->
-                add_diagnostic state Error expr.loc
-                  (Printf.sprintf "assignment to immutable binding %s" name)
-            | _ -> ())
-          (root_identifier_name write.value.target);
+        if assignment_requires_mutable_root write.value.target then
+          Option.iter
+            (fun name ->
+              match lookup env name with
+              | Some binding when not binding.is_mutable ->
+                  add_diagnostic state Error expr.loc
+                    (Printf.sprintf "assignment to immutable binding %s" name)
+              | _ -> ())
+            (root_identifier_name write.value.target);
         (match
            ( expr_annotation state write.value.target,
              expr_annotation state write.value.value )

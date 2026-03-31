@@ -124,6 +124,7 @@ and top_decl_desc =
   | Import of string node
   | CImport of string node
   | Foreign of foreign
+  | Extend of type_extend
 
 and top_decl = top_decl_desc node
 
@@ -151,6 +152,18 @@ and var_decl_desc = {
 and var_decl = var_decl_desc node
 and type_decl_desc = { name : identifier; data : type_decl_data }
 and type_decl = type_decl_desc node
+
+and type_extend_desc = { target : identifier; items : extend_item list }
+and type_extend = type_extend_desc node
+
+and lifecycle_construct_desc = { params : param list; body : block }
+and lifecycle_construct = lifecycle_construct_desc node
+
+and extend_item_desc =
+  | ExtendConstruct of lifecycle_construct
+  | ExtendDestruct of block
+
+and extend_item = extend_item_desc node
 
 and type_decl_data =
   | TypeDeclAlias of haven_type

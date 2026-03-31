@@ -31,6 +31,24 @@ let run () =
   assert_parse_ok "initializer without trailing comma"
     "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1 }; thing.value }";
 
+  assert_parse_ok "extend lifecycle block"
+    {|
+type Buffer = struct {
+  i8* ptr;
+  i32 len;
+};
+
+extend Buffer with {
+  construct(i32 len) {
+    self->len = len;
+  }
+
+  destruct {
+    self->len = 0;
+  }
+}
+|};
+
   assert_parse_error_contains "initializer trailing comma" "parse error"
     "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1, }; thing.value }";
 

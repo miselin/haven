@@ -90,6 +90,12 @@ module Cleanup = struct
                 };
             }
       | Core.BoxExpr inner -> Core.BoxExpr (clean_expression typed inner)
+      | Core.BoxConstruct box ->
+          Core.BoxConstruct
+            {
+              box with
+              value = { box.value with args = List.map (clean_expression typed) box.value.args };
+            }
       | Core.Unbox inner -> Core.Unbox (clean_expression typed inner)
       | Core.Ref inner -> Core.Ref (clean_expression typed inner)
       | Core.Load inner -> Core.Load (clean_expression typed inner)
@@ -123,7 +129,7 @@ module Cleanup = struct
       | Core.Assign write -> clean_write_like typed (fun write -> Core.Assign write) write
       | Core.Mutate write -> clean_write_like typed (fun write -> Core.Mutate write) write
       | (Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil | Core.BoxType _) as
-        value ->
+          value ->
           value
     in
     { expr with value = cleaned_value }

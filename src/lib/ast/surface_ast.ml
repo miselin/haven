@@ -69,6 +69,7 @@ and top_decl_desc =
   | Import of string node
   | CImport of string node
   | Foreign of foreign
+  | Extend of type_extend
 
 and top_decl = top_decl_desc node
 
@@ -94,8 +95,23 @@ and var_decl_desc = {
 }
 
 and var_decl = var_decl_desc node
-and type_decl_desc = { name : identifier; data : type_decl_data }
+and type_decl_desc = {
+  name : identifier;
+  data : type_decl_data;
+  construct : function_decl option;
+  destruct : function_decl option;
+}
 and type_decl = type_decl_desc node
+
+and lifecycle_construct_desc = { params : param list; body : block }
+and lifecycle_construct = lifecycle_construct_desc node
+
+and type_extend_desc = {
+  target : identifier;
+  construct : lifecycle_construct option;
+  destruct : block option;
+}
+and type_extend = type_extend_desc node
 
 and type_decl_data =
   | TypeDeclAlias of haven_type
@@ -103,7 +119,15 @@ and type_decl_data =
   | TypeDeclEnum of enum_decl
   | TypeDeclForward
 
-and struct_decl_desc = { fields : struct_field list }
+and struct_lifecycle_desc = {
+  constructor : identifier option;
+  destructor : identifier option;
+}
+and struct_lifecycle = struct_lifecycle_desc node
+and struct_decl_desc = {
+  fields : struct_field list;
+  lifecycle : struct_lifecycle option;
+}
 and enum_decl_desc = { generics : identifier list; variants : enum_variant list }
 and struct_field_desc = { name : identifier; ty : haven_type }
 and enum_variant_desc = { name : identifier; inner_tys : haven_type list }

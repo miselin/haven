@@ -28,6 +28,7 @@ top_decl ::= import
            | foreign_block
            | fn_decl
            | tydecl
+           | extend_decl
            | global_decl
 ```
 
@@ -41,6 +42,17 @@ referenced by:
 
 ```
 import   ::= 'import' STRING ';'
+```
+
+referenced by:
+
+* top_decl
+
+**extend_decl:**
+
+```
+extend_decl
+         ::= 'extend' IDENT 'with' '{' extend_item* '}'
 ```
 
 referenced by:
@@ -258,6 +270,30 @@ type_body
 referenced by:
 
 * tydecl
+
+**extend_item:**
+
+```
+extend_item
+         ::= 'construct' block
+           | 'construct' '(' param_list? ')' block
+           | 'destruct' block
+```
+
+referenced by:
+
+* extend_decl
+
+**param_list:**
+
+```
+param_list
+         ::= param ( ',' param )*
+```
+
+referenced by:
+
+* extend_item
 
 **struct_decl:**
 

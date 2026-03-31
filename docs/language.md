@@ -253,6 +253,34 @@ fn example() -> i32 {
 }
 ```
 
+`box` also supports type-directed construction:
+
+```
+type Buffer = struct {
+    i32 len;
+    i32 cap;
+};
+
+extend Buffer with {
+    construct(i32 cap) {
+        self->len = 0;
+        self->cap = cap;
+    }
+}
+
+fn example() -> i32 {
+    let mut boxed = box Buffer(64);
+    let value = unbox boxed;
+    boxed = nil;
+    value.cap
+}
+```
+
+`box T` allocates storage for `T`, recursively default-initializes its members, and then runs a zero-argument
+constructor if `T` defines one. `box T(args...)` performs the same recursive default initialization, then calls
+`construct` with the supplied arguments. This means member pointers are `nil` and inline subobjects are already in a
+known state before `construct` runs.
+
 Box types are written much like pointers, but using a caret (`^`) instead
 of an asterisk (`*`):
 
@@ -318,6 +346,32 @@ declarations will also be automatically marked `pub` and `impure`, simplifying t
 ### Type Declarations
 
 Type declarations (`type X = ...`) may only appear at the file scope.
+
+### Type Extensions
+
+Type extensions attach behavior to an existing type without changing its layout.
+
+```
+extend Buffer with {
+    construct(i32 cap) {
+        self->len = 0;
+        self->cap = cap;
+    }
+
+    destruct {
+        self->len = 0;
+    }
+}
+```
+
+In the current model, `extend` is behavioral only:
+
+- `construct(...) { ... }` defines an optional constructor hook.
+- `destruct { ... }` defines an optional destructor hook.
+- `self` is provided implicitly inside both hooks and is pointer-like, so fields are accessed with `self->field`.
+
+Constructors run automatically after recursive default-initialization. Destructors run automatically when the final
+boxed reference is released. `extend` does not add fields or change ABI layout.
 
 ### Variable Declarations
 

@@ -250,6 +250,12 @@ module ConstantFold = struct
                 };
             }
       | Core.BoxExpr inner -> Core.BoxExpr (fold_expression inner)
+      | Core.BoxConstruct box ->
+          Core.BoxConstruct
+            {
+              box with
+              value = { box.value with args = List.map fold_expression box.value.args };
+            }
       | Core.Unbox inner -> Core.Unbox (fold_expression inner)
       | Core.Ref inner -> Core.Ref (fold_expression inner)
       | Core.Load inner -> Core.Load (fold_expression inner)
@@ -279,11 +285,14 @@ module ConstantFold = struct
       | Core.Assign write -> Core.Assign (fold_write write)
       | Core.Mutate write -> Core.Mutate (fold_write write)
       | Core.Literal literal -> Core.Literal (fold_literal literal)
-      | (Core.Identifier _ | Core.SizeType _ | Core.Nil | Core.BoxType _) as value -> value
+      | (Core.Identifier _ | Core.SizeType _ | Core.Nil | Core.BoxType _) as value ->
+          value
     in
     let expr = { expr with value } in
     match expr.value with
-    | Core.Literal _ | Core.Identifier _ | Core.Nil | Core.SizeType _ | Core.BoxType _ -> expr
+    | Core.Literal _ | Core.Identifier _ | Core.Nil | Core.SizeType _ | Core.BoxType _
+    | Core.BoxConstruct _ ->
+        expr
     | Core.Block block when block.value.statements = [] -> (
         match block.value.result with Some result -> result | None -> expr)
     | Core.ToBool inner -> (

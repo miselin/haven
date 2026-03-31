@@ -92,7 +92,12 @@ and var_decl_desc = {
 }
 
 and var_decl = var_decl_desc node
-and type_decl_desc = { name : identifier; data : type_decl_data }
+and type_decl_desc = {
+  name : identifier;
+  data : type_decl_data;
+  construct : function_decl option;
+  destruct : function_decl option;
+}
 and type_decl = type_decl_desc node
 
 and type_decl_data =
@@ -101,7 +106,15 @@ and type_decl_data =
   | TypeDeclEnum of enum_decl
   | TypeDeclForward
 
-and struct_decl_desc = { fields : struct_field list }
+and struct_lifecycle_desc = {
+  constructor : identifier option;
+  destructor : identifier option;
+}
+and struct_lifecycle = struct_lifecycle_desc node
+and struct_decl_desc = {
+  fields : struct_field list;
+  lifecycle : struct_lifecycle option;
+}
 and enum_decl_desc = { generics : identifier list; variants : enum_variant list }
 and struct_field_desc = { name : identifier; ty : haven_type }
 and enum_variant_desc = { name : identifier; inner_tys : haven_type list }
@@ -173,6 +186,7 @@ and expression_desc =
   | Match of match_expr
   | BoxExpr of expression
   | BoxType of haven_type
+  | BoxConstruct of box_construct
   | Unbox of expression
   | Ref of expression
   | Load of expression
@@ -183,6 +197,8 @@ and expression_desc =
   | Mutate of write
 
 and expression = expression_desc node
+and box_construct_desc = { ty : haven_type; args : expression list }
+and box_construct = box_construct_desc node
 and call_desc = { target : expression; params : expression list }
 and call = call_desc node
 and index_desc = { target : expression; index : expression }

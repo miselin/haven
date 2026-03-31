@@ -307,10 +307,27 @@ let pp_type_decl fmt (ty : type_decl) =
   fprintf fmt "@[<hv 2>TypeDecl(@,%a,@ %a@,)@]" pp_identifier ty.name
     pp_type_decl_data ty.data
 
+let pp_lifecycle_construct fmt (decl : lifecycle_construct) =
+  fprintf fmt "Construct(params=[%a], body=%a)"
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_param)
+    decl.value.params pp_block decl.value.body
+
+let pp_extend_item fmt (item : extend_item) =
+  match item.value with
+  | ExtendConstruct construct -> pp_lifecycle_construct fmt construct
+  | ExtendDestruct block -> fprintf fmt "Destruct(%a)" pp_block block
+
+let pp_type_extend fmt (ext : type_extend) =
+  let ext = unwrap ext in
+  fprintf fmt "@[<hv 2>Extend(@,%a,@ items=[%a]@,)@]" pp_identifier ext.target
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_extend_item)
+    ext.items
+
 let pp_decl fmt decl =
   match decl.value with
   | FDecl d -> fprintf fmt "@[<hv 2>FDecl(@,%a@,)@]" pp_fdecl d
   | TDecl t -> pp_type_decl fmt t
+  | Extend e -> pp_type_extend fmt e
   | VDecl v -> pp_var_decl fmt v
   | Import i -> fprintf fmt "Import(%s)" i.value
   | CImport i -> fprintf fmt "CImport(%s)" i.value

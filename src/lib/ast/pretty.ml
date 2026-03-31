@@ -270,12 +270,29 @@ let pp_surface_type_decl_data fmt = function
         decl.value.variants
   | TypeDeclForward -> fprintf fmt "Forward"
 
+let pp_surface_lifecycle_fn fmt = function
+  | Some (fn : Surface.function_decl) -> pp_surface_identifier fmt fn.value.name
+  | None -> fprintf fmt "None"
+
+let pp_surface_lifecycle_construct fmt (construct : Surface.lifecycle_construct) =
+  fprintf fmt "Construct(params=[%a], body=%a)"
+    (pp_print_list ~pp_sep pp_surface_param)
+    construct.value.params pp_surface_block construct.value.body
+
+let pp_surface_type_extend fmt (ext : Surface.type_extend) =
+  fprintf fmt "Extend(%a, construct=%a, destruct=%a)" pp_surface_identifier
+    ext.value.target
+    (pp_print_option pp_surface_lifecycle_construct) ext.value.construct
+    (pp_print_option pp_surface_block) ext.value.destruct
+
 let pp_surface_decl fmt (decl : Surface.top_decl) =
   match decl.value with
   | Surface.FDecl fn -> fprintf fmt "FDecl(%a)" pp_surface_function fn
   | TDecl ty ->
-      fprintf fmt "TypeDecl(%a, %a)" pp_surface_identifier ty.value.name
-        pp_surface_type_decl_data ty.value.data
+      fprintf fmt "TypeDecl(%a, %a, construct=%a, destruct=%a)" pp_surface_identifier
+        ty.value.name pp_surface_type_decl_data ty.value.data pp_surface_lifecycle_fn
+        ty.value.construct pp_surface_lifecycle_fn ty.value.destruct
+  | Extend ext -> pp_surface_type_extend fmt ext
   | VDecl v -> pp_surface_var_decl fmt v
   | Import i -> fprintf fmt "Import(%s)" i.value
   | CImport i -> fprintf fmt "CImport(%s)" i.value
@@ -377,6 +394,10 @@ and pp_core_expression fmt (expr : Core.expression) =
         m.value.arms
   | BoxExpr inner -> fprintf fmt "BoxExpr(%a)" pp_core_expression inner
   | BoxType ty -> fprintf fmt "BoxType(%a)" pp_core_type ty
+  | BoxConstruct box ->
+      fprintf fmt "BoxConstruct(%a, %a)" pp_core_type box.value.ty
+        (pp_print_list ~pp_sep pp_core_expression)
+        box.value.args
   | Unbox inner -> fprintf fmt "Unbox(%a)" pp_core_expression inner
   | Ref inner -> fprintf fmt "Ref(%a)" pp_core_expression inner
   | Load inner -> fprintf fmt "Load(%a)" pp_core_expression inner
@@ -505,12 +526,17 @@ let pp_core_type_decl_data fmt = function
         decl.value.variants
   | TypeDeclForward -> fprintf fmt "Forward"
 
+let pp_core_lifecycle_fn fmt = function
+  | Some (fn : Core.function_decl) -> pp_core_identifier fmt fn.value.name
+  | None -> fprintf fmt "None"
+
 let pp_core_decl fmt (decl : Core.top_decl) =
   match decl.value with
   | Core.FDecl fn -> fprintf fmt "FDecl(%a)" pp_core_function fn
   | TDecl ty ->
-      fprintf fmt "TypeDecl(%a, %a)" pp_core_identifier ty.value.name
-        pp_core_type_decl_data ty.value.data
+      fprintf fmt "TypeDecl(%a, %a, construct=%a, destruct=%a)" pp_core_identifier
+        ty.value.name pp_core_type_decl_data ty.value.data pp_core_lifecycle_fn
+        ty.value.construct pp_core_lifecycle_fn ty.value.destruct
   | VDecl v -> pp_core_var_decl fmt v
   | Import i -> fprintf fmt "Import(%s)" i.value
   | CImport i -> fprintf fmt "CImport(%s)" i.value

@@ -42,6 +42,15 @@ module Verify = struct
               (Printf.sprintf "%s still has an unresolved expression type after typing"
                  context))
 
+  let verify_default_constructible state loc context ty =
+    match resolve_core_type state.type_env [] [] loc ty with
+    | Some resolved when resolved_default_constructible state.type_env resolved -> ()
+    | Some resolved ->
+        add_diagnostic state Error loc
+          (Printf.sprintf "%s requires a default-constructible type, but %s is not"
+             context (string_of_resolved_ty resolved))
+    | None -> ()
+
   let verify_binding_annotation state (binding : Core.let_stmt) =
     match binding_annotation state binding with
     | Some { resolved_type = Some _; _ } -> ()
@@ -97,8 +106,14 @@ module Verify = struct
       | Core.As cast ->
           verify_declared_type state cast.loc "cast target" cast.value.target_type;
           verify_expression state cast.value.inner
-      | Core.SizeType ty | Core.BoxType ty ->
+      | Core.SizeType ty ->
           verify_declared_type state expr.loc "embedded type expression" ty
+      | Core.BoxType ty ->
+          verify_declared_type state expr.loc "embedded type expression" ty;
+          verify_default_constructible state expr.loc "box type construction" ty
+      | Core.BoxConstruct box ->
+          verify_declared_type state expr.loc "embedded type expression" box.value.ty;
+          List.iter (verify_expression state) box.value.args
       | Core.Match match_expr ->
           verify_expression state match_expr.value.expr;
           List.iter
@@ -181,6 +196,10 @@ module Verify = struct
         verify_declared_type state binding.loc
           (Printf.sprintf "global %s" binding.value.name.value)
           binding.value.ty;
+        if binding.value.init_expr = None then
+          verify_default_constructible state binding.loc
+            (Printf.sprintf "global %s default initialization" binding.value.name.value)
+            binding.value.ty;
         Option.iter (verify_expression state) binding.value.init_expr
     | Core.TDecl decl -> verify_type_decl state decl
     | Core.Import _ | Core.CImport _ -> ()

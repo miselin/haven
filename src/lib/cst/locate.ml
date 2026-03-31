@@ -7,6 +7,8 @@ type any_node =
   | FunctionDecl of function_decl
   | VarDecl of var_decl
   | TypeDecl of type_decl
+  | TypeExtend of type_extend
+  | ExtendItem of extend_item
   | StructDecl of struct_decl
   | EnumDecl of enum_decl
   | StructField of struct_field
@@ -51,6 +53,8 @@ let location_of = function
   | FunctionDecl f -> f.loc
   | VarDecl v -> v.loc
   | TypeDecl t -> t.loc
+  | TypeExtend e -> e.loc
+  | ExtendItem i -> i.loc
   | StructDecl s -> s.loc
   | EnumDecl e -> e.loc
   | StructField f -> f.loc
@@ -319,6 +323,17 @@ and walk_top_decl predicate acc decl =
   | FDecl f -> walk_function_decl predicate acc f
   | VDecl v -> walk_var_decl predicate acc v
   | TDecl t -> walk_type_decl predicate acc t
+  | Extend e ->
+      let acc = add_if predicate (TypeExtend e) acc in
+      List.fold_left
+        (fun acc (item : extend_item) ->
+          let acc = add_if predicate (ExtendItem item) acc in
+          match item.value with
+          | ExtendConstruct construct ->
+              walk_block predicate acc construct.value.body
+          | ExtendDestruct block ->
+              walk_block predicate acc block)
+        acc e.value.items
   | Import _ | CImport _ -> acc
   | Foreign f ->
       let acc = add_if predicate (Foreign f) acc in

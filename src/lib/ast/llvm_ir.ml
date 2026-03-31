@@ -61,6 +61,8 @@ type preamble = {
   box_ref_ty : Llvm.lltype;
   box_unref : Llvm.llvalue;
   box_unref_ty : Llvm.lltype;
+  free : Llvm.llvalue;
+  free_ty : Llvm.lltype;
 }
 
 type global_init = {
@@ -292,14 +294,14 @@ and llvm_named_type t ?loc (resolved : Analysis.resolved_ty) =
   match resolved with
   | Analysis.ResolvedNamed (name, _args) -> (
       match Analysis.lookup_named_type t.type_env name with
-      | Some (Analysis.TypeStruct decl) -> llvm_struct_type t ?loc resolved decl
-      | Some (Analysis.TypeEnum decl) -> llvm_enum_type t ?loc resolved decl
+      | Some (Analysis.TypeStruct (decl, _)) -> llvm_struct_type t ?loc resolved decl
+      | Some (Analysis.TypeEnum (decl, _)) -> llvm_enum_type t ?loc resolved decl
       | Some Analysis.TypeAlias alias -> (
           match Analysis.resolve_core_type t.type_env [] [] (with_default dummy_loc loc) alias with
           | Some alias_ty -> llvm_type_of_resolved t ?loc alias_ty
           | None ->
               fail ?loc "failed to resolve alias %s during LLVM lowering" name)
-      | Some Analysis.TypeForward | None ->
+      | Some (Analysis.TypeForward _) | None ->
           fail ?loc "unknown named type %s during LLVM lowering" name)
   | _ -> fail ?loc "expected named type during LLVM lowering"
 
@@ -508,7 +510,19 @@ let create_preamble context llmodule =
   let box_unref, box_unref_ty =
     declare_runtime_function llmodule "__haven_box_unref" void_type [ ptr_type ]
   in
-  { new_empty_box; new_empty_box_ty; new_box; new_box_ty; box_ref; box_ref_ty; box_unref; box_unref_ty }
+  let free, free_ty = declare_runtime_function llmodule "free" void_type [ ptr_type ] in
+  {
+    new_empty_box;
+    new_empty_box_ty;
+    new_box;
+    new_box_ty;
+    box_ref;
+    box_ref_ty;
+    box_unref;
+    box_unref_ty;
+    free;
+    free_ty;
+  }
 
 let target_codegen_opt_level = function
   | O0 -> Llvm_target.CodeGenOptLevel.None
@@ -779,10 +793,210 @@ let emit_box_ref t box =
   let preamble = require_preamble t "box retain/release" in
   ignore (Llvm.build_call preamble.box_ref_ty preamble.box_ref [| box |] "" t.builder)
 
-let emit_box_unref t box =
+let lookup_lifecycle t = function
+  | Analysis.ResolvedNamed (name, _) -> Analysis.lookup_type_lifecycle t.type_env name
+  | _ -> None
+
+let emit_lifecycle_call t _resolved (fn_decl : Core.function_decl) storage extra_args =
+  match lookup_function_symbol t fn_decl.value.name.value with
+  | Function_symbol { fn; fn_type; resolved_type = Analysis.ResolvedFunction (params, ret, _); named_params; _ } ->
+      if named_params <> 1 + List.length extra_args then
+        fail ~loc:fn_decl.loc
+          "lifecycle hook %s expected %d argument(s), but lowering produced %d"
+          fn_decl.value.name.value named_params (1 + List.length extra_args);
+      if not (Analysis.equal_resolved_type ret Analysis.ResolvedVoid) then
+        fail ~loc:fn_decl.loc "lifecycle hook %s must return void" fn_decl.value.name.value;
+      (match params with
+      | self_param :: extra_param_tys
+        when Analysis.resolved_is_pointerish self_param
+             && List.length extra_param_tys = List.length extra_args ->
+          ignore (Llvm.build_call fn_type fn (Array.of_list (storage :: extra_args)) "" t.builder)
+      | self_param :: _
+        when not (Analysis.resolved_is_pointerish self_param) ->
+          fail ~loc:fn_decl.loc
+            "lifecycle hook %s self parameter must be pointer-like"
+            fn_decl.value.name.value
+      | _ ->
+          fail ~loc:fn_decl.loc "lifecycle hook %s must start with exactly one self parameter"
+            fn_decl.value.name.value)
+  | Function_symbol _ ->
+      fail ~loc:fn_decl.loc "lifecycle hook %s did not resolve to a callable function type"
+        fn_decl.value.name.value
+  | Variable_symbol _ ->
+      fail ~loc:fn_decl.loc "lifecycle hook %s unexpectedly resolved to a variable"
+        fn_decl.value.name.value
+
+let emit_default_constructor_call t resolved storage =
+  match lookup_lifecycle t resolved with
+  | Some { construct = Some fn_decl; _ }
+    when Analysis.lifecycle_user_params fn_decl = [] ->
+      emit_lifecycle_call t resolved fn_decl storage []
+  | _ -> ()
+
+let emit_constructor_call t resolved storage extra_args =
+  match lookup_lifecycle t resolved with
+  | Some { construct = Some fn_decl; _ } ->
+      emit_lifecycle_call t resolved fn_decl storage extra_args
+  | _ -> ()
+
+let emit_destructor_call t resolved storage =
+  match lookup_lifecycle t resolved with
+  | Some { destruct = Some fn_decl; _ } -> emit_lifecycle_call t resolved fn_decl storage []
+  | _ -> ()
+
+let rec resolved_has_destructor_hook t = function
+  | (Analysis.ResolvedNamed (name, _) as resolved) -> (
+      match Analysis.lookup_named_type t.type_env name with
+      | Some (Analysis.TypeStruct (decl, lifecycle)) ->
+          Option.is_some lifecycle.destruct
+          || List.exists
+               (fun (field : Core.struct_field) ->
+                 match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+                 | Some field_ty -> resolved_has_destructor_hook t field_ty
+                 | None -> false)
+               decl.value.fields
+      | Some (Analysis.TypeEnum (decl, lifecycle)) -> (
+          Option.is_some lifecycle.destruct
+          ||
+          match Analysis.lookup_enum_decl t.type_env dummy_loc resolved with
+          | Some (_, subst) ->
+              List.exists
+                (fun (variant : Core.enum_variant) ->
+                  List.exists
+                    (fun inner_ty ->
+                      match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
+                      | Some resolved_inner -> resolved_has_destructor_hook t resolved_inner
+                      | None -> false)
+                    variant.value.inner_tys)
+                decl.value.variants
+          | None -> false)
+      | Some (Analysis.TypeAlias alias) -> (
+          match Analysis.resolve_core_type t.type_env [] [] dummy_loc alias with
+          | Some alias_ty -> resolved_has_destructor_hook t alias_ty
+          | None -> false)
+      | Some (Analysis.TypeForward lifecycle) -> Option.is_some lifecycle.destruct
+      | None -> false)
+  | Analysis.ResolvedArray (inner, _) -> resolved_has_destructor_hook t inner
+  | _ -> false
+
+let rec emit_default_initialize_storage ?(run_constructor = true) t resolved storage =
+  ignore (Llvm.build_store (Llvm.const_null (llvm_type_of_resolved t resolved)) storage t.builder);
+  match resolved with
+  | Analysis.ResolvedArray (inner, count) ->
+      for index = 0 to count - 1 do
+        let zero = Llvm.const_int (i32_type t) 0 in
+        let idx = Llvm.const_int (i32_type t) index in
+        let element_ptr =
+          Llvm.build_in_bounds_gep (llvm_type_of_resolved t resolved) storage
+            [| zero; idx |] "array.init.elem" t.builder
+        in
+        emit_default_initialize_storage t inner element_ptr
+      done
+  | Analysis.ResolvedNamed (name, _) -> (
+      match Analysis.lookup_named_type t.type_env name with
+      | Some (Analysis.TypeStruct (decl, _)) ->
+          let struct_ty = llvm_type_of_resolved t resolved in
+          List.iteri
+            (fun index (field : Core.struct_field) ->
+              match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+              | Some field_ty ->
+                  let field_ptr =
+                    Llvm.build_struct_gep struct_ty storage index "field.init" t.builder
+                  in
+                  emit_default_initialize_storage t field_ty field_ptr
+              | None -> ())
+            decl.value.fields;
+          if run_constructor then emit_default_constructor_call t resolved storage
+      | Some (Analysis.TypeEnum _) | Some (Analysis.TypeForward _) ->
+          if run_constructor then emit_default_constructor_call t resolved storage
+      | Some (Analysis.TypeAlias alias) -> (
+          match Analysis.resolve_core_type t.type_env [] [] dummy_loc alias with
+          | Some alias_ty -> emit_default_initialize_storage ~run_constructor t alias_ty storage
+          | None -> ())
+      | None -> ())
+  | _ -> ()
+
+and emit_recursive_destruct_on_storage t resolved storage =
+  match resolved with
+  | Analysis.ResolvedBox inner ->
+      let box = Llvm.build_load (ptr_type t) storage "box.handle" t.builder in
+      emit_box_unref t inner box
+  | Analysis.ResolvedArray (inner, count) ->
+      for index = count - 1 downto 0 do
+        let zero = Llvm.const_int (i32_type t) 0 in
+        let idx = Llvm.const_int (i32_type t) index in
+        let element_ptr =
+          Llvm.build_in_bounds_gep (llvm_type_of_resolved t resolved) storage
+            [| zero; idx |] "array.drop.elem" t.builder
+        in
+        emit_recursive_destruct_on_storage t inner element_ptr
+      done
+  | Analysis.ResolvedNamed (name, _) -> (
+      match Analysis.lookup_named_type t.type_env name with
+      | Some (Analysis.TypeStruct (decl, _)) ->
+          emit_destructor_call t resolved storage;
+          let struct_ty = llvm_type_of_resolved t resolved in
+          List.iteri
+            (fun index (field : Core.struct_field) ->
+              match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+              | Some field_ty ->
+                  let field_ptr =
+                    Llvm.build_struct_gep struct_ty storage index "field.drop" t.builder
+                  in
+                  emit_recursive_destruct_on_storage t field_ty field_ptr
+              | None -> ())
+            decl.value.fields
+      | Some (Analysis.TypeEnum (_, _)) ->
+          emit_destructor_call t resolved storage
+      | Some (Analysis.TypeAlias alias) -> (
+          match Analysis.resolve_core_type t.type_env [] [] dummy_loc alias with
+          | Some alias_ty -> emit_recursive_destruct_on_storage t alias_ty storage
+          | None -> ())
+      | Some (Analysis.TypeForward _) -> emit_destructor_call t resolved storage
+      | None -> ())
+  | _ -> ()
+
+and emit_box_unref t inner box =
   let preamble = require_preamble t "box retain/release" in
-  ignore
-    (Llvm.build_call preamble.box_unref_ty preamble.box_unref [| box |] "" t.builder)
+  if Analysis.resolved_contains_box_ownership t.type_env [] dummy_loc inner
+     || resolved_has_destructor_hook t inner
+  then (
+    let fn = current_function t in
+    let done_block = Llvm.append_block t.context "box.release.done" fn.fn_value in
+    let release_block = Llvm.append_block t.context "box.release" fn.fn_value in
+    let keep_block = Llvm.append_block t.context "box.keep" fn.fn_value in
+    let box_is_null = Llvm.build_is_null box "box.isnull" t.builder in
+    ignore (Llvm.build_cond_br box_is_null done_block release_block t.builder);
+    Llvm.position_at_end release_block t.builder;
+    let rc_ptr = Llvm.build_pointercast box (ptr_type t) "box.rc" t.builder in
+    let rc = Llvm.build_load (i32_type t) rc_ptr "box.rc.value" t.builder in
+    let new_rc = Llvm.build_sub rc (Llvm.const_int (i32_type t) 1) "box.rc.dec" t.builder in
+    ignore (Llvm.build_store new_rc rc_ptr t.builder);
+    let rc_is_zero =
+      Llvm.build_icmp Llvm.Icmp.Eq new_rc (Llvm.const_int (i32_type t) 0) "box.rc.zero"
+        t.builder
+    in
+    ignore (Llvm.build_cond_br rc_is_zero keep_block done_block t.builder);
+    Llvm.position_at_end keep_block t.builder;
+    let box_raw = Llvm.build_pointercast box (ptr_type t) "box.raw" t.builder in
+    let payload_raw =
+      Llvm.build_in_bounds_gep (i8_type t) box_raw [| const_i32 t 16 |] "box.payload.raw"
+        t.builder
+    in
+    let payload_ptr =
+      Llvm.build_pointercast payload_raw
+        (ptr_type t) "box.payload" t.builder
+    in
+    emit_recursive_destruct_on_storage t inner payload_ptr;
+    let free_fn_ty = Llvm.function_type (void_type t) [| ptr_type t |] in
+    let free_fn = Llvm.declare_function "free" free_fn_ty t.llmodule in
+    Llvm.set_linkage Llvm.Linkage.External free_fn;
+    Llvm.set_function_call_conv Llvm.CallConv.c free_fn;
+    ignore (Llvm.build_call free_fn_ty free_fn [| box |] "" t.builder);
+    ignore (Llvm.build_br done_block t.builder);
+    Llvm.position_at_end done_block t.builder)
+  else
+    ignore (Llvm.build_call preamble.box_unref_ty preamble.box_unref [| box |] "" t.builder)
 
 let ensure_storage t resolved value =
   let slot = build_alloca t (llvm_type_of_resolved t resolved) "spill" in
@@ -802,9 +1016,9 @@ let coerce_store_value t ?loc value source target =
 
 let rec emit_ownership_on_storage t kind resolved storage =
   match resolved with
-  | Analysis.ResolvedBox _ ->
+  | Analysis.ResolvedBox inner ->
       let box = Llvm.build_load (ptr_type t) storage "box.handle" t.builder in
-      if kind = Analysis.Retain then emit_box_ref t box else emit_box_unref t box
+      if kind = Analysis.Retain then emit_box_ref t box else emit_box_unref t inner box
   | Analysis.ResolvedArray (inner, count) ->
       for index = 0 to count - 1 do
         let zero = Llvm.const_int (i32_type t) 0 in
@@ -835,7 +1049,7 @@ and emit_ownership_on_named t kind resolved storage =
   match resolved with
   | Analysis.ResolvedNamed (name, _args) -> (
       match Analysis.lookup_named_type t.type_env name with
-      | Some (Analysis.TypeStruct decl) ->
+      | Some (Analysis.TypeStruct (decl, _)) ->
           let field_types =
             with_default [] (Analysis.lookup_struct_fields t.type_env decl.loc resolved)
           in
@@ -847,13 +1061,13 @@ and emit_ownership_on_named t kind resolved storage =
               in
               emit_ownership_on_storage t kind field_ty field_ptr)
             field_types
-      | Some (Analysis.TypeEnum decl) ->
+      | Some (Analysis.TypeEnum (decl, _)) ->
           emit_ownership_on_enum t kind resolved decl storage
       | Some (Analysis.TypeAlias alias) -> (
           match Analysis.resolve_core_type t.type_env [] [] dummy_loc alias with
           | Some alias_ty -> emit_ownership_on_storage t kind alias_ty storage
           | None -> ())
-      | Some Analysis.TypeForward | None -> ())
+      | Some (Analysis.TypeForward _) | None -> ())
   | _ -> ()
 
 and emit_ownership_on_enum t kind resolved decl storage =
@@ -918,8 +1132,8 @@ and emit_ownership_on_enum t kind resolved decl storage =
 
 let emit_ownership_on_value t kind resolved value =
   match resolved with
-  | Analysis.ResolvedBox _ ->
-      if kind = Analysis.Retain then emit_box_ref t value else emit_box_unref t value
+  | Analysis.ResolvedBox inner ->
+      if kind = Analysis.Retain then emit_box_ref t value else emit_box_unref t inner value
   | _ ->
       let storage = ensure_storage t resolved value in
       emit_ownership_on_storage t kind resolved storage
@@ -1729,8 +1943,8 @@ and emit_expr t (expr : Core.expression) =
         Llvm.const_null (llvm_type_of_resolved t (expr_resolved_type t expr))
     | Core.Match match_expr -> emit_match t expr match_expr
     | Core.BoxExpr inner -> emit_box_expr t expr inner
-    | Core.BoxType _ ->
-        fail ~loc:expr.loc "box type expressions are not supported during LLVM lowering"
+    | Core.BoxType ty -> emit_box_type_expr t expr ty
+    | Core.BoxConstruct box -> emit_box_construct_expr t expr box
     | Core.Unbox inner -> emit_unbox t expr inner
     | Core.Ref inner -> emit_lvalue t inner
     | Core.Load inner ->
@@ -1783,6 +1997,40 @@ and emit_box_expr t (expr : Core.expression) inner =
           Llvm.const_int (i32_type t) value_size;
         |]
         "box.new" t.builder
+
+and emit_box_type_expr t (expr : Core.expression) ty =
+  let inner_resolved = resolved_type_of_core_type t ty.loc ty in
+  let box_layout = emit_box_layout t inner_resolved in
+  let box_size =
+    Llvm_target.DataLayout.abi_size box_layout t.data_layout |> Int64.to_int
+  in
+  let preamble = require_preamble t ~loc:expr.loc "box allocation" in
+  let box_handle =
+    Llvm.build_call preamble.new_empty_box_ty preamble.new_empty_box
+      [| Llvm.const_int (i32_type t) box_size |]
+      "box.new.empty" t.builder
+  in
+  let value_ptr = emit_box_value_ptr t (Analysis.ResolvedBox inner_resolved) box_handle in
+  emit_default_initialize_storage t inner_resolved value_ptr;
+  box_handle
+
+and emit_box_construct_expr t (expr : Core.expression) (box : Core.box_construct) =
+  let inner_resolved = resolved_type_of_core_type t box.value.ty.loc box.value.ty in
+  let box_layout = emit_box_layout t inner_resolved in
+  let box_size =
+    Llvm_target.DataLayout.abi_size box_layout t.data_layout |> Int64.to_int
+  in
+  let preamble = require_preamble t ~loc:expr.loc "box allocation" in
+  let box_handle =
+    Llvm.build_call preamble.new_empty_box_ty preamble.new_empty_box
+      [| Llvm.const_int (i32_type t) box_size |]
+      "box.new.empty" t.builder
+  in
+  let value_ptr = emit_box_value_ptr t (Analysis.ResolvedBox inner_resolved) box_handle in
+  emit_default_initialize_storage ~run_constructor:false t inner_resolved value_ptr;
+  let arg_values = List.map (emit_expr t) box.value.args in
+  emit_constructor_call t inner_resolved value_ptr arg_values;
+  box_handle
 
 and emit_unbox t (expr : Core.expression) inner =
   let inner_value = emit_expr t inner in
@@ -2078,7 +2326,9 @@ let lower_global_initializer t (decl : Core.var_decl) =
   match lookup_global_symbol t decl.value.name.value with
   | Variable_symbol { storage; resolved_type; _ } -> (
       match decl.value.init_expr with
-      | None -> ()
+      | None ->
+          Llvm.set_initializer (zero_constant t resolved_type) storage;
+          t.global_inits_rev <- { decl; storage } :: t.global_inits_rev
       | Some init -> (
           match constant_of_expr t init with
           | Some constant ->
@@ -2137,15 +2387,16 @@ let emit_global_ctor t =
       Llvm.position_at_end entry t.builder;
       List.iter
         (fun { decl; storage } ->
+          let resolved = resolved_type_of_core_type t decl.loc decl.value.ty in
           match decl.value.init_expr with
+          | None ->
+              emit_default_initialize_storage t resolved storage
           | Some init ->
               let value = emit_expr t init in
-              let resolved = resolved_type_of_core_type t decl.loc decl.value.ty in
               ignore
                 (Llvm.build_store
                    (emit_cast t value (expr_resolved_type t init) resolved)
-                   storage t.builder)
-          | None -> ())
+                   storage t.builder))
         inits;
       ignore (Llvm.build_br fn_state.return_block t.builder);
       Llvm.position_at_end fn_state.return_block t.builder;
