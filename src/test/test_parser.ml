@@ -16,6 +16,9 @@ let run () =
   assert_parse_ok "specialization hole parameter types"
     "fn vadd(fvec? a, mat? b) { a }";
 
+  assert_parse_ok "compile-time assert statement"
+    "fn vadd(fvec? a, fvec? b) { @assert a.dim == b.dim, \"dims must match\"; a + b }";
+
   assert_parse_ok "multi-payload enum variants"
     "type Pair = enum { Both(i32, i32), Empty }; pub fn main() -> i32 { 0 }";
 
@@ -71,6 +74,18 @@ let run () =
   | _ -> failwith "expected vadd to have two parameters");
   assert_true "specialization function should keep omitted return type through core conversion"
     (specialized_fn.value.return_type = None);
+
+  let assert_core =
+    parse_to_core
+      "fn vadd(fvec? a, fvec? b) { @assert a.dim == b.dim, \"dims must match\"; a + b }"
+  in
+  let assert_fn = find_named_function "vadd" assert_core in
+  (match
+     Option.bind assert_fn.value.definition (fun body ->
+         match body.value.statements with stmt :: _ -> Some stmt | [] -> None)
+   with
+  | Some { value = Core.CompileAssert _; _ } -> ()
+  | _ -> failwith "expected compile assert to survive into core AST");
 
   let missing_return_error =
     try

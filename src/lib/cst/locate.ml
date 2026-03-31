@@ -226,6 +226,7 @@ and walk_statement predicate acc stmt =
         | Some t -> walk_haven_type predicate acc t
       in
       walk_expression predicate acc s.value.init_expr
+  | CompileAssert a -> walk_expression predicate acc a.value.cond
   | Return (Some e) -> walk_expression predicate acc e
   | Return None -> acc
   | Defer e -> walk_expression predicate acc e

@@ -99,6 +99,7 @@ let find_first_let_binding (program : Core.parsed_program) =
         match stmt.value with
         | Core.Let binding -> collect_in_statements (binding :: acc) rest
         | Core.Expression _
+        | Core.CompileAssert _
         | Core.Return _
         | Core.Defer _
         | Core.Break
@@ -144,6 +145,7 @@ let find_let_binding_at index (program : Core.parsed_program) =
             let inner = collect_stmt [] loop.value.body.value.statements in
             collect_stmt (List.rev_append inner bindings) stmt_rest
         | Core.Expression _
+        | Core.CompileAssert _
         | Core.Return _
         | Core.Defer _
         | Core.Break

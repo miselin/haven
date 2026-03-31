@@ -246,6 +246,9 @@ module Semantic = struct
     | Core.Expression expr ->
         check_expression_in_context state env loop_depth true expr;
         env
+    | Core.CompileAssert compile_assert ->
+        check_expression state env loop_depth compile_assert.value.cond;
+        env
     | Core.Return expr ->
         Option.iter (check_expression state env loop_depth) expr;
         (match (return_expected, expr) with

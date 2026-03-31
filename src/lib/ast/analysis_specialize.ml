@@ -365,6 +365,9 @@ module Specialize = struct
       match stmt.value with
       | Core.Expression expr ->
           Core.Expression (rewrite_expression state annotations expr)
+      | Core.CompileAssert compile_assert ->
+          Core.CompileAssert
+            compile_assert
       | Core.Return expr ->
           Core.Return (Option.map (rewrite_expression state annotations) expr)
       | Core.Defer expr ->

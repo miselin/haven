@@ -323,6 +323,16 @@ module ConstantFold = struct
     let value =
       match stmt.value with
       | Core.Expression expr -> Core.Expression (fold_expression expr)
+      | Core.CompileAssert compile_assert ->
+          Core.CompileAssert
+            {
+              compile_assert with
+              value =
+                {
+                  compile_assert.value with
+                  cond = fold_expression compile_assert.value.cond;
+                };
+            }
       | Core.Return expr -> Core.Return (Option.map fold_expression expr)
       | Core.Defer expr -> Core.Defer (fold_expression expr)
       | Core.Let binding ->
@@ -385,12 +395,13 @@ module ConstantFold = struct
     | ({ loc; value = (Core.TDecl _ | Core.Import _ | Core.CImport _) as value } : Core.top_decl) ->
         ({ loc; value } : Core.top_decl)
 
-  let run (typed : typing_result) =
+  let run ?program (typed : typing_result) =
+    let program = Option.value ~default:typed.program program in
     {
       Core.program =
         {
-          loc = typed.program.program.loc;
-          value = { Core.decls = List.map fold_top_decl typed.program.program.value.decls };
+          loc = program.program.loc;
+          value = { Core.decls = List.map fold_top_decl program.program.value.decls };
         };
     }
 end

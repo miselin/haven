@@ -39,8 +39,11 @@ let run () =
       | _ -> failwith "expected constant folding to reduce the if condition to true")
   | _ -> failwith "expected constant folding to reduce the if condition to a literal");
   (match scrutinee_after.value with
-  | Core.Unary _ -> ()
-  | _ -> failwith "expected cleanup to remove redundant ToBool around bool-valued condition");
+  | Core.Literal lit -> (
+      match lit.value with
+      | Core.Bool true -> ()
+      | _ -> failwith "expected cleanup to preserve the folded boolean condition")
+  | _ -> failwith "expected cleanup to preserve the folded boolean condition");
 
   let folded_pipeline =
     parse_to_core "pub fn main() -> i32 { let x = 1 + 2 * 3; x }"
@@ -147,4 +150,78 @@ let run () =
   assert_true "equivalent concrete signatures should reuse one specialization"
     (count_occurrences specialization_dedup_core
        "name=get_mat_row__spec__mat2x3__u32"
-    = 1)
+    = 1);
+
+  let compile_assert_pipeline =
+    parse_to_core
+      "fn mat_width_eq(mat? a, mat? b) {\n\
+       \  @assert a.cols == b.cols, \"matrix widths must match\";\n\
+       \  a.cols\n\
+       }\n\
+       pub fn main() -> u32 {\n\
+       \  mat_width_eq(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>, Mat<Vec<5.0, 6.0>, Vec<7.0, 8.0>>)\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "compile assert typing" compile_assert_pipeline.typing.diagnostics;
+  assert_no_diagnostics "compile assert verify" compile_assert_pipeline.verify.diagnostics;
+  assert_no_diagnostics "compile assert semantic" compile_assert_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "compile assert pass" compile_assert_pipeline.asserts.diagnostics;
+  let compile_assert_core =
+    Haven.Ast.Pretty.core_program_to_string compile_assert_pipeline.cleaned
+  in
+  assert_true "successful compile asserts should be erased before the cleaned AST"
+    (not (string_contains compile_assert_core "CompileAssert"));
+
+  let compile_assert_fail_pipeline =
+    parse_to_core
+      "fn mat_width_eq(mat? a, mat? b) {\n\
+       \  @assert a.cols == b.cols, \"matrix widths must match\";\n\
+       \  a.cols\n\
+       }\n\
+       pub fn main() -> u32 {\n\
+       \  mat_width_eq(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>, Mat<Vec<5.0>, Vec<6.0>>)\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "failing compile assert should produce diagnostics"
+    compile_assert_fail_pipeline.asserts.diagnostics;
+  assert_any_diagnostic_message_contains "failing compile assert should preserve the user message"
+    "matrix widths must match" compile_assert_fail_pipeline.asserts.diagnostics;
+  assert_any_diagnostic_message_contains
+    "failing compile assert should include the rendered condition"
+    "compile-time assertion failed: a.cols == b.cols"
+    compile_assert_fail_pipeline.asserts.diagnostics;
+  assert_any_diagnostic_message_contains
+    "failing compile assert should include the specialized condition"
+    "specialized as: 2 == 1"
+    compile_assert_fail_pipeline.asserts.diagnostics;
+
+  let compile_assert_short_circuit_pipeline =
+    parse_to_core
+      "fn vadd(fvec? a, fvec? b) {\n\
+       \  @assert a.dim == b.dim, \"vector dimensions must match\";\n\
+       \  a + b\n\
+       }\n\
+       pub fn main() -> fvec3 {\n\
+       \  vadd(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0>)\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "failing compile assert should still report the assert"
+    compile_assert_short_circuit_pipeline.asserts.diagnostics;
+  assert_any_diagnostic_message_contains
+    "failing compile assert should keep the user-facing message"
+    "vector dimensions must match"
+    compile_assert_short_circuit_pipeline.asserts.diagnostics;
+  assert_any_diagnostic_message_contains
+    "failing compile assert should include the rendered vector condition"
+    "compile-time assertion failed: a.dim == b.dim"
+    compile_assert_short_circuit_pipeline.asserts.diagnostics;
+  assert_any_diagnostic_message_contains
+    "failing compile assert should include the specialized vector condition"
+    "specialized as: 3 == 2"
+    compile_assert_short_circuit_pipeline.asserts.diagnostics;
+  assert_no_diagnostics
+    "failing compile assert should short-circuit later semantic analysis"
+    compile_assert_short_circuit_pipeline.semantic.diagnostics

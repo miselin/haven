@@ -57,6 +57,7 @@ module Verify = struct
   and verify_statement state (stmt : Core.statement) =
     match stmt.value with
     | Core.Expression expr -> verify_expression state expr
+    | Core.CompileAssert compile_assert -> verify_expression state compile_assert.value.cond
     | Core.Return expr -> Option.iter (verify_expression state) expr
     | Core.Defer expr -> verify_expression state expr
     | Core.Let binding ->

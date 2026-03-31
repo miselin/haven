@@ -191,6 +191,9 @@ and pp_surface_statement fmt (stmt : Surface.statement) =
         binding.value.mut pp_surface_identifier binding.value.name
         (pp_print_option pp_surface_type)
         binding.value.ty pp_surface_expression binding.value.init_expr
+  | CompileAssert compile_assert ->
+      fprintf fmt "CompileAssert(cond=%a, message=%S)" pp_surface_expression
+        compile_assert.value.cond compile_assert.value.message.value
   | Return expr ->
       fprintf fmt "Return(%a)" (pp_print_option pp_surface_expression) expr
   | Defer expr -> fprintf fmt "Defer(%a)" pp_surface_expression expr
@@ -423,6 +426,9 @@ and pp_core_statement fmt (stmt : Core.statement) =
         binding.value.mut pp_core_identifier binding.value.name
         (pp_print_option pp_core_type)
         binding.value.ty pp_core_expression binding.value.init_expr
+  | CompileAssert compile_assert ->
+      fprintf fmt "CompileAssert(cond=%a, message=%S)" pp_core_expression
+        compile_assert.value.cond compile_assert.value.message.value
   | Return expr -> fprintf fmt "Return(%a)" (pp_print_option pp_core_expression) expr
   | Defer expr -> fprintf fmt "Defer(%a)" pp_core_expression expr
   | Loop loop ->

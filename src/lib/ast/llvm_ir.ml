@@ -1878,6 +1878,8 @@ and emit_statement t (stmt : Core.statement) =
   match stmt.value with
   | Core.Expression expr ->
       ignore (emit_expr t expr)
+  | Core.CompileAssert _ ->
+      fail ~loc:stmt.loc "compile-time assert reached LLVM lowering"
   | Core.Let binding ->
       let resolved = binding_resolved_type t binding in
       let slot =

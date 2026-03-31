@@ -132,6 +132,16 @@ module Cleanup = struct
     let value =
       match stmt.value with
       | Core.Expression expr -> Core.Expression (clean_expression typed expr)
+      | Core.CompileAssert compile_assert ->
+          Core.CompileAssert
+            {
+              compile_assert with
+              value =
+                {
+                  compile_assert.value with
+                  cond = clean_expression typed compile_assert.value.cond;
+                };
+            }
       | Core.Return expr -> Core.Return (Option.map (clean_expression typed) expr)
       | Core.Defer expr -> Core.Defer (clean_expression typed expr)
       | Core.Let binding ->
@@ -220,13 +230,14 @@ module Cleanup = struct
     in
     { decl with value }
 
-  let run typed =
+  let run ?program typed =
+    let program = Option.value ~default:typed.program program in
     {
       Core.program =
         {
-          typed.program.program with
+          program.program with
           value =
-            { Core.decls = List.map (clean_decl typed) typed.program.program.value.decls };
+            { Core.decls = List.map (clean_decl typed) program.program.value.decls };
         };
     }
 end

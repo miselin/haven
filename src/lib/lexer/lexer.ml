@@ -51,10 +51,14 @@ type symbol =
   | Tilde
   | Underscore
 
+type directive =
+  | Assert
+
 module Raw = struct
   type t =
     | Trivia of trivia
     | Ident of string
+    | Directive of directive
     | Numeric_type of numeric_type
     | Vec_type of vec_type
     | Mat_type of mat_type
@@ -86,6 +90,7 @@ let ident_segment = [%sedlex.regexp? Plus ident_inner]
 let numeric_type = [%sedlex.regexp? ('i' | 'u'), nonzero, Star digit]
 let vec_type = [%sedlex.regexp? "fvec", nonzero, Star digit]
 let vec_hole_type = [%sedlex.regexp? "fvec?"]
+let assert_directive = [%sedlex.regexp? "@assert"]
 
 let mat_type =
   [%sedlex.regexp?
@@ -365,6 +370,7 @@ let rec lex buf acc =
       let text = Sedlexing.Utf8.lexeme buf in
       lex buf (push_token buf (Numeric_type (numeric_type_of_string text)) acc)
   | vec_hole_type -> lex buf (push_token buf Vec_hole_type acc)
+  | assert_directive -> lex buf (push_token buf (Directive Assert) acc)
   | vec_type ->
       let text = Sedlexing.Utf8.lexeme buf in
       lex buf (push_token buf (Vec_type (vec_type_of_string text)) acc)

@@ -123,9 +123,13 @@ and foreign = foreign_desc node
 and block_desc = { statements : statement list; result : expression option }
 and block = block_desc node
 
+and compile_assert_desc = { cond : expression; message : string node }
+and compile_assert = compile_assert_desc node
+
 and statement_desc =
   | Expression of expression
   | Let of let_stmt
+  | CompileAssert of compile_assert
   | Return of expression option
   | Defer of expression
   | Iter of iter_stmt

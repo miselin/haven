@@ -245,6 +245,9 @@ module Typing = struct
     | Core.Expression expr ->
         ignore (infer_value_expression state env expr);
         env
+    | Core.CompileAssert compile_assert ->
+        ignore (infer_value_expression state env compile_assert.value.cond);
+        env
     | Core.Return expr ->
         Option.iter
           (fun (expr : Core.expression) ->

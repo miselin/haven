@@ -259,6 +259,18 @@ and cst_statement_to_surface (stmt : Cst.statement) : Surface.statement option =
                   name = cst_identifier_to_surface binding.value.name;
                   init_expr = cst_expr_to_surface binding.value.init_expr;
                 }))
+    | Cst.CompileAssert compile_assert ->
+        Some
+          (Surface.CompileAssert
+             (mk_surface compile_assert.loc
+                {
+                  Surface.cond = cst_expr_to_surface compile_assert.value.cond;
+                  message =
+                    {
+                      value = compile_assert.value.message.value;
+                      loc = compile_assert.value.message.loc;
+                    };
+                }))
     | Cst.Return expr -> Some (Surface.Return (Option.map cst_expr_to_surface expr))
     | Cst.Defer expr -> Some (Surface.Defer (cst_expr_to_surface expr))
     | Cst.Iter iter ->
@@ -868,6 +880,20 @@ and surface_statement_to_core st (stmt : Surface.statement) : Core.statement lis
                   ty = Option.map surface_type_to_core binding.value.ty;
                   name = surface_identifier_to_core binding.value.name;
                   init_expr = surface_expr_to_core st binding.value.init_expr;
+                }));
+      ]
+  | Surface.CompileAssert compile_assert ->
+      [
+        mk_core_stmt stmt.loc
+          (Core.CompileAssert
+             (mk_core compile_assert.loc
+                {
+                  Core.cond = surface_expr_to_core st compile_assert.value.cond;
+                  message =
+                    {
+                      value = compile_assert.value.message.value;
+                      loc = compile_assert.value.message.loc;
+                    };
                 }));
       ]
   | Surface.Return expr ->

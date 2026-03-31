@@ -184,6 +184,9 @@ module Purity = struct
     | Core.Expression expr ->
         visit_expression state current env expr;
         env
+    | Core.CompileAssert compile_assert ->
+        visit_expression state current env compile_assert.value.cond;
+        env
     | Core.Return expr ->
         Option.iter (visit_expression state current env) expr;
         env

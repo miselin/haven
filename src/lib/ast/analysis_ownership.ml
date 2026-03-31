@@ -330,6 +330,9 @@ module Ownership = struct
     | Core.Expression expr ->
         visit_expression state scopes expr;
         scopes
+    | Core.CompileAssert compile_assert ->
+        visit_expression state scopes compile_assert.value.cond;
+        scopes
     | Core.Return expr ->
         Option.iter (visit_expression state scopes) expr;
         (match (return_expected, expr) with
