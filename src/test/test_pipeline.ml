@@ -65,4 +65,19 @@ let run () =
   in
   assert_no_diagnostics "specialization typing" specialization_pipeline.typing.diagnostics;
   assert_no_diagnostics "specialization verify" specialization_pipeline.verify.diagnostics;
-  assert_no_diagnostics "specialization semantic" specialization_pipeline.semantic.diagnostics
+  assert_no_diagnostics "specialization semantic" specialization_pipeline.semantic.diagnostics;
+
+  let specialization_call_pipeline =
+    parse_to_core
+      "fn vadd(fvec? a, fvec? b) { a + b }\n\
+       fn main() -> fvec3 {\n\
+       \  vadd(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>)\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "specialization call typing"
+    specialization_call_pipeline.typing.diagnostics;
+  assert_no_diagnostics "specialization call verify"
+    specialization_call_pipeline.verify.diagnostics;
+  assert_no_diagnostics "specialization call semantic"
+    specialization_call_pipeline.semantic.diagnostics
