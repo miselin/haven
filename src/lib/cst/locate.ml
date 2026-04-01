@@ -98,15 +98,8 @@ let add_if predicate node acc = if predicate node then node :: acc else acc
 let rec walk_haven_type predicate acc (ty : haven_type) =
   let acc = add_if predicate (HavenType ty) acc in
   match ty.value with
-  | NumericType _
-  | VecType _
-  | MatrixType _
-  | VecHoleType
-  | MatrixHoleType
-  | FloatType
-  | VoidType
-  | StringType
-    ->
+  | NumericType _ | VecType _ | MatrixType _ | VecHoleType | MatrixHoleType
+  | FloatType | VoidType | StringType ->
       acc
   | CustomType _ -> acc
   | CellType inner -> walk_haven_type predicate acc inner
@@ -230,7 +223,7 @@ and walk_statement predicate acc stmt =
         | Some t -> walk_haven_type predicate acc t
       in
       walk_expression predicate acc s.value.init_expr
-  | CompileAssert a -> walk_expression predicate acc a.value.cond
+  | Directive d -> walk_directive predicate acc d
   | Return (Some e) -> walk_expression predicate acc e
   | Return None -> acc
   | Defer e -> walk_expression predicate acc e
@@ -331,13 +324,17 @@ and walk_top_decl predicate acc decl =
           match item.value with
           | ExtendConstruct construct ->
               walk_block predicate acc construct.value.body
-          | ExtendDestruct block ->
-              walk_block predicate acc block)
+          | ExtendDestruct block -> walk_block predicate acc block)
         acc e.value.items
   | Import _ | CImport _ -> acc
   | Foreign f ->
       let acc = add_if predicate (Foreign f) acc in
       List.fold_left (walk_function_decl predicate) acc f.value.decls
+
+and walk_directive predicate acc d =
+  match d.value with
+  | DirectiveCall _ -> acc
+  | DirectiveCompileTime a -> walk_expression predicate acc a.cond
 
 let walk_program predicate acc program =
   let acc = add_if predicate (Program program) acc in

@@ -17,7 +17,6 @@
 %token <Haven_token.Token.mat_type> MAT_TYPE
 %token VEC_HOLE_TYPE MAT_HOLE_TYPE
 %token FLOAT_TYPE VOID_TYPE STR_TYPE
-%token ASSERT_DIRECTIVE
 %token <int> INT_LIT
 %token <float> FLOAT_LIT
 %token <int> HEX_LIT OCT_LIT BIN_LIT
@@ -27,7 +26,7 @@
 %token LOGIC_AND LOGIC_OR EQEQ BANGEQ LE GE
 %token LSHIFT RSHIFT LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
 %token LT GT COMMA DOT SEMICOLON COLON STAR CARET
-%token PLUS MINUS SLASH PERCENT EQUAL AMP PIPE BANG TILDE UNDERSCORE
+%token PLUS MINUS SLASH PERCENT EQUAL AMP PIPE BANG TILDE UNDERSCORE AT
 %token EOF
 
 (* Main keywords *)
@@ -181,9 +180,7 @@ stmt_inner:
       Let (mk_loc $startpos $endpos { mut = m; name = n; ty = Some t; init_expr = mk_expr $startpos(i) $endpos(i) (Initializer i); })
     }
   | LET m=boption(MUT) t=haven_type n=identifier EQUAL e=expr { Let (mk_loc $startpos $endpos { mut = m; name = n; ty = Some t; init_expr = e; }) }
-  | ASSERT_DIRECTIVE c=expr COMMA m=STRING_LIT {
-      CompileAssert (mk_loc $startpos $endpos { cond = c; message = mk_id m $startpos(m) $endpos(m) })
-    }
+  | d=directive { Directive d }
   | RET e=option(expr) { Return e }
   | DEFER e=expr { Defer e }
   | ITER r=iter_range v=identifier b=block { Iter (mk_loc $startpos $endpos { range = r; var = v; body = b }) }
@@ -358,4 +355,11 @@ builtin_type:
   | FLOAT_TYPE { mk_loc $startpos $endpos FloatType }
   | VOID_TYPE { mk_loc $startpos $endpos VoidType }
   | STR_TYPE { mk_loc $startpos $endpos StringType }
+  ;
+
+(** DIRECTIVES AND ANNOTATIONS **)
+
+directive:
+  | AT i=identifier LPAREN a=separated_nonempty_list(COMMA, expr) RPAREN { mk_loc $startpos $endpos (DirectiveCall { name = i; args = a }) }
+  | AT i=identifier c=expr COMMA m=STRING_LIT { mk_loc $startpos $endpos (DirectiveCompileTime { name = i; cond = c; message = mk_loc $startpos $endpos m }) }
   ;

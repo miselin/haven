@@ -1,5 +1,4 @@
 open Haven_core
-
 module Cst = Haven_cst.Cst
 module Surface = Surface_ast
 module Core = Core_ast
@@ -35,7 +34,6 @@ let mk_surface_arm loc value : Surface.match_arm = { value; loc }
 let mk_surface_vec loc value : Surface.vec_literal = { value; loc }
 let mk_surface_mat loc value : Surface.mat_literal = { value; loc }
 let mk_surface_enum loc value : Surface.enum_literal = { value; loc }
-
 let mk_core loc value : _ Core.node = { value; loc }
 let mk_core_ident loc value : Core.identifier = { value; loc }
 let mk_core_expr loc value : Core.expression = { value; loc }
@@ -59,7 +57,8 @@ type surface_extension_hooks = {
 
 let default_iter_type loc =
   mk_core_type loc
-    (Core.NumericType { Haven_token.Token.signedness = Haven_token.Token.Signed; bits = 32 })
+    (Core.NumericType
+       { Haven_token.Token.signedness = Haven_token.Token.Signed; bits = 32 })
 
 let string_of_loc (loc : Loc.t) =
   let pos = loc.start_pos in
@@ -70,22 +69,18 @@ let string_of_loc (loc : Loc.t) =
 let rec surface_type_has_specialization_hole (ty : Surface.haven_type) =
   match ty.value with
   | Surface.VecHoleType | Surface.MatrixHoleType -> true
-  | Surface.CellType inner
-  | Surface.PointerType inner
-  | Surface.BoxType inner ->
+  | Surface.CellType inner | Surface.PointerType inner | Surface.BoxType inner
+    ->
       surface_type_has_specialization_hole inner
-  | Surface.ArrayType arr -> surface_type_has_specialization_hole arr.value.element
+  | Surface.ArrayType arr ->
+      surface_type_has_specialization_hole arr.value.element
   | Surface.FunctionType fn ->
       surface_type_has_specialization_hole fn.value.return_type
       || List.exists surface_type_has_specialization_hole fn.value.param_types
   | Surface.TemplatedType templ ->
       List.exists surface_type_has_specialization_hole templ.value.inner
-  | Surface.NumericType _
-  | Surface.VecType _
-  | Surface.MatrixType _
-  | Surface.FloatType
-  | Surface.VoidType
-  | Surface.StringType
+  | Surface.NumericType _ | Surface.VecType _ | Surface.MatrixType _
+  | Surface.FloatType | Surface.VoidType | Surface.StringType
   | Surface.CustomType _ ->
       false
 
@@ -96,10 +91,12 @@ let function_has_specialization_param (fn : Surface.function_decl) =
     fn.value.params.value.params
 
 let validate_surface_function_decl (fn : Surface.function_decl) =
-  if fn.value.return_type = None && not (function_has_specialization_param fn) then
+  if fn.value.return_type = None && not (function_has_specialization_param fn)
+  then
     failwith
       (Printf.sprintf
-         "function %s omits its return type, but only specialization functions may infer returns (%s)"
+         "function %s omits its return type, but only specialization functions \
+          may infer returns (%s)"
          fn.value.name.value (string_of_loc fn.loc))
 
 let rec cst_program_to_surface (program : Cst.program) : Surface.program =
@@ -119,7 +116,8 @@ and cst_top_decl_to_surface (decl : Cst.top_decl) : Surface.top_decl =
   in
   mk_surface decl.loc value
 
-and cst_function_decl_to_surface (fn : Cst.function_decl) : Surface.function_decl =
+and cst_function_decl_to_surface (fn : Cst.function_decl) :
+    Surface.function_decl =
   let value =
     {
       Surface.public = fn.value.public;
@@ -139,7 +137,8 @@ and cst_function_decl_to_surface (fn : Cst.function_decl) : Surface.function_dec
 and cst_intrinsic_to_surface (intr : Cst.intrinsic) : Surface.intrinsic =
   let value =
     {
-      Surface.name = { value = intr.value.name.value; loc = intr.value.name.loc };
+      Surface.name =
+        { value = intr.value.name.value; loc = intr.value.name.loc };
       types = List.map cst_type_to_surface intr.value.types;
     }
   in
@@ -225,7 +224,8 @@ and cst_type_decl_to_surface (decl : Cst.type_decl) : Surface.type_decl =
 
 and cst_type_decl_data_to_surface = function
   | Cst.TypeDeclAlias ty -> Surface.TypeDeclAlias (cst_type_to_surface ty)
-  | Cst.TypeDeclStruct s -> Surface.TypeDeclStruct (cst_struct_decl_to_surface s)
+  | Cst.TypeDeclStruct s ->
+      Surface.TypeDeclStruct (cst_struct_decl_to_surface s)
   | Cst.TypeDeclEnum e -> Surface.TypeDeclEnum (cst_enum_decl_to_surface e)
   | Cst.TypeDeclForward -> Surface.TypeDeclForward
 
@@ -238,7 +238,8 @@ and cst_struct_decl_to_surface (decl : Cst.struct_decl) : Surface.struct_decl =
   in
   mk_surface decl.loc value
 
-and cst_struct_field_to_surface (field : Cst.struct_field) : Surface.struct_field =
+and cst_struct_field_to_surface (field : Cst.struct_field) :
+    Surface.struct_field =
   let value : Surface.struct_field_desc =
     {
       Surface.name = cst_identifier_to_surface field.value.name;
@@ -256,7 +257,8 @@ and cst_enum_decl_to_surface (decl : Cst.enum_decl) : Surface.enum_decl =
   in
   mk_surface decl.loc value
 
-and cst_enum_variant_to_surface (variant : Cst.enum_variant) : Surface.enum_variant =
+and cst_enum_variant_to_surface (variant : Cst.enum_variant) :
+    Surface.enum_variant =
   let value =
     {
       Surface.name = cst_identifier_to_surface variant.value.name;
@@ -268,7 +270,8 @@ and cst_enum_variant_to_surface (variant : Cst.enum_variant) : Surface.enum_vari
 and cst_foreign_to_surface (foreign : Cst.foreign) : Surface.foreign =
   let value =
     {
-      Surface.lib = { value = foreign.value.lib.value; loc = foreign.value.lib.loc };
+      Surface.lib =
+        { value = foreign.value.lib.value; loc = foreign.value.lib.loc };
       decls = List.map cst_function_decl_to_surface foreign.value.decls;
     }
   in
@@ -281,29 +284,30 @@ and cst_block_to_surface (block : Cst.block) : Surface.block =
   let statements, result =
     match List.rev lowered_items with
     | LoweredExpression expr :: rev_prefix ->
-        ( List.rev_map lowered_item_to_statement rev_prefix,
-          Some expr )
+        (List.rev_map lowered_item_to_statement rev_prefix, Some expr)
     | rev_items -> (List.rev_map lowered_item_to_statement rev_items, None)
   in
   mk_surface_block block.loc { statements; result }
 
-and cst_block_item_to_surface (item : Cst.block_item) : lowered_block_item option =
+and cst_block_item_to_surface (item : Cst.block_item) :
+    lowered_block_item option =
   match item.value with
   | Cst.BlockStatement stmt ->
       Option.map
         (fun stmt -> LoweredStatement stmt)
         (cst_statement_to_surface stmt)
-  | Cst.BlockExpression expr -> Some (LoweredExpression (cst_expr_to_surface expr))
+  | Cst.BlockExpression expr ->
+      Some (LoweredExpression (cst_expr_to_surface expr))
 
 and lowered_item_to_statement = function
   | LoweredStatement stmt -> stmt
-  | LoweredExpression expr ->
-      mk_surface_stmt expr.loc (Surface.Expression expr)
+  | LoweredExpression expr -> mk_surface_stmt expr.loc (Surface.Expression expr)
 
 and cst_statement_to_surface (stmt : Cst.statement) : Surface.statement option =
   let value =
     match stmt.value with
-    | Cst.Expression expr -> Some (Surface.Expression (cst_expr_to_surface expr))
+    | Cst.Expression expr ->
+        Some (Surface.Expression (cst_expr_to_surface expr))
     | Cst.Let binding ->
         Some
           (Surface.Let
@@ -314,19 +318,33 @@ and cst_statement_to_surface (stmt : Cst.statement) : Surface.statement option =
                   name = cst_identifier_to_surface binding.value.name;
                   init_expr = cst_expr_to_surface binding.value.init_expr;
                 }))
-    | Cst.CompileAssert compile_assert ->
-        Some
-          (Surface.CompileAssert
-             (mk_surface compile_assert.loc
-                {
-                  Surface.cond = cst_expr_to_surface compile_assert.value.cond;
-                  message =
-                    {
-                      value = compile_assert.value.message.value;
-                      loc = compile_assert.value.message.loc;
-                    };
-                }))
-    | Cst.Return expr -> Some (Surface.Return (Option.map cst_expr_to_surface expr))
+    | Cst.Directive directive -> (
+        match directive.value with
+        | DirectiveCall c ->
+            failwith
+              (Printf.sprintf "directive calls not yet implemented (for %s)"
+                 c.name.value)
+        | DirectiveCompileTime compile_time -> (
+            match compile_time.name.value with
+            | "assert" ->
+                Some
+                  (Surface.CompileAssert
+                     (mk_surface directive.loc
+                        {
+                          Surface.cond = cst_expr_to_surface compile_time.cond;
+                          message =
+                            {
+                              value = compile_time.message.value;
+                              loc = compile_time.message.loc;
+                            };
+                        }))
+            | _ ->
+                (* TODO: this is probably too early to bail, we should store in an "UnknownCompileTimeDirective" or sometihng and bail in a later pass, but works for now *)
+                failwith
+                  (Printf.sprintf "compile-time directive %s is not known"
+                     compile_time.name.value)))
+    | Cst.Return expr ->
+        Some (Surface.Return (Option.map cst_expr_to_surface expr))
     | Cst.Defer expr -> Some (Surface.Defer (cst_expr_to_surface expr))
     | Cst.Iter iter ->
         Some
@@ -458,7 +476,8 @@ and cst_mat_to_surface (mat : Cst.mat_literal) : Surface.mat_literal =
   mk_surface_mat mat.loc
     { Surface.rows = List.map cst_expr_to_surface mat.value.rows }
 
-and cst_enum_literal_to_surface (enum : Cst.enum_literal) : Surface.enum_literal =
+and cst_enum_literal_to_surface (enum : Cst.enum_literal) : Surface.enum_literal
+    =
   mk_surface_enum enum.loc
     {
       Surface.enum_name = cst_identifier_to_surface enum.value.enum_name;
@@ -485,7 +504,8 @@ and cst_type_to_surface (ty : Cst.haven_type) : Surface.haven_type =
         Surface.FunctionType
           (mk_surface fn.loc
              {
-               Surface.param_types = List.map cst_type_to_surface fn.value.param_types;
+               Surface.param_types =
+                 List.map cst_type_to_surface fn.value.param_types;
                return_type = cst_type_to_surface fn.value.return_type;
                vararg = fn.value.vararg;
              })
@@ -512,7 +532,8 @@ and cst_identifier_to_surface (id : Cst.identifier) : Surface.identifier =
   mk_surface_ident id.loc id.value
 
 and cst_init_to_surface (init : Cst.init_list) : Surface.init_list =
-  mk_surface init.loc { Surface.exprs = List.map cst_expr_to_surface init.value.exprs }
+  mk_surface init.loc
+    { Surface.exprs = List.map cst_expr_to_surface init.value.exprs }
 
 and cst_as_expr_to_surface (cast : Cst.as_expr) : Surface.as_expr =
   mk_surface cast.loc
@@ -527,8 +548,13 @@ and cst_if_expr_to_surface (ifx : Cst.if_expr) : Surface.if_expr =
     | None -> None
     | Some (Cst.Else block) -> Some (cst_block_to_surface block)
     | Some (Cst.ElseIf nested_if) ->
-        let nested_expr = mk_surface_expr nested_if.loc (Surface.If (cst_if_expr_to_surface nested_if)) in
-        Some (mk_surface_block nested_if.loc { statements = []; result = Some nested_expr })
+        let nested_expr =
+          mk_surface_expr nested_if.loc
+            (Surface.If (cst_if_expr_to_surface nested_if))
+        in
+        Some
+          (mk_surface_block nested_if.loc
+             { statements = []; result = Some nested_expr })
   in
   mk_surface ifx.loc
     {
@@ -551,19 +577,24 @@ and cst_match_arm_to_surface (arm : Cst.match_arm) : Surface.match_arm =
       expr = cst_expr_to_surface arm.value.expr;
     }
 
-and cst_match_pattern_to_surface (pat : Cst.match_pattern) : Surface.match_pattern =
+and cst_match_pattern_to_surface (pat : Cst.match_pattern) :
+    Surface.match_pattern =
   let value =
     match pat.value with
     | Cst.PatternDefault -> Surface.PatternDefault
-    | Cst.PatternLiteral lit -> Surface.PatternLiteral (cst_literal_to_surface lit)
-    | Cst.PatternEnum enum -> Surface.PatternEnum (cst_pattern_enum_to_surface enum)
+    | Cst.PatternLiteral lit ->
+        Surface.PatternLiteral (cst_literal_to_surface lit)
+    | Cst.PatternEnum enum ->
+        Surface.PatternEnum (cst_pattern_enum_to_surface enum)
   in
   mk_surface_pattern pat.loc value
 
-and cst_pattern_enum_to_surface (enum : Cst.pattern_enum) : Surface.pattern_enum =
+and cst_pattern_enum_to_surface (enum : Cst.pattern_enum) : Surface.pattern_enum
+    =
   mk_surface enum.loc
     {
-      Surface.enum_name = Option.map cst_identifier_to_surface enum.value.enum_name;
+      Surface.enum_name =
+        Option.map cst_identifier_to_surface enum.value.enum_name;
       enum_variant = cst_identifier_to_surface enum.value.enum_variant;
       binding = List.map cst_pattern_binding_to_surface enum.value.binding;
     }
@@ -647,7 +678,8 @@ let rec surface_type_to_core (ty : Surface.haven_type) : Core.haven_type =
         Core.FunctionType
           (mk_core fn.loc
              {
-               Core.param_types = List.map surface_type_to_core fn.value.param_types;
+               Core.param_types =
+                 List.map surface_type_to_core fn.value.param_types;
                return_type = surface_type_to_core fn.value.return_type;
                vararg = fn.value.vararg;
              })
@@ -660,14 +692,17 @@ let rec surface_type_to_core (ty : Surface.haven_type) : Core.haven_type =
                Core.element = surface_type_to_core arr.value.element;
                count =
                  surface_literal_to_core
-                   (fun _ -> invalid_arg "array count literals do not contain expressions")
+                   (fun _ ->
+                     invalid_arg
+                       "array count literals do not contain expressions")
                    arr.value.count;
              })
     | Surface.TemplatedType templ ->
         Core.TemplatedType
           (mk_core templ.loc
              {
-               Core.outer = mk_core_ident templ.value.outer.loc templ.value.outer.value;
+               Core.outer =
+                 mk_core_ident templ.value.outer.loc templ.value.outer.value;
                inner = List.map surface_type_to_core templ.value.inner;
              })
   in
@@ -685,7 +720,8 @@ and surface_literal_to_core map_expr (lit : Surface.literal) : Core.literal =
     | Surface.Char c -> Core.Char c
     | Surface.Matrix mat -> Core.Matrix (surface_mat_to_core map_expr mat)
     | Surface.Vector vec -> Core.Vector (surface_vec_to_core map_expr vec)
-    | Surface.Enum enum -> Core.Enum (surface_enum_literal_to_core map_expr enum)
+    | Surface.Enum enum ->
+        Core.Enum (surface_enum_literal_to_core map_expr enum)
   in
   mk_core_literal lit.loc value
 
@@ -693,18 +729,18 @@ and core_bool_literal_expr loc value =
   mk_core_expr loc (Core.Literal (mk_core_literal loc (Core.Bool value)))
 
 and core_false_expr loc = core_bool_literal_expr loc false
-
 and core_true_expr loc = core_bool_literal_expr loc true
 
-and surface_vec_to_core map_expr (vec : Surface.vec_literal) : Core.vec_literal =
-  mk_core_vec vec.loc
-    { Core.elements = List.map map_expr vec.value.elements }
+and surface_vec_to_core map_expr (vec : Surface.vec_literal) : Core.vec_literal
+    =
+  mk_core_vec vec.loc { Core.elements = List.map map_expr vec.value.elements }
 
-and surface_mat_to_core map_expr (mat : Surface.mat_literal) : Core.mat_literal =
-  mk_core_mat mat.loc
-    { Core.rows = List.map map_expr mat.value.rows }
+and surface_mat_to_core map_expr (mat : Surface.mat_literal) : Core.mat_literal
+    =
+  mk_core_mat mat.loc { Core.rows = List.map map_expr mat.value.rows }
 
-and surface_enum_literal_to_core map_expr (enum : Surface.enum_literal) : Core.enum_literal =
+and surface_enum_literal_to_core map_expr (enum : Surface.enum_literal) :
+    Core.enum_literal =
   mk_core_enum enum.loc
     {
       Core.enum_name = surface_identifier_to_core enum.value.enum_name;
@@ -722,7 +758,7 @@ and core_identifier_expr (id : Core.identifier) =
 and core_binary_expr loc op left right =
   mk_core_expr loc (Core.Binary (mk_core loc { Core.left; right; op }))
 
-and core_match_arm loc pattern expr = mk_core_arm loc { Core.pattern = pattern; expr }
+and core_match_arm loc pattern expr = mk_core_arm loc { Core.pattern; expr }
 
 let rec const_int_of_surface_expr (expr : Surface.expression) =
   match expr.value with
@@ -784,14 +820,12 @@ let mk_surface_pointer_type loc inner =
 
 let mk_surface_void_type loc = mk_surface_type loc Surface.VoidType
 
-let synthesize_surface_lifecycle_fn
-    (target : Surface.identifier)
-    kind loc
-    (user_params : Surface.param list)
-    body =
+let synthesize_surface_lifecycle_fn (target : Surface.identifier) kind loc
+    (user_params : Surface.param list) body =
   let self_ident = mk_surface_ident loc "self" in
   let target_ty =
-    mk_surface_type loc (Surface.CustomType { name = mk_surface_ident target.loc target.value })
+    mk_surface_type loc
+      (Surface.CustomType { name = mk_surface_ident target.loc target.value })
   in
   let self_ty = mk_surface_pointer_type loc target_ty in
   mk_surface loc
@@ -805,17 +839,16 @@ let synthesize_surface_lifecycle_fn
         mk_surface loc
           {
             Surface.params =
-              (mk_surface loc { Surface.name = self_ident; ty = self_ty }) :: user_params;
+              mk_surface loc { Surface.name = self_ident; ty = self_ty }
+              :: user_params;
             vararg = false;
           };
       return_type = Some (mk_surface_void_type loc);
       vararg = false;
     }
 
-let merge_surface_extension
-    (target : Surface.identifier)
-    (existing : surface_extension_hooks)
-    (ext : Surface.type_extend) =
+let merge_surface_extension (target : Surface.identifier)
+    (existing : surface_extension_hooks) (ext : Surface.type_extend) =
   let construct =
     match (existing.construct, ext.value.construct) with
     | Some _, Some _ ->
@@ -846,10 +879,11 @@ let rec surface_program_to_core st (program : Surface.program) : Core.program =
               | None -> { construct = None; destruct = None; loc = ext.loc }
             in
             let hooks = merge_surface_extension ext.value.target existing ext in
-            ((ext.value.target.value, hooks) :: List.remove_assoc ext.value.target.value extensions, decls_rev)
+            ( (ext.value.target.value, hooks)
+              :: List.remove_assoc ext.value.target.value extensions,
+              decls_rev )
         | _ -> (extensions, decl :: decls_rev))
-      ([], [])
-      program.value.decls
+      ([], []) program.value.decls
   in
   let seen_types =
     List.filter_map
@@ -860,65 +894,72 @@ let rec surface_program_to_core st (program : Surface.program) : Core.program =
       program.value.decls
   in
   st.known_types <-
-    List.fold_left (fun acc name -> String_set.add name acc) String_set.empty seen_types;
+    List.fold_left
+      (fun acc name -> String_set.add name acc)
+      String_set.empty seen_types;
   let decls =
     List.rev decls_rev
     |> List.concat_map (fun (decl : Surface.top_decl) ->
-           match decl.value with
-           | Surface.TDecl ty -> (
-               let hooks = List.assoc_opt ty.value.name.value extensions in
-               (match (hooks, ty.value.data) with
-               | ( Some { construct; destruct; _ },
-                   Surface.TypeDeclStruct _ )
-                 when Option.is_some construct || Option.is_some destruct ->
-                   ()
-               | Some _, _ ->
-                   failwith
-                     (Printf.sprintf
-                        "extend target %s must be a struct in the first-pass lifecycle model"
-                        ty.value.name.value)
-               | None, _ -> ());
-               let construct : Surface.function_decl option =
-                 Option.bind hooks (fun hooks ->
-                     Option.map
-                       (fun (construct : Surface.lifecycle_construct) ->
-                         synthesize_surface_lifecycle_fn ty.value.name "construct" ty.loc
-                           construct.value.params construct.value.body)
-                       hooks.construct)
-               in
-               let destruct : Surface.function_decl option =
-                 Option.bind hooks (fun hooks ->
-                     Option.map
-                       (synthesize_surface_lifecycle_fn ty.value.name "destruct" ty.loc [])
-                       hooks.destruct)
-               in
-               let ty =
-                 {
-                   ty with
-                   value = { ty.value with construct; destruct };
-                 }
-               in
-               let core_ty = surface_top_decl_to_core st { decl with value = Surface.TDecl ty } in
-               let lifecycle_fns : Surface.function_decl option list = [ construct; destruct ] in
-               let extra_fdecls =
-                 List.filter_map
-                   (fun (hook : Surface.function_decl option) ->
-                     Option.map
-                       (fun (fn : Surface.function_decl) ->
-                         mk_core fn.loc (Core.FDecl (surface_function_decl_to_core st fn)))
-                       hook)
-                   lifecycle_fns
-               in
-               core_ty :: extra_fdecls)
-           | Surface.Extend _ -> []
-           | _ -> [ surface_top_decl_to_core st decl ])
+        match decl.value with
+        | Surface.TDecl ty ->
+            let hooks = List.assoc_opt ty.value.name.value extensions in
+            (match (hooks, ty.value.data) with
+            | Some { construct; destruct; _ }, Surface.TypeDeclStruct _
+              when Option.is_some construct || Option.is_some destruct ->
+                ()
+            | Some _, _ ->
+                failwith
+                  (Printf.sprintf
+                     "extend target %s must be a struct in the first-pass \
+                      lifecycle model"
+                     ty.value.name.value)
+            | None, _ -> ());
+            let construct : Surface.function_decl option =
+              Option.bind hooks (fun hooks ->
+                  Option.map
+                    (fun (construct : Surface.lifecycle_construct) ->
+                      synthesize_surface_lifecycle_fn ty.value.name "construct"
+                        ty.loc construct.value.params construct.value.body)
+                    hooks.construct)
+            in
+            let destruct : Surface.function_decl option =
+              Option.bind hooks (fun hooks ->
+                  Option.map
+                    (synthesize_surface_lifecycle_fn ty.value.name "destruct"
+                       ty.loc [])
+                    hooks.destruct)
+            in
+            let ty =
+              { ty with value = { ty.value with construct; destruct } }
+            in
+            let core_ty =
+              surface_top_decl_to_core st { decl with value = Surface.TDecl ty }
+            in
+            let lifecycle_fns : Surface.function_decl option list =
+              [ construct; destruct ]
+            in
+            let extra_fdecls =
+              List.filter_map
+                (fun (hook : Surface.function_decl option) ->
+                  Option.map
+                    (fun (fn : Surface.function_decl) ->
+                      mk_core fn.loc
+                        (Core.FDecl (surface_function_decl_to_core st fn)))
+                    hook)
+                lifecycle_fns
+            in
+            core_ty :: extra_fdecls
+        | Surface.Extend _ -> []
+        | _ -> [ surface_top_decl_to_core st decl ])
   in
   List.iter
     (fun (name, _) ->
       if not (List.mem name seen_types) then
-        failwith (Printf.sprintf "extend target %s does not match any declared type" name))
+        failwith
+          (Printf.sprintf "extend target %s does not match any declared type"
+             name))
     extensions;
-  mk_core program.loc { Core.decls = decls }
+  mk_core program.loc { Core.decls }
 
 and surface_top_decl_to_core st (decl : Surface.top_decl) : Core.top_decl =
   let value =
@@ -930,18 +971,22 @@ and surface_top_decl_to_core st (decl : Surface.top_decl) : Core.top_decl =
     | Surface.CImport i -> Core.CImport { value = i.value; loc = i.loc }
     | Surface.Foreign f -> Core.Foreign (surface_foreign_to_core st f)
     | Surface.Extend _ ->
-        failwith "surface extend declarations must be merged before core lowering"
+        failwith
+          "surface extend declarations must be merged before core lowering"
   in
   mk_core decl.loc value
 
-and surface_function_decl_to_core st (fn : Surface.function_decl) : Core.function_decl =
+and surface_function_decl_to_core st (fn : Surface.function_decl) :
+    Core.function_decl =
   let value =
     {
       Core.public = fn.value.public;
       impure = fn.value.impure;
       name = surface_identifier_to_core fn.value.name;
       definition =
-        Option.map (surface_block_to_core st ~context:`Value) fn.value.definition;
+        Option.map
+          (surface_block_to_core st ~context:`Value)
+          fn.value.definition;
       intrinsic = Option.map (surface_intrinsic_to_core st) fn.value.intrinsic;
       params = surface_param_list_to_core st fn.value.params;
       return_type = Option.map surface_type_to_core fn.value.return_type;
@@ -957,7 +1002,8 @@ and surface_intrinsic_to_core _st (intr : Surface.intrinsic) : Core.intrinsic =
       types = List.map surface_type_to_core intr.value.types;
     }
 
-and surface_param_list_to_core st (params : Surface.param_list) : Core.param_list =
+and surface_param_list_to_core st (params : Surface.param_list) :
+    Core.param_list =
   mk_core params.loc
     {
       Core.params = List.map (surface_param_to_core st) params.value.params;
@@ -988,17 +1034,21 @@ and surface_type_decl_to_core st (decl : Surface.type_decl) : Core.type_decl =
     {
       Core.name = surface_identifier_to_core decl.value.name;
       data = surface_type_decl_data_to_core st decl.value.data;
-      construct = Option.map (surface_function_decl_to_core st) decl.value.construct;
-      destruct = Option.map (surface_function_decl_to_core st) decl.value.destruct;
+      construct =
+        Option.map (surface_function_decl_to_core st) decl.value.construct;
+      destruct =
+        Option.map (surface_function_decl_to_core st) decl.value.destruct;
     }
 
 and surface_type_decl_data_to_core st = function
   | Surface.TypeDeclAlias ty -> Core.TypeDeclAlias (surface_type_to_core ty)
-  | Surface.TypeDeclStruct s -> Core.TypeDeclStruct (surface_struct_decl_to_core st s)
+  | Surface.TypeDeclStruct s ->
+      Core.TypeDeclStruct (surface_struct_decl_to_core st s)
   | Surface.TypeDeclEnum e -> Core.TypeDeclEnum (surface_enum_decl_to_core st e)
   | Surface.TypeDeclForward -> Core.TypeDeclForward
 
-and surface_struct_decl_to_core st (decl : Surface.struct_decl) : Core.struct_decl =
+and surface_struct_decl_to_core st (decl : Surface.struct_decl) :
+    Core.struct_decl =
   mk_core decl.loc
     {
       Core.fields = List.map (surface_struct_field_to_core st) decl.value.fields;
@@ -1007,8 +1057,12 @@ and surface_struct_decl_to_core st (decl : Surface.struct_decl) : Core.struct_de
           (fun (lifecycle : Surface.struct_lifecycle) ->
             mk_core lifecycle.loc
               {
-                Core.constructor = Option.map surface_identifier_to_core lifecycle.value.constructor;
-                destructor = Option.map surface_identifier_to_core lifecycle.value.destructor;
+                Core.constructor =
+                  Option.map surface_identifier_to_core
+                    lifecycle.value.constructor;
+                destructor =
+                  Option.map surface_identifier_to_core
+                    lifecycle.value.destructor;
               })
           decl.value.lifecycle;
     }
@@ -1040,22 +1094,16 @@ and surface_enum_variant_to_core _st (variant : Surface.enum_variant) :
 
 and surface_foreign_to_core st (foreign : Surface.foreign) : Core.foreign =
   let normalize_foreign_decl (fn : Surface.function_decl) =
-    {
-      fn with
-      value =
-        {
-          fn.value with
-          public = true;
-          impure = true;
-        };
-    }
+    { fn with value = { fn.value with public = true; impure = true } }
   in
   mk_core foreign.loc
     {
-      Core.lib = { value = foreign.value.lib.value; loc = foreign.value.lib.loc };
+      Core.lib =
+        { value = foreign.value.lib.value; loc = foreign.value.lib.loc };
       decls =
         List.map
-          (fun fn -> surface_function_decl_to_core st (normalize_foreign_decl fn))
+          (fun fn ->
+            surface_function_decl_to_core st (normalize_foreign_decl fn))
           foreign.value.decls;
     }
 
@@ -1066,9 +1114,12 @@ and surface_block_to_core st ~context (block : Surface.block) : Core.block =
   match (context, block.value.result) with
   | `Value, result ->
       mk_core_block block.loc
-        { Core.statements = statements; result = Option.map (surface_expr_to_core st) result }
+        {
+          Core.statements;
+          result = Option.map (surface_expr_to_core st) result;
+        }
   | `Statement, None ->
-      mk_core_block block.loc { Core.statements = statements; result = None }
+      mk_core_block block.loc { Core.statements; result = None }
   | `Statement, Some expr ->
       let expr_stmt =
         mk_core_stmt expr.loc (Core.Expression (surface_expr_to_core st expr))
@@ -1076,7 +1127,8 @@ and surface_block_to_core st ~context (block : Surface.block) : Core.block =
       mk_core_block block.loc
         { Core.statements = statements @ [ expr_stmt ]; result = None }
 
-and surface_statement_to_core st (stmt : Surface.statement) : Core.statement list =
+and surface_statement_to_core st (stmt : Surface.statement) :
+    Core.statement list =
   match stmt.value with
   | Surface.Expression expr ->
       [ mk_core_stmt stmt.loc (Core.Expression (surface_expr_to_core st expr)) ]
@@ -1107,7 +1159,10 @@ and surface_statement_to_core st (stmt : Surface.statement) : Core.statement lis
                 }));
       ]
   | Surface.Return expr ->
-      [ mk_core_stmt stmt.loc (Core.Return (Option.map (surface_expr_to_core st) expr)) ]
+      [
+        mk_core_stmt stmt.loc
+          (Core.Return (Option.map (surface_expr_to_core st) expr));
+      ]
   | Surface.Defer expr ->
       [ mk_core_stmt stmt.loc (Core.Defer (surface_expr_to_core st expr)) ]
   | Surface.While while_stmt ->
@@ -1177,35 +1232,45 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
   let end_ref = core_identifier_expr end_name in
   let step_ref = core_identifier_expr step_name in
   let cond =
-    match Option.bind iter.value.range.value.range_incr const_int_of_surface_expr with
+    match
+      Option.bind iter.value.range.value.range_incr const_int_of_surface_expr
+    with
     | Some step when step < 0 ->
         core_binary_expr loc Core.GreaterThanOrEqual index_expr end_ref
-    | Some _ | None when Option.is_none iter.value.range.value.range_incr ->
+    | (Some _ | None) when Option.is_none iter.value.range.value.range_incr ->
         core_binary_expr loc Core.LessThanOrEqual index_expr end_ref
-    | Some _ ->
-        core_binary_expr loc Core.LessThanOrEqual index_expr end_ref
+    | Some _ -> core_binary_expr loc Core.LessThanOrEqual index_expr end_ref
     | None ->
         let direction =
-          core_binary_expr loc Core.LessThan step_ref (core_int_literal_expr loc 0)
+          core_binary_expr loc Core.LessThan step_ref
+            (core_int_literal_expr loc 0)
         in
         let non_negative_arm =
           core_match_arm loc
-            (mk_core_pattern loc (Core.PatternLiteral (mk_core_literal loc (Core.Integer 0))))
+            (mk_core_pattern loc
+               (Core.PatternLiteral (mk_core_literal loc (Core.Integer 0))))
             (core_binary_expr loc Core.LessThanOrEqual index_expr end_ref)
         in
         let negative_arm =
-          core_match_arm loc (mk_core_pattern loc Core.PatternDefault)
+          core_match_arm loc
+            (mk_core_pattern loc Core.PatternDefault)
             (core_binary_expr loc Core.GreaterThanOrEqual index_expr end_ref)
         in
         mk_core_expr loc
-          (Core.Match (mk_core loc { Core.expr = direction; arms = [ non_negative_arm; negative_arm ] }))
+          (Core.Match
+             (mk_core loc
+                {
+                  Core.expr = direction;
+                  arms = [ non_negative_arm; negative_arm ];
+                }))
   in
   let next_value = core_binary_expr loc Core.Add index_expr step_ref in
   let increment =
     mk_core_stmt loc
       (Core.Expression
          (mk_core_expr loc
-            (Core.Assign (mk_core loc { Core.target = index_expr; value = next_value }))))
+            (Core.Assign
+               (mk_core loc { Core.target = index_expr; value = next_value }))))
   in
   let body = surface_block_to_core st ~context:`Statement iter.value.body in
   let iteration_hint =
@@ -1260,7 +1325,8 @@ and surface_expr_to_core st (expr : Surface.expression) : Core.expression =
              })
     | Surface.Literal lit ->
         Core.Literal (surface_literal_to_core (surface_expr_to_core st) lit)
-    | Surface.Block block -> Core.Block (surface_block_to_core st ~context:`Value block)
+    | Surface.Block block ->
+        Core.Block (surface_block_to_core st ~context:`Value block)
     | Surface.Identifier id -> Core.Identifier (surface_identifier_to_core id)
     | Surface.Initializer init ->
         Core.Initializer
@@ -1292,9 +1358,9 @@ and surface_expr_to_core st (expr : Surface.expression) : Core.expression =
           (mk_core_type inner.loc
              (Core.CustomType { name = surface_identifier_to_core id }))
     | Surface.BoxExpr { value = Surface.Call call; loc }
-      when (match call.value.target.value with
+      when match call.value.target.value with
            | Surface.Identifier id -> String_set.mem id.value st.known_types
-           | _ -> false) ->
+           | _ -> false ->
         let ty =
           match call.value.target.value with
           | Surface.Identifier id ->
@@ -1304,7 +1370,10 @@ and surface_expr_to_core st (expr : Surface.expression) : Core.expression =
         in
         Core.BoxConstruct
           (mk_core loc
-             { Core.ty; args = List.map (surface_expr_to_core st) call.value.params })
+             {
+               Core.ty;
+               args = List.map (surface_expr_to_core st) call.value.params;
+             })
     | Surface.BoxExpr inner -> Core.BoxExpr (surface_expr_to_core st inner)
     | Surface.BoxType ty -> Core.BoxType (surface_type_to_core ty)
     | Surface.Unbox inner -> Core.Unbox (surface_expr_to_core st inner)
@@ -1338,16 +1407,20 @@ and surface_expr_to_core st (expr : Surface.expression) : Core.expression =
 and lower_if_expr st loc (ifx : Surface.if_expr) : Core.expression_desc =
   let false_arm =
     core_match_arm loc
-      (mk_core_pattern loc (Core.PatternLiteral (mk_core_literal loc (Core.Bool false))))
+      (mk_core_pattern loc
+         (Core.PatternLiteral (mk_core_literal loc (Core.Bool false))))
       (match ifx.value.else_branch with
-      | None -> mk_core_expr loc (Core.Block (mk_core_block loc { statements = []; result = None }))
+      | None ->
+          mk_core_expr loc
+            (Core.Block (mk_core_block loc { statements = []; result = None }))
       | Some block ->
           mk_core_expr block.loc
             (Core.Block (surface_block_to_core st ~context:`Value block)))
   in
   let true_arm =
     core_match_arm loc
-      (mk_core_pattern loc (Core.PatternLiteral (mk_core_literal loc (Core.Bool true))))
+      (mk_core_pattern loc
+         (Core.PatternLiteral (mk_core_literal loc (Core.Bool true))))
       (mk_core_expr ifx.value.then_branch.loc
          (Core.Block
             (surface_block_to_core st ~context:`Value ifx.value.then_branch)))
@@ -1374,15 +1447,19 @@ and surface_match_pattern_to_core st (pat : Surface.match_pattern) :
     match pat.value with
     | Surface.PatternDefault -> Core.PatternDefault
     | Surface.PatternLiteral lit ->
-        Core.PatternLiteral (surface_literal_to_core (surface_expr_to_core st) lit)
-    | Surface.PatternEnum enum -> Core.PatternEnum (surface_pattern_enum_to_core enum)
+        Core.PatternLiteral
+          (surface_literal_to_core (surface_expr_to_core st) lit)
+    | Surface.PatternEnum enum ->
+        Core.PatternEnum (surface_pattern_enum_to_core enum)
   in
   mk_core_pattern pat.loc value
 
-and surface_pattern_enum_to_core (enum : Surface.pattern_enum) : Core.pattern_enum =
+and surface_pattern_enum_to_core (enum : Surface.pattern_enum) :
+    Core.pattern_enum =
   mk_core enum.loc
     {
-      Core.enum_name = Option.map surface_identifier_to_core enum.value.enum_name;
+      Core.enum_name =
+        Option.map surface_identifier_to_core enum.value.enum_name;
       enum_variant = surface_identifier_to_core enum.value.enum_variant;
       binding = List.map surface_pattern_binding_to_core enum.value.binding;
     }
@@ -1392,7 +1469,8 @@ and surface_pattern_binding_to_core (binding : Surface.pattern_binding) :
   let value =
     match binding.value with
     | Surface.BindingIgnored -> Core.BindingIgnored
-    | Surface.BindingNamed id -> Core.BindingNamed (surface_identifier_to_core id)
+    | Surface.BindingNamed id ->
+        Core.BindingNamed (surface_identifier_to_core id)
   in
   mk_core_binding binding.loc value
 
@@ -1400,8 +1478,7 @@ let core_of_surface (parsed : Surface.parsed_program) : Core.parsed_program =
   let st = fresh_state () in
   { Core.program = surface_program_to_core st parsed.program }
 
-let core_of_expanded_cst parsed =
-  core_of_surface (surface_of_cst parsed)
+let core_of_expanded_cst parsed = core_of_surface (surface_of_cst parsed)
 
 let core_of_cst parsed =
   let expanded = Imports.expand_cst parsed in
