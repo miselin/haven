@@ -135,6 +135,7 @@ and pp_surface_expression fmt (expr : Surface.expression) =
   | SizeExpr inner -> fprintf fmt "SizeExpr(%a)" pp_surface_expression inner
   | SizeType ty -> fprintf fmt "SizeType(%a)" pp_surface_type ty
   | Nil -> fprintf fmt "Nil"
+  | Zero -> fprintf fmt "Zero"
   | If ifx ->
       fprintf fmt "@[<hv 2>If(@,cond=%a,@ then=%a,@ else=%a@,)@]"
         pp_surface_expression ifx.value.cond pp_surface_block ifx.value.then_branch
@@ -387,6 +388,7 @@ and pp_core_expression fmt (expr : Core.expression) =
   | SizeExpr inner -> fprintf fmt "SizeExpr(%a)" pp_core_expression inner
   | SizeType ty -> fprintf fmt "SizeType(%a)" pp_core_type ty
   | Nil -> fprintf fmt "Nil"
+  | Zero -> fprintf fmt "Zero"
   | Match m ->
       fprintf fmt "@[<hv 2>Match(@,expr=%a,@ arms=%a@,)@]" pp_core_expression
         m.value.expr

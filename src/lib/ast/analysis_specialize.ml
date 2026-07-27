@@ -320,7 +320,8 @@ module Specialize = struct
                   };
               };
         }
-    | (Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil | Core.BoxType _) ->
+    | (Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil | Core.Zero
+      | Core.BoxType _) ->
         expr
 
   and rewrite_call state annotations (expr : Core.expression) (call : Core.call) =

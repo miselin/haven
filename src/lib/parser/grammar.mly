@@ -32,7 +32,7 @@
 
 (* Main keywords *)
 %token PUB FN MUT IF ELSE LET WHILE UNTIL BREAK CONTINUE MATCH AS ITER
-%token LOAD RET STRUCT TYPE NIL DEFER IMPURE ENUM IMPORT CIMPORT SIZE
+%token LOAD RET STRUCT TYPE NIL ZERO DEFER IMPURE ENUM IMPORT CIMPORT SIZE
 %token BOX UNBOX INTRINSIC FOREIGN DATA STATE VEC MAT FUNCTION
 %token VAFUNCTION CELL REF EXTEND WITH CONSTRUCT DESTRUCT
 
@@ -261,6 +261,7 @@ primary:
   | SIZE LT t=haven_type GT { mk_expr $startpos $endpos (SizeType t) }
   | SIZE LPAREN e=expr RPAREN { mk_expr $startpos $endpos (SizeExpr e) }
   | NIL { mk_expr $startpos $endpos Nil }
+  | ZERO { mk_expr $startpos $endpos Zero }
   ;
 
 init: LBRACE exprs=separated_nonempty_list(COMMA, expr) RBRACE { mk_loc $startpos $endpos { exprs } } ;

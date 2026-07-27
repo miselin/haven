@@ -235,6 +235,32 @@ i32[1] arr = {
 };
 ```
 
+### Zero Initialization
+
+`zero` is a contextually typed expression that recursively initializes every
+element or field of an aggregate to its zero value. It is valid for arrays,
+structures, vectors, and matrices:
+
+```
+type Buffer = struct {
+    i8* ptr;
+    u64 length;
+};
+
+let Buffer buffer = zero;
+let mut u32[16] words = zero;
+pub state Buffer[4] buffers = zero;
+```
+
+Numeric elements and fields become `0` or `0.0`, pointer-like fields become
+`nil`, and nested aggregates are zero-initialized recursively. The surrounding
+declaration or expression context must provide the complete target type;
+`let value = zero;` is invalid because `zero` does not infer an aggregate type.
+
+`zero` is not a partial aggregate initializer. A brace initializer must still
+provide every required element or field. Scalar and enum targets are rejected;
+use an ordinary numeric literal or `nil` when initializing those values.
+
 ### Boxed Types
 
 > [!CAUTION]
@@ -392,8 +418,16 @@ state i32 x = 1234; // mutable, local
 pub state i32 y = 5678; // mutable, global linkage
 ```
 
-For `pub` data and state, an initializer may be ommitted to create a reference to be resolved by the linker.
+For `pub` data and state, an initializer may be omitted to create a reference to be resolved by the linker.
 Non-constant global initializers are lowered to program startup initialization before user code runs.
+
+An explicit `zero` initializer creates a definition rather than an external
+reference. For example:
+
+```
+pub state i32[4] supplied_elsewhere;    // external declaration
+pub state i32[4] owned_here = zero;     // zero-filled definition
+```
 
 #### Function Scope
 

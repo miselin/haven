@@ -37,6 +37,9 @@ let run () =
   assert_parse_ok "initializer without trailing comma"
     "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1 }; thing.value }";
 
+  assert_parse_ok "aggregate zero initializer"
+    "pub state i32[4] values = zero;";
+
   assert_parse_ok "extend lifecycle block"
     {|
 type Buffer = struct {

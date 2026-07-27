@@ -128,8 +128,8 @@ module Cleanup = struct
             }
       | Core.Assign write -> clean_write_like typed (fun write -> Core.Assign write) write
       | Core.Mutate write -> clean_write_like typed (fun write -> Core.Mutate write) write
-      | (Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil | Core.BoxType _) as
-          value ->
+      | (Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil | Core.Zero
+        | Core.BoxType _) as value ->
           value
     in
     { expr with value = cleaned_value }

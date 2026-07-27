@@ -246,6 +246,7 @@ and expression_desc =
   | SizeExpr of expression
   | SizeType of haven_type
   | Nil
+  | Zero
   | If of if_expr
   | Match of match_expr
   | BoxExpr of expression

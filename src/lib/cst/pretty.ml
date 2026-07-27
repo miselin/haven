@@ -114,6 +114,7 @@ and pp_expression fmt expr =
   | SizeExpr e -> fprintf fmt "SizeExpr(%a)" pp_expression e
   | SizeType t -> fprintf fmt "SizeType(%a)" pp_type t
   | Nil -> fprintf fmt "Nil"
+  | Zero -> fprintf fmt "Zero"
   | If i -> pp_if_expr fmt i
   | Match m -> pp_match_expr fmt m
   | BoxExpr e -> fprintf fmt "Box(expr=%a)" pp_expression e

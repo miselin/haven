@@ -196,6 +196,7 @@ and walk_expression predicate acc expr =
   | SizeExpr e -> walk_expression predicate acc e
   | SizeType t -> walk_haven_type predicate acc t
   | Nil -> acc
+  | Zero -> acc
   | If i -> walk_if_expr predicate acc i
   | Match m ->
       let acc = add_if predicate (MatchExpr m) acc in

@@ -664,6 +664,7 @@ let rec constant_of_expr t (expr : Core.expression) =
   | Core.Literal lit -> constant_of_literal t expr.loc resolved lit
   | Core.Nil when Analysis.resolved_is_pointerish resolved ->
       Some (Llvm.const_null (llvm_type_of_resolved t resolved))
+  | Core.Zero -> Some (zero_constant t resolved)
   | Core.As cast ->
       Option.bind
         (constant_of_expr t cast.value.inner)
@@ -2000,6 +2001,7 @@ and emit_expr t (expr : Core.expression) =
         | None -> fail ~loc:expr.loc "failed to lower size expression")
     | Core.Nil ->
         Llvm.const_null (llvm_type_of_resolved t (expr_resolved_type t expr))
+    | Core.Zero -> zero_constant t (expr_resolved_type t expr)
     | Core.Match match_expr -> emit_match t expr match_expr
     | Core.BoxExpr inner -> emit_box_expr t expr inner
     | Core.BoxType ty -> emit_box_type_expr t expr ty
