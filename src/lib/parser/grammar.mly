@@ -46,7 +46,7 @@
 %left LT GT LE GE
 %left LSHIFT RSHIFT
 %left PLUS MINUS
-%left MULITPLY DIVIDE MODULO
+%left STAR SLASH PERCENT
 %nonassoc UMINUS BANG TILDE
 
 %start <program> program
@@ -210,9 +210,9 @@ expr:
   | l=expr WALRUS r=expr { mk_binary $startpos $endpos Mutate l r }
   | l=expr PLUS r=expr { mk_binary $startpos $endpos Add l r }
   | l=expr MINUS r=expr { mk_binary $startpos $endpos Subtract l r }
-  | l=expr STAR r=expr %prec MULITPLY { mk_binary $startpos $endpos Multiply l r }
-  | l=expr SLASH r=expr %prec DIVIDE { mk_binary $startpos $endpos Divide l r }
-  | l=expr PERCENT r=expr %prec MODULO { mk_binary $startpos $endpos Modulo l r }
+  | l=expr STAR r=expr { mk_binary $startpos $endpos Multiply l r }
+  | l=expr SLASH r=expr { mk_binary $startpos $endpos Divide l r }
+  | l=expr PERCENT r=expr { mk_binary $startpos $endpos Modulo l r }
   | l=expr AMP r=expr %prec BITWISE_AND { mk_binary $startpos $endpos BitwiseAnd l r }
   | l=expr CARET r=expr %prec BITWISE_XOR { mk_binary $startpos $endpos BitwiseXor l r }
   | l=expr PIPE r=expr %prec BITWISE_OR { mk_binary $startpos $endpos BitwiseOr l r }
@@ -328,12 +328,12 @@ identifier: i=IDENT { mk_id i $startpos $endpos } ;
 
 haven_type:
   | t=type_primary { t }
-  | t=type_primary STAR { mk_loc $startpos $endpos (PointerType t) }
-  | t=type_primary CARET {
+  | t=haven_type STAR { mk_loc $startpos $endpos (PointerType t) }
+  | t=haven_type CARET {
       let ty : haven_type_desc = BoxType t in
       mk_loc $startpos $endpos ty
     }
-  | t=type_primary LBRACKET c=integer_literal RBRACKET { mk_loc $startpos $endpos (ArrayType (mk_loc $startpos $endpos { element = t; count = c })) }
+  | t=haven_type LBRACKET c=integer_literal RBRACKET { mk_loc $startpos $endpos (ArrayType (mk_loc $startpos $endpos { element = t; count = c })) }
   ;
 
 type_primary:

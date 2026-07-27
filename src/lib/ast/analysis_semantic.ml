@@ -91,6 +91,26 @@ module Semantic = struct
         | Core.VDecl _ | Core.TDecl _ | Core.Import _ | Core.CImport _ -> map)
       String_map.empty program.value.decls
 
+  let check_duplicate_function_definitions state (program : Core.program) =
+    let definitions = ref String_map.empty in
+    let check (fn : Core.function_decl) =
+      match fn.value.definition with
+      | None -> ()
+      | Some _ ->
+          let name = fn.value.name.value in
+          if String_map.mem name !definitions then
+            add_diagnostic state Error fn.loc
+              (Printf.sprintf "duplicate function definition %s" name)
+          else definitions := String_map.add name () !definitions
+    in
+    List.iter
+      (fun (decl : Core.top_decl) ->
+        match decl.value with
+        | Core.FDecl fn -> check fn
+        | Core.Foreign foreign -> List.iter check foreign.value.decls
+        | Core.VDecl _ | Core.TDecl _ | Core.Import _ | Core.CImport _ -> ())
+      program.value.decls
+
   let duplicate_binding env name =
     match env with
     | [] -> false
@@ -788,9 +808,6 @@ module Semantic = struct
         if not statement_context then
           add_diagnostic state Error expr.loc
             "mutation is statement-only and cannot be used as a value";
-        if not (is_lvalue write.value.target) then
-          add_diagnostic state Error expr.loc
-            "mutation target must be assignable";
         (match expr_annotation state write.value.target with
         | Some { resolved_type = Some resolved; _ } ->
             if not (resolved_is_pointerish resolved) then
@@ -843,6 +860,7 @@ module Semantic = struct
         functions = collect_functions typed.program.program;
       }
     in
+    check_duplicate_function_definitions state typed.program.program;
     let env = [ initial_scope typed ] in
     List.iter
       (fun (decl : Core.top_decl) ->

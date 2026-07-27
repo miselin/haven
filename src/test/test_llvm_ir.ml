@@ -123,6 +123,38 @@ let run () =
     (string_contains ctor_ir "@llvm.global_ctors");
   assert_true "non-constant globals should emit the init function"
     (string_contains ctor_ir "@__haven_global_init");
+  assert_true "startup-initialized data must remain writable in LLVM"
+    (string_contains ctor_ir "@GLOBAL = internal global i32 0");
+
+  let external_ir =
+    emit_ir
+      "pub state i32 supplied_elsewhere;\npub fn read() -> i32 { supplied_elsewhere }"
+  in
+  assert_true "initializer-less public state should remain an external declaration"
+    (string_contains external_ir "@supplied_elsewhere = external global i32");
+  assert_true "external declarations should not synthesize startup initialization"
+    (not (string_contains external_ir "@__haven_global_init"));
+
+  let constant_cast_ir =
+    emit_ir
+      "data u32 ZERO = as<u32>(0);\npub fn main() -> u32 { ZERO }"
+  in
+  assert_true "constant casts should match the declared global type"
+    (string_contains constant_cast_ir "@ZERO = internal constant i32 0");
+
+  let short_circuit_ir =
+    emit_ir
+      {|
+state i32 calls = 0;
+impure fn rhs() -> i32 {
+  calls = calls + 1;
+  1
+}
+pub impure fn test() -> i1 { 0 && rhs() }
+|}
+  in
+  assert_true "logical RHS should only be emitted in the conditional block"
+    (count_occurrences short_circuit_ir "call i32 @rhs()" = 1);
 
   let box_ir = emit_ir "pub fn forward(i32^ input) -> i32^ { defer unbox input; input }" in
   assert_true "box ownership should call box ref"

@@ -617,13 +617,60 @@ let create_string_literal t value =
   let zero = Llvm.const_int (i32_type t) 0 in
   Llvm.const_in_bounds_gep (Llvm.type_of init) global [| zero; zero |]
 
+let constant_is_signed = function
+  | Analysis.ResolvedInt (Haven_token.Token.Signed, _) -> true
+  | _ -> false
+
+let constant_cast t value source target =
+  if Analysis.equal_resolved_type source target then Some value
+  else
+    match (source, target) with
+    | Analysis.ResolvedInt _, Analysis.ResolvedInt (_, bits) ->
+        Option.map
+          (fun constant ->
+            Llvm.const_of_int64
+              (Llvm.integer_type t.context bits)
+              constant (constant_is_signed source))
+          (Llvm.int64_of_const value)
+    | Analysis.ResolvedInt _, Analysis.ResolvedFloat ->
+        Option.map
+          (fun constant ->
+            Llvm.const_float (float_type t) (Int64.to_float constant))
+          (Llvm.int64_of_const value)
+    | Analysis.ResolvedFloat, Analysis.ResolvedInt (_, bits) ->
+        Option.map
+          (fun constant ->
+            Llvm.const_of_int64
+              (Llvm.integer_type t.context bits)
+              (Int64.of_float constant) (constant_is_signed target))
+          (Llvm.float_of_const value)
+    | source, target
+      when Analysis.resolved_is_pointerish source
+           && Analysis.resolved_is_pointerish target ->
+        Some (Llvm.const_pointercast value (ptr_type t))
+    | source, Analysis.ResolvedInt (_, bits)
+      when Analysis.resolved_is_pointerish source ->
+        Some
+          (Llvm.const_ptrtoint value
+             (Llvm.integer_type t.context bits))
+    | Analysis.ResolvedInt _, target
+      when Analysis.resolved_is_pointerish target ->
+        Some (Llvm.const_inttoptr value (ptr_type t))
+    | _ -> None
+
 let rec constant_of_expr t (expr : Core.expression) =
   let resolved = expr_resolved_type t expr in
   match expr.value with
   | Core.Literal lit -> constant_of_literal t expr.loc resolved lit
   | Core.Nil when Analysis.resolved_is_pointerish resolved ->
       Some (Llvm.const_null (llvm_type_of_resolved t resolved))
-  | Core.As cast -> constant_of_expr t cast.value.inner
+  | Core.As cast ->
+      Option.bind
+        (constant_of_expr t cast.value.inner)
+        (fun value ->
+          constant_cast t value
+            (expr_resolved_type t cast.value.inner)
+            resolved)
   | Core.SizeExpr inner ->
       let size =
         Llvm_target.DataLayout.abi_size
@@ -1557,6 +1604,13 @@ and emit_enum_literal t (expr : Core.expression) (enum_lit : Core.enum_literal) 
   | _ -> fail ~loc:expr.loc "enum literal requires enum type during LLVM lowering"
 
 and emit_binary t (expr : Core.expression) (binary : Core.binary) =
+  match binary.value.op with
+  | Core.LogicAnd | Core.LogicOr ->
+      emit_logical_binary t expr binary
+  | _ ->
+      emit_eager_binary t expr binary
+
+and emit_eager_binary t (expr : Core.expression) (binary : Core.binary) =
   let lhs = emit_expr t binary.value.left in
   let rhs = emit_expr t binary.value.right in
   let lhs_ty = expr_resolved_type t binary.value.left in
@@ -1590,33 +1644,38 @@ and emit_binary t (expr : Core.expression) (binary : Core.binary) =
         | _ -> assert false
       in
       Llvm.build_fcmp pred lhs rhs "fcmp" t.builder
-  | ( Core.LogicAnd | Core.LogicOr ), _, _, Analysis.ResolvedInt (_, 1) ->
-      let lhs_bool = emit_to_bool t binary.value.left lhs in
-      let current_block = Llvm.insertion_block t.builder in
-      let fn_value = Llvm.block_parent current_block in
-      let rhs_block = Llvm.append_block t.context "logic.rhs" fn_value in
-      let end_block = Llvm.append_block t.context "logic.end" fn_value in
-      ignore
-        (Llvm.build_cond_br lhs_bool
-           (if binary.value.op = Core.LogicAnd then rhs_block else end_block)
-           (if binary.value.op = Core.LogicAnd then end_block else rhs_block)
-           t.builder);
-      Llvm.position_at_end rhs_block t.builder;
-      let rhs_value = emit_expr t binary.value.right in
-      let rhs_bool = emit_to_bool t binary.value.right rhs_value in
-      let rhs_block_final = Llvm.insertion_block t.builder in
-      ignore (Llvm.build_br end_block t.builder);
-      Llvm.position_at_end end_block t.builder;
-      let incoming =
-        if binary.value.op = Core.LogicAnd then
-          [ (Llvm.const_int (i1_type t) 0, current_block); (rhs_bool, rhs_block_final) ]
-        else
-          [ (Llvm.const_int (i1_type t) 1, current_block); (rhs_bool, rhs_block_final) ]
-      in
-      Llvm.build_phi incoming "logic.phi" t.builder
   | _, _, _, (Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _) ->
       emit_vector_or_matrix_binary t expr binary lhs rhs lhs_ty rhs_ty result_ty
   | _ -> emit_nonfloat_binary t expr binary lhs rhs lhs_ty rhs_ty result_ty
+
+and emit_logical_binary t (expr : Core.expression) (binary : Core.binary) =
+  let result_ty = expr_resolved_type t expr in
+  if not (Analysis.equal_resolved_type result_ty (Analysis.ResolvedInt (Unsigned, 1))) then
+    fail ~loc:expr.loc "logical operator lowering bug";
+  let lhs = emit_expr t binary.value.left in
+  let lhs_bool = emit_to_bool t binary.value.left lhs in
+  let current_block = Llvm.insertion_block t.builder in
+  let fn_value = Llvm.block_parent current_block in
+  let rhs_block = Llvm.append_block t.context "logic.rhs" fn_value in
+  let end_block = Llvm.append_block t.context "logic.end" fn_value in
+  ignore
+    (Llvm.build_cond_br lhs_bool
+       (if binary.value.op = Core.LogicAnd then rhs_block else end_block)
+       (if binary.value.op = Core.LogicAnd then end_block else rhs_block)
+       t.builder);
+  Llvm.position_at_end rhs_block t.builder;
+  let rhs_value = emit_expr t binary.value.right in
+  let rhs_bool = emit_to_bool t binary.value.right rhs_value in
+  let rhs_block_final = Llvm.insertion_block t.builder in
+  ignore (Llvm.build_br end_block t.builder);
+  Llvm.position_at_end end_block t.builder;
+  let incoming =
+    if binary.value.op = Core.LogicAnd then
+      [ (Llvm.const_int (i1_type t) 0, current_block); (rhs_bool, rhs_block_final) ]
+    else
+      [ (Llvm.const_int (i1_type t) 1, current_block); (rhs_bool, rhs_block_final) ]
+  in
+  Llvm.build_phi incoming "logic.phi" t.builder
 
 and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty result_ty =
   let cast_to_result lhs rhs =
@@ -2285,7 +2344,8 @@ let declare_global_symbol t (decl : Core.var_decl) =
     (if decl.value.public then Llvm.Linkage.External else Llvm.Linkage.Internal)
     storage;
   Llvm.set_global_constant (not decl.value.is_mutable) storage;
-  if decl.value.init_expr = None then Llvm.set_initializer (zero_constant t resolved) storage;
+  if decl.value.init_expr = None && not decl.value.public then
+    Llvm.set_initializer (zero_constant t resolved) storage;
   let symbol =
     Variable_symbol
       { storage; resolved_type = resolved; is_mutable = decl.value.is_mutable }
@@ -2327,13 +2387,16 @@ let lower_global_initializer t (decl : Core.var_decl) =
   | Variable_symbol { storage; resolved_type; _ } -> (
       match decl.value.init_expr with
       | None ->
-          Llvm.set_initializer (zero_constant t resolved_type) storage;
-          t.global_inits_rev <- { decl; storage } :: t.global_inits_rev
+          if not decl.value.public then (
+            Llvm.set_global_constant false storage;
+            Llvm.set_initializer (zero_constant t resolved_type) storage;
+            t.global_inits_rev <- { decl; storage } :: t.global_inits_rev)
       | Some init -> (
           match constant_of_expr t init with
           | Some constant ->
               Llvm.set_initializer constant storage
           | None ->
+              Llvm.set_global_constant false storage;
               Llvm.set_initializer (zero_constant t resolved_type) storage;
               t.global_inits_rev <- { decl; storage } :: t.global_inits_rev))
   | Function_symbol _ -> fail "global %s unexpectedly resolved to function" decl.value.name.value
