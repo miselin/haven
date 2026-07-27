@@ -237,21 +237,8 @@ i32[1] arr = {
 
 ### Zero Initialization
 
-`zero` and `nil` serve different purposes:
-
-- `nil` is a pointer-like value. It means that a pointer, reference, or box does
-  not currently refer to an object.
-- `zero` is an aggregate initializer. It asks the compiler to produce the zero
-  value of an entire array, structure, vector, or matrix.
-
-Haven keeps these concepts separate instead of treating an integer `0`, a null
-pointer, and a zero-filled aggregate as interchangeable. Put another way,
-`nil` answers “what object does this value refer to?” with “none”; `zero`
-answers “what should every part of this aggregate initially contain?” with
-“its zero value.”
-
-Use `nil` when the value itself is pointer-like; use `zero` when the value is an
-aggregate whose contents should all start in their zero state:
+`zero` zero-initializes aggregates such as arrays, structures, vectors, and
+matrices. `nil` is used in pointer-like contexts.
 
 ```
 type Buffer = struct {
@@ -259,26 +246,15 @@ type Buffer = struct {
     u64 length;
 };
 
-let i8* ptr = nil;            // no pointed-to object
 let Buffer buffer = zero;
 let mut u32[16] words = zero;
 pub state Buffer[4] buffers = zero;
 ```
 
-The `Buffer` value exists as a complete structure: `buffer.ptr` becomes `nil`
-and `buffer.length` becomes `0`. More generally, numeric elements and fields
-become `0` or `0.0`, pointer-like fields become `nil`, and nested aggregates are
-zero-initialized recursively.
-
-`zero` is contextually typed. The surrounding declaration or expression must
-provide its complete aggregate type:
-
-```
-let Buffer buffer = zero; // valid: Buffer supplies the aggregate shape
-let i8* ptr = zero;        // invalid: use nil for a pointer value
-let Buffer buffer = nil;   // invalid: Buffer is not pointer-like
-let value = zero;          // invalid: no aggregate type is available
-```
+Numeric elements and fields become `0` or `0.0`, pointer-like fields become
+`nil`, and nested aggregates are zero-initialized recursively. `zero` is
+contextually typed, so the surrounding declaration or expression must provide
+the complete aggregate type. For example, `let value = zero;` is invalid.
 
 `zero` is not a partial aggregate initializer. A brace initializer must still
 provide every required element or field. Scalar and enum targets are rejected;
@@ -743,10 +719,8 @@ let node tail = { 1, nil };
 let node head = { 0, ref tail };
 ```
 
-`nil` may be used in lieu of a reference to indicate `NULL`. It is a value for
-pointer-like types, not a general-purpose zero initializer. To recursively
-initialize an array, structure, vector, or matrix, use [`zero`](#zero-initialization)
-instead.
+`nil` may be used in lieu of a reference to indicate `NULL`. To zero-initialize
+an aggregate, use [`zero`](#zero-initialization) instead.
 
 ### Load
 
