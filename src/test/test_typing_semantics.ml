@@ -1,6 +1,17 @@
 open Test_support
 
 let run () =
+  let duplicate_function_pipeline =
+    parse_to_core
+      "fn duplicate() -> i32 { 1 }\nfn duplicate() -> i32 { 2 }\npub fn main() -> i32 { duplicate() }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "duplicate function definitions should fail semantic analysis"
+    duplicate_function_pipeline.semantic.diagnostics;
+  assert_any_diagnostic_message_contains "duplicate function definition wording"
+    "duplicate function definition duplicate"
+    duplicate_function_pipeline.semantic.diagnostics;
+
   let bad_semantics =
     parse_to_core "pub fn main() -> void { break; }" |> Analysis.Pipeline.run_core
   in

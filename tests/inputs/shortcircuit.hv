@@ -1,11 +1,18 @@
-pub fn and() -> i32 {
-    as<i32>(0 && (1 / 0))
+state i32 calls = 0;
+
+impure fn rhs() -> i32 {
+    calls = calls + 10;
+    1
 }
 
-pub fn or() -> i32 {
-    as<i32>(1 || (1 / 0))
+impure fn and() -> i32 {
+    as<i32>(0 && rhs())
 }
 
-pub fn sut() -> i32 {
+impure fn or() -> i32 {
+    as<i32>(1 || rhs())
+}
+
+pub impure fn sut() -> i32 {
     and() + or()
 }

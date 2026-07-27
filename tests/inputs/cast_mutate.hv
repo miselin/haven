@@ -1,0 +1,6 @@
+pub impure fn sut() -> i32 {
+    let mut i32 value = 0;
+    let i8* raw = as<i8*>(ref value);
+    as<i32*>(raw) := 7;
+    value
+}

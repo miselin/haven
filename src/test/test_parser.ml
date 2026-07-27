@@ -16,6 +16,12 @@ let run () =
   assert_parse_ok "specialization hole parameter types"
     "fn vadd(fvec? a, mat? b) { a }";
 
+  assert_parse_ok "nested pointer type"
+    "pub fn follow(i8** cursor) -> i8* { load cursor }";
+
+  assert_parse_ok "composed pointer and array postfixes"
+    "pub fn first(i8*[2] values) -> i8* { values[0] }";
+
   assert_parse_ok "compile-time assert statement"
     "fn vadd(fvec? a, fvec? b) { @assert a.dim == b.dim, \"dims must match\"; a + b }";
 
@@ -92,6 +98,18 @@ extend Buffer with {
   | _ -> failwith "expected vadd to have two parameters");
   assert_true "specialization function should keep omitted return type through core conversion"
     (specialized_fn.value.return_type = None);
+
+  let associativity_core =
+    parse_to_core "pub fn calculate() -> i32 { 15 * 100 / 400 }"
+  in
+  let calculate_fn = find_named_function "calculate" associativity_core in
+  (match Option.bind calculate_fn.value.definition (fun body -> body.value.result) with
+  | Some { value = Core.Binary divide; _ }
+    when divide.value.op = Core.Divide -> (
+      match divide.value.left.value with
+      | Core.Binary multiply when multiply.value.op = Core.Multiply -> ()
+      | _ -> failwith "expected multiplication to be the left operand of division")
+  | _ -> failwith "expected same-tier arithmetic operators to associate left");
 
   let assert_core =
     parse_to_core

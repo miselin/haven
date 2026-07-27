@@ -18,7 +18,9 @@ let rc_cases =
     { name = "add"; expected_rc = 6 };
     { name = "prec1"; expected_rc = 90 };
     { name = "prec2"; expected_rc = 0 };
+    { name = "associativity"; expected_rc = 3 };
     { name = "shortcircuit"; expected_rc = 1 };
+    { name = "cast_mutate"; expected_rc = 7 };
     { name = "constant"; expected_rc = 0 };
     { name = "struct"; expected_rc = 3 };
     { name = "match"; expected_rc = 0 };
