@@ -139,6 +139,7 @@ module Assert = struct
             (render_expression write.value.value)
       | Core.SizeType _ -> "size<type>"
       | Core.Nil -> "nil"
+      | Core.Zero -> "zero"
     in
     if self_prec < ctx_prec then "(" ^ rendered ^ ")" else rendered
 
@@ -207,7 +208,7 @@ module Assert = struct
                 (fun expr -> render_specialized_expression state expr)
                 box.value.args))
     | (Core.Literal _ | Core.Identifier _ | Core.Block _ | Core.Initializer _ | Core.Match _
-      | Core.BoxType _ | Core.SizeType _ | Core.Nil) ->
+      | Core.BoxType _ | Core.SizeType _ | Core.Nil | Core.Zero) ->
         render_expression ~ctx_prec expr
 
   let assert_context (compile_assert : Core.compile_assert) suffix =

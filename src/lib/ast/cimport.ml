@@ -242,6 +242,7 @@ let is_haven_keyword =
       "Mat";
       "mut";
       "nil";
+      "zero";
       "pub";
       "ref";
       "ret";

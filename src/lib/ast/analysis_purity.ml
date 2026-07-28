@@ -90,7 +90,9 @@ module Purity = struct
   let rec visit_expression state current env (expr : Core.expression) =
     let visit = visit_expression state current in
     match expr.value with
-    | Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.BoxType _ | Core.Nil -> ()
+    | Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.BoxType _ | Core.Nil
+    | Core.Zero ->
+        ()
     | Core.BoxConstruct box ->
         List.iter (visit env) box.value.args
     | Core.ToBool inner

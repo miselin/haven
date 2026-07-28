@@ -86,7 +86,7 @@ module Verify = struct
   and verify_expression state (expr : Core.expression) =
     let verify_subexprs () =
       match expr.value with
-      | Core.Identifier _ | Core.Literal _ | Core.Nil -> ()
+      | Core.Identifier _ | Core.Literal _ | Core.Nil | Core.Zero -> ()
       | Core.ToBool inner
       | Core.SizeExpr inner
       | Core.BoxExpr inner

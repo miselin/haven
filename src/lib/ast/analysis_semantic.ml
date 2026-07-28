@@ -379,7 +379,7 @@ module Semantic = struct
       | _ -> ()
     in
     match expr.value with
-    | Core.Identifier _ | Core.Literal _ | Core.Nil | Core.SizeType _ -> ()
+    | Core.Identifier _ | Core.Literal _ | Core.Nil | Core.Zero | Core.SizeType _ -> ()
     | Core.ToBool inner ->
         check_expression state env loop_depth inner;
         check_scalar_truthy inner

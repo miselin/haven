@@ -161,6 +161,7 @@ let rec emit_expression ?(ctx_prec = 0) ~indent ~comments fmt expr =
       fprintf fmt "size(%a)" (emit_expression ~ctx_prec:0 ~indent ~comments) e
   | SizeType t -> fprintf fmt "size<%a>" emit_type t
   | Nil -> fprintf fmt "nil"
+  | Zero -> fprintf fmt "zero"
   | If i -> emit_if_expr ~indent ~comments fmt i
   | Match m -> emit_match_expr ~indent ~comments fmt m
   | BoxExpr e ->

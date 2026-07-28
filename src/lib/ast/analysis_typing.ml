@@ -387,6 +387,7 @@ module Typing = struct
                 integer = None;
               };
           }
+      | Core.Zero -> infer_zero state ~expected_type expr.loc
       | Core.Match match_expr -> infer_match state env ~expected_type expr.loc match_expr
       | Core.BoxExpr inner -> (
           let inner_expected =
@@ -865,6 +866,19 @@ module Typing = struct
     match expected_type with
     | Some expected -> annotation_of_resolved loc (Some expected)
     | None -> unknown_expr_annotation
+
+  and infer_zero state ~(expected_type : resolved_ty option) loc : expr_annotation =
+    let valid =
+      match expected_type with
+      | Some (ResolvedArray _ | ResolvedVec _ | ResolvedMatrix _) -> true
+      | Some (ResolvedNamed _ as struct_ty) ->
+          Option.is_some (lookup_struct_fields state.type_env loc struct_ty)
+      | Some _ | None -> false
+    in
+    if not valid then
+      add_diagnostic state Error loc
+        "zero requires an explicit array, struct, vector, or matrix target type";
+    annotation_of_resolved loc expected_type
 
   and infer_unary state env loc (unary : Core.unary) : expr_annotation =
     let inner_ann = infer_value_expression state env unary.value.inner in

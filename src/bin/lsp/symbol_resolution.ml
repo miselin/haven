@@ -473,7 +473,7 @@ and walk_expression state env (expr : Core.expression) =
       match literal.value with
       | Core.Enum enum_lit -> enum_literal_hover state expr enum_lit
       | _ -> ())
-  | Nil -> ()
+  | Nil | Zero -> ()
   | ToBool inner | SizeExpr inner | BoxExpr inner | Unbox inner | Ref inner | Load inner ->
       walk_expression state env inner
   | BoxConstruct box ->
@@ -774,7 +774,7 @@ let rec highlight_expression state env (expr : Core.expression) =
                  Analysis.lookup_enum_variant state.type_env expr.loc resolved
                    enum_lit.value.enum_variant.value))
       | _ -> ())
-  | Nil -> ()
+  | Nil | Zero -> ()
   | ToBool inner | SizeExpr inner | BoxExpr inner | Unbox inner | Ref inner | Load inner ->
       highlight_expression state env inner
   | BoxConstruct box ->

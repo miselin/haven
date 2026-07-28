@@ -378,6 +378,7 @@ and cst_expr_to_surface (expr : Cst.expression) : Surface.expression =
         | Cst.SizeExpr inner -> Surface.SizeExpr (cst_expr_to_surface inner)
         | Cst.SizeType ty -> Surface.SizeType (cst_type_to_surface ty)
         | Cst.Nil -> Surface.Nil
+        | Cst.Zero -> Surface.Zero
         | Cst.If ifx -> Surface.If (cst_if_expr_to_surface ifx)
         | Cst.Match m -> Surface.Match (cst_match_expr_to_surface m)
         | Cst.BoxExpr inner -> Surface.BoxExpr (cst_expr_to_surface inner)
@@ -1278,6 +1279,7 @@ and surface_expr_to_core st (expr : Surface.expression) : Core.expression =
     | Surface.SizeExpr inner -> Core.SizeExpr (surface_expr_to_core st inner)
     | Surface.SizeType ty -> Core.SizeType (surface_type_to_core ty)
     | Surface.Nil -> Core.Nil
+    | Surface.Zero -> Core.Zero
     | Surface.If ifx -> lower_if_expr st expr.loc ifx
     | Surface.Match m ->
         Core.Match

@@ -198,7 +198,7 @@ module Ownership = struct
     if not (resolved_contains_ownership state expr.loc expected) then ()
     else
       match expr.value with
-      | Core.Nil -> ()
+      | Core.Nil | Core.Zero -> ()
       | Core.BoxExpr _ | Core.BoxType _ | Core.BoxConstruct _ -> ()
       | Core.Call call -> emit_retains_for_expected_enum_call state reason expected call
       | Core.As cast -> emit_retains_for_transfer state reason expected cast.value.inner
@@ -263,7 +263,7 @@ module Ownership = struct
 
   let rec visit_expression state scopes (expr : Core.expression) =
     match expr.value with
-    | Core.Identifier _ | Core.Nil | Core.SizeType _ | Core.BoxType _ -> ()
+    | Core.Identifier _ | Core.Nil | Core.Zero | Core.SizeType _ | Core.BoxType _ -> ()
     | Core.BoxConstruct box ->
         List.iter (visit_expression state scopes) box.value.args
     | Core.Literal literal -> (

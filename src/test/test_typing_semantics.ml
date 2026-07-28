@@ -529,4 +529,52 @@ pub fn sut() -> i32 {
     |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "invalid vector arithmetic should fail"
-    bad_vector_binary_pipeline.semantic.diagnostics
+    bad_vector_binary_pipeline.semantic.diagnostics;
+
+  let aggregate_zero_pipeline =
+    parse_to_core
+      {|
+type Buffer = struct {
+  i8* ptr;
+  u64 length;
+};
+
+pub state Buffer buffer = zero;
+pub state i32[4] values = zero;
+pub state fvec3 vector = zero;
+pub state mat2x3 matrix = zero;
+
+fn make_buffer() -> Buffer {
+  zero
+}
+|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "zero should type-check for aggregate targets"
+    aggregate_zero_pipeline.typing.diagnostics;
+  assert_no_diagnostics "zero aggregates should pass semantic analysis"
+    aggregate_zero_pipeline.semantic.diagnostics;
+
+  let scalar_zero_pipeline =
+    parse_to_core "pub state i32 value = zero;" |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "zero initializer should reject scalar targets"
+    scalar_zero_pipeline.typing.diagnostics;
+  assert_any_diagnostic_message_contains "scalar zero diagnostic wording"
+    "zero requires an explicit array, struct, vector, or matrix target type"
+    scalar_zero_pipeline.typing.diagnostics;
+
+  let enum_zero_pipeline =
+    parse_to_core
+      "type Choice = enum { First, Second }; pub state Choice value = zero;"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "zero initializer should reject enum targets"
+    enum_zero_pipeline.typing.diagnostics;
+
+  let untyped_zero_pipeline =
+    parse_to_core "pub fn main() -> void { let value = zero; }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "zero should require a contextual aggregate type"
+    untyped_zero_pipeline.typing.diagnostics

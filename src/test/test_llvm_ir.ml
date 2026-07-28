@@ -135,6 +135,27 @@ let run () =
   assert_true "external declarations should not synthesize startup initialization"
     (not (string_contains external_ir "@__haven_global_init"));
 
+  let zero_aggregate_ir =
+    emit_ir "pub state i32[4] values = zero;\npub fn read() -> i32 { values[3] }"
+  in
+  assert_true "aggregate zero initializers should emit zero-filled definitions"
+    (string_contains zero_aggregate_ir "@values = global [4 x i32] zeroinitializer");
+
+  let zero_struct_ir =
+    emit_ir
+      "type Buffer = struct { i8* ptr; u64 length; };\npub state Buffer buffer = zero;"
+  in
+  assert_true "struct zero initializers should recursively include pointer fields"
+    (string_contains zero_struct_ir
+       "@buffer = global %haven.struct.Buffer zeroinitializer");
+
+  let local_zero_ir =
+    emit_ir
+      "pub impure fn read() -> i32 { let mut i32[4] values = zero; values[3] = 7; values[0] }"
+  in
+  assert_true "local aggregate zero initializers should store a zero-filled value"
+    (string_contains local_zero_ir "store [4 x i32] zeroinitializer");
+
   let constant_cast_ir =
     emit_ir
       "data u32 ZERO = as<u32>(0);\npub fn main() -> u32 { ZERO }"

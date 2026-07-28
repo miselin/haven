@@ -183,6 +183,7 @@ and expression_desc =
   | SizeExpr of expression
   | SizeType of haven_type
   | Nil
+  | Zero
   | Match of match_expr
   | BoxExpr of expression
   | BoxType of haven_type

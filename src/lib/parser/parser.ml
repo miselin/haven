@@ -34,6 +34,7 @@ let keywords =
          ("void", Grammar.VOID_TYPE);
          ("type", Grammar.TYPE);
          ("nil", Grammar.NIL);
+         ("zero", Grammar.ZERO);
          ("defer", Grammar.DEFER);
          ("impure", Grammar.IMPURE);
          ("enum", Grammar.ENUM);

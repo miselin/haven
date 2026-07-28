@@ -285,13 +285,14 @@ module ConstantFold = struct
       | Core.Assign write -> Core.Assign (fold_write write)
       | Core.Mutate write -> Core.Mutate (fold_write write)
       | Core.Literal literal -> Core.Literal (fold_literal literal)
-      | (Core.Identifier _ | Core.SizeType _ | Core.Nil | Core.BoxType _) as value ->
+      | (Core.Identifier _ | Core.SizeType _ | Core.Nil | Core.Zero | Core.BoxType _) as
+          value ->
           value
     in
     let expr = { expr with value } in
     match expr.value with
-    | Core.Literal _ | Core.Identifier _ | Core.Nil | Core.SizeType _ | Core.BoxType _
-    | Core.BoxConstruct _ ->
+    | Core.Literal _ | Core.Identifier _ | Core.Nil | Core.Zero | Core.SizeType _
+    | Core.BoxType _ | Core.BoxConstruct _ ->
         expr
     | Core.Block block when block.value.statements = [] -> (
         match block.value.result with Some result -> result | None -> expr)
