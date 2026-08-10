@@ -12,12 +12,30 @@ let run () =
   (match binding_ann.inferred_type with
   | Some ty -> (
       match ty.value with
-      | Core.NumericType { signedness = Haven.Token.Unsigned; bits = 3 } -> ()
-      | _ -> failwith "expected let x = 5 to infer an unsigned 3-bit numeric type")
+      | Core.NumericType
+          { signedness = Haven.Token.Signed; bits = native_bits }
+        when native_bits = Sys.word_size ->
+          ()
+      | _ -> failwith "expected let x = 5 to infer the signed native word type")
   | None -> failwith "expected inferred type for let binding");
   (match binding_ann.metavar.integer with
   | Some { exact_value = Some 5; minimum_bits = Some 3; _ } -> ()
   | _ -> failwith "expected integer metavar to record exact value and width");
+
+  let target_profile : Analysis.target_profile =
+    { native_integer_bits = 16; c_integer_bits = 16 }
+  in
+  let typed_16 =
+    parse_to_core "pub fn main() -> void { let x = 5; }"
+    |> Analysis.Typing.run ~target_profile
+  in
+  let binding_16 = find_first_let_binding typed_16.program in
+  let binding_16_ann =
+    Hashtbl.find typed_16.annotations.bindings (Analysis.binding_id binding_16)
+  in
+  (match binding_16_ann.resolved_type with
+  | Some (Analysis.ResolvedInt (Haven.Token.Signed, 16)) -> ()
+  | _ -> failwith "expected target profile to select a signed 16-bit default");
 
   let pipeline =
     Haven.Parser.parse_string "pub fn main() -> i32 { if !0 { 1 } else { 0 } }"

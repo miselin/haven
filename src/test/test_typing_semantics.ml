@@ -28,6 +28,57 @@ let run () =
   assert_diagnostic_category "typing diagnostic category" Analysis.TypeCheck
     bad_typing.diagnostics;
 
+  let fitting_literal =
+    parse_to_core "pub fn main() -> i8 { let i8 x = 1; x }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "compile-time fitting integer literal"
+    fitting_literal.typing.diagnostics;
+
+  let minimum_signed_literal =
+    parse_to_core "pub fn main() -> i8 { -128 }" |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "minimum signed integer literal"
+    minimum_signed_literal.typing.diagnostics;
+
+  let out_of_range_literal =
+    parse_to_core "pub fn main() -> i8 { let i8 x = 128; x }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics
+    "out-of-range integer literal should fail at compile time"
+    out_of_range_literal.typing.diagnostics;
+  assert_any_diagnostic_message_contains "out-of-range integer literal wording"
+    "integer literal 128 does not fit i8"
+    out_of_range_literal.typing.diagnostics;
+
+  let contextual_binary_literal =
+    parse_to_core "pub fn add(i16 value) -> i16 { value + 1 }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "binary literal fitting the other operand"
+    contextual_binary_literal.typing.diagnostics;
+
+  let widening_binary_literal =
+    parse_to_core "pub fn add(i16 value) -> i16 { value + 70000 }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "binary literal must not widen the other operand"
+    widening_binary_literal.typing.diagnostics;
+  assert_any_diagnostic_message_contains "binary literal no-widening wording"
+    "integer literal 70000 does not fit i16"
+    widening_binary_literal.typing.diagnostics;
+
+  let mixed_signedness =
+    parse_to_core "pub fn add(i16 left, u16 right) -> i16 { left + right }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_has_diagnostics "mixed signedness should require an explicit cast"
+    mixed_signedness.typing.diagnostics;
+  assert_any_diagnostic_message_contains "mixed signedness wording"
+    "different signedness require an explicit cast"
+    mixed_signedness.typing.diagnostics;
+
   let enum_pipeline =
     parse_to_core
       {|

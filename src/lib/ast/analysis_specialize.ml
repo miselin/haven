@@ -465,7 +465,8 @@ module Specialize = struct
         inst.template.value.params.value.params inst.param_types
     in
     let temp_typed, _body_result =
-      Typing.analyze_function_body state.typed.program
+      Typing.analyze_function_body
+        ~target_profile:state.typed.target_profile state.typed.program
         ~active_specializations:[ function_id inst.template ]
         ~param_bindings inst.template
     in

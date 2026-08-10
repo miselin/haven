@@ -55,6 +55,7 @@ let rc_cases =
     { name = "match_stmt"; expected_rc = 5 };
     { name = "mat_extract"; expected_rc = 2 };
     { name = "array_local"; expected_rc = 16 };
+    { name = "numeric_inference"; expected_rc = 5 };
   ]
 
 let opt_cases =

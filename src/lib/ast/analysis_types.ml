@@ -35,6 +35,17 @@ type integer_shape = {
   signedness : signedness option;
 }
 
+type target_profile = {
+  native_integer_bits : int;
+  c_integer_bits : int;
+}
+
+let default_target_profile =
+  {
+    native_integer_bits = Sys.word_size;
+    c_integer_bits = min 32 Sys.word_size;
+  }
+
 type metavar = {
   classes : type_class list;
   constant : constant_value option;
@@ -111,6 +122,7 @@ type typing_result = {
   program : Core.parsed_program;
   annotations : annotations;
   diagnostics : diagnostic list;
+  target_profile : target_profile;
 }
 
 type semantic_result = { diagnostics : diagnostic list }
@@ -287,6 +299,19 @@ let exact_integer_bits value =
 let smallest_integer_type loc value =
   if value >= 0 then numeric_type loc Unsigned (exact_integer_bits value)
   else numeric_type loc Signed (exact_integer_bits value)
+
+let integer_fits signedness bits value =
+  if bits <= 0 then false
+  else
+    match signedness with
+    | Signed ->
+        if bits >= Sys.int_size then true
+        else
+          let magnitude = 1 lsl (bits - 1) in
+          value >= -magnitude && value <= magnitude - 1
+    | Unsigned ->
+        value >= 0
+        && (bits >= Sys.int_size || value <= (1 lsl bits) - 1)
 
 let equal_list eq a b =
   let rec loop xs ys =
@@ -473,6 +498,39 @@ let combine_matrix_kind (left : mat_type) (right : mat_type) =
    linear algebra libraries impractical. *)
 let resolved_arithmetic_binary_result op left right =
   match (op, left, right) with
+  (* TODO: Provide a strict-mode escape hatch before broadening implicit
+     variable-to-variable widening. Literal operands are checked against the
+     other operand first and never widen an operation merely to fit a value. *)
+  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
+    | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
+    | Core.BitwiseXor ),
+    ResolvedInt (left_signedness, left_bits),
+    ResolvedInt (right_signedness, right_bits)
+    when left_signedness = right_signedness ->
+      Some (ResolvedInt (left_signedness, max left_bits right_bits))
+  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
+    | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
+    | Core.BitwiseXor ),
+    ResolvedInt (Signed, signed_bits),
+    ResolvedInt (Unsigned, unsigned_bits)
+  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
+    | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
+    | Core.BitwiseXor ),
+    ResolvedInt (Unsigned, unsigned_bits),
+    ResolvedInt (Signed, signed_bits)
+    when signed_bits > unsigned_bits ->
+      Some (ResolvedInt (Signed, signed_bits))
+  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+    ResolvedFloat,
+    ResolvedFloat ->
+      Some ResolvedFloat
+  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+    ResolvedInt _,
+    ResolvedFloat
+  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+    ResolvedFloat,
+    ResolvedInt _ ->
+      Some ResolvedFloat
   | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo ),
     ResolvedVec left,
     ResolvedVec right
@@ -753,7 +811,7 @@ let wider_numeric_type loc (left : Core.haven_type) (right : Core.haven_type) =
         | Signed, _ | _, Signed -> Signed
         | Unsigned, Unsigned -> Unsigned
       in
-      numeric_type loc signedness (max 32 (max a.bits b.bits))
+      numeric_type loc signedness (max a.bits b.bits)
   | _ -> left
 
 let lookup_named_type type_env name = String_map.find_opt name type_env
