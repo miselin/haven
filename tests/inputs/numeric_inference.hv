@@ -1,0 +1,10 @@
+pub fn sut() -> i32 {
+    let mut accumulator = 0;
+    accumulator = accumulator + 2;
+
+    let left = 1;
+    let right = 2;
+    let comparison = if left < right { 3 } else { 4 };
+
+    accumulator + comparison
+}

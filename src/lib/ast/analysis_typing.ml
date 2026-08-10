@@ -10,6 +10,7 @@ module Typing = struct
     type_env : type_env;
     functions : Core.function_decl String_map.t;
     mutable active_specializations : string list;
+    target_profile : target_profile;
   }
 
   let add_diagnostic_with_category state category level loc message =
@@ -347,8 +348,8 @@ module Typing = struct
                 integer = None;
               };
           }
-      | Core.Unary unary -> infer_unary state env expr.loc unary
-      | Core.Binary binary -> infer_binary state env expr.loc binary
+      | Core.Unary unary -> infer_unary state env ~expected_type expr.loc unary
+      | Core.Binary binary -> infer_binary state env ~expected_type expr.loc binary
       | Core.Block block ->
           infer_block state env ~result_expected:expected_type ~return_expected:None block
       | Core.Initializer init ->
@@ -596,10 +597,20 @@ module Typing = struct
     let annotation =
       match literal.value with
       | Core.Integer value ->
-        let ty = smallest_integer_type loc value in
+        let signedness, bits =
+          match expected_type with
+          | Some (ResolvedInt (signedness, bits)) -> (signedness, bits)
+          | _ -> (Signed, state.target_profile.native_integer_bits)
+        in
+        if not (integer_fits signedness bits value) then
+          add_diagnostic state Error loc
+            (Printf.sprintf "integer literal %d does not fit %s%d" value
+               (match signedness with Signed -> "i" | Unsigned -> "u")
+               bits);
+        let ty = numeric_type loc signedness bits in
         {
           inferred_type = Some ty;
-          resolved_type = Some (ResolvedInt ((if value < 0 then Signed else Unsigned), exact_integer_bits value));
+          resolved_type = Some (ResolvedInt (signedness, bits));
           metavar =
             {
               classes = [ TypeClassNumeric ];
@@ -880,33 +891,166 @@ module Typing = struct
         "zero requires an explicit array, struct, vector, or matrix target type";
     annotation_of_resolved loc expected_type
 
-  and infer_unary state env loc (unary : Core.unary) : expr_annotation =
-    let inner_ann = infer_value_expression state env unary.value.inner in
-    match unary.value.op with
-    | Core.Not ->
-        let ty = bool_type loc in
+  and infer_unary state env ~(expected_type : resolved_ty option) loc
+      (unary : Core.unary) : expr_annotation =
+    let infer_negated_integer value =
+      let signedness, bits =
+        match expected_type with
+        | Some (ResolvedInt (signedness, bits)) -> (signedness, bits)
+        | _ -> (Signed, state.target_profile.native_integer_bits)
+      in
+      let negated = -value in
+      if not (integer_fits signedness bits negated) then
+        add_diagnostic state Error loc
+          (Printf.sprintf "integer literal %d does not fit %s%d" negated
+             (match signedness with Signed -> "i" | Unsigned -> "u")
+             bits);
+      let inner_ty = numeric_type unary.value.inner.loc Unsigned bits in
+      let inner_ann =
         {
-          inferred_type = Some ty;
-          resolved_type = Some (ResolvedInt (Unsigned, 1));
-          metavar = metavar_of_type ty;
-        }
-    | Core.Negate | Core.Complement -> (
-        match (inner_ann.inferred_type, inner_ann.resolved_type) with
-        | Some _ty, Some (ResolvedInt (_, bits)) ->
-            let ty = numeric_type loc Signed (max 32 bits) in
-            { inferred_type = Some ty; resolved_type = Some (ResolvedInt (Signed, max 32 bits)); metavar = metavar_of_type ty }
-        | Some ty, resolved_type ->
-            { inferred_type = Some ty; resolved_type; metavar = metavar_of_type ty }
-        | None, _ ->
+          inferred_type = Some inner_ty;
+          resolved_type = Some (ResolvedInt (Unsigned, bits));
+          metavar =
             {
-              inferred_type = None;
-              resolved_type = None;
-              metavar = { unknown_metavar with classes = [ TypeClassNumeric ] };
-            })
+              classes = [ TypeClassNumeric ];
+              constant = Some (ConstantInt value);
+              integer =
+                Some
+                  {
+                    exact_value = Some value;
+                    minimum_bits = Some (exact_integer_bits value);
+                    signedness = Some Unsigned;
+                  };
+            };
+        }
+      in
+      ignore (record_expr state unary.value.inner inner_ann);
+      let ty = numeric_type loc signedness bits in
+      {
+        inferred_type = Some ty;
+        resolved_type = Some (ResolvedInt (signedness, bits));
+        metavar =
+          {
+            classes = [ TypeClassNumeric ];
+            constant = Some (ConstantInt negated);
+            integer =
+              Some
+                {
+                  exact_value = Some negated;
+                  minimum_bits = Some (exact_integer_bits negated);
+                  signedness = Some signedness;
+                };
+          };
+      }
+    in
+    match (unary.value.op, unary.value.inner.value) with
+    | Core.Negate, Core.Literal { value = Core.Integer value; _ } ->
+        infer_negated_integer value
+    | _ ->
+        let inner_expected =
+          match unary.value.op with
+          | Core.Complement -> expected_type
+          | Core.Not | Core.Negate -> None
+        in
+        let inner_ann =
+          infer_value_expression state env ~expected_type:inner_expected
+            unary.value.inner
+        in
+        match unary.value.op with
+        | Core.Not ->
+            let ty = bool_type loc in
+            {
+              inferred_type = Some ty;
+              resolved_type = Some (ResolvedInt (Unsigned, 1));
+              metavar = metavar_of_type ty;
+            }
+        | Core.Negate | Core.Complement -> (
+            match (inner_ann.inferred_type, inner_ann.resolved_type) with
+            | Some _ty, Some (ResolvedInt (_, bits)) ->
+                let bits = max state.target_profile.native_integer_bits bits in
+                let ty = numeric_type loc Signed bits in
+                {
+                  inferred_type = Some ty;
+                  resolved_type = Some (ResolvedInt (Signed, bits));
+                  metavar = metavar_of_type ty;
+                }
+            | Some ty, resolved_type ->
+                { inferred_type = Some ty; resolved_type; metavar = metavar_of_type ty }
+            | None, _ ->
+                {
+                  inferred_type = None;
+                  resolved_type = None;
+                  metavar = { unknown_metavar with classes = [ TypeClassNumeric ] };
+                })
 
-  and infer_binary state env loc (binary : Core.binary) : expr_annotation =
-    let left_ann = infer_value_expression state env binary.value.left in
-    let right_ann = infer_value_expression state env binary.value.right in
+  and infer_binary state env ~(expected_type : resolved_ty option) loc
+      (binary : Core.binary) : expr_annotation =
+    let integer_literal_value (expr : Core.expression) =
+      match expr.value with
+      | Core.Literal { value = Core.Integer value; _ } -> Some value
+      | Core.Unary
+          {
+            value =
+              {
+                op = Core.Negate;
+                inner = { value = Core.Literal { value = Core.Integer value; _ }; _ };
+              };
+            _;
+          } ->
+          Some (-value)
+      | _ -> None
+    in
+    let expected_integer =
+      match expected_type with
+      | Some (ResolvedInt _ as expected) -> Some expected
+      | _ -> None
+    in
+    let left_literal = integer_literal_value binary.value.left in
+    let right_literal = integer_literal_value binary.value.right in
+    let left_ann, right_ann =
+      match (left_literal, right_literal, expected_integer) with
+      | Some _, Some _, Some expected ->
+          ( infer_value_expression state env ~expected_type:(Some expected)
+              binary.value.left,
+            infer_value_expression state env ~expected_type:(Some expected)
+              binary.value.right )
+      | Some _, Some _, None ->
+          let left_ann = infer_value_expression state env binary.value.left in
+          let right_ann =
+            infer_value_expression state env ~expected_type:left_ann.resolved_type
+              binary.value.right
+          in
+          (left_ann, right_ann)
+      | Some _, None, _ ->
+          let right_ann = infer_value_expression state env binary.value.right in
+          let left_ann =
+            infer_value_expression state env ~expected_type:right_ann.resolved_type
+              binary.value.left
+          in
+          (left_ann, right_ann)
+      | None, Some _, _ ->
+          let left_ann = infer_value_expression state env binary.value.left in
+          let right_ann =
+            infer_value_expression state env ~expected_type:left_ann.resolved_type
+              binary.value.right
+          in
+          (left_ann, right_ann)
+      | None, None, _ ->
+          ( infer_value_expression state env binary.value.left,
+            infer_value_expression state env binary.value.right )
+    in
+    (match (left_ann.resolved_type, right_ann.resolved_type) with
+    | Some (ResolvedInt (left_signedness, _) as left_resolved),
+      Some (ResolvedInt (right_signedness, _) as right_resolved)
+      when left_signedness <> right_signedness
+           && binary.value.op <> Core.LogicAnd
+           && binary.value.op <> Core.LogicOr
+           && Option.is_none
+                (resolved_arithmetic_binary_result Core.Add left_resolved
+                   right_resolved) ->
+        add_diagnostic state Error loc
+          "binary integer operands with different signedness require an explicit cast"
+    | _ -> ());
     match binary.value.op with
     | Core.IsEqual
     | Core.NotEqual
@@ -1105,10 +1249,34 @@ module Typing = struct
 
   and infer_call state env ~(expected_type : resolved_ty option) _loc
       (call : Core.call) : expr_annotation =
-    let infer_args_with_expected expected_args =
+    let infer_args_with_expected ?(vararg = false) expected_args =
       List.iteri
         (fun index (expr : Core.expression) ->
-          let expected = nth_or_none expected_args index in
+          let expected =
+            match nth_or_none expected_args index with
+            | Some _ as expected -> expected
+            | None when vararg -> (
+                match expr.value with
+                | Core.Literal { value = Core.Integer _; _ }
+                | Core.Unary
+                    {
+                      value =
+                        {
+                          op = Core.Negate;
+                          inner =
+                            {
+                              value = Core.Literal { value = Core.Integer _; _ };
+                              _;
+                            };
+                        };
+                      _;
+                    } ->
+                    Some
+                      (ResolvedInt
+                         (Signed, state.target_profile.c_integer_bits))
+                | _ -> None)
+            | None -> None
+          in
           ignore (infer_value_expression state env ~expected_type:expected expr))
         call.value.params
     in
@@ -1208,7 +1376,7 @@ module Typing = struct
                 | Some ty -> (
                     match ty.value with
                     | Core.FunctionType fn ->
-                        infer_args_with_expected
+                        infer_args_with_expected ~vararg:fn.value.vararg
                           (List.map
                              (fun expected_ty ->
                                resolve_core_type state.type_env [] [] call.loc expected_ty)
@@ -1238,7 +1406,7 @@ module Typing = struct
                 | Some ty -> (
                     match ty.value with
                     | Core.FunctionType fn ->
-                        infer_args_with_expected
+                        infer_args_with_expected ~vararg:fn.value.vararg
                           (List.map
                              (fun expected_ty ->
                                resolve_core_type state.type_env [] [] call.loc expected_ty)
@@ -1256,7 +1424,7 @@ module Typing = struct
             | Some ty -> (
                 match ty.value with
                 | Core.FunctionType fn ->
-                    infer_args_with_expected
+                    infer_args_with_expected ~vararg:fn.value.vararg
                       (List.map
                          (fun expected_ty ->
                            resolve_core_type state.type_env [] [] call.loc expected_ty)
@@ -1363,7 +1531,7 @@ module Typing = struct
         { inferred_type = Some ty; resolved_type = Some resolved_type; metavar = metavar_of_type ty }
     | None, None, None, None -> unknown_expr_annotation
 
-  let make_state (program : Core.parsed_program) =
+  let make_state target_profile (program : Core.parsed_program) =
     let type_env = type_env_of_program program.program in
     {
       annotations = make_annotations ();
@@ -1372,6 +1540,7 @@ module Typing = struct
       type_env;
       functions = collect_functions program.program;
       active_specializations = [];
+      target_profile;
     }
 
   let globals_env state = [ state.globals ]
@@ -1405,9 +1574,10 @@ module Typing = struct
         infer_block state env ~result_expected:return_expected ~return_expected body
     | None -> unknown_expr_annotation
 
-  let analyze_function_body (program : Core.parsed_program)
-      ?(active_specializations = []) ?param_bindings (fn : Core.function_decl) =
-    let state = make_state program in
+  let analyze_function_body ?(target_profile = default_target_profile)
+      (program : Core.parsed_program) ?(active_specializations = []) ?param_bindings
+      (fn : Core.function_decl) =
+    let state = make_state target_profile program in
     let body_result =
       analyze_function_body_with_state state program ~active_specializations
         ?param_bindings fn
@@ -1416,11 +1586,12 @@ module Typing = struct
         program;
         annotations = state.annotations;
         diagnostics = List.rev state.diagnostics_rev;
+        target_profile;
       },
       body_result )
 
-  let run (program : Core.parsed_program) =
-    let state = make_state program in
+  let run ?(target_profile = default_target_profile) (program : Core.parsed_program) =
+    let state = make_state target_profile program in
     collect_globals state program.program;
     let globals_env () = globals_env state in
     List.iter
@@ -1509,5 +1680,6 @@ module Typing = struct
       program;
       annotations = state.annotations;
       diagnostics = List.rev state.diagnostics_rev;
+      target_profile;
     }
 end

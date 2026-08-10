@@ -164,6 +164,54 @@ let run () =
   assert_true "constant casts should match the declared global type"
     (string_contains constant_cast_ir "@ZERO = internal constant i32 0");
 
+  let native_integer_ir =
+    emit_ir
+      {|
+pub impure fn printf(str fmt, *) -> i32;
+
+pub fn accumulator() -> i32 {
+  let mut value = 0;
+  value = value + 2;
+  value
+}
+
+pub fn compare() -> i32 {
+  let left = 1;
+  let right = 2;
+  if left < right { 3 } else { 4 }
+}
+
+pub impure fn print_literal() -> i32 {
+  printf("%d\n", 1)
+}
+|}
+  in
+  let native_ty = Printf.sprintf "i%d" Sys.word_size in
+  assert_true "unconstrained integer bindings should use the native word width"
+    (string_contains native_integer_ir
+       (Printf.sprintf "%%value = alloca %s" native_ty));
+  assert_true "inferred accumulators should not truncate back to i1"
+    (not (string_contains native_integer_ir "trunc i32 %add to i1"));
+  assert_true "integer comparisons should use the promoted operand width"
+    (string_contains native_integer_ir (Printf.sprintf "icmp slt %s" native_ty));
+  assert_true
+    "integer literals in C-style varargs should receive integer promotion"
+    (string_contains native_integer_ir "@printf(ptr @.str.0, i32 1)");
+
+  let contextual_integer_ir =
+    emit_ir
+      {|
+pub fn add_literal(i16 value) -> i16 { value + 1 }
+pub fn add_widths(i16 left, i32 right) -> i32 { left + right }
+|}
+  in
+  assert_true "a fitting literal should retain the typed operand width"
+    (string_contains contextual_integer_ir "add i16");
+  assert_true "same-signed typed operands should promote to the wider width"
+    (string_contains contextual_integer_ir "sext i16");
+  assert_true "promoted typed operands should compute at the common width"
+    (string_contains contextual_integer_ir "add i32");
+
   let short_circuit_ir =
     emit_ir
       {|

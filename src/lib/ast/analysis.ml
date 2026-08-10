@@ -23,8 +23,9 @@ module Pipeline = struct
     cleaned : Core.parsed_program;
   }
 
-  let run_analyses ?(check_asserts = true) core =
-    let typing = Typing.run core in
+  let run_analyses ?(check_asserts = true) ?(target_profile = default_target_profile)
+      core =
+    let typing = Typing.run ~target_profile core in
     let assert_result =
       if check_asserts then Assert.run typing
       else ({ program = typing.program; diagnostics = [] } : Assert.result)
@@ -76,8 +77,8 @@ module Pipeline = struct
     result.typing.diagnostics @ result.verify.diagnostics @ result.semantic.diagnostics
     @ result.asserts.diagnostics @ result.purity.diagnostics @ result.ownership.diagnostics
 
-  let run_core core =
-    let initial = run_analyses ~check_asserts:false core in
+  let run_core ?(target_profile = default_target_profile) core =
+    let initial = run_analyses ~check_asserts:false ~target_profile core in
     if has_errors (analysis_diagnostics initial) then initial
     else
       let specialized = Specialize.run initial.typing in
@@ -90,13 +91,16 @@ module Pipeline = struct
               diagnostics = initial.typing.diagnostics @ specialized.diagnostics;
             };
         }
-      else run_analyses specialized.program
+      else run_analyses ~target_profile specialized.program
 
-  let run_cst ?(search_dirs = []) ?sysroot ?import_text_resolver parsed =
+  let run_cst ?(search_dirs = []) ?sysroot ?import_text_resolver
+      ?(target_profile = default_target_profile) parsed =
     let expanded =
       Imports.expand_cst ~search_dirs ?sysroot ?import_text_resolver parsed
     in
-    let result = run_core (Convert.core_of_expanded_cst expanded.parsed) in
+    let result =
+      run_core ~target_profile (Convert.core_of_expanded_cst expanded.parsed)
+    in
     let typing =
       {
         result.typing with
