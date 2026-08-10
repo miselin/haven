@@ -327,6 +327,27 @@ control the mutability of the stored value. In the example above, `:=` would be 
 
 ## Declarations
 
+### Visibility
+
+Top-level declarations are file-visible by default. Use `pub(module)` for declarations shared by files in the same module, and `pub` for declarations visible outside the module.
+
+```haven
+fn file_helper() -> i32 { 1 }
+pub(module) fn module_helper() -> i32 { 2 }
+pub fn public_helper() -> i32 { 3 }
+```
+
+Visibility blocks are shorthand for applying the same visibility to each declaration in the block:
+
+```haven
+pub(module) {
+    fn first_helper() -> i32 { 1 }
+    fn second_helper() -> i32 { 2 }
+}
+```
+
+An explicit declaration modifier overrides the surrounding block. Visibility blocks do not introduce a lexical scope.
+
 ### Import Declarations
 
 #### Haven Imports
@@ -445,11 +466,11 @@ Variables at function scope must be initialized.
 Functions can be forward-declared without a body.
 
 ```
-[pub] [impure] fn <ident>(<arg-list>) -> <ret-ty>;
-[pub] [impure] fn <ident>(<arg-list>) -> <ret-ty> { <body> }
+[visibility] [impure] fn <ident>(<arg-list>) -> <ret-ty>;
+[visibility] [impure] fn <ident>(<arg-list>) -> <ret-ty> { <body> }
 ```
 
-Specifying `pub` on declarations that have no definitions will create an external reference to the function.
+Specifying external `pub` on declarations that have no definitions will create an external reference to the function. A `pub(module)` declaration without a definition remains module-visible and is not exported at linker scope.
 
 Specifying `impure` on declarations will mark the function as impure, which means it is allowed to read and write memory.
 

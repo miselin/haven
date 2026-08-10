@@ -123,7 +123,10 @@ let function_signature (fn : Core.function_decl) =
       (List.filter
          (fun part -> not (String.equal part ""))
          [
-           if fn.value.public then "pub" else "";
+           (match fn.value.visibility with
+           | Haven_core.Visibility.File -> ""
+           | Module -> "pub(module)"
+           | External -> "pub");
            if fn.value.impure then "impure" else "";
            "fn";
          ])
@@ -136,7 +139,7 @@ let function_signature (fn : Core.function_decl) =
   Printf.sprintf "%s %s(%s)%s" prefix fn.value.name.value
     (String.concat ", " params) return_suffix
 
-let function_signature_with_types ~name ~public ~impure ~vararg ~params
+let function_signature_with_types ~name ~visibility ~impure ~vararg ~params
     ~return_type =
   let params =
     let params =
@@ -151,7 +154,12 @@ let function_signature_with_types ~name ~public ~impure ~vararg ~params
     String.concat " "
       (List.filter
          (fun part -> not (String.equal part ""))
-         [ if public then "pub" else ""; if impure then "impure" else ""; "fn" ])
+         [ (match visibility with
+           | Haven_core.Visibility.File -> ""
+           | Module -> "pub(module)"
+           | External -> "pub");
+           if impure then "impure" else "";
+           "fn" ])
   in
   let return_suffix =
     match return_type with
@@ -216,7 +224,10 @@ let binding_contents typing (binding : Core.let_stmt) =
 let global_contents (decl : Core.var_decl) =
   hover_block
     (Printf.sprintf "global%s%s %s: %s"
-       (if decl.value.public then " pub" else "")
+       (match decl.value.visibility with
+       | Haven_core.Visibility.File -> ""
+       | Module -> " pub(module)"
+       | External -> " pub")
        (if decl.value.is_mutable then " mut" else "")
        decl.value.name.value
        (format_core_type decl.value.ty))
@@ -429,7 +440,7 @@ and specialized_call_hover state (expr : Core.expression) (call : Core.call) =
             | Some params ->
                 let specialized =
                   function_signature_with_types ~name:fn.value.name.value
-                    ~public:fn.value.public ~impure:fn.value.impure
+                    ~visibility:fn.value.visibility ~impure:fn.value.impure
                     ~vararg:fn.value.vararg ~params
                     ~return_type:
                       (Option.map

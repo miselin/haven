@@ -121,6 +121,7 @@ and top_decl_desc =
   | FDecl of function_decl
   | TDecl of type_decl
   | VDecl of var_decl
+  | VisibilityBlock of visibility_block
   | Import of string node
   | CImport of string node
   | Foreign of foreign
@@ -128,8 +129,15 @@ and top_decl_desc =
 
 and top_decl = top_decl_desc node
 
+and visibility_block_desc = {
+  visibility : Visibility.t;
+  decls : top_decl list;
+}
+
+and visibility_block = visibility_block_desc node
+
 and function_decl_desc = {
-  public : bool;
+  visibility : Visibility.t;
   impure : bool;
   name : identifier;
   definition : block option;
@@ -143,14 +151,18 @@ and function_decl = function_decl_desc node
 
 and var_decl_desc = {
   name : identifier;
-  public : bool;
+  visibility : Visibility.t;
   is_mutable : bool;
   ty : haven_type;
   init_expr : expression option;
 }
 
 and var_decl = var_decl_desc node
-and type_decl_desc = { name : identifier; data : type_decl_data }
+and type_decl_desc = {
+  name : identifier;
+  visibility : Visibility.t;
+  data : type_decl_data;
+}
 and type_decl = type_decl_desc node
 
 and type_extend_desc = { target : identifier; items : extend_item list }

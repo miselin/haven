@@ -26,6 +26,7 @@ referenced by:
 top_decl ::= import
            | cimport
            | foreign_block
+           | visibility_block
            | fn_decl
            | tydecl
            | extend_decl
@@ -42,6 +43,17 @@ referenced by:
 
 ```
 import   ::= 'import' STRING ';'
+```
+
+referenced by:
+
+* top_decl
+
+**visibility_block:**
+
+```
+visibility_block
+         ::= visibility '{' top_decl* '}'
 ```
 
 referenced by:
@@ -156,7 +168,7 @@ referenced by:
 
 ```
 fn_header
-         ::= 'pub'? fn_purity 'fn' IDENT '(' params? ')' return_type?
+         ::= visibility? fn_purity 'fn' IDENT '(' params? ')' return_type?
 ```
 
 referenced by:
@@ -249,7 +261,7 @@ referenced by:
 ![tydecl](diagram/tydecl.svg)
 
 ```
-tydecl   ::= 'type' IDENT ( '=' type_body )? ';'
+tydecl   ::= visibility? 'type' IDENT ( '=' type_body )? ';'
 ```
 
 referenced by:
@@ -379,12 +391,27 @@ referenced by:
 
 ```
 global_decl
-         ::= 'pub'? ( global_data | global_state ) ';'
+         ::= visibility? ( global_data | global_state ) ';'
 ```
 
 referenced by:
 
 * top_decl
+
+**visibility:**
+
+```
+visibility
+         ::= 'pub'
+          | 'pub' '(' 'module' ')'
+```
+
+referenced by:
+
+* fn_header
+* tydecl
+* global_decl
+* visibility_block
 
 **global_data:**
 

@@ -71,7 +71,7 @@ and top_decl_desc =
 and top_decl = top_decl_desc node
 
 and function_decl_desc = {
-  public : bool;
+  visibility : Visibility.t;
   impure : bool;
   name : identifier;
   definition : block option;
@@ -85,7 +85,7 @@ and function_decl = function_decl_desc node
 
 and var_decl_desc = {
   name : identifier;
-  public : bool;
+  visibility : Visibility.t;
   is_mutable : bool;
   ty : haven_type;
   init_expr : expression option;
@@ -94,6 +94,7 @@ and var_decl_desc = {
 and var_decl = var_decl_desc node
 and type_decl_desc = {
   name : identifier;
+  visibility : Visibility.t;
   data : type_decl_data;
   construct : function_decl option;
   destruct : function_decl option;

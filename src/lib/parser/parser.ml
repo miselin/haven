@@ -23,6 +23,7 @@ let keywords =
          ("match", Grammar.MATCH);
          ("as", Grammar.AS);
          ("pub", Grammar.PUB);
+         ("module", Grammar.MODULE);
          ("mut", Grammar.MUT);
          ("fn", Grammar.FN);
          ("iter", Grammar.ITER);
@@ -180,6 +181,7 @@ let token_to_string = function
   | Grammar.FLOAT_TYPE -> "float"
   | Grammar.STR_TYPE -> "str"
   | Grammar.PUB -> "pub"
+  | Grammar.MODULE -> "module"
   | Grammar.FN -> "fn"
   | Grammar.IMPURE -> "impure"
   | Grammar.MUT -> "mut"
