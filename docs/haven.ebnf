@@ -5,6 +5,7 @@ module ::= top_decl+
 top_decl ::= import
            | cimport
            | foreign_block
+           | visibility_block
            | fn_decl
            | tydecl
            | extend_decl
@@ -35,7 +36,7 @@ params ::= param (',' param)* (',' '*')?
         | '*'
 param ::= type IDENT
 
-tydecl ::= 'type' IDENT ( '=' type_body )? ';'
+tydecl ::= visibility? 'type' IDENT ( '=' type_body )? ';'
 type_body ::= type
            | struct_decl
            | enum_decl
@@ -59,7 +60,9 @@ global_data ::= 'data' global_binding
 global_state ::= 'state' global_binding
 global_binding ::= type IDENT ( '=' expr )?
 
+visibility_block ::= visibility '{' top_decl* '}'
 visibility ::= 'pub'
+             | 'pub' '(' 'module' ')'
 mutability ::= 'mut'
 
 block ::= '{' stmt* expr? '}'

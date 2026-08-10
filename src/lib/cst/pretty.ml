@@ -1,10 +1,13 @@
 open Format
 open Cst
+open Haven_core
 open Haven_token.Token
 
 let unwrap (n : _ Cst.node) = n.value
 let pp_identifier fmt (id : identifier) = fprintf fmt "%s" id.value
 let pp_string_lit fmt (s : string node) = fprintf fmt "%S" s.value
+
+let pp_visibility fmt visibility = fprintf fmt "%s" (Visibility.to_string visibility)
 
 let pp_unary_op fmt op =
   match op with
@@ -249,11 +252,11 @@ let pp_fdecl fmt (decl : function_decl) =
   let decl = unwrap decl in
   fprintf fmt
     "@[<hv 2>Function(@,\
-     pub=%a@,\
+     visibility=%a@,\
      impure=%a@,\
      name=%s,@ params=%a,@ vararg=%a,@ intrinsic=%a,@ body=%a@,\
      )@]"
-    pp_print_bool decl.public pp_print_bool decl.impure decl.name.value
+    pp_visibility decl.visibility pp_print_bool decl.impure decl.name.value
     pp_param_list decl.params pp_print_bool decl.vararg
     (pp_print_option pp_intrinsic)
     decl.intrinsic (pp_print_option pp_block) decl.definition
@@ -267,8 +270,8 @@ let pp_fdecl_list fmt decls =
 let pp_var_decl fmt (decl : var_decl) =
   let decl = unwrap decl in
   fprintf fmt
-    "@[<hv 2>Variable(@,name=%s,@ pub=%a,@ mutable=%a,@ ty=%a,@ init=%a@,)@]"
-    decl.name.value pp_print_bool decl.public pp_print_bool decl.is_mutable
+    "@[<hv 2>Variable(@,name=%s,@ visibility=%a,@ mutable=%a,@ ty=%a,@ init=%a@,)@]"
+    decl.name.value pp_visibility decl.visibility pp_print_bool decl.is_mutable
     pp_type decl.ty
     (pp_print_option pp_expression)
     decl.init_expr
@@ -305,8 +308,8 @@ let pp_type_decl_data fmt tyd =
 
 let pp_type_decl fmt (ty : type_decl) =
   let ty = unwrap ty in
-  fprintf fmt "@[<hv 2>TypeDecl(@,%a,@ %a@,)@]" pp_identifier ty.name
-    pp_type_decl_data ty.data
+  fprintf fmt "@[<hv 2>TypeDecl(@,visibility=%a,@ %a,@ %a@,)@]"
+    pp_visibility ty.visibility pp_identifier ty.name pp_type_decl_data ty.data
 
 let pp_lifecycle_construct fmt (decl : lifecycle_construct) =
   fprintf fmt "Construct(params=[%a], body=%a)"
@@ -324,10 +327,11 @@ let pp_type_extend fmt (ext : type_extend) =
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_extend_item)
     ext.items
 
-let pp_decl fmt decl =
+let rec pp_decl fmt decl =
   match decl.value with
   | FDecl d -> fprintf fmt "@[<hv 2>FDecl(@,%a@,)@]" pp_fdecl d
   | TDecl t -> pp_type_decl fmt t
+  | VisibilityBlock b -> pp_visibility_block fmt b
   | Extend e -> pp_type_extend fmt e
   | VDecl v -> pp_var_decl fmt v
   | Import i -> fprintf fmt "Import(%s)" i.value
@@ -336,6 +340,11 @@ let pp_decl fmt decl =
       let f = unwrap f in
       fprintf fmt "@[<v 2>Foreign(@,%s,@ decls=%a@,)@]" f.lib.value
         pp_fdecl_list f.decls
+
+and pp_visibility_block fmt (block : visibility_block) =
+  fprintf fmt "Block(visibility=%a, decls=[%a])" pp_visibility block.value.visibility
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_decl)
+    block.value.decls
 
 let pp_program fmt (program : program) =
   Format.pp_set_margin fmt 100;

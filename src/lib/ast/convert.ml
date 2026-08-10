@@ -103,7 +103,39 @@ let validate_surface_function_decl (fn : Surface.function_decl) =
          fn.value.name.value (string_of_loc fn.loc))
 
 let rec cst_program_to_surface (program : Cst.program) : Surface.program =
-  let decls = List.map cst_top_decl_to_surface program.value.decls in
+  let rec expand_decl ~default_visibility (decl : Cst.top_decl) =
+    match decl.value with
+    | Cst.VisibilityBlock block ->
+        List.concat_map
+          (expand_decl ~default_visibility:block.value.visibility)
+          block.value.decls
+    | Cst.FDecl fn ->
+        let fn =
+          if fn.value.visibility = Visibility.File then
+            { fn with value = { fn.value with visibility = default_visibility } }
+          else fn
+        in
+        [ cst_top_decl_to_surface { decl with value = Cst.FDecl fn } ]
+    | Cst.TDecl ty ->
+        let ty =
+          if ty.value.visibility = Visibility.File then
+            { ty with value = { ty.value with visibility = default_visibility } }
+          else ty
+        in
+        [ cst_top_decl_to_surface { decl with value = Cst.TDecl ty } ]
+    | Cst.VDecl var ->
+        let var =
+          if var.value.visibility = Visibility.File then
+            { var with value = { var.value with visibility = default_visibility } }
+          else var
+        in
+        [ cst_top_decl_to_surface { decl with value = Cst.VDecl var } ]
+    | Cst.Import _ | Cst.CImport _ | Cst.Foreign _ | Cst.Extend _ ->
+        [ cst_top_decl_to_surface decl ]
+  in
+  let decls =
+    List.concat_map (expand_decl ~default_visibility:Visibility.File) program.value.decls
+  in
   mk_surface program.loc { Surface.decls }
 
 and cst_top_decl_to_surface (decl : Cst.top_decl) : Surface.top_decl =
@@ -112,6 +144,8 @@ and cst_top_decl_to_surface (decl : Cst.top_decl) : Surface.top_decl =
     | Cst.FDecl fn -> Surface.FDecl (cst_function_decl_to_surface fn)
     | Cst.TDecl ty -> Surface.TDecl (cst_type_decl_to_surface ty)
     | Cst.VDecl v -> Surface.VDecl (cst_var_decl_to_surface v)
+    | Cst.VisibilityBlock _ ->
+        failwith "visibility blocks must be expanded before surface conversion"
     | Cst.Import i -> Surface.Import { value = i.value; loc = i.loc }
     | Cst.CImport i -> Surface.CImport { value = i.value; loc = i.loc }
     | Cst.Foreign f -> Surface.Foreign (cst_foreign_to_surface f)
@@ -122,7 +156,7 @@ and cst_top_decl_to_surface (decl : Cst.top_decl) : Surface.top_decl =
 and cst_function_decl_to_surface (fn : Cst.function_decl) : Surface.function_decl =
   let value =
     {
-      Surface.public = fn.value.public;
+      Surface.visibility = fn.value.visibility;
       impure = fn.value.impure;
       name = cst_identifier_to_surface fn.value.name;
       definition = Option.map cst_block_to_surface fn.value.definition;
@@ -167,7 +201,7 @@ and cst_var_decl_to_surface (decl : Cst.var_decl) : Surface.var_decl =
   let value =
     {
       Surface.name = cst_identifier_to_surface decl.value.name;
-      public = decl.value.public;
+      Surface.visibility = decl.value.visibility;
       is_mutable = decl.value.is_mutable;
       ty = cst_type_to_surface decl.value.ty;
       init_expr = Option.map cst_expr_to_surface decl.value.init_expr;
@@ -216,6 +250,7 @@ and cst_type_decl_to_surface (decl : Cst.type_decl) : Surface.type_decl =
   let value =
     {
       Surface.name = cst_identifier_to_surface decl.value.name;
+      Surface.visibility = decl.value.visibility;
       data = cst_type_decl_data_to_surface decl.value.data;
       construct = None;
       destruct = None;
@@ -797,7 +832,7 @@ let synthesize_surface_lifecycle_fn
   let self_ty = mk_surface_pointer_type loc target_ty in
   mk_surface loc
     {
-      Surface.public = false;
+      Surface.visibility = Visibility.File;
       impure = true;
       name = mk_surface_ident loc (lifecycle_function_name target kind);
       definition = Some body;
@@ -938,7 +973,7 @@ and surface_top_decl_to_core st (decl : Surface.top_decl) : Core.top_decl =
 and surface_function_decl_to_core st (fn : Surface.function_decl) : Core.function_decl =
   let value =
     {
-      Core.public = fn.value.public;
+      Core.visibility = fn.value.visibility;
       impure = fn.value.impure;
       name = surface_identifier_to_core fn.value.name;
       definition =
@@ -978,7 +1013,7 @@ and surface_var_decl_to_core st (decl : Surface.var_decl) : Core.var_decl =
   mk_core decl.loc
     {
       Core.name = surface_identifier_to_core decl.value.name;
-      public = decl.value.public;
+      Core.visibility = decl.value.visibility;
       is_mutable = decl.value.is_mutable;
       ty = surface_type_to_core decl.value.ty;
       init_expr = Option.map (surface_expr_to_core st) decl.value.init_expr;
@@ -988,6 +1023,7 @@ and surface_type_decl_to_core st (decl : Surface.type_decl) : Core.type_decl =
   mk_core decl.loc
     {
       Core.name = surface_identifier_to_core decl.value.name;
+      visibility = decl.value.visibility;
       data = surface_type_decl_data_to_core st decl.value.data;
       construct = Option.map (surface_function_decl_to_core st) decl.value.construct;
       destruct = Option.map (surface_function_decl_to_core st) decl.value.destruct;
@@ -1046,7 +1082,7 @@ and surface_foreign_to_core st (foreign : Surface.foreign) : Core.foreign =
       value =
         {
           fn.value with
-          public = true;
+          Surface.visibility = Visibility.External;
           impure = true;
         };
     }

@@ -17,7 +17,10 @@ let function_lenses (pipeline : Analysis.Pipeline.result) (fn : Core.function_de
       (fun title -> title)
       [
         Some (if fn.value.impure then "impure" else "pure");
-        if fn.value.public then Some "public" else None;
+        (match fn.value.visibility with
+        | Haven_core.Visibility.File -> None
+        | Module -> Some "module"
+        | External -> Some "public");
         Option.map
           (fun (intrinsic : Core.intrinsic) ->
             "intrinsic " ^ intrinsic.value.name.value)

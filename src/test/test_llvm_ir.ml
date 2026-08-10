@@ -76,7 +76,8 @@ let fn_decl ?(public = false) ?(impure = false) ?(definition = None) ?(params = 
     ?(return_type = Some ty_void) name =
   node
     {
-      Core.public = public;
+      Core.visibility =
+        if public then Haven_core.Visibility.External else Haven_core.Visibility.File;
       impure;
       name = ident name;
       definition;
@@ -363,6 +364,7 @@ pub impure fn main() -> i32 {
          (node
             {
               Core.name = ident "Buffer";
+              visibility = Haven_core.Visibility.File;
               data =
                 Core.TypeDeclStruct
                   (node
@@ -382,7 +384,7 @@ pub impure fn main() -> i32 {
     node
       {
         Core.name = ident "GLOBAL_BUFFER";
-        public = false;
+        Core.visibility = Haven_core.Visibility.File;
         is_mutable = false;
         ty = ty_buffer;
         init_expr = None;

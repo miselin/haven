@@ -2318,7 +2318,8 @@ let declare_function_symbol t (fn : Core.function_decl) =
         | None ->
             let fn_value = Llvm.declare_function fn.value.name.value fn_ty t.llmodule in
             Llvm.set_linkage
-              (if fn.value.public then Llvm.Linkage.External else Llvm.Linkage.Internal)
+              (if Visibility.is_external fn.value.visibility then Llvm.Linkage.External
+               else Llvm.Linkage.Internal)
               fn_value;
             Llvm.set_function_call_conv Llvm.CallConv.c fn_value;
             fn_value
@@ -2343,10 +2344,11 @@ let declare_global_symbol t (decl : Core.var_decl) =
     Llvm.declare_global (llvm_type_of_resolved t resolved) decl.value.name.value t.llmodule
   in
   Llvm.set_linkage
-    (if decl.value.public then Llvm.Linkage.External else Llvm.Linkage.Internal)
+    (if Visibility.is_external decl.value.visibility then Llvm.Linkage.External
+     else Llvm.Linkage.Internal)
     storage;
   Llvm.set_global_constant (not decl.value.is_mutable) storage;
-  if decl.value.init_expr = None && not decl.value.public then
+  if decl.value.init_expr = None && not (Visibility.is_external decl.value.visibility) then
     Llvm.set_initializer (zero_constant t resolved) storage;
   let symbol =
     Variable_symbol
@@ -2389,7 +2391,7 @@ let lower_global_initializer t (decl : Core.var_decl) =
   | Variable_symbol { storage; resolved_type; _ } -> (
       match decl.value.init_expr with
       | None ->
-          if not decl.value.public then (
+          if not (Visibility.is_external decl.value.visibility) then (
             Llvm.set_global_constant false storage;
             Llvm.set_initializer (zero_constant t resolved_type) storage;
             t.global_inits_rev <- { decl; storage } :: t.global_inits_rev)
@@ -2426,7 +2428,7 @@ let emit_global_ctor t =
             {
               value =
                 {
-                  public = false;
+                  visibility = Visibility.File;
                   impure = true;
                   name = { value = "__haven_global_init"; loc = dummy_loc };
                   definition = None;

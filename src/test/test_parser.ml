@@ -40,6 +40,53 @@ let run () =
   assert_parse_ok "aggregate zero initializer"
     "pub state i32[4] values = zero;";
 
+  let visibility_core =
+    parse_to_core
+      {|
+fn file_helper() -> i32 { 0 }
+pub(module) fn module_helper() -> i32 { 1 }
+pub fn public_helper() -> i32 { 2 }
+
+pub(module) {
+  fn grouped_helper() -> i32 { 3 }
+  pub fn grouped_public_helper() -> i32 { 4 }
+  type Shared = i32;
+  state i32 cache;
+}
+|}
+  in
+  let assert_function_visibility name expected =
+    let fn_decl = find_named_function name visibility_core in
+    assert_true
+      (Printf.sprintf "%s should have %s visibility" name
+         (Haven_core.Visibility.to_string expected))
+      (fn_decl.value.visibility = expected)
+  in
+  assert_function_visibility "file_helper" Haven_core.Visibility.File;
+  assert_function_visibility "module_helper" Haven_core.Visibility.Module;
+  assert_function_visibility "public_helper" Haven_core.Visibility.External;
+  assert_function_visibility "grouped_helper" Haven_core.Visibility.Module;
+  assert_function_visibility "grouped_public_helper" Haven_core.Visibility.External;
+  let find_decl name =
+    List.find
+      (fun (decl : Core.top_decl) ->
+        match decl.value with
+        | Core.TDecl ty -> String.equal ty.value.name.value name
+        | Core.VDecl var -> String.equal var.value.name.value name
+        | _ -> false)
+      visibility_core.program.value.decls
+  in
+  (match (find_decl "Shared").value with
+  | Core.TDecl ty ->
+      assert_true "grouped type should have module visibility"
+        (ty.value.visibility = Haven_core.Visibility.Module)
+  | _ -> failwith "expected grouped type declaration");
+  (match (find_decl "cache").value with
+  | Core.VDecl var ->
+      assert_true "grouped state should have module visibility"
+        (var.value.visibility = Haven_core.Visibility.Module)
+  | _ -> failwith "expected grouped state declaration");
+
   assert_parse_ok "extend lifecycle block"
     {|
 type Buffer = struct {

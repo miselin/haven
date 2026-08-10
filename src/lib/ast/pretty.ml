@@ -1,4 +1,5 @@
 open Format
+open Haven_core
 open Haven_token.Token
 
 module Surface = Surface_ast
@@ -225,8 +226,9 @@ let pp_surface_param fmt (param : Surface.param) =
 
 let rec pp_surface_function fmt (fn : Surface.function_decl) =
   fprintf fmt
-    "@[<hv 2>Function(@,pub=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ intrinsic=%a,@ body=%a@,)@]"
-    pp_print_bool fn.value.public pp_print_bool fn.value.impure
+    "@[<hv 2>Function(@,visibility=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ intrinsic=%a,@ body=%a@,)@]"
+    (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
+    fn.value.visibility pp_print_bool fn.value.impure
     pp_surface_identifier fn.value.name
     (pp_print_list ~pp_sep pp_surface_param)
     fn.value.params.value.params
@@ -243,8 +245,10 @@ and pp_surface_intrinsic fmt (intr : Surface.intrinsic) =
     intr.value.types
 
 let pp_surface_var_decl fmt (decl : Surface.var_decl) =
-  fprintf fmt "Var(%a, pub=%a, mutable=%a, ty=%a, init=%a)"
-    pp_surface_identifier decl.value.name pp_print_bool decl.value.public
+  fprintf fmt "Var(%a, visibility=%a, mutable=%a, ty=%a, init=%a)"
+    pp_surface_identifier decl.value.name
+    (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
+    decl.value.visibility
     pp_print_bool decl.value.is_mutable pp_surface_type decl.value.ty
     (pp_print_option pp_surface_expression)
     decl.value.init_expr
@@ -482,8 +486,9 @@ let pp_core_param fmt (param : Core.param) =
 
 let rec pp_core_function fmt (fn : Core.function_decl) =
   fprintf fmt
-    "@[<hv 2>Function(@,pub=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ intrinsic=%a,@ body=%a@,)@]"
-    pp_print_bool fn.value.public pp_print_bool fn.value.impure
+    "@[<hv 2>Function(@,visibility=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ intrinsic=%a,@ body=%a@,)@]"
+    (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
+    fn.value.visibility pp_print_bool fn.value.impure
     pp_core_identifier fn.value.name
     (pp_print_list ~pp_sep pp_core_param)
     fn.value.params.value.params
@@ -500,8 +505,10 @@ and pp_core_intrinsic fmt (intr : Core.intrinsic) =
     intr.value.types
 
 let pp_core_var_decl fmt (decl : Core.var_decl) =
-  fprintf fmt "Var(%a, pub=%a, mutable=%a, ty=%a, init=%a)"
-    pp_core_identifier decl.value.name pp_print_bool decl.value.public
+  fprintf fmt "Var(%a, visibility=%a, mutable=%a, ty=%a, init=%a)"
+    pp_core_identifier decl.value.name
+    (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
+    decl.value.visibility
     pp_print_bool decl.value.is_mutable pp_core_type decl.value.ty
     (pp_print_option pp_core_expression)
     decl.value.init_expr

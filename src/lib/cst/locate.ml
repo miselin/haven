@@ -4,6 +4,7 @@ open Haven_core
 type any_node =
   | Program of program
   | TopDecl of top_decl
+  | VisibilityBlock of visibility_block
   | FunctionDecl of function_decl
   | VarDecl of var_decl
   | TypeDecl of type_decl
@@ -50,6 +51,7 @@ type any_node =
 let location_of = function
   | Program p -> p.loc
   | TopDecl t -> t.loc
+  | VisibilityBlock b -> b.loc
   | FunctionDecl f -> f.loc
   | VarDecl v -> v.loc
   | TypeDecl t -> t.loc
@@ -321,6 +323,8 @@ and walk_function_decl predicate acc fn =
 and walk_top_decl predicate acc decl =
   let acc = add_if predicate (TopDecl decl) acc in
   match decl.value with
+  | VisibilityBlock block ->
+      List.fold_left (walk_top_decl predicate) acc block.value.decls
   | FDecl f -> walk_function_decl predicate acc f
   | VDecl v -> walk_var_decl predicate acc v
   | TDecl t -> walk_type_decl predicate acc t

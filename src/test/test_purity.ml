@@ -16,7 +16,7 @@ pub fn main() -> i32 {
   in
   let puts_decl = find_named_function "puts" foreign_pipeline.core in
   assert_true "foreign declarations should be marked public"
-    puts_decl.value.public;
+    (puts_decl.value.visibility = Haven_core.Visibility.External);
   assert_true "foreign declarations should be marked impure"
     puts_decl.value.impure;
   assert_has_diagnostics "calling foreign from a pure function should fail purity"

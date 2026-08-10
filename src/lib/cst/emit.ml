@@ -78,6 +78,11 @@ let flush_inline_on_line ~line queue fmt =
 let emit_identifier fmt (id : identifier) = fprintf fmt "%s" id.value
 let emit_string_lit fmt (s : string node) = fprintf fmt "%S" s.value
 
+let emit_visibility fmt = function
+  | Visibility.File -> ()
+  | Visibility.Module -> fprintf fmt "pub(module) "
+  | Visibility.External -> fprintf fmt "pub "
+
 let binary_op_string = function
   | Add -> "+"
   | Subtract -> "-"
@@ -523,8 +528,8 @@ let emit_intrinsic fmt (i : intrinsic) =
 
 let emit_fdecl ~comments fmt (decl : function_decl) =
   let decl = unwrap decl in
-  fprintf fmt "%s%sfn %s("
-    (if decl.public then "pub " else "")
+  fprintf fmt "%a%sfn %s("
+    emit_visibility decl.visibility
     (if decl.impure then "impure " else "")
     decl.name.value;
   emit_params fmt decl.params;
@@ -547,8 +552,8 @@ let emit_fdecl_list ~comments fmt decls =
 
 let emit_var_decl ~comments fmt (decl : var_decl) =
   let decl = unwrap decl in
-  fprintf fmt "%s%s %a %a"
-    (if decl.public then "pub " else "")
+  fprintf fmt "%a%s %a %a"
+    emit_visibility decl.visibility
     (if decl.is_mutable then "state" else "data")
     emit_type decl.ty emit_identifier decl.name;
   (pp_print_option (fun fmt expr ->
@@ -595,13 +600,13 @@ let emit_enum_decl fmt (d : enum_decl) =
 let emit_type_decl fmt (ty : type_decl) =
   let ty = unwrap ty in
   match ty.data with
-  | TypeDeclForward -> fprintf fmt "type %a;" emit_identifier ty.name
+  | TypeDeclForward -> fprintf fmt "%atype %a;" emit_visibility ty.visibility emit_identifier ty.name
   | TypeDeclAlias t ->
-      fprintf fmt "type %a = %a;" emit_identifier ty.name emit_type t
+      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility emit_identifier ty.name emit_type t
   | TypeDeclStruct s ->
-      fprintf fmt "type %a = %a;" emit_identifier ty.name emit_struct_decl s
+      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility emit_identifier ty.name emit_struct_decl s
   | TypeDeclEnum e ->
-      fprintf fmt "type %a = %a;" emit_identifier ty.name emit_enum_decl e
+      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility emit_identifier ty.name emit_enum_decl e
 
 let emit_extend_item ~comments fmt (item : extend_item) =
   emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Leading fmt;
@@ -639,7 +644,7 @@ let emit_foreign ~comments fmt (f : foreign) =
     f.decls;
   fprintf fmt "\n}"
 
-let emit_decl ~comments fmt decl =
+let rec emit_decl ~comments fmt decl =
   emit_comments ~comments ~indent:0 ~loc:decl.loc ~kind:`Leading fmt;
   let needs_separate_trailing =
     match decl.value with
@@ -652,11 +657,22 @@ let emit_decl ~comments fmt decl =
   | TDecl t -> emit_type_decl fmt t
   | Extend e -> emit_type_extend ~comments fmt e
   | VDecl v -> emit_var_decl ~comments fmt v
+  | VisibilityBlock block -> emit_visibility_block ~comments fmt block
   | Import i -> fprintf fmt "import %a;" emit_string_lit i
   | CImport i -> fprintf fmt "cimport %a;" emit_string_lit i
   | Foreign f -> emit_foreign ~comments fmt f);
   emit_comments ~comments ~indent:0 ~loc:decl.loc ~kind:`Trailing
     ~separate:needs_separate_trailing fmt
+
+and emit_visibility_block ~comments fmt (block : visibility_block) =
+  let block = unwrap block in
+  fprintf fmt "%a{\n" emit_visibility block.visibility;
+  List.iteri
+    (fun index decl ->
+      emit_decl ~comments fmt decl;
+      if index < List.length block.decls - 1 then fprintf fmt "\n\n")
+    block.decls;
+  fprintf fmt "\n}"
 
 let is_import decl =
   match decl.value with Import _ | CImport _ -> true | _ -> false

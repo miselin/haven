@@ -1,4 +1,5 @@
 %{
+    open Haven_core.Visibility
     open Haven_cst.Cst
 
     let mk_loc start_pos end_pos value = with_location ~start_pos ~end_pos value
@@ -31,7 +32,7 @@
 %token EOF
 
 (* Main keywords *)
-%token PUB FN MUT IF ELSE LET WHILE UNTIL BREAK CONTINUE MATCH AS ITER
+%token PUB MODULE FN MUT IF ELSE LET WHILE UNTIL BREAK CONTINUE MATCH AS ITER
 %token LOAD RET STRUCT TYPE NIL ZERO DEFER IMPURE ENUM IMPORT CIMPORT SIZE
 %token BOX UNBOX INTRINSIC FOREIGN DATA STATE VEC MAT FUNCTION
 %token VAFUNCTION CELL REF EXTEND WITH CONSTRUCT DESTRUCT
@@ -60,6 +61,7 @@ program: decls=top_decl+ EOF { mk_loc $startpos $endpos { decls } } ;
 (** TOP-LEVEL CONSTRUCTS **)
 
 top_decl:
+  | b=visibility_block { mk_loc $startpos $endpos (VisibilityBlock b) }
   | d=fn_definition { mk_loc $startpos $endpos (FDecl d) }
   | d=fn_forward_decl { mk_loc $startpos $endpos (FDecl d) }
   | i=import_decl { mk_loc $startpos $endpos (Import i) }
@@ -68,6 +70,11 @@ top_decl:
   | t=type_decl { mk_loc $startpos $endpos (TDecl t) }
   | e=extend_decl { mk_loc $startpos $endpos (Extend e) }
   | v=global_decl { mk_loc $startpos $endpos (VDecl v) }
+  ;
+
+visibility_block:
+  v=visibility LBRACE ds=top_decl* RBRACE
+    { mk_loc $startpos $endpos { visibility = v; decls = ds } }
   ;
 
 import_decl: IMPORT i=STRING_LIT SEMICOLON { mk_id i $startpos(i) $endpos(i) } ;
@@ -89,8 +96,8 @@ fn_forward_decl:
   ;
 
 fn_header:
-  pub=boption(PUB) impure=boption(IMPURE) FN name=identifier LPAREN p=params RPAREN rt=return_type?
-    { mk_loc $startpos $endpos { public = pub; impure = impure; name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.value.vararg } }
+  visibility=visibility_opt impure=boption(IMPURE) FN name=identifier LPAREN p=params RPAREN rt=return_type?
+    { mk_loc $startpos $endpos { visibility; impure; name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.value.vararg } }
   ;
 return_type: ARROW t=haven_type { t } ;
 
@@ -117,8 +124,8 @@ vararg_params:
 param: t=haven_type n=identifier { mk_loc $startpos $endpos { name = n; ty = t } } ;
 
 type_decl:
-  | TYPE i=identifier EQUAL t=type_defn SEMICOLON { mk_loc $startpos $endpos { name = i; data = t } }
-  | TYPE i=identifier SEMICOLON { mk_loc $startpos $endpos { name = i; data = TypeDeclForward } }
+  | visibility=visibility_opt TYPE i=identifier EQUAL t=type_defn SEMICOLON { mk_loc $startpos $endpos { name = i; visibility; data = t } }
+  | visibility=visibility_opt TYPE i=identifier SEMICOLON { mk_loc $startpos $endpos { name = i; visibility; data = TypeDeclForward } }
   ;
 extend_decl:
   EXTEND i=identifier WITH LBRACE items=list(extend_item) RBRACE
@@ -152,14 +159,24 @@ enum_generics: g=delimited(LT, separated_list(COMMA, identifier), GT) { g } ;
 enum_variant: i=identifier t=option(enum_wrapped_type) { mk_loc $startpos $endpos { name = i; inner_tys = Option.value ~default:[] t }} ;
 enum_wrapped_type: LPAREN ts=separated_nonempty_list(COMMA, haven_type) RPAREN { ts } ;
 
-global_decl: p=boption(PUB) d=global_decl_inner SEMICOLON { mk_loc $startpos $endpos { d.value with public = p } } ;
+global_decl: visibility=visibility_opt d=global_decl_inner SEMICOLON { mk_loc $startpos $endpos { d.value with visibility } } ;
 global_decl_inner:
   | DATA b=global_decl_binding { b }
   | STATE b=global_decl_binding { mk_loc $startpos $endpos { b.value with is_mutable = true } }
   ;
 global_decl_binding: t=haven_type n=identifier e=option(bind_expr) {
-    mk_loc $startpos $endpos { name = n; public = false; is_mutable = false; ty = t; init_expr = e }
+    mk_loc $startpos $endpos { name = n; visibility = File; is_mutable = false; ty = t; init_expr = e }
 } ;
+
+visibility_opt:
+  | v=visibility { v }
+  | { File }
+  ;
+
+visibility:
+  | PUB LPAREN MODULE RPAREN { Module }
+  | PUB { External }
+  ;
 bind_expr:
   | EQUAL i=init { mk_expr $startpos(i) $endpos(i) (Initializer i) }
   | EQUAL e=expr { e }

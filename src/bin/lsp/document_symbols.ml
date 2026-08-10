@@ -19,7 +19,10 @@ let function_detail (fn : Cst.function_decl) =
       (List.filter
          (fun part -> not (String.equal part ""))
          [
-           if fn.value.public then "pub" else "";
+           (match fn.value.visibility with
+           | Haven_core.Visibility.File -> ""
+           | Module -> "pub(module)"
+           | External -> "pub");
            if fn.value.impure then "impure" else "";
            "fn";
          ])
@@ -122,8 +125,10 @@ let type_symbol (decl : Cst.type_decl) =
     ~selection_range:(Lsp_helpers.loc_to_range decl.value.name.loc) ()
 
 let symbols_for_program (parsed : Cst.parsed_program) =
-  let top_decl_symbols (decl : Cst.top_decl) =
+  let rec top_decl_symbols (decl : Cst.top_decl) =
     match decl.value with
+    | Cst.VisibilityBlock block ->
+        List.concat_map top_decl_symbols block.value.decls
     | Cst.FDecl fn ->
         [ function_symbol fn ]
     | Cst.VDecl var_decl ->
