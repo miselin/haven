@@ -50,6 +50,13 @@ To type a variable as a signed integer N bits wide, use `iN`:
 
 For an unsigned integer, use a `u` prefix instead of `i`.
 
+Type aliases can be used with annotations to create integer types with specific byte orders:
+
+```
+type be16 = u16 @byte_order(BigEndian);
+type le16 = u16 @byte_order(LittleEndian);
+```
+
 ### Floats
 
 Use the type `float` for floating-point numbers.
@@ -169,6 +176,33 @@ Single-element structs do not require a trailing comma:
 ```
 let Thing thing = { 1234 };
 ```
+
+#### Structure Layout
+
+To pack a structure in Haven, use the `@layout` annotation:
+
+```
+type Point = struct @layout(packed) {
+    i32 x;
+    i32 y; /* starts at 4th byte of structure - packed layout omits any inter-field padding */
+};
+```
+
+To control the layout of a structure in Haven, use the `@offset` annotation:
+
+```
+type Point = struct {
+    i32 x @offset(8); /* starts at 8th byte of the structure */
+    i32 y @offset(4); /* starts at 4th byte of the structure */
+    i32 z; /* fills the available hole at byte 0 of the structure */
+    i32 w; /* starts at next available slot in the structure, at 12th byte */
+};
+```
+
+Fields that do not have offsets specified will fill available holes in the structure on either side of `@offset`-positioned fields.
+
+Offsets are not permitted to overlap and compile-time analysis will error if an impossible layout is requested.
+Note that adding offsets implies a packed structure layout, even without the annotation.
 
 ### Enums
 

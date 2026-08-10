@@ -38,6 +38,7 @@ let symbol_tag = function
   | Bang -> "BANG"
   | Tilde -> "TILDE"
   | Underscore -> "UNDERSCORE"
+  | At -> "AT"
 
 let symbol_lexeme = function
   | Arrow -> "->"
@@ -76,6 +77,7 @@ let symbol_lexeme = function
   | Bang -> "!"
   | Tilde -> "~"
   | Underscore -> "_"
+  | At -> "@"
 
 let pp_trivia = function
   | Whitespace { text; contains_newline } ->
@@ -98,7 +100,6 @@ let pp_token (token : Raw.tok) =
   match token.tok with
   | Trivia trivia -> pp_trivia trivia
   | Ident text -> Printf.printf "IDENT %s\n" text
-  | Directive Assert -> Printf.printf "DIRECTIVE @assert\n"
   | Numeric_type desc ->
       Printf.printf "NUMERIC_TYPE %s\n" (numeric_type_to_string desc)
   | Vec_type desc -> Printf.printf "VEC_TYPE %s\n" (vec_type_to_string desc)

@@ -205,7 +205,7 @@ let symbol_is_operator = function
   | LtEq | GtEq | LShift | RShift | Lt | Gt | Star | Caret | Plus | Minus
   | Slash | Percent | Equal | Ampersand | Pipe | Bang | Tilde | LParen | RParen
   | LBrace | RBrace | LBracket | RBracket | Comma | Dot | Semicolon | Colon
-  | Underscore ->
+  | Underscore | At ->
       true
 
 let collect_lexical_tokens (parsed : CST.parsed_program) =
@@ -219,10 +219,6 @@ let collect_lexical_tokens (parsed : CST.parsed_program) =
               (loc_of_raw_tok
                  { tok = entry.token; startp = entry.startp; endp = entry.endp })
         | Lexer.Raw.Ident _ -> acc
-        | Lexer.Raw.Directive Assert ->
-            add_token_for_loc acc ~token_type:"keyword"
-              (loc_of_raw_tok
-                 { tok = entry.token; startp = entry.startp; endp = entry.endp })
         | Lexer.Raw.Numeric_type _ | Vec_type _ | Mat_type _ | Vec_hole_type
         | Mat_hole_type | Float_type | Void_type | Str_type ->
             add_token_for_loc acc ~token_type:"type"

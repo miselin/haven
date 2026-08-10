@@ -152,10 +152,8 @@ and var_decl_desc = {
 and var_decl = var_decl_desc node
 and type_decl_desc = { name : identifier; data : type_decl_data }
 and type_decl = type_decl_desc node
-
 and type_extend_desc = { target : identifier; items : extend_item list }
 and type_extend = type_extend_desc node
-
 and lifecycle_construct_desc = { params : param list; body : block }
 and lifecycle_construct = lifecycle_construct_desc node
 
@@ -172,7 +170,12 @@ and type_decl_data =
   | TypeDeclForward
 
 and struct_decl_desc = { fields : struct_field list }
-and enum_decl_desc = { generics : identifier list; variants : enum_variant list }
+
+and enum_decl_desc = {
+  generics : identifier list;
+  variants : enum_variant list;
+}
+
 and struct_field_desc = { name : identifier; ty : haven_type }
 and enum_variant_desc = { name : identifier; inner_tys : haven_type list }
 and struct_decl = struct_decl_desc node
@@ -196,13 +199,10 @@ and block_item_desc =
 
 and block_item = block_item_desc node
 
-and compile_assert_desc = { cond : expression; message : string node }
-and compile_assert = compile_assert_desc node
-
 and statement_desc =
   | Expression of expression
   | Let of let_stmt
-  | CompileAssert of compile_assert
+  | Directive of directive
   | Return of expression option
   | Defer of expression
   | Iter of iter_stmt
@@ -335,6 +335,19 @@ and enum_literal_desc = {
 }
 
 and enum_literal = enum_literal_desc node
+
+and directive_desc =
+  | DirectiveCall of directive_call
+  | DirectiveCompileTime of directive_compile_time
+
+and directive = directive_desc node
+and directive_call = { name : identifier; args : expression list }
+
+and directive_compile_time = {
+  name : identifier;
+  cond : expression;
+  message : string node;
+}
 
 type parsed_program = {
   program : program;

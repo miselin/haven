@@ -195,9 +195,7 @@ and pp_statement fmt stmt =
       let s = unwrap s in
       fprintf fmt "@[<hv 2>Let(@,mut=%a,@ name=%a,@ init_expr=%a@,)@]"
         pp_print_bool s.mut pp_identifier s.name pp_expression s.init_expr
-  | CompileAssert a ->
-      fprintf fmt "@[<hv 2>CompileAssert(@,cond=%a,@ message=%S@,)@]" pp_expression
-        a.value.cond a.value.message.value
+  | Directive d -> pp_directive fmt d
   | Return (Some e) -> fprintf fmt "@[<hv 2>Return(@,%a@,)@]" pp_expression e
   | Return None -> fprintf fmt "Return"
   | Defer e -> fprintf fmt "@[<hv 2>Defer(@,%a@,)@]" pp_expression e
@@ -227,6 +225,17 @@ and pp_block fmt block =
   fprintf fmt "@[<v 2>Block(@,%a@,)@]"
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_block_item)
     block.items
+
+and pp_directive fmt (directive : directive) =
+  match directive.value with
+  | DirectiveCall a ->
+      fprintf fmt "@[<hv 2>Directive(@,name=%a,@,cond=%a@,)@]" pp_identifier
+        a.name
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_expression)
+        a.args
+  | DirectiveCompileTime a ->
+      fprintf fmt "@[<hv 2>CompileAssert(@,name=%a,@,cond=%a,@ message=%S@,)@]"
+        pp_identifier a.name pp_expression a.cond a.message.value
 
 let pp_param fmt (p : param) =
   let p = unwrap p in

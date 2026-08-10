@@ -412,10 +412,8 @@ and emit_statement ~indent ~comments fmt stmt =
       fprintf fmt " = %a;"
         (emit_expression ~ctx_prec:0 ~indent ~comments)
         s.init_expr
-  | CompileAssert a ->
-      fprintf fmt "@assert %a, %S;"
-        (emit_expression ~ctx_prec:0 ~indent ~comments)
-        a.value.cond a.value.message.value;
+  | Directive d ->
+      fprintf fmt "%a;" (emit_directive ~indent ~comments) d;
       flush_inline_on_line ~line:stmt.loc.start_pos.pos_lnum comments fmt
   | Return (Some e) ->
       fprintf fmt "ret %a;" (emit_expression ~ctx_prec:0 ~indent ~comments) e;
@@ -492,6 +490,19 @@ and emit_block ~indent ~comments fmt block =
       emit_comments ~comments ~indent:(indent + 1) ~loc:block_node.loc
         ~kind:`Trailing ~separate:false fmt;
       fprintf fmt "\n%s}" (spaces indent)
+
+and emit_directive ~indent ~comments fmt directive =
+  match directive.value with
+  | DirectiveCall c ->
+      fprintf fmt "%s@%a(%a)" (spaces indent) emit_identifier c.name
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+           (emit_expression ~ctx_prec:0 ~indent ~comments))
+        c.args
+  | DirectiveCompileTime c ->
+      fprintf fmt "%s@%a %a, %a" (spaces indent) emit_identifier c.name
+        (emit_expression ~ctx_prec:0 ~indent ~comments)
+        c.cond emit_string_lit c.message
 
 let emit_param fmt (p : param) =
   let p = unwrap p in
@@ -608,15 +619,21 @@ let emit_extend_item ~comments fmt (item : extend_item) =
   (match item.value with
   | ExtendConstruct construct ->
       if construct.value.params = [] then
-        fprintf fmt "%sconstruct %a" (spaces 1) (emit_block ~indent:1 ~comments)
+        fprintf fmt "%sconstruct %a" (spaces 1)
+          (emit_block ~indent:1 ~comments)
           construct.value.body
       else
         fprintf fmt "%sconstruct(%a) %a" (spaces 1)
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") emit_param)
-          construct.value.params (emit_block ~indent:1 ~comments) construct.value.body
+          construct.value.params
+          (emit_block ~indent:1 ~comments)
+          construct.value.body
   | ExtendDestruct block ->
-      fprintf fmt "%sdestruct %a" (spaces 1) (emit_block ~indent:1 ~comments) block);
-  emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Trailing ~separate:true fmt
+      fprintf fmt "%sdestruct %a" (spaces 1)
+        (emit_block ~indent:1 ~comments)
+        block);
+  emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Trailing ~separate:true
+    fmt
 
 let emit_type_extend ~comments fmt (ext : type_extend) =
   let ext = unwrap ext in
