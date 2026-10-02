@@ -528,8 +528,7 @@ let emit_intrinsic fmt (i : intrinsic) =
 
 let emit_fdecl ~comments fmt (decl : function_decl) =
   let decl = unwrap decl in
-  fprintf fmt "%a%sfn %s("
-    emit_visibility decl.visibility
+  fprintf fmt "%a%sfn %s(" emit_visibility decl.visibility
     (if decl.impure then "impure " else "")
     decl.name.value;
   emit_params fmt decl.params;
@@ -552,8 +551,7 @@ let emit_fdecl_list ~comments fmt decls =
 
 let emit_var_decl ~comments fmt (decl : var_decl) =
   let decl = unwrap decl in
-  fprintf fmt "%a%s %a %a"
-    emit_visibility decl.visibility
+  fprintf fmt "%a%s %a %a" emit_visibility decl.visibility
     (if decl.is_mutable then "state" else "data")
     emit_type decl.ty emit_identifier decl.name;
   (pp_print_option (fun fmt expr ->
@@ -600,28 +598,39 @@ let emit_enum_decl fmt (d : enum_decl) =
 let emit_type_decl fmt (ty : type_decl) =
   let ty = unwrap ty in
   match ty.data with
-  | TypeDeclForward -> fprintf fmt "%atype %a;" emit_visibility ty.visibility emit_identifier ty.name
+  | TypeDeclForward ->
+      fprintf fmt "%atype %a;" emit_visibility ty.visibility emit_identifier
+        ty.name
   | TypeDeclAlias t ->
-      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility emit_identifier ty.name emit_type t
+      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility
+        emit_identifier ty.name emit_type t
   | TypeDeclStruct s ->
-      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility emit_identifier ty.name emit_struct_decl s
+      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility
+        emit_identifier ty.name emit_struct_decl s
   | TypeDeclEnum e ->
-      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility emit_identifier ty.name emit_enum_decl e
+      fprintf fmt "%atype %a = %a;" emit_visibility ty.visibility
+        emit_identifier ty.name emit_enum_decl e
 
 let emit_extend_item ~comments fmt (item : extend_item) =
   emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Leading fmt;
   (match item.value with
   | ExtendConstruct construct ->
       if construct.value.params = [] then
-        fprintf fmt "%sconstruct %a" (spaces 1) (emit_block ~indent:1 ~comments)
+        fprintf fmt "%sconstruct %a" (spaces 1)
+          (emit_block ~indent:1 ~comments)
           construct.value.body
       else
         fprintf fmt "%sconstruct(%a) %a" (spaces 1)
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") emit_param)
-          construct.value.params (emit_block ~indent:1 ~comments) construct.value.body
+          construct.value.params
+          (emit_block ~indent:1 ~comments)
+          construct.value.body
   | ExtendDestruct block ->
-      fprintf fmt "%sdestruct %a" (spaces 1) (emit_block ~indent:1 ~comments) block);
-  emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Trailing ~separate:true fmt
+      fprintf fmt "%sdestruct %a" (spaces 1)
+        (emit_block ~indent:1 ~comments)
+        block);
+  emit_comments ~comments ~indent:1 ~loc:item.loc ~kind:`Trailing ~separate:true
+    fmt
 
 let emit_type_extend ~comments fmt (ext : type_extend) =
   let ext = unwrap ext in

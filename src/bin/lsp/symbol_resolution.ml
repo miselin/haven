@@ -3,10 +3,7 @@ module Core = Analysis.Core
 module Pretty = Haven.Ast.Pretty
 module String_map = Map.Make (String)
 
-type binding = {
-  hover_text : string;
-  definition_loc : Haven_core.Loc.t;
-}
+type binding = { hover_text : string; definition_loc : Haven_core.Loc.t }
 
 type candidate = {
   loc : Haven_core.Loc.t;
@@ -22,7 +19,6 @@ type resolution = {
 }
 
 type highlight_kind = [ `Read | `Text | `Write ]
-
 type env = binding String_map.t list
 
 type state = {
@@ -41,13 +37,15 @@ let range_size (loc : Haven_core.Loc.t) =
 let better_candidate (left : candidate) (right : candidate) =
   let left_size = range_size left.loc in
   let right_size = range_size right.loc in
-  left_size < right_size || (left_size = right_size && left.priority > right.priority)
+  left_size < right_size
+  || (left_size = right_size && left.priority > right.priority)
 
 let maybe_pick state (candidate : candidate) =
   if Haven_core.Loc.contains_position candidate.loc state.position then
     match state.best with
     | None -> state.best <- Some candidate
-    | Some current when better_candidate candidate current -> state.best <- Some candidate
+    | Some current when better_candidate candidate current ->
+        state.best <- Some candidate
     | Some _ -> ()
 
 let hover_candidate loc priority contents =
@@ -89,7 +87,8 @@ let expr_annotation typing (expr : Core.expression) =
   Hashtbl.find_opt typing.Analysis.annotations.exprs (Analysis.expr_id expr)
 
 let binding_annotation typing (binding : Core.let_stmt) =
-  Hashtbl.find_opt typing.Analysis.annotations.bindings (Analysis.binding_id binding)
+  Hashtbl.find_opt typing.Analysis.annotations.bindings
+    (Analysis.binding_id binding)
 
 let expr_resolved_type typing (expr : Core.expression) =
   match expr_annotation typing expr with
@@ -127,7 +126,7 @@ let function_signature (fn : Core.function_decl) =
            | Haven_core.Visibility.File -> ""
            | Module -> "pub(module)"
            | External -> "pub");
-           if fn.value.impure then "impure" else "";
+           (if fn.value.impure then "impure" else "");
            "fn";
          ])
   in
@@ -137,7 +136,8 @@ let function_signature (fn : Core.function_decl) =
     | None -> ""
   in
   Printf.sprintf "%s %s(%s)%s" prefix fn.value.name.value
-    (String.concat ", " params) return_suffix
+    (String.concat ", " params)
+    return_suffix
 
 let function_signature_with_types ~name ~visibility ~impure ~vararg ~params
     ~return_type =
@@ -154,25 +154,30 @@ let function_signature_with_types ~name ~visibility ~impure ~vararg ~params
     String.concat " "
       (List.filter
          (fun part -> not (String.equal part ""))
-         [ (match visibility with
+         [
+           (match visibility with
            | Haven_core.Visibility.File -> ""
            | Module -> "pub(module)"
            | External -> "pub");
-           if impure then "impure" else "";
-           "fn" ])
+           (if impure then "impure" else "");
+           "fn";
+         ])
   in
   let return_suffix =
     match return_type with
     | Some ty -> " -> " ^ format_core_type ty
     | None -> ""
   in
-  Printf.sprintf "%s %s(%s)%s" prefix name (String.concat ", " params) return_suffix
+  Printf.sprintf "%s %s(%s)%s" prefix name
+    (String.concat ", " params)
+    return_suffix
 
 let type_decl_summary (decl : Core.type_decl) =
   match decl.value.data with
   | Core.TypeDeclAlias ty ->
       Printf.sprintf "type %s = %s" decl.value.name.value (format_core_type ty)
-  | Core.TypeDeclStruct _ -> Printf.sprintf "type %s = struct" decl.value.name.value
+  | Core.TypeDeclStruct _ ->
+      Printf.sprintf "type %s = struct" decl.value.name.value
   | Core.TypeDeclEnum enum_decl ->
       let generics =
         match enum_decl.value.generics with
@@ -186,7 +191,6 @@ let type_decl_summary (decl : Core.type_decl) =
   | Core.TypeDeclForward -> Printf.sprintf "type %s" decl.value.name.value
 
 let hover_block text = Printf.sprintf "```haven\n%s\n```" text
-
 let make_binding hover_text definition_loc = { hover_text; definition_loc }
 
 let expression_contents typing (expr : Core.expression) =
@@ -196,7 +200,8 @@ let expression_contents typing (expr : Core.expression) =
       Some
         (hover_block
            (Printf.sprintf "expr: %s"
-              (type_summary expr.loc annotation.inferred_type annotation.resolved_type)))
+              (type_summary expr.loc annotation.inferred_type
+                 annotation.resolved_type)))
 
 let binding_contents typing (binding : Core.let_stmt) =
   let annotation = binding_annotation typing binding in
@@ -218,7 +223,8 @@ let binding_contents typing (binding : Core.let_stmt) =
     | None, None -> "unknown"
   in
   hover_block
-    (Printf.sprintf "let%s %s: %s" (if binding.value.mut then " mut" else "")
+    (Printf.sprintf "let%s %s: %s"
+       (if binding.value.mut then " mut" else "")
        binding.value.name.value ty)
 
 let global_contents (decl : Core.var_decl) =
@@ -278,13 +284,16 @@ let root_bindings (typing : Analysis.typing_result) =
       match decl.value with
       | Core.FDecl fn ->
           String_map.add fn.value.name.value
-            (make_binding (hover_block (function_signature fn)) fn.value.name.loc)
+            (make_binding
+               (hover_block (function_signature fn))
+               fn.value.name.loc)
             env
       | Core.Foreign foreign ->
           List.fold_left
             (fun env (fn : Core.function_decl) ->
               String_map.add fn.value.name.value
-                (make_binding (hover_block (function_signature fn))
+                (make_binding
+                   (hover_block (function_signature fn))
                    fn.value.name.loc)
                 env)
             env foreign.value.decls
@@ -292,8 +301,7 @@ let root_bindings (typing : Analysis.typing_result) =
           String_map.add var_decl.value.name.value
             (make_binding (global_contents var_decl) var_decl.value.name.loc)
             env
-      | Core.TDecl _ | Core.Import _ | Core.CImport _ ->
-          env)
+      | Core.TDecl _ | Core.Import _ | Core.CImport _ -> env)
     String_map.empty typing.program.program.value.decls
 
 let type_decls (typing : Analysis.typing_result) =
@@ -311,38 +319,37 @@ let function_decls (typing : Analysis.typing_result) =
   List.fold_left
     (fun decls (decl : Core.top_decl) ->
       match decl.value with
-      | Core.FDecl fn ->
-          String_map.add fn.value.name.value fn decls
+      | Core.FDecl fn -> String_map.add fn.value.name.value fn decls
       | Core.Foreign foreign ->
           List.fold_left
             (fun decls (fn : Core.function_decl) ->
               String_map.add fn.value.name.value fn decls)
             decls foreign.value.decls
-      | Core.TDecl _ | Core.VDecl _ | Core.Import _ | Core.CImport _ ->
-          decls)
+      | Core.TDecl _ | Core.VDecl _ | Core.Import _ | Core.CImport _ -> decls)
     String_map.empty typing.program.program.value.decls
 
 let maybe_pick_type_decl state id priority =
   Option.iter
     (fun decl ->
       maybe_pick_binding state id.Core.loc priority
-        (make_binding (hover_block (type_decl_summary decl)) decl.value.name.loc))
+        (make_binding
+           (hover_block (type_decl_summary decl))
+           decl.value.name.loc))
     (String_map.find_opt id.value state.type_decls)
 
 let rec walk_type state (ty : Core.haven_type) =
   maybe_pick state (hover_candidate ty.loc 20 (type_contents ty));
   match ty.value with
-  | Core.CellType inner | PointerType inner | BoxType inner -> walk_type state inner
-  | Core.ArrayType arr ->
-      walk_type state arr.value.element
+  | Core.CellType inner | PointerType inner | BoxType inner ->
+      walk_type state inner
+  | Core.ArrayType arr -> walk_type state arr.value.element
   | Core.FunctionType fn_ty ->
       List.iter (walk_type state) fn_ty.value.param_types;
       walk_type state fn_ty.value.return_type
   | Core.TemplatedType templ ->
       maybe_pick_type_decl state templ.value.outer 30;
       List.iter (walk_type state) templ.value.inner
-  | Core.CustomType custom ->
-      maybe_pick_type_decl state custom.name 30
+  | Core.CustomType custom -> maybe_pick_type_decl state custom.name 30
   | NumericType _ | VecType _ | MatrixType _ | VecHoleType | MatrixHoleType
   | FloatType | VoidType | StringType ->
       ()
@@ -350,21 +357,23 @@ let rec walk_type state (ty : Core.haven_type) =
 and walk_match_pattern state (pattern : Core.match_pattern) =
   match pattern.value with
   | Core.PatternDefault ->
-      maybe_pick state (hover_candidate pattern.loc 30 (hover_block "pattern _"))
+      maybe_pick state
+        (hover_candidate pattern.loc 30 (hover_block "pattern _"))
   | PatternLiteral _ -> ()
   | Core.PatternEnum enum ->
       maybe_pick state
         (hover_candidate enum.value.enum_variant.loc 30
            (hover_block
               (Printf.sprintf "pattern %s" enum.value.enum_variant.value)));
-      Option.iter (fun id -> maybe_pick_type_decl state id 35) enum.value.enum_name
+      Option.iter
+        (fun id -> maybe_pick_type_decl state id 35)
+        enum.value.enum_name
 
 and bind_pattern state env scrutinee_resolved (pattern : Core.match_pattern) =
   let env = push_scope env in
   walk_match_pattern state pattern;
   match pattern.value with
-  | Core.PatternDefault | PatternLiteral _ ->
-      env
+  | Core.PatternDefault | PatternLiteral _ -> env
   | Core.PatternEnum enum ->
       let resolved_variant =
         Option.bind scrutinee_resolved (fun resolved ->
@@ -374,7 +383,9 @@ and bind_pattern state env scrutinee_resolved (pattern : Core.match_pattern) =
       Option.iter
         (fun (variant, _inner_ty) ->
           maybe_pick_binding state enum.value.enum_variant.loc 35
-            (make_binding (enum_variant_contents variant) variant.value.name.loc))
+            (make_binding
+               (enum_variant_contents variant)
+               variant.value.name.loc))
         resolved_variant;
       let payload_tys =
         Option.value ~default:[]
@@ -383,8 +394,7 @@ and bind_pattern state env scrutinee_resolved (pattern : Core.match_pattern) =
       bind_pattern_payloads enum.value.binding payload_tys
         (fun env (binding : Core.pattern_binding) payload_ty ->
           match binding.value with
-          | Core.BindingIgnored ->
-              env
+          | Core.BindingIgnored -> env
           | Core.BindingNamed id ->
               let binding =
                 make_binding
@@ -410,10 +420,11 @@ and specialized_call_hover state (expr : Core.expression) (call : Core.call) =
   | Core.Identifier id -> (
       match String_map.find_opt id.value state.function_decls with
       | None -> ()
-      | Some fn ->
+      | Some fn -> (
           if
             (not (Analysis.function_has_specialization_param fn))
-            || List.length fn.value.params.value.params <> List.length call.value.params
+            || List.length fn.value.params.value.params
+               <> List.length call.value.params
           then ()
           else
             let specialized_params =
@@ -449,7 +460,8 @@ and specialized_call_hover state (expr : Core.expression) (call : Core.call) =
                 in
                 let original = function_signature fn in
                 let hover_text =
-                  if String.equal specialized original then hover_block specialized
+                  if String.equal specialized original then
+                    hover_block specialized
                   else
                     hover_block
                       (Printf.sprintf "%s\nspecialized from %s" specialized
@@ -461,7 +473,7 @@ and specialized_call_hover state (expr : Core.expression) (call : Core.call) =
                     priority = 45;
                     hover_text = Some hover_text;
                     definition_loc = Some fn.value.name.loc;
-                  })
+                  }))
   | _ -> ()
 
 and walk_expression state env (expr : Core.expression) =
@@ -472,10 +484,8 @@ and walk_expression state env (expr : Core.expression) =
   | Core.Binary binary ->
       walk_expression state env binary.value.left;
       walk_expression state env binary.value.right
-  | Unary unary ->
-      walk_expression state env unary.value.inner
-  | Block block ->
-      ignore (walk_block state env block)
+  | Unary unary -> walk_expression state env unary.value.inner
+  | Block block -> ignore (walk_block state env block)
   | Identifier id ->
       Option.iter
         (fun binding -> maybe_pick_binding state id.loc 35 binding)
@@ -485,24 +495,31 @@ and walk_expression state env (expr : Core.expression) =
       | Core.Enum enum_lit -> enum_literal_hover state expr enum_lit
       | _ -> ())
   | Nil | Zero -> ()
-  | ToBool inner | SizeExpr inner | BoxExpr inner | Unbox inner | Ref inner | Load inner ->
+  | ToBool inner
+  | SizeExpr inner
+  | BoxExpr inner
+  | Unbox inner
+  | Ref inner
+  | Load inner ->
       walk_expression state env inner
   | BoxConstruct box ->
       walk_type state box.value.ty;
       List.iter (walk_expression state env) box.value.args
-  | Initializer init ->
-      List.iter (walk_expression state env) init.value.exprs
+  | Initializer init -> List.iter (walk_expression state env) init.value.exprs
   | As cast ->
       walk_type state cast.value.target_type;
       walk_expression state env cast.value.inner
-  | SizeType ty | BoxType ty ->
-      walk_type state ty
+  | SizeType ty | BoxType ty -> walk_type state ty
   | Match match_expr ->
       walk_expression state env match_expr.value.expr;
-      let scrutinee_resolved = expr_resolved_type state.typing match_expr.value.expr in
+      let scrutinee_resolved =
+        expr_resolved_type state.typing match_expr.value.expr
+      in
       List.iter
         (fun (arm : Core.match_arm) ->
-          let arm_env = bind_pattern state env scrutinee_resolved arm.value.pattern in
+          let arm_env =
+            bind_pattern state env scrutinee_resolved arm.value.pattern
+          in
           walk_expression state arm_env arm.value.expr)
         match_expr.value.arms
   | Call call ->
@@ -531,7 +548,9 @@ and walk_statement state env (stmt : Core.statement) =
       env
   | Let binding ->
       let binding_info =
-        make_binding (binding_contents state.typing binding) binding.value.name.loc
+        make_binding
+          (binding_contents state.typing binding)
+          binding.value.name.loc
       in
       maybe_pick_binding state binding.value.name.loc 40 binding_info;
       Option.iter (walk_type state) binding.value.ty;
@@ -551,8 +570,7 @@ and walk_statement state env (stmt : Core.statement) =
       ignore (walk_block state loop_env loop.value.body);
       ignore (List.fold_left (walk_statement state) loop_env loop.value.step);
       env
-  | Break | Continue ->
-      env
+  | Break | Continue -> env
 
 and walk_block state env (block : Core.block) =
   let env = push_scope env in
@@ -579,14 +597,15 @@ let walk_function state (fn : Core.function_decl) =
       List.iter (walk_type state) intrinsic.value.types)
     fn.value.intrinsic;
   Option.iter (walk_type state) fn.value.return_type;
-  Option.iter (fun block -> ignore (walk_block state env block)) fn.value.definition
+  Option.iter
+    (fun block -> ignore (walk_block state env block))
+    fn.value.definition
 
 let walk_type_decl state (decl : Core.type_decl) =
   maybe_pick_binding state decl.value.name.loc 50
     (make_binding (hover_block (type_decl_summary decl)) decl.value.name.loc);
   match decl.value.data with
-  | Core.TypeDeclAlias ty ->
-      walk_type state ty
+  | Core.TypeDeclAlias ty -> walk_type state ty
   | TypeDeclStruct struct_decl ->
       List.iter
         (fun (field : Core.struct_field) ->
@@ -598,7 +617,9 @@ let walk_type_decl state (decl : Core.type_decl) =
       List.iter
         (fun (variant : Core.enum_variant) ->
           maybe_pick_binding state variant.value.name.loc 40
-            (make_binding (enum_variant_contents variant) variant.value.name.loc);
+            (make_binding
+               (enum_variant_contents variant)
+               variant.value.name.loc);
           List.iter (walk_type state) variant.value.inner_tys)
         enum_decl.value.variants
   | TypeDeclForward -> ()
@@ -611,14 +632,10 @@ let walk_global state (decl : Core.var_decl) =
 
 let walk_top_decl state (decl : Core.top_decl) =
   match decl.value with
-  | Core.FDecl fn ->
-      walk_function state fn
-  | TDecl ty_decl ->
-      walk_type_decl state ty_decl
-  | VDecl var_decl ->
-      walk_global state var_decl
-  | Foreign foreign ->
-      List.iter (walk_function state) foreign.value.decls
+  | Core.FDecl fn -> walk_function state fn
+  | TDecl ty_decl -> walk_type_decl state ty_decl
+  | VDecl var_decl -> walk_global state var_decl
+  | Foreign foreign -> List.iter (walk_function state) foreign.value.decls
   | Import _ | CImport _ -> ()
 
 let resolve_at (typing : Analysis.typing_result) position : resolution option =
@@ -645,10 +662,13 @@ let resolve_at (typing : Analysis.typing_result) position : resolution option =
 
 let hover_text_at typing position =
   Option.bind (resolve_at typing position) (fun resolution ->
-      Option.map (fun hover_text -> resolution.loc, hover_text) resolution.hover_text)
+      Option.map
+        (fun hover_text -> (resolution.loc, hover_text))
+        resolution.hover_text)
 
 let definition_at typing position =
-  Option.bind (resolve_at typing position) (fun resolution -> resolution.definition_loc)
+  Option.bind (resolve_at typing position) (fun resolution ->
+      resolution.definition_loc)
 
 let same_loc (left : Haven_core.Loc.t) (right : Haven_core.Loc.t) =
   let left_start = left.start_pos in
@@ -661,10 +681,7 @@ let same_loc (left : Haven_core.Loc.t) (right : Haven_core.Loc.t) =
   && left_end.pos_lnum = right_end.pos_lnum
   && left_end.pos_cnum = right_end.pos_cnum
 
-type highlight = {
-  loc : Haven_core.Loc.t;
-  kind : highlight_kind;
-}
+type highlight = { loc : Haven_core.Loc.t; kind : highlight_kind }
 
 type highlight_state = {
   target_loc : Haven_core.Loc.t;
@@ -693,7 +710,8 @@ let add_highlight state loc kind =
       state.highlights_rev <- { loc; kind } :: state.highlights_rev
 
 let maybe_add_binding_highlight state loc kind (binding : binding) =
-  if same_loc binding.definition_loc state.target_loc then add_highlight state loc kind
+  if same_loc binding.definition_loc state.target_loc then
+    add_highlight state loc kind
 
 let maybe_add_type_decl_highlight state kind (id : Core.identifier) =
   match String_map.find_opt id.value state.type_decls with
@@ -706,8 +724,7 @@ let rec highlight_type state (ty : Core.haven_type) =
   match ty.value with
   | Core.CellType inner | PointerType inner | BoxType inner ->
       highlight_type state inner
-  | Core.ArrayType arr ->
-      highlight_type state arr.value.element
+  | Core.ArrayType arr -> highlight_type state arr.value.element
   | Core.FunctionType fn_ty ->
       List.iter (highlight_type state) fn_ty.value.param_types;
       highlight_type state fn_ty.value.return_type
@@ -723,8 +740,7 @@ let rec highlight_type state (ty : Core.haven_type) =
 let highlight_match_pattern state env scrutinee_resolved
     (pattern : Core.match_pattern) =
   match pattern.value with
-  | Core.PatternDefault | PatternLiteral _ ->
-      env
+  | Core.PatternDefault | PatternLiteral _ -> env
   | Core.PatternEnum enum ->
       let resolved_variant =
         Option.bind scrutinee_resolved (fun resolved ->
@@ -743,8 +759,7 @@ let highlight_match_pattern state env scrutinee_resolved
       bind_pattern_payloads enum.value.binding payload_tys
         (fun env (binding : Core.pattern_binding) payload_ty ->
           match binding.value with
-          | Core.BindingIgnored ->
-              env
+          | Core.BindingIgnored -> env
           | Core.BindingNamed id ->
               let binding_info =
                 make_binding
@@ -760,10 +775,8 @@ let rec highlight_expression state env (expr : Core.expression) =
   | Core.Binary binary ->
       highlight_expression state env binary.value.left;
       highlight_expression state env binary.value.right
-  | Unary unary ->
-      highlight_expression state env unary.value.inner
-  | Block block ->
-      ignore (highlight_block state env block)
+  | Unary unary -> highlight_expression state env unary.value.inner
+  | Block block -> ignore (highlight_block state env block)
   | Identifier id ->
       Option.iter
         (maybe_add_binding_highlight state id.loc `Read)
@@ -786,7 +799,12 @@ let rec highlight_expression state env (expr : Core.expression) =
                    enum_lit.value.enum_variant.value))
       | _ -> ())
   | Nil | Zero -> ()
-  | ToBool inner | SizeExpr inner | BoxExpr inner | Unbox inner | Ref inner | Load inner ->
+  | ToBool inner
+  | SizeExpr inner
+  | BoxExpr inner
+  | Unbox inner
+  | Ref inner
+  | Load inner ->
       highlight_expression state env inner
   | BoxConstruct box ->
       highlight_type state box.value.ty;
@@ -796,8 +814,7 @@ let rec highlight_expression state env (expr : Core.expression) =
   | As cast ->
       highlight_type state cast.value.target_type;
       highlight_expression state env cast.value.inner
-  | SizeType ty | BoxType ty ->
-      highlight_type state ty
+  | SizeType ty | BoxType ty -> highlight_type state ty
   | Match match_expr ->
       highlight_expression state env match_expr.value.expr;
       let scrutinee_resolved =
@@ -808,7 +825,8 @@ let rec highlight_expression state env (expr : Core.expression) =
       List.iter
         (fun (arm : Core.match_arm) ->
           let arm_env =
-            highlight_match_pattern state env scrutinee_resolved arm.value.pattern
+            highlight_match_pattern state env scrutinee_resolved
+              arm.value.pattern
           in
           highlight_expression state arm_env arm.value.expr)
         match_expr.value.arms
@@ -818,10 +836,9 @@ let rec highlight_expression state env (expr : Core.expression) =
   | Index index ->
       highlight_expression state env index.value.target;
       highlight_expression state env index.value.index
-  | Field field ->
-      highlight_expression state env field.value.target
-  | Assign write | Mutate write -> (
-      match write.value.target.value with
+  | Field field -> highlight_expression state env field.value.target
+  | Assign write | Mutate write ->
+      (match write.value.target.value with
       | Core.Identifier id ->
           Option.iter
             (maybe_add_binding_highlight state id.loc `Write)
@@ -839,9 +856,12 @@ and highlight_statement state env (stmt : Core.statement) =
       env
   | Let binding ->
       let binding_info =
-        make_binding (binding_contents state.typing binding) binding.value.name.loc
+        make_binding
+          (binding_contents state.typing binding)
+          binding.value.name.loc
       in
-      maybe_add_binding_highlight state binding.value.name.loc `Write binding_info;
+      maybe_add_binding_highlight state binding.value.name.loc `Write
+        binding_info;
       Option.iter (highlight_type state) binding.value.ty;
       highlight_expression state env binding.value.init_expr;
       bind_current env binding.value.name.value binding_info
@@ -853,14 +873,16 @@ and highlight_statement state env (stmt : Core.statement) =
       env
   | Loop loop ->
       let loop_env =
-        List.fold_left (highlight_statement state) (push_scope env) loop.value.init
+        List.fold_left
+          (highlight_statement state)
+          (push_scope env) loop.value.init
       in
       highlight_expression state loop_env loop.value.cond;
       ignore (highlight_block state loop_env loop.value.body);
-      ignore (List.fold_left (highlight_statement state) loop_env loop.value.step);
+      ignore
+        (List.fold_left (highlight_statement state) loop_env loop.value.step);
       env
-  | Break | Continue ->
-      env
+  | Break | Continue -> env
 
 and highlight_block state env (block : Core.block) =
   let env = push_scope env in
@@ -889,18 +911,18 @@ let highlight_function state (fn : Core.function_decl) =
       List.iter (highlight_type state) intrinsic.value.types)
     fn.value.intrinsic;
   Option.iter (highlight_type state) fn.value.return_type;
-  Option.iter (fun block -> ignore (highlight_block state env block)) fn.value.definition
+  Option.iter
+    (fun block -> ignore (highlight_block state env block))
+    fn.value.definition
 
 let highlight_type_decl state (decl : Core.type_decl) =
   if same_loc decl.value.name.loc state.target_loc then
     add_highlight state decl.value.name.loc `Text;
   match decl.value.data with
-  | Core.TypeDeclAlias ty ->
-      highlight_type state ty
+  | Core.TypeDeclAlias ty -> highlight_type state ty
   | TypeDeclStruct struct_decl ->
       List.iter
-        (fun (field : Core.struct_field) ->
-          highlight_type state field.value.ty)
+        (fun (field : Core.struct_field) -> highlight_type state field.value.ty)
         struct_decl.value.fields
   | TypeDeclEnum enum_decl ->
       List.iter
@@ -915,18 +937,16 @@ let highlight_global state (decl : Core.var_decl) =
   let binding = make_binding (global_contents decl) decl.value.name.loc in
   maybe_add_binding_highlight state decl.value.name.loc `Write binding;
   highlight_type state decl.value.ty;
-  Option.iter (highlight_expression state [ state.root_env ]) decl.value.init_expr
+  Option.iter
+    (highlight_expression state [ state.root_env ])
+    decl.value.init_expr
 
 let highlight_top_decl state (decl : Core.top_decl) =
   match decl.value with
-  | Core.FDecl fn ->
-      highlight_function state fn
-  | TDecl ty_decl ->
-      highlight_type_decl state ty_decl
-  | VDecl var_decl ->
-      highlight_global state var_decl
-  | Foreign foreign ->
-      List.iter (highlight_function state) foreign.value.decls
+  | Core.FDecl fn -> highlight_function state fn
+  | TDecl ty_decl -> highlight_type_decl state ty_decl
+  | VDecl var_decl -> highlight_global state var_decl
+  | Foreign foreign -> List.iter (highlight_function state) foreign.value.decls
   | Import _ | CImport _ -> ()
 
 let highlights_at (typing : Analysis.typing_result) position =

@@ -100,7 +100,8 @@ module Server = struct
       method! on_req_execute_command ~notify_back:_ ~id:_ ~workDoneToken:_
           command _args =
         Lwt.return
-          (Option.value ~default:`Null (Haven_lsp.on_execute_command state command))
+          (Option.value ~default:`Null
+             (Haven_lsp.on_execute_command state command))
 
       method! on_request_unhandled : type r.
           notify_back:Linol_lwt.Jsonrpc2.notify_back ->

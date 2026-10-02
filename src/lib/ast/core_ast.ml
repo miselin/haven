@@ -7,6 +7,7 @@ type 'a node = {
   (* Analysis identity is separate from the original diagnostic source span. *)
   analysis_scope : string option;
 }
+
 type identifier = string node
 type unary_operator = Not | Negate | Complement
 
@@ -97,6 +98,7 @@ and var_decl_desc = {
 }
 
 and var_decl = var_decl_desc node
+
 and type_decl_desc = {
   name : identifier;
   visibility : Visibility.t;
@@ -104,6 +106,7 @@ and type_decl_desc = {
   construct : function_decl option;
   destruct : function_decl option;
 }
+
 and type_decl = type_decl_desc node
 
 and type_decl_data =
@@ -116,12 +119,19 @@ and struct_lifecycle_desc = {
   constructor : identifier option;
   destructor : identifier option;
 }
+
 and struct_lifecycle = struct_lifecycle_desc node
+
 and struct_decl_desc = {
   fields : struct_field list;
   lifecycle : struct_lifecycle option;
 }
-and enum_decl_desc = { generics : identifier list; variants : enum_variant list }
+
+and enum_decl_desc = {
+  generics : identifier list;
+  variants : enum_variant list;
+}
+
 and struct_field_desc = { name : identifier; ty : haven_type }
 and enum_variant_desc = { name : identifier; inner_tys : haven_type list }
 and struct_decl = struct_decl_desc node
@@ -136,10 +146,8 @@ and intrinsic_desc = { name : string node; types : haven_type list }
 and intrinsic = intrinsic_desc node
 and foreign_desc = { lib : string node; decls : function_decl list }
 and foreign = foreign_desc node
-
 and block_desc = { statements : statement list; result : expression option }
 and block = block_desc node
-
 and compile_assert_desc = { cond : expression; message : string node }
 and compile_assert = compile_assert_desc node
 
@@ -163,7 +171,6 @@ and let_stmt_desc = {
 }
 
 and let_stmt = let_stmt_desc node
-
 and iteration_hint_desc = KnownTripCount of int
 and iteration_hint = iteration_hint_desc node
 

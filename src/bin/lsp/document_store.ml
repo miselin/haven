@@ -1,11 +1,7 @@
 open Linol.Lsp.Types
-
 module Analysis = Haven.Ast.Analysis
 
-type parse_error = {
-  loc : Haven_core.Loc.t option;
-  message : string;
-}
+type parse_error = { loc : Haven_core.Loc.t option; message : string }
 
 type document = {
   uri : DocumentUri.t;
@@ -42,14 +38,10 @@ let location_from_error_message ~filename message =
     | [] -> message
   in
   let tail =
-    match String.split_on_char '|' tail with
-    | head :: _ -> head
-    | [] -> tail
+    match String.split_on_char '|' tail with head :: _ -> head | [] -> tail
   in
   let tail =
-    match String.split_on_char '\r' tail with
-    | head :: _ -> head
-    | [] -> tail
+    match String.split_on_char '\r' tail with head :: _ -> head | [] -> tail
   in
   let location_text =
     match String.split_on_char ' ' tail |> List.rev with
@@ -74,12 +66,11 @@ let location_from_error_message ~filename message =
             in
             match (int_of_string_opt line_text, int_of_string_opt col_text) with
             | Some line, Some col ->
-                let path =
-                  String.sub text 0 second_last_colon
-                in
+                let path = String.sub text 0 second_last_colon in
                 Some
                   (loc_of_line_col
-                     ~filename:(if String.length path = 0 then filename else path)
+                     ~filename:
+                       (if String.length path = 0 then filename else path)
                      ~line ~col)
             | _ -> None))
   in
@@ -91,7 +82,8 @@ let get_text_by_path (store : t) path =
       match acc with
       | Some _ -> acc
       | None ->
-          if String.equal (DocumentUri.to_path doc.uri) path then Some doc.text else None)
+          if String.equal (DocumentUri.to_path doc.uri) path then Some doc.text
+          else None)
     store None
 
 let analyze_document (store : t) uri text =
@@ -104,22 +96,15 @@ let analyze_document (store : t) uri text =
     in
     (Some cst, Some pipeline, None)
   with
-  | Failure message
-  | Sys_error message ->
+  | Failure message | Sys_error message ->
       let parse_error =
-        {
-          loc = location_from_error_message ~filename message;
-          message;
-        }
+        { loc = location_from_error_message ~filename message; message }
       in
       (None, None, Some parse_error)
   | exn ->
       let message = Printexc.to_string exn in
       let parse_error =
-        {
-          loc = location_from_error_message ~filename message;
-          message;
-        }
+        { loc = location_from_error_message ~filename message; message }
       in
       (None, None, Some parse_error)
 
@@ -154,8 +139,7 @@ let close_doc (store : t) (uri : DocumentUri.t) =
 let line_offsets text =
   let offsets = ref [ 0 ] in
   String.iteri
-    (fun index ch ->
-      if ch = '\n' then offsets := (index + 1) :: !offsets)
+    (fun index ch -> if ch = '\n' then offsets := (index + 1) :: !offsets)
     text;
   Array.of_list (List.rev !offsets)
 
@@ -165,10 +149,12 @@ let offset_of_position text (position : Position.t) =
   let line = min position.line max_line in
   let bol = offsets.(line) in
   let next_bol =
-    if line + 1 < Array.length offsets then offsets.(line + 1) else String.length text
+    if line + 1 < Array.length offsets then offsets.(line + 1)
+    else String.length text
   in
   let line_limit =
-    if next_bol > bol && text.[next_bol - 1] = '\n' then next_bol - 1 else next_bol
+    if next_bol > bol && text.[next_bol - 1] = '\n' then next_bol - 1
+    else next_bol
   in
   let character = min position.character (line_limit - bol) in
   bol + character
@@ -177,7 +163,8 @@ let apply_incremental_change text (range : Range.t) replacement =
   let start_offset = offset_of_position text range.start in
   let end_offset = offset_of_position text range.end_ in
   let end_offset = max start_offset end_offset in
-  String.sub text 0 start_offset ^ replacement
+  String.sub text 0 start_offset
+  ^ replacement
   ^ String.sub text end_offset (String.length text - end_offset)
 
 let apply_change doc (change : TextDocumentContentChangeEvent.t) =
@@ -202,8 +189,7 @@ let save_doc (store : t) (id : TextDocumentIdentifier.t) text =
   | Some doc, Some text ->
       doc.text <- text;
       reanalyze_all store
-  | Some _doc, None ->
-      reanalyze_all store
+  | Some _doc, None -> reanalyze_all store
   | None, Some text ->
       let doc =
         {
@@ -226,9 +212,13 @@ let get_cst (store : t) (uri : DocumentUri.t) =
   match Hashtbl.find_opt store uri with None -> None | Some doc -> doc.cst
 
 let get_pipeline (store : t) (uri : DocumentUri.t) =
-  match Hashtbl.find_opt store uri with None -> None | Some doc -> doc.pipeline
+  match Hashtbl.find_opt store uri with
+  | None -> None
+  | Some doc -> doc.pipeline
 
 let get_parse_error (store : t) (uri : DocumentUri.t) =
-  match Hashtbl.find_opt store uri with None -> None | Some doc -> doc.parse_error
+  match Hashtbl.find_opt store uri with
+  | None -> None
+  | Some doc -> doc.parse_error
 
 let get_doc (store : t) (uri : DocumentUri.t) = Hashtbl.find_opt store uri

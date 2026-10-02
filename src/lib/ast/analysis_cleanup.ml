@@ -1,6 +1,5 @@
 open Analysis_types
 
-
 module Cleanup = struct
   let expr_annotation typed expr =
     Hashtbl.find_opt typed.annotations.exprs (expr_id expr)
@@ -34,7 +33,11 @@ module Cleanup = struct
           Core.Unary
             {
               unary with
-              value = { unary.value with inner = clean_expression typed unary.value.inner };
+              value =
+                {
+                  unary.value with
+                  inner = clean_expression typed unary.value.inner;
+                };
             }
       | Core.Block block ->
           let block : Core.block = clean_block typed block in
@@ -55,18 +58,24 @@ module Cleanup = struct
           Core.Initializer
             {
               init with
-              value = { Core.exprs = List.map (clean_expression typed) init.value.exprs };
+              value =
+                {
+                  Core.exprs =
+                    List.map (clean_expression typed) init.value.exprs;
+                };
             }
       | Core.As cast ->
-          let inner : Core.expression = clean_expression typed cast.value.inner in
+          let inner : Core.expression =
+            clean_expression typed cast.value.inner
+          in
           let redundant =
             match expr_annotation typed inner with
-            | Some { inferred_type = Some ty; _ } -> equal_type ty cast.value.target_type
+            | Some { inferred_type = Some ty; _ } ->
+                equal_type ty cast.value.target_type
             | _ -> false
           in
           if redundant then inner.value
-          else
-            Core.As { cast with value = { cast.value with inner } }
+          else Core.As { cast with value = { cast.value with inner } }
       | Core.SizeExpr inner -> Core.SizeExpr (clean_expression typed inner)
       | Core.Match match_expr ->
           Core.Match
@@ -94,7 +103,11 @@ module Cleanup = struct
           Core.BoxConstruct
             {
               box with
-              value = { box.value with args = List.map (clean_expression typed) box.value.args };
+              value =
+                {
+                  box.value with
+                  args = List.map (clean_expression typed) box.value.args;
+                };
             }
       | Core.Unbox inner -> Core.Unbox (clean_expression typed inner)
       | Core.Ref inner -> Core.Ref (clean_expression typed inner)
@@ -124,12 +137,17 @@ module Cleanup = struct
             {
               field with
               value =
-                { field.value with target = clean_expression typed field.value.target };
+                {
+                  field.value with
+                  target = clean_expression typed field.value.target;
+                };
             }
-      | Core.Assign write -> clean_write_like typed (fun write -> Core.Assign write) write
-      | Core.Mutate write -> clean_write_like typed (fun write -> Core.Mutate write) write
-      | (Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil | Core.Zero
-        | Core.BoxType _) as value ->
+      | Core.Assign write ->
+          clean_write_like typed (fun write -> Core.Assign write) write
+      | Core.Mutate write ->
+          clean_write_like typed (fun write -> Core.Mutate write) write
+      | ( Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil
+        | Core.Zero | Core.BoxType _ ) as value ->
           value
     in
     { expr with value = cleaned_value }
@@ -148,7 +166,8 @@ module Cleanup = struct
                   cond = clean_expression typed compile_assert.value.cond;
                 };
             }
-      | Core.Return expr -> Core.Return (Option.map (clean_expression typed) expr)
+      | Core.Return expr ->
+          Core.Return (Option.map (clean_expression typed) expr)
       | Core.Defer expr -> Core.Defer (clean_expression typed expr)
       | Core.Let binding ->
           Core.Let
@@ -173,7 +192,7 @@ module Cleanup = struct
                   step = List.map (clean_statement typed) loop.value.step;
                 };
             }
-      | Core.Break | Core.Continue as value -> value
+      | (Core.Break | Core.Continue) as value -> value
     in
     { stmt with value }
 
@@ -182,7 +201,8 @@ module Cleanup = struct
       block with
       value =
         {
-          Core.statements = List.map (clean_statement typed) block.value.statements;
+          Core.statements =
+            List.map (clean_statement typed) block.value.statements;
           result = Option.map (clean_expression typed) block.value.result;
         };
     }
@@ -197,7 +217,8 @@ module Cleanup = struct
               value =
                 {
                   fn.value with
-                  definition = Option.map (clean_block typed) fn.value.definition;
+                  definition =
+                    Option.map (clean_block typed) fn.value.definition;
                 };
             }
       | Core.VDecl binding ->
@@ -207,7 +228,8 @@ module Cleanup = struct
               value =
                 {
                   binding.value with
-                  init_expr = Option.map (clean_expression typed) binding.value.init_expr;
+                  init_expr =
+                    Option.map (clean_expression typed) binding.value.init_expr;
                 };
             }
       | Core.Foreign foreign ->
@@ -226,7 +248,8 @@ module Cleanup = struct
                             {
                               fn.value with
                               definition =
-                                Option.map (clean_block typed) fn.value.definition;
+                                Option.map (clean_block typed)
+                                  fn.value.definition;
                             };
                         })
                       foreign.value.decls;
@@ -243,7 +266,10 @@ module Cleanup = struct
         {
           program.program with
           value =
-            { Core.decls = List.map (clean_decl typed) program.program.value.decls };
+            {
+              Core.decls =
+                List.map (clean_decl typed) program.program.value.decls;
+            };
         };
     }
 end

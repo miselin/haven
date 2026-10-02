@@ -1,5 +1,4 @@
 include Analysis_types
-
 module Typing = Analysis_typing.Typing
 module Verify = Analysis_verify.Verify
 module Semantic = Analysis_semantic.Semantic
@@ -23,8 +22,8 @@ module Pipeline = struct
     cleaned : Core.parsed_program;
   }
 
-  let run_analyses ?(check_asserts = true) ?(target_profile = default_target_profile)
-      core =
+  let run_analyses ?(check_asserts = true)
+      ?(target_profile = default_target_profile) core =
     let typing = Typing.run ~target_profile core in
     let assert_result =
       if check_asserts then Assert.run typing
@@ -40,7 +39,8 @@ module Pipeline = struct
       if assert_failed then { diagnostics = [] } else Verify.run asserted_typed
     in
     let semantic : semantic_result =
-      if assert_failed then { diagnostics = [] } else Semantic.run asserted_typed
+      if assert_failed then { diagnostics = [] }
+      else Semantic.run asserted_typed
     in
     let purity : purity_result =
       if assert_failed then { diagnostics = [] } else Purity.run asserted_typed
@@ -71,11 +71,14 @@ module Pipeline = struct
     }
 
   let has_errors diagnostics =
-    List.exists (fun (diagnostic : diagnostic) -> diagnostic.level = Error) diagnostics
+    List.exists
+      (fun (diagnostic : diagnostic) -> diagnostic.level = Error)
+      diagnostics
 
   let analysis_diagnostics result =
-    result.typing.diagnostics @ result.verify.diagnostics @ result.semantic.diagnostics
-    @ result.asserts.diagnostics @ result.purity.diagnostics @ result.ownership.diagnostics
+    result.typing.diagnostics @ result.verify.diagnostics
+    @ result.semantic.diagnostics @ result.asserts.diagnostics
+    @ result.purity.diagnostics @ result.ownership.diagnostics
 
   let run_core ?(target_profile = default_target_profile) core =
     let initial = run_analyses ~check_asserts:false ~target_profile core in

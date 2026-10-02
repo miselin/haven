@@ -18,7 +18,9 @@ module Purity = struct
   type env = string list list
 
   let add_diagnostic state loc message =
-    state.diagnostics_rev <- { category = Purity; level = Error; loc; message } :: state.diagnostics_rev
+    state.diagnostics_rev <-
+      { category = Purity; level = Error; loc; message }
+      :: state.diagnostics_rev
 
   let expr_annotation state expr =
     Hashtbl.find_opt state.typed.annotations.exprs (expr_id expr)
@@ -31,7 +33,9 @@ module Purity = struct
   let push_scope env = [] :: env
 
   let bind_current env name =
-    match env with [] -> [ [ name ] ] | scope :: rest -> (name :: scope) :: rest
+    match env with
+    | [] -> [ [ name ] ]
+    | scope :: rest -> (name :: scope) :: rest
 
   let rec lookup env name =
     match env with
@@ -62,19 +66,19 @@ module Purity = struct
                   (function_info_of_decl ~is_foreign:true fn)
                   functions)
               functions foreign.value.decls
-        | Core.TDecl _ | Core.VDecl _ | Core.Import _ | Core.CImport _ -> functions)
+        | Core.TDecl _ | Core.VDecl _ | Core.Import _ | Core.CImport _ ->
+            functions)
       String_map.empty program.value.decls
 
   let add_callee current name =
     match current with
     | None -> ()
     | Some info ->
-        if not (List.mem name info.callees) then info.callees <- name :: info.callees
+        if not (List.mem name info.callees) then
+          info.callees <- name :: info.callees
 
   let mark_direct_effect current =
-    match current with
-    | None -> ()
-    | Some info -> info.direct_effectful <- true
+    match current with None -> () | Some info -> info.direct_effectful <- true
 
   let visit_pattern_bindings (pattern : Core.match_pattern) =
     match pattern.value with
@@ -90,11 +94,10 @@ module Purity = struct
   let rec visit_expression state current env (expr : Core.expression) =
     let visit = visit_expression state current in
     match expr.value with
-    | Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.BoxType _ | Core.Nil
-    | Core.Zero ->
+    | Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.BoxType _
+    | Core.Nil | Core.Zero ->
         ()
-    | Core.BoxConstruct box ->
-        List.iter (visit env) box.value.args
+    | Core.BoxConstruct box -> List.iter (visit env) box.value.args
     | Core.ToBool inner
     | Core.SizeExpr inner
     | Core.BoxExpr inner
@@ -102,17 +105,14 @@ module Purity = struct
     | Core.Ref inner ->
         visit env inner
     | Core.Load inner ->
-        visit env inner
-        ;
+        visit env inner;
         mark_direct_effect current
     | Core.Unary unary -> visit env unary.value.inner
     | Core.Binary binary ->
         visit env binary.value.left;
         visit env binary.value.right
-    | Core.Block block ->
-        ignore (visit_block state current env block)
-    | Core.Initializer init ->
-        List.iter (visit env) init.value.exprs
+    | Core.Block block -> ignore (visit_block state current env block)
+    | Core.Initializer init -> List.iter (visit env) init.value.exprs
     | Core.As cast -> visit env cast.value.inner
     | Core.Match match_expr ->
         visit env match_expr.value.expr;
@@ -155,14 +155,15 @@ module Purity = struct
             match target_type with
             | Some (ResolvedFunction _) | None -> mark_direct_effect current
             | _ -> ()))
-    | Core.Identifier id ->
+    | Core.Identifier id -> (
         if lookup env id.value then
-          (match target_type with
-        | Some (ResolvedFunction _) -> mark_direct_effect current
-          | _ -> ())
-        else if String_map.mem id.value state.functions then add_callee current id.value
+          match target_type with
+          | Some (ResolvedFunction _) -> mark_direct_effect current
+          | _ -> ()
+        else if String_map.mem id.value state.functions then
+          add_callee current id.value
         else
-          (match target_type with
+          match target_type with
           | Some (ResolvedFunction _) | None -> mark_direct_effect current
           | _ -> ())
     | _ -> (
@@ -177,11 +178,11 @@ module Purity = struct
     | _ -> ()
 
   and classify_field state current (field : Core.field) =
-    if field.value.arrow then (
+    if field.value.arrow then
       match expr_resolved_type state field.value.target with
       | Some (ResolvedPointer _ | ResolvedBox _ | ResolvedCell _) ->
           mark_direct_effect current
-      | _ -> ())
+      | _ -> ()
 
   and visit_statement state current env (stmt : Core.statement) =
     match stmt.value with
@@ -202,17 +203,26 @@ module Purity = struct
         bind_current env binding.value.name.value
     | Core.Loop loop ->
         let loop_env =
-          List.fold_left (visit_statement state current) (push_scope env) loop.value.init
+          List.fold_left
+            (visit_statement state current)
+            (push_scope env) loop.value.init
         in
         visit_expression state current loop_env loop.value.cond;
         ignore (visit_block state current loop_env loop.value.body);
-        ignore (List.fold_left (visit_statement state current) loop_env loop.value.step);
+        ignore
+          (List.fold_left
+             (visit_statement state current)
+             loop_env loop.value.step);
         env
     | Core.Break | Core.Continue -> env
 
   and visit_block state current env (block : Core.block) =
     let block_env = push_scope env in
-    let block_env = List.fold_left (visit_statement state current) block_env block.value.statements in
+    let block_env =
+      List.fold_left
+        (visit_statement state current)
+        block_env block.value.statements
+    in
     Option.iter (visit_expression state current block_env) block.value.result;
     block_env
 
@@ -224,7 +234,8 @@ module Purity = struct
           let env = push_scope [] in
           let env =
             List.fold_left
-              (fun env (param : Core.param) -> bind_current env param.value.name.value)
+              (fun env (param : Core.param) ->
+                bind_current env param.value.name.value)
               env info.fn.value.params.value.params
           in
           env
@@ -236,9 +247,7 @@ module Purity = struct
     String_map.iter
       (fun _ info ->
         let next_effectful =
-          info.direct_effectful
-          || info.is_foreign
-          || info.fn.value.impure
+          info.direct_effectful || info.is_foreign || info.fn.value.impure
           || List.exists
                (fun callee ->
                  match String_map.find_opt callee state.functions with
@@ -255,9 +264,11 @@ module Purity = struct
   let emit_diagnostics state =
     String_map.iter
       (fun _ info ->
-        if info.effectful && not info.fn.value.impure && not info.is_foreign then
+        if info.effectful && (not info.fn.value.impure) && not info.is_foreign
+        then
           add_diagnostic state info.fn.loc
-            (Printf.sprintf "function %s performs side effects and must be marked impure"
+            (Printf.sprintf
+               "function %s performs side effects and must be marked impure"
                info.fn.value.name.value))
       state.functions
 

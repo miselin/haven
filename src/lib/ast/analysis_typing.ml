@@ -14,12 +14,11 @@ module Typing = struct
   }
 
   let add_diagnostic_with_category state category level loc message =
-    state.diagnostics_rev <- { category; level; loc; message } :: state.diagnostics_rev
+    state.diagnostics_rev <-
+      { category; level; loc; message } :: state.diagnostics_rev
 
   let add_diagnostic state = add_diagnostic_with_category state TypeCheck
-
   let push_scope env = String_map.empty :: env
-
   let pop_scope = function [] -> [] | _ :: rest -> rest
 
   let bind_current env name binding =
@@ -35,8 +34,8 @@ module Typing = struct
         | Some binding -> Some binding
         | None -> lookup rest name)
 
-  let record_expr state (expr : Core.expression) (annotation : expr_annotation) :
-      expr_annotation =
+  let record_expr state (expr : Core.expression) (annotation : expr_annotation)
+      : expr_annotation =
     Hashtbl.replace state.annotations.exprs (expr_id expr) annotation;
     annotation
 
@@ -73,7 +72,8 @@ module Typing = struct
     | Some expected -> coerce_annotation_to_expected loc expected annotation
     | None -> annotation
 
-  let materialize_cell_annotation loc (annotation : expr_annotation) : expr_annotation =
+  let materialize_cell_annotation loc (annotation : expr_annotation) :
+      expr_annotation =
     match annotation.resolved_type with
     | Some (ResolvedCell inner) ->
         let inferred_type = Some (core_type_of_resolved_ty loc inner) in
@@ -86,7 +86,8 @@ module Typing = struct
 
   let expected_enum_variant state loc expected_type variant_name =
     match expected_type with
-    | Some enum_ty -> lookup_enum_variant state.type_env loc enum_ty variant_name
+    | Some enum_ty ->
+        lookup_enum_variant state.type_env loc enum_ty variant_name
     | None -> None
 
   let lookup_function state name = String_map.find_opt name state.functions
@@ -98,7 +99,8 @@ module Typing = struct
            Core.value =
              {
                param_types =
-                 List.map (fun (param : Core.param) -> param.value.ty)
+                 List.map
+                   (fun (param : Core.param) -> param.value.ty)
                    fn.value.params.value.params;
                return_type;
                vararg = fn.value.vararg;
@@ -108,7 +110,9 @@ module Typing = struct
          })
 
   let function_type_of_decl (fn : Core.function_decl) =
-    let return_type = Option.value ~default:(void_type fn.loc) fn.value.return_type in
+    let return_type =
+      Option.value ~default:(void_type fn.loc) fn.value.return_type
+    in
     function_type_with_return fn.loc fn return_type
 
   let update_function_global state (fn : Core.function_decl)
@@ -131,7 +135,8 @@ module Typing = struct
         | None :: _ -> None
       in
       match (collect [] param_resolved, return_ann.resolved_type) with
-      | Some params, Some ret -> Some (ResolvedFunction (params, ret, fn.value.vararg))
+      | Some params, Some ret ->
+          Some (ResolvedFunction (params, ret, fn.value.vararg))
       | _ -> resolve_core_type state.type_env [] [] fn.loc fn_ty
     in
     state.globals <-
@@ -152,7 +157,11 @@ module Typing = struct
       metavar =
         metavar_of_type ~constant:(ConstantInt value)
           ~integer:
-            { exact_value = Some value; minimum_bits = Some 32; signedness = Some Unsigned }
+            {
+              exact_value = Some value;
+              minimum_bits = Some 32;
+              signedness = Some Unsigned;
+            }
           ty;
     }
 
@@ -198,7 +207,8 @@ module Typing = struct
               {
                 inferred_type = Some binding.value.ty;
                 resolved_type =
-                  resolve_core_type state.type_env [] [] binding.loc binding.value.ty;
+                  resolve_core_type state.type_env [] [] binding.loc
+                    binding.value.ty;
                 metavar = metavar_of_type binding.value.ty;
                 is_mutable = binding.value.is_mutable;
               }
@@ -218,11 +228,12 @@ module Typing = struct
       String_map.empty program.value.decls
 
   let rec infer_block state env ?(result_expected : resolved_ty option = None)
-      ~return_expected (block : Core.block) :
-      expr_annotation =
+      ~return_expected (block : Core.block) : expr_annotation =
     let env = push_scope env in
     let env =
-      List.fold_left (infer_statement state ~return_expected) env block.value.statements
+      List.fold_left
+        (infer_statement state ~return_expected)
+        env block.value.statements
     in
     match block.value.result with
     | Some expr ->
@@ -253,7 +264,9 @@ module Typing = struct
     | Core.Return expr ->
         Option.iter
           (fun (expr : Core.expression) ->
-            ignore (infer_value_expression state env ~expected_type:return_expected expr))
+            ignore
+              (infer_value_expression state env ~expected_type:return_expected
+                 expr))
           expr;
         env
     | Core.Defer expr ->
@@ -262,7 +275,8 @@ module Typing = struct
     | Core.Break | Core.Continue -> env
     | Core.Let binding ->
         let init_expected =
-          Option.bind binding.value.ty (resolve_core_type state.type_env [] [] binding.loc)
+          Option.bind binding.value.ty
+            (resolve_core_type state.type_env [] [] binding.loc)
         in
         let init_ann =
           infer_value_expression state env ~expected_type:init_expected
@@ -276,7 +290,8 @@ module Typing = struct
         let binding_metavar =
           match (binding.value.ty, inferred_type) with
           | Some ty, _ -> metavar_of_type ty
-          | None, Some ty -> { init_ann.metavar with classes = type_class_of_type ty }
+          | None, Some ty ->
+              { init_ann.metavar with classes = type_class_of_type ty }
           | None, None -> init_ann.metavar
         in
         let binding_ann =
@@ -295,12 +310,16 @@ module Typing = struct
     | Core.Loop loop ->
         let loop_env = push_scope env in
         let loop_env =
-          List.fold_left (infer_statement state ~return_expected) loop_env loop.value.init
+          List.fold_left
+            (infer_statement state ~return_expected)
+            loop_env loop.value.init
         in
         ignore (infer_expression state loop_env loop.value.cond);
         ignore (infer_block state loop_env ~return_expected loop.value.body);
         ignore
-          (List.fold_left (infer_statement state ~return_expected) loop_env loop.value.step);
+          (List.fold_left
+             (infer_statement state ~return_expected)
+             loop_env loop.value.step);
         env
 
   and infer_expression state env ?(expected_type : resolved_ty option = None)
@@ -324,14 +343,18 @@ module Typing = struct
                     metavar = binding.metavar;
                   }
               | None -> (
-                  match expected_enum_variant state expr.loc expected_type id.value with
-                  | Some (_, []) -> annotation_of_resolved expr.loc expected_type
+                  match
+                    expected_enum_variant state expr.loc expected_type id.value
+                  with
+                  | Some (_, []) ->
+                      annotation_of_resolved expr.loc expected_type
                   | Some (_, _ :: _) -> unknown_expr_annotation
                   | None ->
                       add_diagnostic state Error expr.loc
                         (Printf.sprintf "unknown identifier %s" id.value);
                       unknown_expr_annotation)))
-      | Core.Literal literal -> infer_literal state env ~expected_type expr.loc literal
+      | Core.Literal literal ->
+          infer_literal state env ~expected_type expr.loc literal
       | Core.ToBool inner ->
           let inner_ann = infer_value_expression state env inner in
           let ty = bool_type expr.loc in
@@ -350,9 +373,11 @@ module Typing = struct
               };
           }
       | Core.Unary unary -> infer_unary state env ~expected_type expr.loc unary
-      | Core.Binary binary -> infer_binary state env ~expected_type expr.loc binary
+      | Core.Binary binary ->
+          infer_binary state env ~expected_type expr.loc binary
       | Core.Block block ->
-          infer_block state env ~result_expected:expected_type ~return_expected:None block
+          infer_block state env ~result_expected:expected_type
+            ~return_expected:None block
       | Core.Initializer init ->
           infer_initializer state env ~expected_type expr.loc init
       | Core.As cast ->
@@ -360,7 +385,8 @@ module Typing = struct
           {
             inferred_type = Some cast.value.target_type;
             resolved_type =
-              resolve_core_type state.type_env [] [] cast.loc cast.value.target_type;
+              resolve_core_type state.type_env [] [] cast.loc
+                cast.value.target_type;
             metavar = metavar_of_type cast.value.target_type;
           }
       | Core.SizeExpr inner ->
@@ -383,24 +409,25 @@ module Typing = struct
             inferred_type = None;
             resolved_type = None;
             metavar =
-              {
-                classes = [ TypeClassNil ];
-                constant = None;
-                integer = None;
-              };
+              { classes = [ TypeClassNil ]; constant = None; integer = None };
           }
       | Core.Zero -> infer_zero state ~expected_type expr.loc
-      | Core.Match match_expr -> infer_match state env ~expected_type expr.loc match_expr
+      | Core.Match match_expr ->
+          infer_match state env ~expected_type expr.loc match_expr
       | Core.BoxExpr inner -> (
           let inner_expected =
-            match expected_type with Some (ResolvedBox inner) -> Some inner | _ -> None
+            match expected_type with
+            | Some (ResolvedBox inner) -> Some inner
+            | _ -> None
           in
           let inner_ann =
             infer_value_expression state env ~expected_type:inner_expected inner
           in
           match inner_ann.resolved_type with
           | Some inner_ty ->
-              let ty = box_type expr.loc (core_type_of_resolved_ty expr.loc inner_ty) in
+              let ty =
+                box_type expr.loc (core_type_of_resolved_ty expr.loc inner_ty)
+              in
               {
                 inferred_type = Some ty;
                 resolved_type = Some (ResolvedBox inner_ty);
@@ -417,13 +444,16 @@ module Typing = struct
           {
             inferred_type = Some core_ty;
             resolved_type =
-              Option.map (fun ty -> ResolvedBox ty)
+              Option.map
+                (fun ty -> ResolvedBox ty)
                 (resolve_core_type state.type_env [] [] expr.loc ty);
             metavar = metavar_of_type core_ty;
           }
       | Core.BoxConstruct box ->
           let core_ty = box_type expr.loc box.value.ty in
-          let resolved_inner = resolve_core_type state.type_env [] [] expr.loc box.value.ty in
+          let resolved_inner =
+            resolve_core_type state.type_env [] [] expr.loc box.value.ty
+          in
           let infer_constructor_args resolved_inner =
             let lifecycle_name =
               match resolved_inner with
@@ -439,18 +469,23 @@ module Typing = struct
                       nth_or_none
                         (List.map
                            (fun (param : Core.param) ->
-                             resolve_core_type state.type_env [] [] param.loc param.value.ty)
+                             resolve_core_type state.type_env [] [] param.loc
+                               param.value.ty)
                            params)
                         index
                     in
-                    ignore (infer_value_expression state env ~expected_type:expected arg))
+                    ignore
+                      (infer_value_expression state env ~expected_type:expected
+                         arg))
                   box.value.args;
                 if List.length params <> List.length box.value.args then
                   add_diagnostic state Error expr.loc
                     (Printf.sprintf
-                       "constructor for %s expects %d argument(s), but %d were provided"
+                       "constructor for %s expects %d argument(s), but %d were \
+                        provided"
                        (string_of_resolved_ty resolved_inner)
-                       (List.length params) (List.length box.value.args))
+                       (List.length params)
+                       (List.length box.value.args))
             | _ ->
                 List.iter
                   (fun (arg : Core.expression) ->
@@ -474,7 +509,9 @@ module Typing = struct
               match ty with
               | ResolvedBox inner_ty ->
                   let core_ty =
-                    mk_type expr.loc (Core.CellType (core_type_of_resolved_ty expr.loc inner_ty))
+                    mk_type expr.loc
+                      (Core.CellType
+                         (core_type_of_resolved_ty expr.loc inner_ty))
                   in
                   {
                     inferred_type = Some core_ty;
@@ -487,7 +524,10 @@ module Typing = struct
           let inner_ann = infer_expression state env inner in
           match inner_ann.resolved_type with
           | Some inner_ty ->
-              let ty = pointer_type expr.loc (core_type_of_resolved_ty expr.loc inner_ty) in
+              let ty =
+                pointer_type expr.loc
+                  (core_type_of_resolved_ty expr.loc inner_ty)
+              in
               {
                 inferred_type = Some ty;
                 resolved_type = Some (ResolvedPointer inner_ty);
@@ -497,14 +537,17 @@ module Typing = struct
               {
                 inferred_type = None;
                 resolved_type = None;
-                metavar = { unknown_metavar with classes = [ TypeClassPointer ] };
+                metavar =
+                  { unknown_metavar with classes = [ TypeClassPointer ] };
               })
       | Core.Load inner -> (
           let inner_ann = infer_expression state env inner in
           match inner_ann.resolved_type with
           | Some ty -> (
               match ty with
-              | ResolvedPointer inner_ty | ResolvedBox inner_ty | ResolvedCell inner_ty ->
+              | ResolvedPointer inner_ty
+              | ResolvedBox inner_ty
+              | ResolvedCell inner_ty ->
                   let core_ty = core_type_of_resolved_ty expr.loc inner_ty in
                   {
                     inferred_type = Some core_ty;
@@ -529,7 +572,9 @@ module Typing = struct
               | Some fields -> (
                   match List.assoc_opt field.value.field.value fields with
                   | Some field_ty ->
-                      let core_ty = core_type_of_resolved_ty expr.loc field_ty in
+                      let core_ty =
+                        core_type_of_resolved_ty expr.loc field_ty
+                      in
                       {
                         inferred_type = Some core_ty;
                         resolved_type = Some field_ty;
@@ -559,12 +604,15 @@ module Typing = struct
                   | Some idx when idx < mat.rows ->
                       let vec_ty =
                         mk_type expr.loc
-                          (Core.VecType { kind = FloatVec; dimension = mat.columns })
+                          (Core.VecType
+                             { kind = FloatVec; dimension = mat.columns })
                       in
                       {
                         inferred_type = Some vec_ty;
                         resolved_type =
-                          Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
+                          Some
+                            (ResolvedVec
+                               { kind = FloatVec; dimension = mat.columns });
                         metavar = metavar_of_type vec_ty;
                       }
                   | _ -> unknown_expr_annotation))
@@ -582,14 +630,19 @@ module Typing = struct
       | Core.Mutate write ->
           infer_write_like state env ~pointee_target:true write
     in
-    let annotation = maybe_coerce_annotation expr.loc expected_type annotation in
+    let annotation =
+      maybe_coerce_annotation expr.loc expected_type annotation
+    in
     record_expr state expr annotation
 
-  and infer_value_expression state env ?(expected_type : resolved_ty option = None)
-      (expr : Core.expression) : expr_annotation =
+  and infer_value_expression state env
+      ?(expected_type : resolved_ty option = None) (expr : Core.expression) :
+      expr_annotation =
     let annotation = infer_expression state env ~expected_type expr in
     let annotation =
-      match expected_type with Some (ResolvedCell _) -> annotation | _ -> materialize_cell_annotation expr.loc annotation
+      match expected_type with
+      | Some (ResolvedCell _) -> annotation
+      | _ -> materialize_cell_annotation expr.loc annotation
     in
     record_expr state expr annotation
 
@@ -598,233 +651,251 @@ module Typing = struct
     let annotation =
       match literal.value with
       | Core.Integer value ->
-        let signedness, bits =
-          match expected_type with
-          | Some (ResolvedInt (signedness, bits)) -> (signedness, bits)
-          | _ -> (Signed, state.target_profile.native_integer_bits)
-        in
-        if not (integer_fits signedness bits value) then
-          add_diagnostic state Error loc
-            (Printf.sprintf "integer literal %d does not fit %s%d" value
-               (match signedness with Signed -> "i" | Unsigned -> "u")
-               bits);
-        let ty = numeric_type loc signedness bits in
-        {
-          inferred_type = Some ty;
-          resolved_type = Some (ResolvedInt (signedness, bits));
-          metavar =
-            {
-              classes = [ TypeClassNumeric ];
-              constant = Some (ConstantInt value);
-              integer =
-                Some
-                  {
-                    exact_value = Some value;
-                    minimum_bits = Some (exact_integer_bits value);
-                    signedness = Some (if value < 0 then Signed else Unsigned);
-                  };
-            };
-        }
-      | Core.Bool value ->
-        let ty = bool_type loc in
-        {
-          inferred_type = Some ty;
-          resolved_type = Some (ResolvedInt (Unsigned, 1));
-          metavar =
-            {
-              classes = [ TypeClassBool; TypeClassNumeric ];
-              constant = Some (ConstantBool value);
-              integer =
-                Some
-                  {
-                    exact_value = Some (if value then 1 else 0);
-                    minimum_bits = Some 1;
-                    signedness = Some Unsigned;
-                  };
-            };
-        }
-      | Core.Float value ->
-        let ty = float_type loc in
-        {
-          inferred_type = Some ty;
-          resolved_type = Some ResolvedFloat;
-          metavar =
-            {
-              classes = [ TypeClassFloat ];
-              constant = Some (ConstantFloat value);
-              integer = None;
-            };
-        }
-      | Core.String value ->
-        let ty = string_type loc in
-        {
-          inferred_type = Some ty;
-          resolved_type = Some ResolvedString;
-          metavar =
-            {
-              classes = [ TypeClassString ];
-              constant = Some (ConstantString value);
-              integer = None;
-            };
-        }
-      | Core.Char value ->
-        let ty = numeric_type loc Unsigned 8 in
-        {
-          inferred_type = Some ty;
-          resolved_type = Some (ResolvedInt (Unsigned, 8));
-          metavar =
-            {
-              classes = [ TypeClassNumeric ];
-              constant = Some (ConstantChar value);
-              integer =
-                Some
-                  {
-                    exact_value = Some (Char.code value);
-                    minimum_bits = Some 8;
-                    signedness = Some Unsigned;
-                  };
-            };
-        }
-      | Core.Vector vec ->
-        let element_expected =
-          match expected_type with Some ResolvedVec _ -> Some ResolvedFloat | _ -> None
-        in
-        let element_anns =
-          List.map
-            (fun (expr : Core.expression) ->
-              infer_value_expression state env ~expected_type:element_expected expr)
-            vec.value.elements
-        in
-        let has_float =
-          List.exists
-            (fun (ann : expr_annotation) ->
-              match ann.inferred_type with
-              | Some ty -> ty.value = Core.FloatType
-              | None -> false)
-            element_anns
-        in
-        let ty =
-          if has_float || List.length vec.value.elements > 0 then
-            Some
-              (mk_type loc
-                 (Core.VecType { kind = FloatVec; dimension = List.length vec.value.elements }))
-          else None
-        in
-        {
-          inferred_type = ty;
-          resolved_type =
-            Option.map (fun _ -> ResolvedVec { kind = FloatVec; dimension = List.length vec.value.elements }) ty;
-          metavar =
-            {
-              classes = [ TypeClassVector ];
-              constant = None;
-              integer = None;
-            };
-        }
-      | Core.Matrix mat ->
-        let row_expected =
-          match expected_type with
-          | Some (ResolvedMatrix matrix) ->
-              Some (ResolvedVec { kind = FloatVec; dimension = matrix.columns })
-          | _ -> None
-        in
-        let rows =
-          List.map
-            (fun (row : Core.expression) ->
-              infer_value_expression state env ~expected_type:row_expected row)
-            mat.value.rows
-        in
-        let inferred_row_dimension =
-          List.find_map
-            (fun (ann : expr_annotation) ->
-              match ann.resolved_type with
-              | Some (ResolvedVec vec) -> Some vec.dimension
-              | _ -> None)
-            rows
-        in
-        let columns =
-          match expected_type with
-          | Some (ResolvedMatrix matrix) -> matrix.columns
-          | _ -> Option.value ~default:0 inferred_row_dimension
-        in
-        List.iter2
-          (fun (row : Core.expression) (ann : expr_annotation) ->
-            match ann.resolved_type with
-            | Some (ResolvedVec vec) when vec.dimension = columns -> ()
-            | Some (ResolvedVec _) ->
-                add_diagnostic state Error row.loc
-                  "matrix literal rows must all have the same vector width"
-            | Some _ ->
-                add_diagnostic state Error row.loc
-                  "matrix literal rows must be vector expressions"
-            | None -> ())
-          mat.value.rows rows;
-        {
-          inferred_type =
-            Some
-              (mk_type loc
-                 (Core.MatrixType { kind = GenericMat; rows = List.length mat.value.rows; columns }));
-          resolved_type =
-            Some
-              (ResolvedMatrix
-                 { kind = GenericMat; rows = List.length mat.value.rows; columns });
-          metavar =
-            {
-              classes = [ TypeClassMatrix ];
-              constant = None;
-              integer = None;
-            };
-        }
-      | Core.Enum enum ->
-        let resolved_type =
-          if enum.value.types = [] then
+          let signedness, bits =
             match expected_type with
-            | Some (ResolvedNamed (name, _) as expected)
-              when String.equal name enum.value.enum_name.value ->
-                Some expected
-            | Some expected -> (
-                match expected with
-                | ResolvedNamed (name, _) when String.equal name enum.value.enum_name.value ->
-                    Some expected
+            | Some (ResolvedInt (signedness, bits)) -> (signedness, bits)
+            | _ -> (Signed, state.target_profile.native_integer_bits)
+          in
+          if not (integer_fits signedness bits value) then
+            add_diagnostic state Error loc
+              (Printf.sprintf "integer literal %d does not fit %s%d" value
+                 (match signedness with Signed -> "i" | Unsigned -> "u")
+                 bits);
+          let ty = numeric_type loc signedness bits in
+          {
+            inferred_type = Some ty;
+            resolved_type = Some (ResolvedInt (signedness, bits));
+            metavar =
+              {
+                classes = [ TypeClassNumeric ];
+                constant = Some (ConstantInt value);
+                integer =
+                  Some
+                    {
+                      exact_value = Some value;
+                      minimum_bits = Some (exact_integer_bits value);
+                      signedness = Some (if value < 0 then Signed else Unsigned);
+                    };
+              };
+          }
+      | Core.Bool value ->
+          let ty = bool_type loc in
+          {
+            inferred_type = Some ty;
+            resolved_type = Some (ResolvedInt (Unsigned, 1));
+            metavar =
+              {
+                classes = [ TypeClassBool; TypeClassNumeric ];
+                constant = Some (ConstantBool value);
+                integer =
+                  Some
+                    {
+                      exact_value = Some (if value then 1 else 0);
+                      minimum_bits = Some 1;
+                      signedness = Some Unsigned;
+                    };
+              };
+          }
+      | Core.Float value ->
+          let ty = float_type loc in
+          {
+            inferred_type = Some ty;
+            resolved_type = Some ResolvedFloat;
+            metavar =
+              {
+                classes = [ TypeClassFloat ];
+                constant = Some (ConstantFloat value);
+                integer = None;
+              };
+          }
+      | Core.String value ->
+          let ty = string_type loc in
+          {
+            inferred_type = Some ty;
+            resolved_type = Some ResolvedString;
+            metavar =
+              {
+                classes = [ TypeClassString ];
+                constant = Some (ConstantString value);
+                integer = None;
+              };
+          }
+      | Core.Char value ->
+          let ty = numeric_type loc Unsigned 8 in
+          {
+            inferred_type = Some ty;
+            resolved_type = Some (ResolvedInt (Unsigned, 8));
+            metavar =
+              {
+                classes = [ TypeClassNumeric ];
+                constant = Some (ConstantChar value);
+                integer =
+                  Some
+                    {
+                      exact_value = Some (Char.code value);
+                      minimum_bits = Some 8;
+                      signedness = Some Unsigned;
+                    };
+              };
+          }
+      | Core.Vector vec ->
+          let element_expected =
+            match expected_type with
+            | Some (ResolvedVec _) -> Some ResolvedFloat
+            | _ -> None
+          in
+          let element_anns =
+            List.map
+              (fun (expr : Core.expression) ->
+                infer_value_expression state env ~expected_type:element_expected
+                  expr)
+              vec.value.elements
+          in
+          let has_float =
+            List.exists
+              (fun (ann : expr_annotation) ->
+                match ann.inferred_type with
+                | Some ty -> ty.value = Core.FloatType
+                | None -> false)
+              element_anns
+          in
+          let ty =
+            if has_float || List.length vec.value.elements > 0 then
+              Some
+                (mk_type loc
+                   (Core.VecType
+                      {
+                        kind = FloatVec;
+                        dimension = List.length vec.value.elements;
+                      }))
+            else None
+          in
+          {
+            inferred_type = ty;
+            resolved_type =
+              Option.map
+                (fun _ ->
+                  ResolvedVec
+                    {
+                      kind = FloatVec;
+                      dimension = List.length vec.value.elements;
+                    })
+                ty;
+            metavar =
+              { classes = [ TypeClassVector ]; constant = None; integer = None };
+          }
+      | Core.Matrix mat ->
+          let row_expected =
+            match expected_type with
+            | Some (ResolvedMatrix matrix) ->
+                Some
+                  (ResolvedVec { kind = FloatVec; dimension = matrix.columns })
+            | _ -> None
+          in
+          let rows =
+            List.map
+              (fun (row : Core.expression) ->
+                infer_value_expression state env ~expected_type:row_expected row)
+              mat.value.rows
+          in
+          let inferred_row_dimension =
+            List.find_map
+              (fun (ann : expr_annotation) ->
+                match ann.resolved_type with
+                | Some (ResolvedVec vec) -> Some vec.dimension
                 | _ -> None)
-            | None -> None
-          else
-            None
-        in
-        let ty =
-          match resolved_type with
-          | Some resolved -> core_type_of_resolved_ty loc resolved
-          | None when enum.value.types = [] ->
-              mk_type loc
-                (Core.CustomType
+              rows
+          in
+          let columns =
+            match expected_type with
+            | Some (ResolvedMatrix matrix) -> matrix.columns
+            | _ -> Option.value ~default:0 inferred_row_dimension
+          in
+          List.iter2
+            (fun (row : Core.expression) (ann : expr_annotation) ->
+              match ann.resolved_type with
+              | Some (ResolvedVec vec) when vec.dimension = columns -> ()
+              | Some (ResolvedVec _) ->
+                  add_diagnostic state Error row.loc
+                    "matrix literal rows must all have the same vector width"
+              | Some _ ->
+                  add_diagnostic state Error row.loc
+                    "matrix literal rows must be vector expressions"
+              | None -> ())
+            mat.value.rows rows;
+          {
+            inferred_type =
+              Some
+                (mk_type loc
+                   (Core.MatrixType
+                      {
+                        kind = GenericMat;
+                        rows = List.length mat.value.rows;
+                        columns;
+                      }));
+            resolved_type =
+              Some
+                (ResolvedMatrix
                    {
-                     name =
-                       mk_identifier enum.value.enum_name.loc enum.value.enum_name.value;
-                   })
-          | None ->
-            mk_type loc
-              (Core.TemplatedType
-                 {
-                   Core.value =
+                     kind = GenericMat;
+                     rows = List.length mat.value.rows;
+                     columns;
+                   });
+            metavar =
+              { classes = [ TypeClassMatrix ]; constant = None; integer = None };
+          }
+      | Core.Enum enum ->
+          let resolved_type =
+            if enum.value.types = [] then
+              match expected_type with
+              | Some (ResolvedNamed (name, _) as expected)
+                when String.equal name enum.value.enum_name.value ->
+                  Some expected
+              | Some expected -> (
+                  match expected with
+                  | ResolvedNamed (name, _)
+                    when String.equal name enum.value.enum_name.value ->
+                      Some expected
+                  | _ -> None)
+              | None -> None
+            else None
+          in
+          let ty =
+            match resolved_type with
+            | Some resolved -> core_type_of_resolved_ty loc resolved
+            | None when enum.value.types = [] ->
+                mk_type loc
+                  (Core.CustomType
                      {
-                       outer = enum.value.enum_name;
-                       inner = enum.value.types;
-                     };
-                   loc;
-                   analysis_scope = None;
-                 })
-        in
-        List.iter
-          (fun (expr : Core.expression) -> ignore (infer_value_expression state env expr))
-          enum.value.wrapped;
-        {
-          inferred_type = Some ty;
-          resolved_type =
-            (match resolved_type with
-            | Some resolved -> Some resolved
-            | None -> resolve_core_type state.type_env [] [] loc ty);
-          metavar = metavar_of_type ty;
-        }
+                       name =
+                         mk_identifier enum.value.enum_name.loc
+                           enum.value.enum_name.value;
+                     })
+            | None ->
+                mk_type loc
+                  (Core.TemplatedType
+                     {
+                       Core.value =
+                         {
+                           outer = enum.value.enum_name;
+                           inner = enum.value.types;
+                         };
+                       loc;
+                       analysis_scope = None;
+                     })
+          in
+          List.iter
+            (fun (expr : Core.expression) ->
+              ignore (infer_value_expression state env expr))
+            enum.value.wrapped;
+          {
+            inferred_type = Some ty;
+            resolved_type =
+              (match resolved_type with
+              | Some resolved -> Some resolved
+              | None -> resolve_core_type state.type_env [] [] loc ty);
+            metavar = metavar_of_type ty;
+          }
     in
     match (expected_type, annotation.resolved_type) with
     | Some expected, Some actual when resolved_can_cast actual expected ->
@@ -833,14 +904,17 @@ module Typing = struct
           inferred_type = Some inferred_type;
           resolved_type = Some expected;
           metavar =
-            { annotation.metavar with classes = type_class_of_type inferred_type };
+            {
+              annotation.metavar with
+              classes = type_class_of_type inferred_type;
+            };
         }
     | _ -> annotation
 
   and infer_initializer state env ~(expected_type : resolved_ty option) loc
       (init : Core.init_list) : expr_annotation =
     let infer_all expected_types =
-          List.iteri
+      List.iteri
         (fun index (expr : Core.expression) ->
           let expected = nth_or_none expected_types index in
           ignore (infer_value_expression state env ~expected_type:expected expr))
@@ -849,7 +923,9 @@ module Typing = struct
     (match expected_type with
     | Some (ResolvedArray (element_ty, count)) ->
         let expected_types =
-          List.init (min count (List.length init.value.exprs)) (fun _ -> Some element_ty)
+          List.init
+            (min count (List.length init.value.exprs))
+            (fun _ -> Some element_ty)
         in
         infer_all expected_types
     | Some (ResolvedNamed _ as struct_ty) -> (
@@ -857,22 +933,26 @@ module Typing = struct
         | Some fields ->
             let expected_types =
               List.map (fun (_, field_ty) -> Some field_ty) fields
-              |> List.filteri (fun index _ -> index < List.length init.value.exprs)
+              |> List.filteri (fun index _ ->
+                  index < List.length init.value.exprs)
             in
             infer_all expected_types
         | None ->
             List.iter
-              (fun (expr : Core.expression) -> ignore (infer_value_expression state env expr))
+              (fun (expr : Core.expression) ->
+                ignore (infer_value_expression state env expr))
               init.value.exprs)
     | Some (ResolvedVec _) ->
         List.iter
           (fun (expr : Core.expression) ->
             ignore
-              (infer_value_expression state env ~expected_type:(Some ResolvedFloat) expr))
+              (infer_value_expression state env
+                 ~expected_type:(Some ResolvedFloat) expr))
           init.value.exprs
     | _ ->
         List.iter
-          (fun (expr : Core.expression) -> ignore (infer_value_expression state env expr))
+          (fun (expr : Core.expression) ->
+            ignore (infer_value_expression state env expr))
           init.value.exprs;
         add_diagnostic state Error loc
           "not enough information to infer type for initializer");
@@ -880,7 +960,8 @@ module Typing = struct
     | Some expected -> annotation_of_resolved loc (Some expected)
     | None -> unknown_expr_annotation
 
-  and infer_zero state ~(expected_type : resolved_ty option) loc : expr_annotation =
+  and infer_zero state ~(expected_type : resolved_ty option) loc :
+      expr_annotation =
     let valid =
       match expected_type with
       | Some (ResolvedArray _ | ResolvedVec _ | ResolvedMatrix _) -> true
@@ -948,7 +1029,7 @@ module Typing = struct
     match (unary.value.op, unary.value.inner.value) with
     | Core.Negate, Core.Literal { value = Core.Integer value; _ } ->
         infer_negated_integer value
-    | _ ->
+    | _ -> (
         let inner_expected =
           match unary.value.op with
           | Core.Complement -> expected_type
@@ -977,13 +1058,18 @@ module Typing = struct
                   metavar = metavar_of_type ty;
                 }
             | Some ty, resolved_type ->
-                { inferred_type = Some ty; resolved_type; metavar = metavar_of_type ty }
+                {
+                  inferred_type = Some ty;
+                  resolved_type;
+                  metavar = metavar_of_type ty;
+                }
             | None, _ ->
                 {
                   inferred_type = None;
                   resolved_type = None;
-                  metavar = { unknown_metavar with classes = [ TypeClassNumeric ] };
-                })
+                  metavar =
+                    { unknown_metavar with classes = [ TypeClassNumeric ] };
+                }))
 
   and infer_binary state env ~(expected_type : resolved_ty option) loc
       (binary : Core.binary) : expr_annotation =
@@ -995,7 +1081,8 @@ module Typing = struct
             value =
               {
                 op = Core.Negate;
-                inner = { value = Core.Literal { value = Core.Integer value; _ }; _ };
+                inner =
+                  { value = Core.Literal { value = Core.Integer value; _ }; _ };
               };
             _;
           } ->
@@ -1019,22 +1106,22 @@ module Typing = struct
       | Some _, Some _, None ->
           let left_ann = infer_value_expression state env binary.value.left in
           let right_ann =
-            infer_value_expression state env ~expected_type:left_ann.resolved_type
-              binary.value.right
+            infer_value_expression state env
+              ~expected_type:left_ann.resolved_type binary.value.right
           in
           (left_ann, right_ann)
       | Some _, None, _ ->
           let right_ann = infer_value_expression state env binary.value.right in
           let left_ann =
-            infer_value_expression state env ~expected_type:right_ann.resolved_type
-              binary.value.left
+            infer_value_expression state env
+              ~expected_type:right_ann.resolved_type binary.value.left
           in
           (left_ann, right_ann)
       | None, Some _, _ ->
           let left_ann = infer_value_expression state env binary.value.left in
           let right_ann =
-            infer_value_expression state env ~expected_type:left_ann.resolved_type
-              binary.value.right
+            infer_value_expression state env
+              ~expected_type:left_ann.resolved_type binary.value.right
           in
           (left_ann, right_ann)
       | None, None, _ ->
@@ -1042,8 +1129,8 @@ module Typing = struct
             infer_value_expression state env binary.value.right )
     in
     (match (left_ann.resolved_type, right_ann.resolved_type) with
-    | Some (ResolvedInt (left_signedness, _) as left_resolved),
-      Some (ResolvedInt (right_signedness, _) as right_resolved)
+    | ( Some (ResolvedInt (left_signedness, _) as left_resolved),
+        Some (ResolvedInt (right_signedness, _) as right_resolved) )
       when left_signedness <> right_signedness
            && binary.value.op <> Core.LogicAnd
            && binary.value.op <> Core.LogicOr
@@ -1051,38 +1138,27 @@ module Typing = struct
                 (resolved_arithmetic_binary_result Core.Add left_resolved
                    right_resolved) ->
         add_diagnostic state Error loc
-          "binary integer operands with different signedness require an explicit cast"
+          "binary integer operands with different signedness require an \
+           explicit cast"
     | _ -> ());
     match binary.value.op with
-    | Core.IsEqual
-    | Core.NotEqual
-    | Core.LessThan
-    | Core.LessThanOrEqual
-    | Core.GreaterThan
-    | Core.GreaterThanOrEqual
-    | Core.LogicAnd
-    | Core.LogicOr ->
+    | Core.IsEqual | Core.NotEqual | Core.LessThan | Core.LessThanOrEqual
+    | Core.GreaterThan | Core.GreaterThanOrEqual | Core.LogicAnd | Core.LogicOr
+      ->
         let ty = bool_type loc in
         {
           inferred_type = Some ty;
           resolved_type = Some (ResolvedInt (Unsigned, 1));
           metavar = metavar_of_type ty;
         }
-    | Core.Add
-    | Core.Subtract
-    | Core.Multiply
-    | Core.Divide
-    | Core.Modulo
-    | Core.LeftShift
-    | Core.RightShift
-    | Core.BitwiseAnd
-    | Core.BitwiseOr
+    | Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
+    | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
     | Core.BitwiseXor -> (
         match
           Option.bind left_ann.resolved_type (fun left_resolved ->
               Option.bind right_ann.resolved_type (fun right_resolved ->
-                  resolved_arithmetic_binary_result binary.value.op left_resolved
-                    right_resolved))
+                  resolved_arithmetic_binary_result binary.value.op
+                    left_resolved right_resolved))
         with
         | Some resolved ->
             let ty = core_type_of_resolved_ty loc resolved in
@@ -1099,15 +1175,18 @@ module Typing = struct
                 right_ann.resolved_type )
             with
             | Some left_ty, _, Some left_resolved, Some right_resolved
-              when resolved_is_pointerish left_resolved && resolved_is_numeric right_resolved
-                   && (binary.value.op = Core.Add || binary.value.op = Core.Subtract) ->
+              when resolved_is_pointerish left_resolved
+                   && resolved_is_numeric right_resolved
+                   && (binary.value.op = Core.Add
+                      || binary.value.op = Core.Subtract) ->
                 {
                   inferred_type = Some left_ty;
                   resolved_type = Some left_resolved;
                   metavar = metavar_of_type left_ty;
                 }
             | _, Some right_ty, Some left_resolved, Some right_resolved
-              when resolved_is_numeric left_resolved && resolved_is_pointerish right_resolved
+              when resolved_is_numeric left_resolved
+                   && resolved_is_pointerish right_resolved
                    && binary.value.op = Core.Add ->
                 {
                   inferred_type = Some right_ty;
@@ -1117,8 +1196,8 @@ module Typing = struct
             | Some left_ty, Some right_ty, _, _
               when is_numeric_type left_ty || left_ty.value = Core.FloatType ->
                 let ty =
-                  if is_numeric_type right_ty || right_ty.value = Core.FloatType then
-                    wider_numeric_type loc left_ty right_ty
+                  if is_numeric_type right_ty || right_ty.value = Core.FloatType
+                  then wider_numeric_type loc left_ty right_ty
                   else left_ty
                 in
                 {
@@ -1129,7 +1208,8 @@ module Typing = struct
             | Some left_ty, Some _, _, _ ->
                 {
                   inferred_type = Some left_ty;
-                  resolved_type = resolve_core_type state.type_env [] [] loc left_ty;
+                  resolved_type =
+                    resolve_core_type state.type_env [] [] loc left_ty;
                   metavar = metavar_of_type left_ty;
                 }
             | Some ty, None, _, _ | None, Some ty, _, _ ->
@@ -1141,31 +1221,40 @@ module Typing = struct
             | None, None, _, _ -> (
                 match
                   ( Option.bind left_ann.metavar.integer (fun i -> i.exact_value),
-                    Option.bind right_ann.metavar.integer (fun i -> i.exact_value) )
+                    Option.bind right_ann.metavar.integer (fun i ->
+                        i.exact_value) )
                 with
                 | Some left_value, Some right_value ->
-                    let ty = smallest_integer_type loc (max left_value right_value) in
+                    let ty =
+                      smallest_integer_type loc (max left_value right_value)
+                    in
                     {
                       inferred_type = Some ty;
-                      resolved_type = resolve_core_type state.type_env [] [] loc ty;
+                      resolved_type =
+                        resolve_core_type state.type_env [] [] loc ty;
                       metavar = metavar_of_type ty;
                     }
                 | _ ->
                     {
                       inferred_type = None;
                       resolved_type = None;
-                      metavar = { unknown_metavar with classes = [ TypeClassNumeric ] };
+                      metavar =
+                        { unknown_metavar with classes = [ TypeClassNumeric ] };
                     })))
 
   and infer_match state env ~(expected_type : resolved_ty option) loc
-      (match_expr : Core.match_expr) :
-      expr_annotation =
+      (match_expr : Core.match_expr) : expr_annotation =
     ignore (infer_value_expression state env match_expr.value.expr);
     let arm_types =
       List.map
         (fun (arm : Core.match_arm) ->
-          let env = infer_pattern_bindings state env match_expr.value.expr arm.value.pattern in
-          let ann = infer_value_expression state env ~expected_type arm.value.expr in
+          let env =
+            infer_pattern_bindings state env match_expr.value.expr
+              arm.value.pattern
+          in
+          let ann =
+            infer_value_expression state env ~expected_type arm.value.expr
+          in
           ann.inferred_type)
         match_expr.value.arms
     in
@@ -1202,7 +1291,9 @@ module Typing = struct
     | Core.PatternEnum enum ->
         let initial = push_scope env in
         let payload_tys =
-          match Hashtbl.find_opt state.annotations.exprs (expr_id scrutinee) with
+          match
+            Hashtbl.find_opt state.annotations.exprs (expr_id scrutinee)
+          with
           | Some { resolved_type = Some scrutinee_ty; _ } -> (
               match
                 lookup_enum_variant state.type_env pattern.loc scrutinee_ty
@@ -1243,7 +1334,8 @@ module Typing = struct
                 match binding.value with
                 | Core.BindingIgnored -> env
                 | Core.BindingNamed id ->
-                    bind_current env id.value (binding_annotation binding.loc payload_ty)
+                    bind_current env id.value
+                      (binding_annotation binding.loc payload_ty)
               in
               bind_payloads env rest rest_payloads
         in
@@ -1274,8 +1366,7 @@ module Typing = struct
                       _;
                     } ->
                     Some
-                      (ResolvedInt
-                         (Signed, state.target_profile.c_integer_bits))
+                      (ResolvedInt (Signed, state.target_profile.c_integer_bits))
                 | _ -> None)
             | None -> None
           in
@@ -1313,8 +1404,10 @@ module Typing = struct
           fn_decl.value.params.value.params
       in
       infer_args_with_expected expected_args;
-      if List.length call.value.params <> List.length fn_decl.value.params.value.params then
-        unknown_expr_annotation
+      if
+        List.length call.value.params
+        <> List.length fn_decl.value.params.value.params
+      then unknown_expr_annotation
       else
         let arg_anns =
           List.map (infer_value_expression state env) call.value.params
@@ -1323,8 +1416,7 @@ module Typing = struct
           List.exists
             (fun (ann : expr_annotation) -> ann.resolved_type = None)
             arg_anns
-        then
-          unknown_expr_annotation
+        then unknown_expr_annotation
         else
           let specialization_key = function_id fn_decl in
           if List.mem specialization_key state.active_specializations then
@@ -1335,13 +1427,15 @@ module Typing = struct
                 state with
                 annotations = make_annotations ();
                 diagnostics_rev = [];
-                active_specializations = specialization_key :: state.active_specializations;
+                active_specializations =
+                  specialization_key :: state.active_specializations;
               }
             in
             let local_env = push_scope [ state.globals ] in
             let local_env =
               List.fold_left2
-                (fun local_env (param : Core.param) (arg_ann : expr_annotation) ->
+                (fun local_env (param : Core.param) (arg_ann : expr_annotation)
+                   ->
                   bind_current local_env param.value.name.value
                     {
                       inferred_type = arg_ann.inferred_type;
@@ -1357,8 +1451,8 @@ module Typing = struct
             in
             match fn_decl.value.definition with
             | Some body ->
-                infer_block temp_state local_env ~result_expected:return_expected
-                  ~return_expected body
+                infer_block temp_state local_env
+                  ~result_expected:return_expected ~return_expected body
             | None -> unknown_expr_annotation
     in
     match call.value.target.value with
@@ -1368,11 +1462,11 @@ module Typing = struct
             match expected_type with
             | Some enum_ty -> infer_enum_constructor enum_ty payload_tys
             | None -> unknown_expr_annotation)
-        | None ->
-            (match lookup_function state id.value with
+        | None -> (
+            match lookup_function state id.value with
             | Some fn_decl when function_has_specialization_param fn_decl ->
                 infer_specialized_function_call fn_decl
-            | _ ->
+            | _ -> (
                 let target_ann = infer_expression state env call.value.target in
                 match target_ann.inferred_type with
                 | Some ty -> (
@@ -1381,17 +1475,19 @@ module Typing = struct
                         infer_args_with_expected ~vararg:fn.value.vararg
                           (List.map
                              (fun expected_ty ->
-                               resolve_core_type state.type_env [] [] call.loc expected_ty)
+                               resolve_core_type state.type_env [] [] call.loc
+                                 expected_ty)
                              fn.value.param_types);
                         {
                           inferred_type = Some fn.value.return_type;
                           resolved_type =
-                            resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
+                            resolve_core_type state.type_env [] [] call.loc
+                              fn.value.return_type;
                           metavar = metavar_of_type fn.value.return_type;
                         }
                     | _ -> unknown_expr_annotation)
-                | None -> unknown_expr_annotation))
-    | _ ->
+                | None -> unknown_expr_annotation)))
+    | _ -> (
         let target_ann = infer_expression state env call.value.target in
         match (call.value.target.value, target_ann.resolved_type) with
         | Core.Literal literal, Some enum_ty -> (
@@ -1401,7 +1497,8 @@ module Typing = struct
                   lookup_enum_variant state.type_env call.loc enum_ty
                     enum_lit.value.enum_variant.value
                 with
-                | Some (_, payload_tys) -> infer_enum_constructor enum_ty payload_tys
+                | Some (_, payload_tys) ->
+                    infer_enum_constructor enum_ty payload_tys
                 | None -> unknown_expr_annotation)
             | _ -> (
                 match target_ann.inferred_type with
@@ -1411,12 +1508,14 @@ module Typing = struct
                         infer_args_with_expected ~vararg:fn.value.vararg
                           (List.map
                              (fun expected_ty ->
-                               resolve_core_type state.type_env [] [] call.loc expected_ty)
+                               resolve_core_type state.type_env [] [] call.loc
+                                 expected_ty)
                              fn.value.param_types);
                         {
                           inferred_type = Some fn.value.return_type;
                           resolved_type =
-                            resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
+                            resolve_core_type state.type_env [] [] call.loc
+                              fn.value.return_type;
                           metavar = metavar_of_type fn.value.return_type;
                         }
                     | _ -> unknown_expr_annotation)
@@ -1429,16 +1528,18 @@ module Typing = struct
                     infer_args_with_expected ~vararg:fn.value.vararg
                       (List.map
                          (fun expected_ty ->
-                           resolve_core_type state.type_env [] [] call.loc expected_ty)
+                           resolve_core_type state.type_env [] [] call.loc
+                             expected_ty)
                          fn.value.param_types);
                     {
                       inferred_type = Some fn.value.return_type;
                       resolved_type =
-                        resolve_core_type state.type_env [] [] call.loc fn.value.return_type;
+                        resolve_core_type state.type_env [] [] call.loc
+                          fn.value.return_type;
                       metavar = metavar_of_type fn.value.return_type;
                     }
                 | _ -> unknown_expr_annotation)
-            | None -> unknown_expr_annotation)
+            | None -> unknown_expr_annotation))
 
   and infer_index state env _loc (index : Core.index) : expr_annotation =
     let target_ann = infer_expression state env index.value.target in
@@ -1453,13 +1554,15 @@ module Typing = struct
             {
               inferred_type = Some arr.value.element;
               resolved_type =
-                resolve_core_type state.type_env [] [] index.loc arr.value.element;
+                resolve_core_type state.type_env [] [] index.loc
+                  arr.value.element;
               metavar = metavar_of_type arr.value.element;
             }
         | Core.PointerType inner | Core.BoxType inner | Core.CellType inner ->
             {
               inferred_type = Some inner;
-              resolved_type = resolve_core_type state.type_env [] [] index.loc inner;
+              resolved_type =
+                resolve_core_type state.type_env [] [] index.loc inner;
               metavar = metavar_of_type inner;
             }
         | Core.VecType _ ->
@@ -1477,60 +1580,110 @@ module Typing = struct
               metavar = metavar_of_type ty;
             }
         | Core.MatrixType mat ->
-            let ty = mk_type index.loc (Core.VecType { kind = FloatVec; dimension = mat.columns }) in
+            let ty =
+              mk_type index.loc
+                (Core.VecType { kind = FloatVec; dimension = mat.columns })
+            in
             {
               inferred_type = Some ty;
-              resolved_type = Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
+              resolved_type =
+                Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
               metavar = metavar_of_type ty;
             }
         | Core.MatrixHoleType ->
             let ty = mk_type index.loc Core.VecHoleType in
-            { inferred_type = Some ty; resolved_type = Some ResolvedVecHole; metavar = metavar_of_type ty }
+            {
+              inferred_type = Some ty;
+              resolved_type = Some ResolvedVecHole;
+              metavar = metavar_of_type ty;
+            }
         | _ -> unknown_expr_annotation)
-    | None, Some (ResolvedArray (inner, _) | ResolvedPointer inner | ResolvedBox inner | ResolvedCell inner) ->
+    | ( None,
+        Some
+          ( ResolvedArray (inner, _)
+          | ResolvedPointer inner
+          | ResolvedBox inner
+          | ResolvedCell inner ) ) ->
         let ty = core_type_of_resolved_ty index.loc inner in
-        { inferred_type = Some ty; resolved_type = Some inner; metavar = metavar_of_type ty }
-    | None, Some (ResolvedVec _) ->
-        let ty = float_type index.loc in
-        { inferred_type = Some ty; resolved_type = Some ResolvedFloat; metavar = metavar_of_type ty }
-    | None, Some (ResolvedMatrix mat) ->
-        let ty = mk_type index.loc (Core.VecType { kind = FloatVec; dimension = mat.columns }) in
         {
           inferred_type = Some ty;
-          resolved_type = Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
+          resolved_type = Some inner;
+          metavar = metavar_of_type ty;
+        }
+    | None, Some (ResolvedVec _) ->
+        let ty = float_type index.loc in
+        {
+          inferred_type = Some ty;
+          resolved_type = Some ResolvedFloat;
+          metavar = metavar_of_type ty;
+        }
+    | None, Some (ResolvedMatrix mat) ->
+        let ty =
+          mk_type index.loc
+            (Core.VecType { kind = FloatVec; dimension = mat.columns })
+        in
+        {
+          inferred_type = Some ty;
+          resolved_type =
+            Some (ResolvedVec { kind = FloatVec; dimension = mat.columns });
           metavar = metavar_of_type ty;
         }
     | None, Some ResolvedVecHole ->
         let ty = float_type index.loc in
-        { inferred_type = Some ty; resolved_type = Some ResolvedFloat; metavar = metavar_of_type ty }
+        {
+          inferred_type = Some ty;
+          resolved_type = Some ResolvedFloat;
+          metavar = metavar_of_type ty;
+        }
     | None, Some ResolvedMatrixHole ->
         let ty = mk_type index.loc Core.VecHoleType in
-        { inferred_type = Some ty; resolved_type = Some ResolvedVecHole; metavar = metavar_of_type ty }
+        {
+          inferred_type = Some ty;
+          resolved_type = Some ResolvedVecHole;
+          metavar = metavar_of_type ty;
+        }
     | None, _ -> unknown_expr_annotation
 
-  and infer_write_like state env ~pointee_target (write : Core.write) : expr_annotation =
+  and infer_write_like state env ~pointee_target (write : Core.write) :
+      expr_annotation =
     let target_ann = infer_expression state env write.value.target in
     let expected_value =
       match (pointee_target, target_ann.resolved_type) with
       | false, Some resolved -> Some resolved
-      | true, Some (ResolvedPointer inner | ResolvedBox inner | ResolvedCell inner) ->
+      | ( true,
+          Some (ResolvedPointer inner | ResolvedBox inner | ResolvedCell inner)
+        ) ->
           Some inner
       | _ -> None
     in
     let value_ann =
-      infer_value_expression state env ~expected_type:expected_value write.value.value
+      infer_value_expression state env ~expected_type:expected_value
+        write.value.value
     in
-    match (target_ann.inferred_type, target_ann.resolved_type, value_ann.inferred_type, value_ann.resolved_type) with
+    match
+      ( target_ann.inferred_type,
+        target_ann.resolved_type,
+        value_ann.inferred_type,
+        value_ann.resolved_type )
+    with
     | Some ty, resolved_type, _, _ ->
         { inferred_type = Some ty; resolved_type; metavar = metavar_of_type ty }
     | None, Some resolved_type, _, _ ->
         let ty = core_type_of_resolved_ty write.loc resolved_type in
-        { inferred_type = Some ty; resolved_type = Some resolved_type; metavar = metavar_of_type ty }
+        {
+          inferred_type = Some ty;
+          resolved_type = Some resolved_type;
+          metavar = metavar_of_type ty;
+        }
     | None, None, Some ty, resolved_type ->
         { inferred_type = Some ty; resolved_type; metavar = metavar_of_type ty }
     | None, None, None, Some resolved_type ->
         let ty = core_type_of_resolved_ty write.loc resolved_type in
-        { inferred_type = Some ty; resolved_type = Some resolved_type; metavar = metavar_of_type ty }
+        {
+          inferred_type = Some ty;
+          resolved_type = Some resolved_type;
+          metavar = metavar_of_type ty;
+        }
     | None, None, None, None -> unknown_expr_annotation
 
   let make_state target_profile (program : Core.parsed_program) =
@@ -1553,7 +1706,8 @@ module Typing = struct
     collect_globals state program.program;
     let env = push_scope (globals_env state) in
     let return_expected =
-      Option.bind fn.value.return_type (resolve_core_type state.type_env [] [] fn.loc)
+      Option.bind fn.value.return_type
+        (resolve_core_type state.type_env [] [] fn.loc)
     in
     let env =
       match param_bindings with
@@ -1566,19 +1720,21 @@ module Typing = struct
           List.fold_left
             (fun env (param : Core.param) ->
               let binding =
-                binding_from_type ~is_mutable:false state.type_env param.value.ty
+                binding_from_type ~is_mutable:false state.type_env
+                  param.value.ty
               in
               bind_current env param.value.name.value binding)
             env fn.value.params.value.params
     in
     match fn.value.definition with
     | Some body ->
-        infer_block state env ~result_expected:return_expected ~return_expected body
+        infer_block state env ~result_expected:return_expected ~return_expected
+          body
     | None -> unknown_expr_annotation
 
   let analyze_function_body ?(target_profile = default_target_profile)
-      (program : Core.parsed_program) ?(active_specializations = []) ?param_bindings
-      (fn : Core.function_decl) =
+      (program : Core.parsed_program) ?(active_specializations = [])
+      ?param_bindings (fn : Core.function_decl) =
     let state = make_state target_profile program in
     let body_result =
       analyze_function_body_with_state state program ~active_specializations
@@ -1592,7 +1748,8 @@ module Typing = struct
       },
       body_result )
 
-  let run ?(target_profile = default_target_profile) (program : Core.parsed_program) =
+  let run ?(target_profile = default_target_profile)
+      (program : Core.parsed_program) =
     let state = make_state target_profile program in
     collect_globals state program.program;
     let globals_env () = globals_env state in
@@ -1612,13 +1769,15 @@ module Typing = struct
                   List.fold_left
                     (fun env (param : Core.param) ->
                       let binding =
-                        binding_from_type ~is_mutable:false state.type_env param.value.ty
+                        binding_from_type ~is_mutable:false state.type_env
+                          param.value.ty
                       in
                       bind_current env param.value.name.value binding)
                     env fn.value.params.value.params
                 in
                 let result_ann =
-                  infer_block state env ~result_expected:return_expected ~return_expected body
+                  infer_block state env ~result_expected:return_expected
+                    ~return_expected body
                 in
                 if function_has_specialization_param fn then
                   update_function_global state fn result_ann)
@@ -1637,7 +1796,8 @@ module Typing = struct
                       List.fold_left
                         (fun env (param : Core.param) ->
                           let binding =
-                            binding_from_type ~is_mutable:false state.type_env param.value.ty
+                            binding_from_type ~is_mutable:false state.type_env
+                              param.value.ty
                           in
                           bind_current env param.value.name.value binding)
                         env fn.value.params.value.params
@@ -1653,9 +1813,12 @@ module Typing = struct
             Option.iter
               (fun init ->
                 let expected_type =
-                  resolve_core_type state.type_env [] [] binding.loc binding.value.ty
+                  resolve_core_type state.type_env [] [] binding.loc
+                    binding.value.ty
                 in
-                ignore (infer_value_expression state (globals_env ()) ~expected_type init);
+                ignore
+                  (infer_value_expression state (globals_env ()) ~expected_type
+                     init);
                 ignore
                   (record_binding state
                      {
@@ -1672,7 +1835,8 @@ module Typing = struct
                      {
                        inferred_type = Some binding.value.ty;
                        resolved_type =
-                         resolve_core_type state.type_env [] [] binding.loc binding.value.ty;
+                         resolve_core_type state.type_env [] [] binding.loc
+                           binding.value.ty;
                        metavar = metavar_of_type binding.value.ty;
                        is_mutable = binding.value.is_mutable;
                      }))

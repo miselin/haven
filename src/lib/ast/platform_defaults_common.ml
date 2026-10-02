@@ -3,7 +3,8 @@ let is_space = function ' ' | '\t' | '\n' | '\r' -> true | _ -> false
 let is_directory path =
   if String.equal path "" then false
   else
-    try (Unix.stat path).Unix.st_kind = Unix.S_DIR with Unix.Unix_error _ -> false
+    try (Unix.stat path).Unix.st_kind = Unix.S_DIR
+    with Unix.Unix_error _ -> false
 
 let existing_dir path =
   if is_directory path then
@@ -43,24 +44,33 @@ let next_token text index =
   if index >= len then None
   else
     let rec take index =
-      if index < len && not (is_space text.[index]) then take (index + 1) else index
+      if index < len && not (is_space text.[index]) then take (index + 1)
+      else index
     in
     let next = take index in
     Some (String.sub text index (next - index), next)
 
 let capture_first_line prog args =
-  let stdout_path = Filename.temp_file "haven-platform-defaults-stdout" ".txt" in
-  let stderr_path = Filename.temp_file "haven-platform-defaults-stderr" ".txt" in
+  let stdout_path =
+    Filename.temp_file "haven-platform-defaults-stdout" ".txt"
+  in
+  let stderr_path =
+    Filename.temp_file "haven-platform-defaults-stderr" ".txt"
+  in
   Fun.protect
     ~finally:(fun () ->
       if Sys.file_exists stdout_path then Sys.remove stdout_path;
       if Sys.file_exists stderr_path then Sys.remove stderr_path)
     (fun () ->
       let stdout_fd =
-        Unix.openfile stdout_path [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ] 0o600
+        Unix.openfile stdout_path
+          [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ]
+          0o600
       in
       let stderr_fd =
-        Unix.openfile stderr_path [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ] 0o600
+        Unix.openfile stderr_path
+          [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ]
+          0o600
       in
       Fun.protect
         ~finally:(fun () ->
@@ -70,8 +80,8 @@ let capture_first_line prog args =
           try
             let argv = Array.of_list (prog :: args) in
             let pid =
-              Unix.create_process_env prog argv (Unix.environment ()) Unix.stdin stdout_fd
-                stderr_fd
+              Unix.create_process_env prog argv (Unix.environment ()) Unix.stdin
+                stdout_fd stderr_fd
             in
             let _, status = Unix.waitpid [] pid in
             let read_first_line path =
@@ -110,12 +120,15 @@ let apply_env_cflags ~search_dirs ~sysroot flags =
             match next_token flags index with
             | Some (path, index) ->
                 loop index
-                  (match existing_dir path with Some dir -> dir :: search_dirs | None -> search_dirs)
+                  (match existing_dir path with
+                  | Some dir -> dir :: search_dirs
+                  | None -> search_dirs)
                   sysroot
             | None -> (List.rev search_dirs, sysroot))
         | "-isysroot" -> (
             match next_token flags index with
-            | Some (path, index) -> loop index search_dirs (maybe_set_sysroot sysroot path)
+            | Some (path, index) ->
+                loop index search_dirs (maybe_set_sysroot sysroot path)
             | None -> (List.rev search_dirs, sysroot))
         | "-resource-dir" -> (
             match next_token flags index with
@@ -127,18 +140,25 @@ let apply_env_cflags ~search_dirs ~sysroot flags =
         | _ ->
             let search_dirs =
               if String.length token > 2 && String.sub token 0 2 = "-I" then
-                add_dir_if_exists search_dirs (String.sub token 2 (String.length token - 2))
-              else if String.length token > 14 && String.sub token 0 14 = "-resource-dir=" then
                 add_dir_if_exists search_dirs
-                  (resource_include_dir (String.sub token 14 (String.length token - 14)))
+                  (String.sub token 2 (String.length token - 2))
+              else if
+                String.length token > 14
+                && String.sub token 0 14 = "-resource-dir="
+              then
+                add_dir_if_exists search_dirs
+                  (resource_include_dir
+                     (String.sub token 14 (String.length token - 14)))
               else search_dirs
             in
             let sysroot =
-              if String.length token > 9 && String.sub token 0 9 = "-isysroot" then
-                maybe_set_sysroot sysroot (String.sub token 9 (String.length token - 9))
+              if String.length token > 9 && String.sub token 0 9 = "-isysroot"
+              then
+                maybe_set_sysroot sysroot
+                  (String.sub token 9 (String.length token - 9))
               else sysroot
             in
             loop index search_dirs sysroot)
   in
-  loop 0 [] sysroot
-  |> fun (env_search_dirs, sysroot) -> (search_dirs @ env_search_dirs, sysroot)
+  loop 0 [] sysroot |> fun (env_search_dirs, sysroot) ->
+  (search_dirs @ env_search_dirs, sysroot)

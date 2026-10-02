@@ -1,9 +1,7 @@
 open Analysis_types
 
 module ConstantFold = struct
-  type numeric_pair =
-    | IntPair of int * int
-    | FloatPair of float * float
+  type numeric_pair = IntPair of int * int | FloatPair of float * float
 
   let int_of_int64_opt value =
     try
@@ -11,28 +9,38 @@ module ConstantFold = struct
       if Int64.of_int roundtrip = value then Some roundtrip else None
     with Invalid_argument _ -> None
 
-  let constant_int_of_int64 value = Option.map (fun value -> ConstantInt value) (int_of_int64_opt value)
+  let constant_int_of_int64 value =
+    Option.map (fun value -> ConstantInt value) (int_of_int64_opt value)
 
-  let fold_numeric_pair left right (int_op : int64 -> int64 -> int64) (float_op : float -> float -> float) :
-      constant_value option =
+  let fold_numeric_pair left right (int_op : int64 -> int64 -> int64)
+      (float_op : float -> float -> float) : constant_value option =
     match (left, right) with
-    | ConstantInt l, ConstantInt r -> constant_int_of_int64 (int_op (Int64.of_int l) (Int64.of_int r))
+    | ConstantInt l, ConstantInt r ->
+        constant_int_of_int64 (int_op (Int64.of_int l) (Int64.of_int r))
     | ConstantFloat l, ConstantFloat r -> Some (ConstantFloat (float_op l r))
-    | ConstantInt l, ConstantFloat r -> Some (ConstantFloat (float_op (float_of_int l) r))
-    | ConstantFloat l, ConstantInt r -> Some (ConstantFloat (float_op l (float_of_int r)))
+    | ConstantInt l, ConstantFloat r ->
+        Some (ConstantFloat (float_op (float_of_int l) r))
+    | ConstantFloat l, ConstantInt r ->
+        Some (ConstantFloat (float_op l (float_of_int r)))
     | _ -> None
 
   let fold_int_pair left right f =
     match (left, right) with
-    | ConstantInt l, ConstantInt r -> constant_int_of_int64 (f (Int64.of_int l) (Int64.of_int r))
+    | ConstantInt l, ConstantInt r ->
+        constant_int_of_int64 (f (Int64.of_int l) (Int64.of_int r))
     | _ -> None
 
   let literal_of_constant loc = function
-    | ConstantInt value -> Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Integer value))))
-    | ConstantBool value -> Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Bool value))))
-    | ConstantFloat value -> Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Float value))))
-    | ConstantString value -> Some (mk_expr loc (Core.Literal (mk_literal loc (Core.String value))))
-    | ConstantChar value -> Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Char value))))
+    | ConstantInt value ->
+        Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Integer value))))
+    | ConstantBool value ->
+        Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Bool value))))
+    | ConstantFloat value ->
+        Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Float value))))
+    | ConstantString value ->
+        Some (mk_expr loc (Core.Literal (mk_literal loc (Core.String value))))
+    | ConstantChar value ->
+        Some (mk_expr loc (Core.Literal (mk_literal loc (Core.Char value))))
 
   let constant_of_literal (literal : Core.literal) =
     match literal.value with
@@ -64,7 +72,8 @@ module ConstantFold = struct
     | Some (FloatPair (l, r)) -> Some (FloatPair (l, r))
     | None -> (
         match (left, right) with
-        | ConstantChar l, ConstantChar r -> Some (IntPair (Char.code l, Char.code r))
+        | ConstantChar l, ConstantChar r ->
+            Some (IntPair (Char.code l, Char.code r))
         | _ -> None)
 
   let equality_result left right =
@@ -79,10 +88,15 @@ module ConstantFold = struct
 
   let fold_unary op inner =
     match (op, inner) with
-    | Core.Not, _ -> Option.map (fun value -> ConstantBool (not value)) (truthy_of_constant inner)
-    | Core.Negate, ConstantInt value -> constant_int_of_int64 (Int64.neg (Int64.of_int value))
+    | Core.Not, _ ->
+        Option.map
+          (fun value -> ConstantBool (not value))
+          (truthy_of_constant inner)
+    | Core.Negate, ConstantInt value ->
+        constant_int_of_int64 (Int64.neg (Int64.of_int value))
     | Core.Negate, ConstantFloat value -> Some (ConstantFloat (-.value))
-    | Core.Complement, ConstantInt value -> constant_int_of_int64 (Int64.lognot (Int64.of_int value))
+    | Core.Complement, ConstantInt value ->
+        constant_int_of_int64 (Int64.lognot (Int64.of_int value))
     | _ -> None
 
   let fold_binary op left right =
@@ -109,8 +123,10 @@ module ConstantFold = struct
         | ConstantFloat _, ConstantInt 0 ->
             None
         | ConstantFloat l, ConstantFloat r -> Some (ConstantFloat (l /. r))
-        | ConstantInt l, ConstantFloat r -> Some (ConstantFloat (float_of_int l /. r))
-        | ConstantFloat l, ConstantInt r -> Some (ConstantFloat (l /. float_of_int r))
+        | ConstantInt l, ConstantFloat r ->
+            Some (ConstantFloat (float_of_int l /. r))
+        | ConstantFloat l, ConstantInt r ->
+            Some (ConstantFloat (l /. float_of_int r))
         | _ -> None)
     | Core.Modulo -> (
         match (left, right) with
@@ -141,9 +157,13 @@ module ConstantFold = struct
         | Some (ConstantInt value) -> Some (ConstantInt value)
         | _ -> None)
     | Core.IsEqual -> (
-        match equality_result left right with Some value -> Some (ConstantBool value) | None -> None)
+        match equality_result left right with
+        | Some value -> Some (ConstantBool value)
+        | None -> None)
     | Core.NotEqual -> (
-        match equality_result left right with Some value -> Some (ConstantBool (not value)) | None -> None)
+        match equality_result left right with
+        | Some value -> Some (ConstantBool (not value))
+        | None -> None)
     | Core.LessThan -> (
         match order_pair left right with
         | Some (IntPair (l, r)) -> Some (ConstantBool (l < r))
@@ -184,27 +204,42 @@ module ConstantFold = struct
             Option.bind (constant_of_expr binary.value.right) (fun right ->
                 fold_binary binary.value.op left right))
     | Core.ToBool inner ->
-        Option.bind (constant_of_expr inner) truthy_of_constant |> Option.map (fun value -> ConstantBool value)
+        Option.bind (constant_of_expr inner) truthy_of_constant
+        |> Option.map (fun value -> ConstantBool value)
     | Core.Block block when block.value.statements = [] ->
         Option.bind block.value.result constant_of_expr
     | _ -> None
 
   let rec fold_literal (literal : Core.literal) =
     match literal.value with
-    | Core.Matrix mat -> mk_literal literal.loc (Core.Matrix (fold_mat_literal mat))
-    | Core.Vector vec -> mk_literal literal.loc (Core.Vector (fold_vec_literal vec))
-    | Core.Enum enum -> mk_literal literal.loc (Core.Enum (fold_enum_literal enum))
-    | (Core.Integer _ | Core.Bool _ | Core.Float _ | Core.String _ | Core.Char _) as value ->
+    | Core.Matrix mat ->
+        mk_literal literal.loc (Core.Matrix (fold_mat_literal mat))
+    | Core.Vector vec ->
+        mk_literal literal.loc (Core.Vector (fold_vec_literal vec))
+    | Core.Enum enum ->
+        mk_literal literal.loc (Core.Enum (fold_enum_literal enum))
+    | (Core.Integer _ | Core.Bool _ | Core.Float _ | Core.String _ | Core.Char _)
+      as value ->
         mk_literal literal.loc value
 
   and fold_vec_literal (vec : Core.vec_literal) =
-    { vec with value = { elements = List.map fold_expression vec.value.elements } }
+    {
+      vec with
+      value = { elements = List.map fold_expression vec.value.elements };
+    }
 
   and fold_mat_literal (mat : Core.mat_literal) =
     { mat with value = { rows = List.map fold_expression mat.value.rows } }
 
   and fold_enum_literal (enum : Core.enum_literal) =
-    { enum with value = { enum.value with wrapped = List.map fold_expression enum.value.wrapped } }
+    {
+      enum with
+      value =
+        {
+          enum.value with
+          wrapped = List.map fold_expression enum.value.wrapped;
+        };
+    }
 
   and fold_expression (expr : Core.expression) : Core.expression =
     let value =
@@ -224,16 +259,24 @@ module ConstantFold = struct
           Core.Unary
             {
               unary with
-              value = { unary.value with inner = fold_expression unary.value.inner };
+              value =
+                { unary.value with inner = fold_expression unary.value.inner };
             }
       | Core.Block block -> Core.Block (fold_block block)
       | Core.ToBool inner -> Core.ToBool (fold_expression inner)
       | Core.Initializer init ->
           Core.Initializer
-            { init with value = { Core.exprs = List.map fold_expression init.value.exprs } }
+            {
+              init with
+              value = { Core.exprs = List.map fold_expression init.value.exprs };
+            }
       | Core.As cast ->
           Core.As
-            { cast with value = { cast.value with inner = fold_expression cast.value.inner } }
+            {
+              cast with
+              value =
+                { cast.value with inner = fold_expression cast.value.inner };
+            }
       | Core.SizeExpr inner -> Core.SizeExpr (fold_expression inner)
       | Core.Match match_expr ->
           Core.Match
@@ -245,7 +288,14 @@ module ConstantFold = struct
                   arms =
                     List.map
                       (fun (arm : Core.match_arm) ->
-                        { arm with value = { arm.value with expr = fold_expression arm.value.expr } })
+                        {
+                          arm with
+                          value =
+                            {
+                              arm.value with
+                              expr = fold_expression arm.value.expr;
+                            };
+                        })
                       match_expr.value.arms;
                 };
             }
@@ -254,7 +304,11 @@ module ConstantFold = struct
           Core.BoxConstruct
             {
               box with
-              value = { box.value with args = List.map fold_expression box.value.args };
+              value =
+                {
+                  box.value with
+                  args = List.map fold_expression box.value.args;
+                };
             }
       | Core.Unbox inner -> Core.Unbox (fold_expression inner)
       | Core.Ref inner -> Core.Ref (fold_expression inner)
@@ -281,40 +335,53 @@ module ConstantFold = struct
             }
       | Core.Field field ->
           Core.Field
-            { field with value = { field.value with target = fold_expression field.value.target } }
+            {
+              field with
+              value =
+                { field.value with target = fold_expression field.value.target };
+            }
       | Core.Assign write -> Core.Assign (fold_write write)
       | Core.Mutate write -> Core.Mutate (fold_write write)
       | Core.Literal literal -> Core.Literal (fold_literal literal)
-      | (Core.Identifier _ | Core.SizeType _ | Core.Nil | Core.Zero | Core.BoxType _) as
-          value ->
+      | ( Core.Identifier _ | Core.SizeType _ | Core.Nil | Core.Zero
+        | Core.BoxType _ ) as value ->
           value
     in
     let expr = { expr with value } in
     match expr.value with
-    | Core.Literal _ | Core.Identifier _ | Core.Nil | Core.Zero | Core.SizeType _
-    | Core.BoxType _ | Core.BoxConstruct _ ->
+    | Core.Literal _ | Core.Identifier _ | Core.Nil | Core.Zero
+    | Core.SizeType _ | Core.BoxType _ | Core.BoxConstruct _ ->
         expr
     | Core.Block block when block.value.statements = [] -> (
         match block.value.result with Some result -> result | None -> expr)
     | Core.ToBool inner -> (
         match constant_of_expr inner with
         | Some constant -> (
-            match literal_of_constant expr.loc constant with Some folded -> { expr with value = folded.value } | None -> expr)
+            match literal_of_constant expr.loc constant with
+            | Some folded -> { expr with value = folded.value }
+            | None -> expr)
         | None -> expr)
     | Core.Unary unary -> (
         match constant_of_expr unary.value.inner with
         | Some constant -> (
             match fold_unary unary.value.op constant with
             | Some folded -> (
-                match literal_of_constant expr.loc folded with Some lit -> { expr with value = lit.value } | None -> expr)
+                match literal_of_constant expr.loc folded with
+                | Some lit -> { expr with value = lit.value }
+                | None -> expr)
             | None -> expr)
         | None -> expr)
     | Core.Binary binary -> (
-        match (constant_of_expr binary.value.left, constant_of_expr binary.value.right) with
+        match
+          ( constant_of_expr binary.value.left,
+            constant_of_expr binary.value.right )
+        with
         | Some left, Some right -> (
             match fold_binary binary.value.op left right with
             | Some folded -> (
-                match literal_of_constant expr.loc folded with Some lit -> { expr with value = lit.value } | None -> expr)
+                match literal_of_constant expr.loc folded with
+                | Some lit -> { expr with value = lit.value }
+                | None -> expr)
             | None -> expr)
         | _ -> expr)
     | _ -> expr
@@ -349,7 +416,11 @@ module ConstantFold = struct
           Core.Let
             {
               binding with
-              value = { binding.value with init_expr = fold_expression binding.value.init_expr };
+              value =
+                {
+                  binding.value with
+                  init_expr = fold_expression binding.value.init_expr;
+                };
             }
       | Core.Loop loop ->
           Core.Loop
@@ -364,7 +435,7 @@ module ConstantFold = struct
                   step = List.map fold_statement loop.value.step;
                 };
             }
-      | Core.Break | Core.Continue as value -> value
+      | (Core.Break | Core.Continue) as value -> value
     in
     { stmt with value }
 
@@ -419,7 +490,8 @@ module ConstantFold = struct
       Core.program =
         {
           program.program with
-          value = { Core.decls = List.map fold_top_decl program.program.value.decls };
+          value =
+            { Core.decls = List.map fold_top_decl program.program.value.decls };
         };
     }
 end

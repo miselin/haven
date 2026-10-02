@@ -128,12 +128,7 @@ and top_decl_desc =
   | Extend of type_extend
 
 and top_decl = top_decl_desc node
-
-and visibility_block_desc = {
-  visibility : Visibility.t;
-  decls : top_decl list;
-}
-
+and visibility_block_desc = { visibility : Visibility.t; decls : top_decl list }
 and visibility_block = visibility_block_desc node
 
 and function_decl_desc = {
@@ -158,16 +153,16 @@ and var_decl_desc = {
 }
 
 and var_decl = var_decl_desc node
+
 and type_decl_desc = {
   name : identifier;
   visibility : Visibility.t;
   data : type_decl_data;
 }
-and type_decl = type_decl_desc node
 
+and type_decl = type_decl_desc node
 and type_extend_desc = { target : identifier; items : extend_item list }
 and type_extend = type_extend_desc node
-
 and lifecycle_construct_desc = { params : param list; body : block }
 and lifecycle_construct = lifecycle_construct_desc node
 
@@ -184,7 +179,12 @@ and type_decl_data =
   | TypeDeclForward
 
 and struct_decl_desc = { fields : struct_field list }
-and enum_decl_desc = { generics : identifier list; variants : enum_variant list }
+
+and enum_decl_desc = {
+  generics : identifier list;
+  variants : enum_variant list;
+}
+
 and struct_field_desc = { name : identifier; ty : haven_type }
 and enum_variant_desc = { name : identifier; inner_tys : haven_type list }
 and struct_decl = struct_decl_desc node
@@ -207,7 +207,6 @@ and block_item_desc =
   | BlockExpression of expression
 
 and block_item = block_item_desc node
-
 and compile_assert_desc = { cond : expression; message : string node }
 and compile_assert = compile_assert_desc node
 

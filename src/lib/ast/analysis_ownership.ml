@@ -13,10 +13,7 @@ module Ownership = struct
     | LoopScope of string
     | BlockScope of string
 
-  type scope = {
-    kind : scope_kind;
-    owned : owned_value list;
-  }
+  type scope = { kind : scope_kind; owned : owned_value list }
 
   type state = {
     typed : typing_result;
@@ -52,7 +49,8 @@ module Ownership = struct
         | BeforeStmt id -> add_indexed_action index.before_stmt id action
         | OnBlockExit id -> add_indexed_action index.on_block_exit id action
         | OnLoopExit id -> add_indexed_action index.on_loop_exit id action
-        | OnFunctionExit id -> add_indexed_action index.on_function_exit id action
+        | OnFunctionExit id ->
+            add_indexed_action index.on_function_exit id action
         | OnGlobalInit id -> add_indexed_action index.on_global_init id action)
       actions;
     index
@@ -123,10 +121,14 @@ module Ownership = struct
     | Some _ | None -> None
 
   let emit_retain_expr state reason expected (expr : Core.expression) =
-    emit_action state (AfterExpr (expr_id expr)) Retain reason
+    emit_action state
+      (AfterExpr (expr_id expr))
+      Retain reason
       (OwnershipExpr (expr_id expr, root_identifier_name expr))
       expr.loc
-      (match expr_resolved_type state expr with Some ty -> Some ty | None -> Some expected)
+      (match expr_resolved_type state expr with
+      | Some ty -> Some ty
+      | None -> Some expected)
 
   let rec emit_initializer_retains state reason slots exprs =
     match (slots, exprs) with
@@ -135,8 +137,12 @@ module Ownership = struct
         emit_initializer_retains state reason slot_rest expr_rest
     | _ -> ()
 
-  and emit_enum_payload_retains state reason expected (enum_lit : Core.enum_literal) =
-    match lookup_enum_variant state.type_env enum_lit.loc expected enum_lit.value.enum_variant.value with
+  and emit_enum_payload_retains state reason expected
+      (enum_lit : Core.enum_literal) =
+    match
+      lookup_enum_variant state.type_env enum_lit.loc expected
+        enum_lit.value.enum_variant.value
+    with
     | Some (_, payload_tys) ->
         List.iter2
           (fun payload_ty wrapped ->
@@ -166,14 +172,20 @@ module Ownership = struct
             match literal.value with
             | Core.Enum enum_lit ->
                 emit_enum_payload_retains state reason enum_ty
-                  { enum_lit with value = { enum_lit.value with wrapped = call.value.params } }
+                  {
+                    enum_lit with
+                    value = { enum_lit.value with wrapped = call.value.params };
+                  }
             | _ -> ())
         | _ -> ())
     | _ -> ()
 
-  and emit_retains_for_expected_enum_call state reason expected (call : Core.call) =
+  and emit_retains_for_expected_enum_call state reason expected
+      (call : Core.call) =
     let emit_variant_retains variant_name =
-      match lookup_enum_variant state.type_env call.loc expected variant_name with
+      match
+        lookup_enum_variant state.type_env call.loc expected variant_name
+      with
       | Some (_, payload_tys) ->
           List.iter2
             (fun payload_ty wrapped ->
@@ -190,7 +202,8 @@ module Ownership = struct
     | Core.Identifier id -> emit_variant_retains id.value
     | Core.Literal literal -> (
         match literal.value with
-        | Core.Enum enum_lit -> emit_variant_retains enum_lit.value.enum_variant.value
+        | Core.Enum enum_lit ->
+            emit_variant_retains enum_lit.value.enum_variant.value
         | _ -> ())
     | _ -> ()
 
@@ -200,10 +213,14 @@ module Ownership = struct
       match expr.value with
       | Core.Nil | Core.Zero -> ()
       | Core.BoxExpr _ | Core.BoxType _ | Core.BoxConstruct _ -> ()
-      | Core.Call call -> emit_retains_for_expected_enum_call state reason expected call
-      | Core.As cast -> emit_retains_for_transfer state reason expected cast.value.inner
+      | Core.Call call ->
+          emit_retains_for_expected_enum_call state reason expected call
+      | Core.As cast ->
+          emit_retains_for_transfer state reason expected cast.value.inner
       | Core.Block block ->
-          Option.iter (emit_retains_for_transfer state reason expected) block.value.result
+          Option.iter
+            (emit_retains_for_transfer state reason expected)
+            block.value.result
       | Core.Match match_expr ->
           List.iter
             (fun (arm : Core.match_arm) ->
@@ -218,27 +235,29 @@ module Ownership = struct
           | ResolvedNamed _ as struct_ty -> (
               match lookup_struct_fields state.type_env expr.loc struct_ty with
               | Some fields ->
-                  emit_initializer_retains state reason
-                    (List.map snd fields)
+                  emit_initializer_retains state reason (List.map snd fields)
                     init.value.exprs
               | None -> ())
           | _ -> ())
       | Core.Literal literal -> (
           match literal.value with
-          | Core.Enum enum_lit -> emit_enum_payload_retains state reason expected enum_lit
+          | Core.Enum enum_lit ->
+              emit_enum_payload_retains state reason expected enum_lit
           | _ -> emit_retain_expr state reason expected expr)
       | _ -> emit_retain_expr state reason expected expr
 
   let emit_assignment_release state reason (expr : Core.expression)
       (target : Core.expression) expected =
     if resolved_contains_ownership state expr.loc expected then
-      emit_action state (BeforeExpr (expr_id expr)) Release reason
+      emit_action state
+        (BeforeExpr (expr_id expr))
+        Release reason
         (OwnershipTarget (expr_id target, root_identifier_name target))
         target.loc (Some expected)
 
   let rec emit_release_to_function state anchor = function
     | [] -> ()
-    | scope :: rest ->
+    | scope :: rest -> (
         let reason =
           match scope.kind with
           | BlockScope _ -> ScopeExit
@@ -246,9 +265,10 @@ module Ownership = struct
           | FunctionScope _ -> FunctionExit
         in
         emit_scope_release state anchor reason scope;
-        (match scope.kind with
+        match scope.kind with
         | FunctionScope _ -> ()
-        | BlockScope _ | LoopScope _ -> emit_release_to_function state anchor rest)
+        | BlockScope _ | LoopScope _ ->
+            emit_release_to_function state anchor rest)
 
   let rec emit_release_to_loop state anchor ~include_loop = function
     | [] -> ()
@@ -263,7 +283,9 @@ module Ownership = struct
 
   let rec visit_expression state scopes (expr : Core.expression) =
     match expr.value with
-    | Core.Identifier _ | Core.Nil | Core.Zero | Core.SizeType _ | Core.BoxType _ -> ()
+    | Core.Identifier _ | Core.Nil | Core.Zero | Core.SizeType _
+    | Core.BoxType _ ->
+        ()
     | Core.BoxConstruct box ->
         List.iter (visit_expression state scopes) box.value.args
     | Core.Literal literal -> (
@@ -274,7 +296,8 @@ module Ownership = struct
             List.iter (visit_expression state scopes) mat.value.rows
         | Core.Enum enum_lit ->
             List.iter (visit_expression state scopes) enum_lit.value.wrapped
-        | Core.Integer _ | Core.Bool _ | Core.Float _ | Core.String _ | Core.Char _ ->
+        | Core.Integer _ | Core.Bool _ | Core.Float _ | Core.String _
+        | Core.Char _ ->
             ())
     | Core.ToBool inner
     | Core.SizeExpr inner
@@ -283,21 +306,19 @@ module Ownership = struct
     | Core.Ref inner
     | Core.Load inner ->
         visit_expression state scopes inner
-    | Core.Unary unary ->
-        visit_expression state scopes unary.value.inner
+    | Core.Unary unary -> visit_expression state scopes unary.value.inner
     | Core.Binary binary ->
         visit_expression state scopes binary.value.left;
         visit_expression state scopes binary.value.right
-    | Core.Block block ->
-        ignore (visit_block_impl state scopes block ())
+    | Core.Block block -> ignore (visit_block_impl state scopes block ())
     | Core.Initializer init ->
         List.iter (visit_expression state scopes) init.value.exprs
-    | Core.As cast ->
-        visit_expression state scopes cast.value.inner
+    | Core.As cast -> visit_expression state scopes cast.value.inner
     | Core.Match match_expr ->
         visit_expression state scopes match_expr.value.expr;
         List.iter
-          (fun (arm : Core.match_arm) -> visit_expression state scopes arm.value.expr)
+          (fun (arm : Core.match_arm) ->
+            visit_expression state scopes arm.value.expr)
           match_expr.value.arms
     | Core.Call call ->
         visit_expression state scopes call.value.target;
@@ -306,25 +327,28 @@ module Ownership = struct
     | Core.Index index ->
         visit_expression state scopes index.value.target;
         visit_expression state scopes index.value.index
-    | Core.Field field ->
-        visit_expression state scopes field.value.target
-    | Core.Assign write ->
+    | Core.Field field -> visit_expression state scopes field.value.target
+    | Core.Assign write -> (
         visit_expression state scopes write.value.target;
         visit_expression state scopes write.value.value;
-        (match expr_resolved_type state write.value.target with
+        match expr_resolved_type state write.value.target with
         | Some expected ->
-            emit_retains_for_transfer state AssignValue expected write.value.value;
-            emit_assignment_release state AssignOverwrite expr write.value.target expected
+            emit_retains_for_transfer state AssignValue expected
+              write.value.value;
+            emit_assignment_release state AssignOverwrite expr
+              write.value.target expected
         | None -> ())
-    | Core.Mutate write ->
+    | Core.Mutate write -> (
         visit_expression state scopes write.value.target;
         visit_expression state scopes write.value.value;
-        (match expr_resolved_type state write.value.target with
+        match expr_resolved_type state write.value.target with
         | Some (ResolvedPointer expected)
         | Some (ResolvedBox expected)
         | Some (ResolvedCell expected) ->
-            emit_retains_for_transfer state MutateValue expected write.value.value;
-            emit_assignment_release state MutateOverwrite expr write.value.target expected
+            emit_retains_for_transfer state MutateValue expected
+              write.value.value;
+            emit_assignment_release state MutateOverwrite expr
+              write.value.target expected
         | Some _ | None -> ())
 
   and visit_statement state scopes ~return_expected (stmt : Core.statement) =
@@ -347,12 +371,14 @@ module Ownership = struct
         visit_expression state scopes expr;
         scopes
     | Core.Break ->
-        emit_release_to_loop state (BeforeStmt (statement_id stmt)) ~include_loop:true
-          scopes;
+        emit_release_to_loop state
+          (BeforeStmt (statement_id stmt))
+          ~include_loop:true scopes;
         scopes
     | Core.Continue ->
-        emit_release_to_loop state (BeforeStmt (statement_id stmt)) ~include_loop:false
-          scopes;
+        emit_release_to_loop state
+          (BeforeStmt (statement_id stmt))
+          ~include_loop:false scopes;
         scopes
     | Core.Let binding ->
         visit_expression state scopes binding.value.init_expr;
@@ -376,17 +402,24 @@ module Ownership = struct
         let loop_scopes = push_scope (LoopScope (statement_id stmt)) scopes in
         let loop_scopes =
           List.fold_left
-            (fun scopes stmt -> visit_statement state scopes ~return_expected stmt)
+            (fun scopes stmt ->
+              visit_statement state scopes ~return_expected stmt)
             loop_scopes loop.value.init
         in
         visit_expression state loop_scopes loop.value.cond;
-        ignore (visit_block_impl state loop_scopes loop.value.body ~return_expected ());
+        ignore
+          (visit_block_impl state loop_scopes loop.value.body ~return_expected
+             ());
         ignore
           (List.fold_left
-             (fun scopes stmt -> visit_statement state scopes ~return_expected stmt)
+             (fun scopes stmt ->
+               visit_statement state scopes ~return_expected stmt)
              loop_scopes loop.value.step);
         (match loop_scopes with
-        | scope :: _ -> emit_scope_release state (OnLoopExit (statement_id stmt)) LoopExit scope
+        | scope :: _ ->
+            emit_scope_release state
+              (OnLoopExit (statement_id stmt))
+              LoopExit scope
         | [] -> ());
         scopes
 
@@ -400,11 +433,13 @@ module Ownership = struct
     in
     Option.iter (visit_expression state scopes) block.value.result;
     (match scopes with
-    | scope :: _ -> emit_scope_release state (OnBlockExit (block_id block)) ScopeExit scope
+    | scope :: _ ->
+        emit_scope_release state (OnBlockExit (block_id block)) ScopeExit scope
     | [] -> ());
     List.tl scopes
 
-  let walk_block state scopes ?(return_expected : resolved_ty option = None) block =
+  let walk_block state scopes ?(return_expected : resolved_ty option = None)
+      block =
     visit_block_impl state scopes ~return_expected block ()
 
   let owned_param_of_decl state (param : Core.param) =
@@ -423,30 +458,42 @@ module Ownership = struct
     | None -> ()
     | Some body ->
         let return_expected =
-          let core_ty = Option.value ~default:(void_type fn.loc) fn.value.return_type in
+          let core_ty =
+            Option.value ~default:(void_type fn.loc) fn.value.return_type
+          in
           resolve_core_type state.type_env [] [] fn.loc core_ty
         in
         let params =
-          List.filter_map (owned_param_of_decl state) fn.value.params.value.params
+          List.filter_map
+            (owned_param_of_decl state)
+            fn.value.params.value.params
         in
-        let scopes = [ { kind = FunctionScope (function_id fn); owned = List.rev params } ] in
+        let scopes =
+          [ { kind = FunctionScope (function_id fn); owned = List.rev params } ]
+        in
         ignore (walk_block state scopes body ~return_expected);
         (match (return_expected, body.value.result) with
         | Some expected, Some result ->
             emit_retains_for_transfer state ReturnValue expected result
         | _ -> ());
-        emit_scope_release state (OnFunctionExit (function_id fn)) FunctionExit
+        emit_scope_release state
+          (OnFunctionExit (function_id fn))
+          FunctionExit
           { kind = FunctionScope (function_id fn); owned = List.rev params }
 
   let visit_top_decl state (decl : Core.top_decl) =
     match decl.value with
     | Core.FDecl fn -> visit_function state fn
-    | Core.Foreign foreign -> List.iter (visit_function state) foreign.value.decls
+    | Core.Foreign foreign ->
+        List.iter (visit_function state) foreign.value.decls
     | Core.VDecl binding ->
         Option.iter
           (fun init ->
             visit_expression state [] init;
-            match resolve_core_type state.type_env [] [] binding.loc binding.value.ty with
+            match
+              resolve_core_type state.type_env [] [] binding.loc
+                binding.value.ty
+            with
             | Some resolved ->
                 emit_retains_for_transfer state BindingInit resolved init
             | None -> ())
@@ -464,5 +511,9 @@ module Ownership = struct
     in
     List.iter (visit_top_decl state) typed.program.program.value.decls;
     let actions = List.rev state.actions_rev in
-    { actions; index = index_actions actions; diagnostics = List.rev state.diagnostics_rev }
+    {
+      actions;
+      index = index_actions actions;
+      diagnostics = List.rev state.diagnostics_rev;
+    }
 end

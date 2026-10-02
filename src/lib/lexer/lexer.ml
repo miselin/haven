@@ -51,8 +51,7 @@ type symbol =
   | Tilde
   | Underscore
 
-type directive =
-  | Assert
+type directive = Assert
 
 module Raw = struct
   type t =
@@ -97,7 +96,6 @@ let mat_type =
     ("fmat" | "mat"), nonzero, Star digit, 'x', nonzero, Star digit]
 
 let mat_hole_type = [%sedlex.regexp? "mat?"]
-
 let float_type = [%sedlex.regexp? "float"]
 let void_type = [%sedlex.regexp? "void"]
 let str_type = [%sedlex.regexp? "str"]
@@ -116,7 +114,10 @@ let ident =
   [%sedlex.regexp? (letter | '_'), Star ident_inner, Star ('-', ident_segment)]
 
 let newline = [%sedlex.regexp? "\r\n" | '\n' | '\r']
-let preprocessor_directive = [%sedlex.regexp? '#', Star (Compl ('\n' | '\r')), Opt newline]
+
+let preprocessor_directive =
+  [%sedlex.regexp? '#', Star (Compl ('\n' | '\r')), Opt newline]
+
 let whitespace = [%sedlex.regexp? Plus (Chars " \t\012\013")]
 let line_comment = [%sedlex.regexp? "//", Star (Compl ('\n' | '\r'))]
 
@@ -151,10 +152,7 @@ let push_token buf tok acc =
 
 let trim_ascii_whitespace text =
   let len = String.length text in
-  let is_space = function
-    | ' ' | '\t' | '\012' | '\013' -> true
-    | _ -> false
-  in
+  let is_space = function ' ' | '\t' | '\012' | '\013' -> true | _ -> false in
   let rec find_start i =
     if i >= len then len
     else if is_space (String.unsafe_get text i) then find_start (i + 1)
@@ -185,9 +183,7 @@ let parse_decimal_prefix text start =
   let len = String.length text in
   let rec loop i =
     if i < len then
-      match String.unsafe_get text i with
-      | '0' .. '9' -> loop (i + 1)
-      | _ -> i
+      match String.unsafe_get text i with '0' .. '9' -> loop (i + 1) | _ -> i
     else i
   in
   let finish = loop start in
@@ -214,9 +210,7 @@ let parse_quoted_string text start =
     loop (start + 1)
 
 let parse_line_directive text =
-  let body =
-    text |> strip_trailing_newline |> trim_ascii_whitespace
-  in
+  let body = text |> strip_trailing_newline |> trim_ascii_whitespace in
   let body =
     if String.length body > 0 && String.unsafe_get body 0 = '#' then
       String.sub body 1 (String.length body - 1) |> trim_ascii_whitespace
@@ -226,14 +220,12 @@ let parse_line_directive text =
     if
       String.length body >= 4
       && String.equal (String.sub body 0 4) "line"
-      &&
-      (String.length body = 4
-      ||
-      match String.unsafe_get body 4 with
-      | ' ' | '\t' | '\012' | '\013' -> true
-      | _ -> false)
-    then
-      String.sub body 4 (String.length body - 4) |> trim_ascii_whitespace
+      && (String.length body = 4
+         ||
+         match String.unsafe_get body 4 with
+         | ' ' | '\t' | '\012' | '\013' -> true
+         | _ -> false)
+    then String.sub body 4 (String.length body - 4) |> trim_ascii_whitespace
     else body
   in
   match parse_decimal_prefix body 0 with
@@ -275,43 +267,12 @@ let should_split_rshift rest =
   | Some { tok = EOF; _ } -> true
   | Some { tok = Symbol sym; _ } -> (
       match sym with
-      | Comma
-      | Dot
-      | Semicolon
-      | Colon
-      | Star
-      | Caret
-      | RParen
-      | RBrace
-      | RBracket
-      | LBracket
-      | Gt
-      | Scope ->
+      | Comma | Dot | Semicolon | Colon | Star | Caret | RParen | RBrace
+      | RBracket | LBracket | Gt | Scope ->
           true
-      | Arrow
-      | FatArrow
-      | Walrus
-      | LogicAnd
-      | LogicOr
-      | EqEq
-      | BangEq
-      | LtEq
-      | GtEq
-      | LShift
-      | RShift
-      | LParen
-      | LBrace
-      | Lt
-      | Plus
-      | Minus
-      | Slash
-      | Percent
-      | Equal
-      | Ampersand
-      | Pipe
-      | Bang
-      | Tilde
-      | Underscore ->
+      | Arrow | FatArrow | Walrus | LogicAnd | LogicOr | EqEq | BangEq | LtEq
+      | GtEq | LShift | RShift | LParen | LBrace | Lt | Plus | Minus | Slash
+      | Percent | Equal | Ampersand | Pipe | Bang | Tilde | Underscore ->
           false)
   | Some _ -> false
 
@@ -319,7 +280,8 @@ let split_closing_rshifts tokens =
   let gt_of tok = { tok with tok = Symbol Gt } in
   let rec loop acc = function
     | [] -> List.rev acc
-    | ({ tok = Symbol RShift; _ } as tok) :: rest when should_split_rshift rest ->
+    | ({ tok = Symbol RShift; _ } as tok) :: rest when should_split_rshift rest
+      ->
         loop (gt_of tok :: gt_of tok :: acc) rest
     | tok :: rest -> loop (tok :: acc) rest
   in

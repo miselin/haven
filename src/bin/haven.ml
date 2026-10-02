@@ -1,5 +1,4 @@
 open Format
-
 module Analysis = Haven.Ast.Analysis
 module Convert = Haven.Ast.Convert
 module Imports = Haven.Ast.Imports
@@ -56,23 +55,22 @@ let string_of_loc (loc : Haven_core.Loc.t) =
     (loc.start_pos.pos_cnum - loc.start_pos.pos_bol + 1)
 
 let print_diagnostic (diagnostic : Analysis.diagnostic) =
-  eprintf "%s: %s: %s: %s@." (string_of_loc diagnostic.loc)
+  eprintf "%s: %s: %s: %s@."
+    (string_of_loc diagnostic.loc)
     (string_of_category diagnostic.category)
     (string_of_level diagnostic.level)
     diagnostic.message
 
 let has_error diagnostics =
   List.exists
-    (fun (diagnostic : Analysis.diagnostic) -> diagnostic.level = Analysis.Error)
+    (fun (diagnostic : Analysis.diagnostic) ->
+      diagnostic.level = Analysis.Error)
     diagnostics
 
 let collect_pipeline_diagnostics (pipeline : Analysis.Pipeline.result) =
-  pipeline.typing.diagnostics
-  @ pipeline.verify.diagnostics
-  @ pipeline.semantic.diagnostics
-  @ pipeline.asserts.diagnostics
-  @ pipeline.purity.diagnostics
-  @ pipeline.ownership.diagnostics
+  pipeline.typing.diagnostics @ pipeline.verify.diagnostics
+  @ pipeline.semantic.diagnostics @ pipeline.asserts.diagnostics
+  @ pipeline.purity.diagnostics @ pipeline.ownership.diagnostics
 
 let parse_input = function
   | None -> Haven.Parser.parse_stdin ()
@@ -114,7 +112,9 @@ let default_output_file (config : config) =
 
 let write_text_file path text =
   let ch = open_out path in
-  Fun.protect ~finally:(fun () -> close_out_noerr ch) (fun () -> output_string ch text)
+  Fun.protect
+    ~finally:(fun () -> close_out_noerr ch)
+    (fun () -> output_string ch text)
 
 let emit_text output_file text =
   match output_file with
@@ -124,31 +124,35 @@ let emit_text output_file text =
       pp_print_flush std_formatter ()
 
 let trace config fmt =
-  if config.trace then kfprintf (fun _ -> pp_print_flush err_formatter ()) err_formatter fmt
+  if config.trace then
+    kfprintf (fun _ -> pp_print_flush err_formatter ()) err_formatter fmt
   else ifprintf err_formatter fmt
 
 let emit_debug_ast heading program =
   eprintf "%s@.%s" heading (render_core_program program)
 
 let split_commas value =
-  value
-  |> String.split_on_char ','
+  value |> String.split_on_char ','
   |> List.filter (fun token -> not (String.equal token ""))
 
 let validate_include_dir path =
   let resolved =
     try Unix.realpath path
     with Unix.Unix_error (err, _, _) ->
-      raise (Arg.Bad (Printf.sprintf "failed to resolve include path %s: %s" path
-                        (Unix.error_message err)))
+      raise
+        (Arg.Bad
+           (Printf.sprintf "failed to resolve include path %s: %s" path
+              (Unix.error_message err)))
   in
   try
     match (Unix.stat resolved).Unix.st_kind with
     | Unix.S_DIR -> resolved
     | _ -> raise (Arg.Bad (Printf.sprintf "not a directory: %s" resolved))
   with Unix.Unix_error (err, _, _) ->
-    raise (Arg.Bad (Printf.sprintf "failed to stat include path %s: %s" resolved
-                      (Unix.error_message err)))
+    raise
+      (Arg.Bad
+         (Printf.sprintf "failed to stat include path %s: %s" resolved
+            (Unix.error_message err)))
 
 let parse_args argv =
   let output_mode = ref Emit_binary in
@@ -185,8 +189,12 @@ let parse_args argv =
   let specs =
     Arg.align
       [
-        ("-c", Arg.Unit (set_output Emit_object), " generate an object file, do not link");
-        ("-o", Arg.String (fun value -> output_file := Some value), " <file> output file");
+        ( "-c",
+          Arg.Unit (set_output Emit_object),
+          " generate an object file, do not link" );
+        ( "-o",
+          Arg.String (fun value -> output_file := Some value),
+          " <file> output file" );
         ("-S", Arg.Unit (set_output Emit_asm), " output assembly");
         ("--O0", Arg.Unit (set_opt Llvm_ir.O0), " no optimizations");
         ("--O1", Arg.Unit (set_opt Llvm_ir.O1), " light optimizations");
@@ -194,20 +202,38 @@ let parse_args argv =
         ("--O3", Arg.Unit (set_opt Llvm_ir.O3), " aggressive optimizations");
         ("--Os", Arg.Unit (set_opt Llvm_ir.Os), " optimize for size");
         ("--debug-ast", Arg.Set debug_ast, " display the parsed AST");
-        ("--debug-ir", Arg.Set debug_ir, " display the generated LLVM IR before emission");
+        ( "--debug-ir",
+          Arg.Set debug_ir,
+          " display the generated LLVM IR before emission" );
         ("--debug-llvm", Arg.Set debug_llvm, " enable LLVM pass debug logging");
         ("--emit-ir", Arg.Unit (set_output Emit_ir), " emit textual IR");
-        ("--emit-core", Arg.Unit (set_output Emit_core), " emit the cleaned core AST");
-        ("--emit-bitcode", Arg.Unit (set_output Emit_bitcode), " emit LLVM bitcode");
+        ( "--emit-core",
+          Arg.Unit (set_output Emit_core),
+          " emit the cleaned core AST" );
+        ( "--emit-bitcode",
+          Arg.Unit (set_output Emit_bitcode),
+          " emit LLVM bitcode" );
         ("--verbose", Arg.Set verbose, " enable driver logging");
         ("--trace", Arg.Set trace_logs, " enable phase-level driver tracing");
-        ("-I", Arg.String add_include_dir, " <path> add a path to the import search path");
-        ("-isysroot", Arg.String (fun value -> sysroot := Some value), " <path> use <path> as the SDK/sysroot for cimport");
-        ("--no-preamble", Arg.Set no_preamble, " do not emit the default preamble");
-        ("--Xl", Arg.String add_linker_option, " <flag> pass <flag> to the linker");
-        ("--ld", Arg.String (fun value -> linker := Some value), " <path> use <path> as the linker");
+        ( "-I",
+          Arg.String add_include_dir,
+          " <path> add a path to the import search path" );
+        ( "-isysroot",
+          Arg.String (fun value -> sysroot := Some value),
+          " <path> use <path> as the SDK/sysroot for cimport" );
+        ( "--no-preamble",
+          Arg.Set no_preamble,
+          " do not emit the default preamble" );
+        ( "--Xl",
+          Arg.String add_linker_option,
+          " <flag> pass <flag> to the linker" );
+        ( "--ld",
+          Arg.String (fun value -> linker := Some value),
+          " <path> use <path> as the linker" );
         ("--no-color", Arg.Set no_color, " disable color in diagnostics");
-        ("--asan", Arg.Set asan, " accept the ASan flag and pass it through when linking");
+        ( "--asan",
+          Arg.Set asan,
+          " accept the ASan flag and pass it through when linking" );
         ("--only-parse", Arg.Set only_parse, " stop after parsing");
       ]
   in
@@ -273,16 +299,17 @@ let summarize_config (config : config) =
     | None -> ())
 
 let default_linker_options () =
-  if Haven.Ast.Platform_defaults_common.is_linux_host () then [ "-no-pie" ] else []
+  if Haven.Ast.Platform_defaults_common.is_linux_host () then [ "-no-pie" ]
+  else []
 
 let run_linker config ~object_file ~output_file =
   let linker = match config.linker with Some path -> path | None -> "gcc" in
   let args =
     Array.of_list
       ([ linker; "-o"; output_file; object_file ]
-     @ default_linker_options ()
-     @ (if config.asan then [ "-fsanitize=address" ] else [])
-     @ config.linker_options)
+      @ default_linker_options ()
+      @ (if config.asan then [ "-fsanitize=address" ] else [])
+      @ config.linker_options)
   in
   trace config "phase: link %s@." (String.concat " " (Array.to_list args));
   let pid =
@@ -301,7 +328,9 @@ let run_linker config ~object_file ~output_file =
 let with_temp_object_file f =
   let path, ch = Filename.open_temp_file "haven" ".o" in
   close_out_noerr ch;
-  Fun.protect ~finally:(fun () -> if Sys.file_exists path then Sys.remove path) (fun () -> f path)
+  Fun.protect
+    ~finally:(fun () -> if Sys.file_exists path then Sys.remove path)
+    (fun () -> f path)
 
 let codegen_options (config : config) =
   {
@@ -317,17 +346,19 @@ let main () =
     try
       trace config "phase: parse@.";
       parse_input config.input
-    with
-    | Failure msg
-    | Sys_error msg ->
-        eprintf "haven: %s@." msg;
-        exit 1
+    with Failure msg | Sys_error msg ->
+      eprintf "haven: %s@." msg;
+      exit 1
   in
   if config.only_parse then (
-    if config.debug_ast then emit_debug_ast "== Parsed AST ==" (Convert.core_of_cst parsed);
+    if config.debug_ast then
+      emit_debug_ast "== Parsed AST ==" (Convert.core_of_cst parsed);
     exit 0);
   trace config "phase: import expansion@.";
-  let expanded = Imports.expand_cst ~search_dirs:config.include_dirs ?sysroot:config.sysroot parsed in
+  let expanded =
+    Imports.expand_cst ~search_dirs:config.include_dirs ?sysroot:config.sysroot
+      parsed
+  in
   if expanded.diagnostics <> [] then (
     List.iter print_diagnostic expanded.diagnostics;
     exit 1);
@@ -338,21 +369,27 @@ let main () =
   let diagnostics = collect_pipeline_diagnostics pipeline in
   List.iter print_diagnostic diagnostics;
   if has_error diagnostics then (
-    if config.debug_ast then emit_debug_ast "== Partial AST after failure ==" pipeline.cleaned;
+    if config.debug_ast then
+      emit_debug_ast "== Partial AST after failure ==" pipeline.cleaned;
     exit 1);
-  if config.debug_ast then emit_debug_ast "== Pre-codegen AST ==" pipeline.cleaned;
+  if config.debug_ast then
+    emit_debug_ast "== Pre-codegen AST ==" pipeline.cleaned;
   try
     match config.output_mode with
     | Emit_core ->
         emit_text config.output_file (render_core_program pipeline.cleaned)
     | Emit_ir | Emit_bitcode | Emit_object | Emit_asm | Emit_binary -> (
         trace config "phase: llvm lowering@.";
-        let compiled = Llvm_ir.compile ~options:(codegen_options config) pipeline in
-        if config.debug_ir then eprintf "%s@." (Llvm.string_of_llmodule compiled.llmodule);
+        let compiled =
+          Llvm_ir.compile ~options:(codegen_options config) pipeline
+        in
+        if config.debug_ir then
+          eprintf "%s@." (Llvm.string_of_llmodule compiled.llmodule);
         match config.output_mode with
         | Emit_ir ->
             emit_text config.output_file
-              (Printf.sprintf "%s\n" (Llvm.string_of_llmodule compiled.llmodule))
+              (Printf.sprintf "%s\n"
+                 (Llvm.string_of_llmodule compiled.llmodule))
         | Emit_bitcode -> (
             match default_output_file config with
             | Some path -> Llvm_ir.emit_bitcode_file compiled path

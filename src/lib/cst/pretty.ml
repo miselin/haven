@@ -7,7 +7,8 @@ let unwrap (n : _ Cst.node) = n.value
 let pp_identifier fmt (id : identifier) = fprintf fmt "%s" id.value
 let pp_string_lit fmt (s : string node) = fprintf fmt "%S" s.value
 
-let pp_visibility fmt visibility = fprintf fmt "%s" (Visibility.to_string visibility)
+let pp_visibility fmt visibility =
+  fprintf fmt "%s" (Visibility.to_string visibility)
 
 let pp_unary_op fmt op =
   match op with
@@ -199,8 +200,8 @@ and pp_statement fmt stmt =
       fprintf fmt "@[<hv 2>Let(@,mut=%a,@ name=%a,@ init_expr=%a@,)@]"
         pp_print_bool s.mut pp_identifier s.name pp_expression s.init_expr
   | CompileAssert a ->
-      fprintf fmt "@[<hv 2>CompileAssert(@,cond=%a,@ message=%S@,)@]" pp_expression
-        a.value.cond a.value.message.value
+      fprintf fmt "@[<hv 2>CompileAssert(@,cond=%a,@ message=%S@,)@]"
+        pp_expression a.value.cond a.value.message.value
   | Return (Some e) -> fprintf fmt "@[<hv 2>Return(@,%a@,)@]" pp_expression e
   | Return None -> fprintf fmt "Return"
   | Defer e -> fprintf fmt "@[<hv 2>Defer(@,%a@,)@]" pp_expression e
@@ -270,7 +271,9 @@ let pp_fdecl_list fmt decls =
 let pp_var_decl fmt (decl : var_decl) =
   let decl = unwrap decl in
   fprintf fmt
-    "@[<hv 2>Variable(@,name=%s,@ visibility=%a,@ mutable=%a,@ ty=%a,@ init=%a@,)@]"
+    "@[<hv 2>Variable(@,\
+     name=%s,@ visibility=%a,@ mutable=%a,@ ty=%a,@ init=%a@,\
+     )@]"
     decl.name.value pp_visibility decl.visibility pp_print_bool decl.is_mutable
     pp_type decl.ty
     (pp_print_option pp_expression)
@@ -308,8 +311,8 @@ let pp_type_decl_data fmt tyd =
 
 let pp_type_decl fmt (ty : type_decl) =
   let ty = unwrap ty in
-  fprintf fmt "@[<hv 2>TypeDecl(@,visibility=%a,@ %a,@ %a@,)@]"
-    pp_visibility ty.visibility pp_identifier ty.name pp_type_decl_data ty.data
+  fprintf fmt "@[<hv 2>TypeDecl(@,visibility=%a,@ %a,@ %a@,)@]" pp_visibility
+    ty.visibility pp_identifier ty.name pp_type_decl_data ty.data
 
 let pp_lifecycle_construct fmt (decl : lifecycle_construct) =
   fprintf fmt "Construct(params=[%a], body=%a)"
@@ -342,7 +345,8 @@ let rec pp_decl fmt decl =
         pp_fdecl_list f.decls
 
 and pp_visibility_block fmt (block : visibility_block) =
-  fprintf fmt "Block(visibility=%a, decls=[%a])" pp_visibility block.value.visibility
+  fprintf fmt "Block(visibility=%a, decls=[%a])" pp_visibility
+    block.value.visibility
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_decl)
     block.value.decls
 

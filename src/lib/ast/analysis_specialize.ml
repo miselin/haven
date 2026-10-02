@@ -1,5 +1,4 @@
 open Analysis_types
-
 module Typing = Analysis_typing.Typing
 
 module Specialize = struct
@@ -11,10 +10,7 @@ module Specialize = struct
     return_type : resolved_ty;
   }
 
-  type result = {
-    program : Core.parsed_program;
-    diagnostics : diagnostic list;
-  }
+  type result = { program : Core.parsed_program; diagnostics : diagnostic list }
 
   type state = {
     typed : typing_result;
@@ -45,7 +41,8 @@ module Specialize = struct
     Hashtbl.find_opt annotations.exprs (expr_id expr)
 
   let resolved_expr_type annotations expr =
-    Option.bind (expr_annotation annotations expr) (fun ann -> ann.resolved_type)
+    Option.bind (expr_annotation annotations expr) (fun ann ->
+        ann.resolved_type)
 
   let exact_integer annotations expr =
     Option.bind (expr_annotation annotations expr) (fun ann ->
@@ -87,20 +84,24 @@ module Specialize = struct
     | ResolvedVec vec -> Printf.sprintf "fvec%d" vec.dimension
     | ResolvedMatrix mat -> Printf.sprintf "mat%dx%d" mat.rows mat.columns
     | ResolvedFunction (params, ret, _vararg) ->
-        "fn_" ^ String.concat "_" (List.map resolved_name params) ^ "_to_"
-        ^ resolved_name ret
+        "fn_"
+        ^ String.concat "_" (List.map resolved_name params)
+        ^ "_to_" ^ resolved_name ret
     | ResolvedNamed (name, []) -> sanitize_name name
     | ResolvedNamed (name, args) ->
-        sanitize_name name ^ "_" ^ String.concat "_" (List.map resolved_name args)
+        sanitize_name name ^ "_"
+        ^ String.concat "_" (List.map resolved_name args)
     | ResolvedGenericParam name -> sanitize_name name
     | ResolvedVecHole -> "fvec_hole"
     | ResolvedMatrixHole -> "mat_hole"
 
   let instance_key (fn : Core.function_decl) param_types =
-    function_id fn ^ "::" ^ String.concat "::" (List.map resolved_name param_types)
+    function_id fn ^ "::"
+    ^ String.concat "::" (List.map resolved_name param_types)
 
   let instance_name (fn : Core.function_decl) param_types =
-    fn.value.name.value ^ "__spec__" ^ String.concat "__" (List.map resolved_name param_types)
+    fn.value.name.value ^ "__spec__"
+    ^ String.concat "__" (List.map resolved_name param_types)
 
   let collect_functions (program : Core.program) =
     let add_fn map (fn : Core.function_decl) =
@@ -133,7 +134,9 @@ module Specialize = struct
       | None -> arg_type
 
   let canonical_param_types type_env (fn : Core.function_decl) arg_types =
-    List.map2 (canonical_param_type type_env) fn.value.params.value.params arg_types
+    List.map2
+      (canonical_param_type type_env)
+      fn.value.params.value.params arg_types
 
   let enqueue_instance state (fn : Core.function_decl) param_types return_type =
     let key = instance_key fn param_types in
@@ -182,8 +185,10 @@ module Specialize = struct
                 value =
                   {
                     binary.value with
-                    left = rewrite_expression state annotations binary.value.left;
-                    right = rewrite_expression state annotations binary.value.right;
+                    left =
+                      rewrite_expression state annotations binary.value.left;
+                    right =
+                      rewrite_expression state annotations binary.value.right;
                   };
               };
         }
@@ -197,14 +202,18 @@ module Specialize = struct
                 value =
                   {
                     unary.value with
-                    inner = rewrite_expression state annotations unary.value.inner;
+                    inner =
+                      rewrite_expression state annotations unary.value.inner;
                   };
               };
         }
     | Core.Block block ->
         { expr with value = Core.Block (rewrite_block state annotations block) }
     | Core.ToBool inner ->
-        { expr with value = Core.ToBool (rewrite_expression state annotations inner) }
+        {
+          expr with
+          value = Core.ToBool (rewrite_expression state annotations inner);
+        }
     | Core.Initializer init ->
         {
           expr with
@@ -215,7 +224,9 @@ module Specialize = struct
                 value =
                   {
                     Core.exprs =
-                      List.map (rewrite_expression state annotations) init.value.exprs;
+                      List.map
+                        (rewrite_expression state annotations)
+                        init.value.exprs;
                   };
               };
         }
@@ -229,12 +240,16 @@ module Specialize = struct
                 value =
                   {
                     cast.value with
-                    inner = rewrite_expression state annotations cast.value.inner;
+                    inner =
+                      rewrite_expression state annotations cast.value.inner;
                   };
               };
         }
     | Core.SizeExpr inner ->
-        { expr with value = Core.SizeExpr (rewrite_expression state annotations inner) }
+        {
+          expr with
+          value = Core.SizeExpr (rewrite_expression state annotations inner);
+        }
     | Core.Match match_expr ->
         {
           expr with
@@ -255,7 +270,8 @@ module Specialize = struct
                               {
                                 arm.value with
                                 expr =
-                                  rewrite_expression state annotations arm.value.expr;
+                                  rewrite_expression state annotations
+                                    arm.value.expr;
                               };
                           })
                         match_expr.value.arms;
@@ -263,7 +279,10 @@ module Specialize = struct
               };
         }
     | Core.BoxExpr inner ->
-        { expr with value = Core.BoxExpr (rewrite_expression state annotations inner) }
+        {
+          expr with
+          value = Core.BoxExpr (rewrite_expression state annotations inner);
+        }
     | Core.BoxConstruct box ->
         {
           expr with
@@ -274,18 +293,29 @@ module Specialize = struct
                 value =
                   {
                     box.value with
-                    args = List.map (rewrite_expression state annotations) box.value.args;
+                    args =
+                      List.map
+                        (rewrite_expression state annotations)
+                        box.value.args;
                   };
               };
         }
     | Core.Unbox inner ->
-        { expr with value = Core.Unbox (rewrite_expression state annotations inner) }
+        {
+          expr with
+          value = Core.Unbox (rewrite_expression state annotations inner);
+        }
     | Core.Ref inner ->
-        { expr with value = Core.Ref (rewrite_expression state annotations inner) }
+        {
+          expr with
+          value = Core.Ref (rewrite_expression state annotations inner);
+        }
     | Core.Load inner ->
-        { expr with value = Core.Load (rewrite_expression state annotations inner) }
-    | Core.Call call ->
-        rewrite_call state annotations expr call
+        {
+          expr with
+          value = Core.Load (rewrite_expression state annotations inner);
+        }
+    | Core.Call call -> rewrite_call state annotations expr call
     | Core.Index index ->
         {
           expr with
@@ -297,27 +327,31 @@ module Specialize = struct
                   {
                     Core.target =
                       rewrite_expression state annotations index.value.target;
-                    index = rewrite_expression state annotations index.value.index;
+                    index =
+                      rewrite_expression state annotations index.value.index;
                   };
               };
         }
     | Core.Field field ->
         let target = rewrite_expression state annotations field.value.target in
-        if not state.clone_only && is_shape_property annotations field then
+        if (not state.clone_only) && is_shape_property annotations field then (
           match exact_integer annotations expr with
           | Some value -> literal_int expr.loc value
           | None ->
               add_diagnostic state Error expr.loc
-                (Printf.sprintf "could not resolve %s to a concrete compile-time value"
+                (Printf.sprintf
+                   "could not resolve %s to a concrete compile-time value"
                    field.value.field.value);
               {
                 expr with
-                value = Core.Field { field with value = { field.value with target } };
-              }
+                value =
+                  Core.Field { field with value = { field.value with target } };
+              })
         else
           {
             expr with
-            value = Core.Field { field with value = { field.value with target } };
+            value =
+              Core.Field { field with value = { field.value with target } };
           }
     | Core.Assign write ->
         {
@@ -330,7 +364,8 @@ module Specialize = struct
                   {
                     Core.target =
                       rewrite_expression state annotations write.value.target;
-                    value = rewrite_expression state annotations write.value.value;
+                    value =
+                      rewrite_expression state annotations write.value.value;
                   };
               };
         }
@@ -345,7 +380,8 @@ module Specialize = struct
                   {
                     Core.target =
                       rewrite_expression state annotations write.value.target;
-                    value = rewrite_expression state annotations write.value.value;
+                    value =
+                      rewrite_expression state annotations write.value.value;
                   };
               };
         }
@@ -514,13 +550,19 @@ module Specialize = struct
               value =
                 {
                   loop.value with
-                  init = List.map (rewrite_statement state annotations) loop.value.init;
+                  init =
+                    List.map
+                      (rewrite_statement state annotations)
+                      loop.value.init;
                   cond = rewrite_expression state annotations loop.value.cond;
                   body = rewrite_block state annotations loop.value.body;
-                  step = List.map (rewrite_statement state annotations) loop.value.step;
+                  step =
+                    List.map
+                      (rewrite_statement state annotations)
+                      loop.value.step;
                 };
             }
-      | Core.Break | Core.Continue as value -> value
+      | (Core.Break | Core.Continue) as value -> value
     in
     { stmt with value; analysis_scope = state.analysis_scope }
 
@@ -531,8 +573,11 @@ module Specialize = struct
       value =
         {
           Core.statements =
-            List.map (rewrite_statement state annotations) block.value.statements;
-          result = Option.map (rewrite_expression state annotations) block.value.result;
+            List.map
+              (rewrite_statement state annotations)
+              block.value.statements;
+          result =
+            Option.map (rewrite_expression state annotations) block.value.result;
         };
     }
 
@@ -557,13 +602,15 @@ module Specialize = struct
       }
     else param
 
-  let rewrite_function_with_annotations state annotations (fn : Core.function_decl) =
+  let rewrite_function_with_annotations state annotations
+      (fn : Core.function_decl) =
     {
       fn with
       value =
         {
           fn.value with
-          definition = Option.map (rewrite_block state annotations) fn.value.definition;
+          definition =
+            Option.map (rewrite_block state annotations) fn.value.definition;
         };
     }
 
@@ -635,7 +682,9 @@ module Specialize = struct
           Some
             {
               decl with
-              value = Core.FDecl (rewrite_function_with_annotations state annotations fn);
+              value =
+                Core.FDecl
+                  (rewrite_function_with_annotations state annotations fn);
             }
     | Core.Foreign foreign ->
         let decls =
@@ -648,7 +697,8 @@ module Specialize = struct
         Some
           {
             decl with
-            value = Core.Foreign { foreign with value = { foreign.value with decls } };
+            value =
+              Core.Foreign { foreign with value = { foreign.value with decls } };
           }
     | Core.VDecl binding ->
         Some

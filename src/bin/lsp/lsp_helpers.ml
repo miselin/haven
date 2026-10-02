@@ -3,8 +3,7 @@ open Linol.Lsp.Types
 let line_offsets text =
   let offsets = ref [ 0 ] in
   String.iteri
-    (fun index ch ->
-      if ch = '\n' then offsets := (index + 1) :: !offsets)
+    (fun index ch -> if ch = '\n' then offsets := (index + 1) :: !offsets)
     text;
   Array.of_list (List.rev !offsets)
 
@@ -13,7 +12,8 @@ let position_of_lex_position (position : Lexing.position) =
     ~character:(position.pos_cnum - position.pos_bol)
 
 let loc_to_range (loc : Haven_core.Loc.t) =
-  Range.create ~start:(position_of_lex_position loc.start_pos)
+  Range.create
+    ~start:(position_of_lex_position loc.start_pos)
     ~end_:(position_of_lex_position loc.end_pos)
 
 let end_position_of_text text =
@@ -23,7 +23,8 @@ let end_position_of_text text =
   Position.create ~line:last_line ~character:(String.length text - bol)
 
 let full_document_range text =
-  Range.create ~start:(Position.create ~line:0 ~character:0)
+  Range.create
+    ~start:(Position.create ~line:0 ~character:0)
     ~end_:(end_position_of_text text)
 
 let lex_position_of_lsp_position ~filename ~text (position : Position.t) =
@@ -32,10 +33,12 @@ let lex_position_of_lsp_position ~filename ~text (position : Position.t) =
   let line = min position.line max_line in
   let bol = offsets.(line) in
   let next_bol =
-    if line + 1 < Array.length offsets then offsets.(line + 1) else String.length text
+    if line + 1 < Array.length offsets then offsets.(line + 1)
+    else String.length text
   in
   let line_limit =
-    if next_bol > bol && text.[next_bol - 1] = '\n' then next_bol - 1 else next_bol
+    if next_bol > bol && text.[next_bol - 1] = '\n' then next_bol - 1
+    else next_bol
   in
   let character = min position.character (line_limit - bol) in
   {

@@ -1,5 +1,4 @@
-let mode =
-  if Array.length Sys.argv > 1 then Sys.argv.(1) else "core"
+let mode = if Array.length Sys.argv > 1 then Sys.argv.(1) else "core"
 
 let () =
   let parsed = Haven.Parser.parse_stdin () in

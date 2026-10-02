@@ -3,17 +3,21 @@ open Test_support
 let run () =
   let duplicate_function_pipeline =
     parse_to_core
-      "fn duplicate() -> i32 { 1 }\nfn duplicate() -> i32 { 2 }\npub fn main() -> i32 { duplicate() }"
+      "fn duplicate() -> i32 { 1 }\n\
+       fn duplicate() -> i32 { 2 }\n\
+       pub fn main() -> i32 { duplicate() }"
     |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "duplicate function definitions should fail semantic analysis"
+  assert_has_diagnostics
+    "duplicate function definitions should fail semantic analysis"
     duplicate_function_pipeline.semantic.diagnostics;
   assert_any_diagnostic_message_contains "duplicate function definition wording"
     "duplicate function definition duplicate"
     duplicate_function_pipeline.semantic.diagnostics;
 
   let bad_semantics =
-    parse_to_core "pub fn main() -> void { break; }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> void { break; }"
+    |> Analysis.Pipeline.run_core
   in
   assert_true "expected break outside loop to fail semantic analysis"
     (bad_semantics.semantic.diagnostics <> []);
@@ -100,9 +104,12 @@ pub fn sut() -> i32 {
 |}
     |> Analysis.Pipeline.run_core
   in
-  assert_no_diagnostics "generic enum constructor typing" enum_pipeline.typing.diagnostics;
-  assert_no_diagnostics "generic enum constructor verify" enum_pipeline.verify.diagnostics;
-  assert_no_diagnostics "generic enum pattern semantics" enum_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "generic enum constructor typing"
+    enum_pipeline.typing.diagnostics;
+  assert_no_diagnostics "generic enum constructor verify"
+    enum_pipeline.verify.diagnostics;
+  assert_no_diagnostics "generic enum pattern semantics"
+    enum_pipeline.semantic.diagnostics;
 
   let expected_return_enum_pipeline =
     parse_to_core
@@ -243,8 +250,8 @@ pub fn sut() -> void {}
     parse_to_core "pub fn bad(fvec3 v, mat2x3 m) -> fvec3 { v * m }"
     |> Analysis.Pipeline.run_core
   in
-  assert_diagnostic_category "mismatched vector-matrix dimensions" Analysis.Semantic
-    mismatched_matrix_pipeline.semantic.diagnostics;
+  assert_diagnostic_category "mismatched vector-matrix dimensions"
+    Analysis.Semantic mismatched_matrix_pipeline.semantic.diagnostics;
   assert_diagnostic_message_contains "mismatched vector-matrix dimensions"
     "binary arithmetic requires numeric operands"
     mismatched_matrix_pipeline.semantic.diagnostics;
@@ -324,12 +331,15 @@ pub fn sut() -> i32 {
     statement_match_pipeline.semantic.diagnostics;
 
   let nil_pipeline =
-    parse_to_core "pub fn main() -> void { let i32 x = nil; }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> void { let i32 x = nil; }"
+    |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "nil assigned to integer binding" nil_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "nil assigned to integer binding"
+    nil_pipeline.semantic.diagnostics;
 
   let nil_pointer_compare_pipeline =
-    parse_to_core "pub fn main(i32* ptr) -> i32 { if ptr == nil { 0 } else { 1 } }"
+    parse_to_core
+      "pub fn main(i32* ptr) -> i32 { if ptr == nil { 0 } else { 1 } }"
     |> Analysis.Pipeline.run_core
   in
   assert_no_diagnostics "pointer nil comparison typing"
@@ -338,7 +348,8 @@ pub fn sut() -> i32 {
     nil_pointer_compare_pipeline.semantic.diagnostics;
 
   let nil_box_compare_pipeline =
-    parse_to_core "pub fn main(i32^ boxed) -> i32 { if boxed != nil { 1 } else { 0 } }"
+    parse_to_core
+      "pub fn main(i32^ boxed) -> i32 { if boxed != nil { 1 } else { 0 } }"
     |> Analysis.Pipeline.run_core
   in
   assert_no_diagnostics "box nil comparison typing"
@@ -347,7 +358,8 @@ pub fn sut() -> i32 {
     nil_box_compare_pipeline.semantic.diagnostics;
 
   let nil_string_compare_pipeline =
-    parse_to_core "pub fn main(str value) -> i32 { if value == nil { 0 } else { 1 } }"
+    parse_to_core
+      "pub fn main(str value) -> i32 { if value == nil { 0 } else { 1 } }"
     |> Analysis.Pipeline.run_core
   in
   assert_no_diagnostics "string nil comparison typing"
@@ -356,7 +368,8 @@ pub fn sut() -> i32 {
     nil_string_compare_pipeline.semantic.diagnostics;
 
   let nil_numeric_compare_pipeline =
-    parse_to_core "pub fn main(i32 value) -> i32 { if value == nil { 0 } else { 1 } }"
+    parse_to_core
+      "pub fn main(i32 value) -> i32 { if value == nil { 0 } else { 1 } }"
     |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "numeric nil comparison should fail"
@@ -401,7 +414,8 @@ pub impure fn main(i8* input) -> i32 {
     nil_in_defer_pipeline.semantic.diagnostics;
 
   let verify_unknown_type_pipeline =
-    parse_to_core "pub fn main(Missing value) -> void { }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main(Missing value) -> void { }"
+    |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "verify should reject unresolved parameter types"
     verify_unknown_type_pipeline.verify.diagnostics;
@@ -412,12 +426,16 @@ pub impure fn main(i8* input) -> i32 {
     parse_to_core "pub fn main(fvec4 uv) -> float { uv.s + uv.t + uv.p + uv.q }"
     |> Analysis.Pipeline.run_core
   in
-  assert_no_diagnostics "stpq vector aliases typing" stpq_pipeline.typing.diagnostics;
-  assert_no_diagnostics "stpq vector aliases verify" stpq_pipeline.verify.diagnostics;
-  assert_no_diagnostics "stpq vector aliases semantic" stpq_pipeline.semantic.diagnostics;
+  assert_no_diagnostics "stpq vector aliases typing"
+    stpq_pipeline.typing.diagnostics;
+  assert_no_diagnostics "stpq vector aliases verify"
+    stpq_pipeline.verify.diagnostics;
+  assert_no_diagnostics "stpq vector aliases semantic"
+    stpq_pipeline.semantic.diagnostics;
 
   let untyped_initializer =
-    parse_to_core "pub fn main() -> void { let values = { 1, 2 }; }" |> Analysis.Typing.run
+    parse_to_core "pub fn main() -> void { let values = { 1, 2 }; }"
+    |> Analysis.Typing.run
   in
   assert_has_diagnostics "untyped initializer should fail typing"
     untyped_initializer.diagnostics;
@@ -456,38 +474,49 @@ pub fn main() -> void {
 |}
     |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "incompatible cast should fail" bad_cast_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "incompatible cast should fail"
+    bad_cast_pipeline.semantic.diagnostics;
 
   let bad_ref_pipeline =
-    parse_to_core "pub fn main() -> void { let x = ref as<i32>(5); }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> void { let x = ref as<i32>(5); }"
+    |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "ref of non-lvalue should fail" bad_ref_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "ref of non-lvalue should fail"
+    bad_ref_pipeline.semantic.diagnostics;
 
   let bad_load_pipeline =
-    parse_to_core "pub fn main() -> void { let x = load as<i32>(5); }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> void { let x = load as<i32>(5); }"
+    |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "load of plain value should fail" bad_load_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "load of plain value should fail"
+    bad_load_pipeline.semantic.diagnostics;
 
   let bare_return_pipeline =
     parse_to_core "pub fn main() -> i32 { ret; }" |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "bare return in non-void function" bare_return_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "bare return in non-void function"
+    bare_return_pipeline.semantic.diagnostics;
 
   let void_return_value_pipeline =
-    parse_to_core "pub fn main() -> void { ret 5; }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> void { ret 5; }"
+    |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "value return in void function"
     void_return_value_pipeline.semantic.diagnostics;
 
   let wrong_return_type_pipeline =
-    parse_to_core "pub fn main() -> i32 { \"hello\" }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> i32 { \"hello\" }"
+    |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "wrong implicit return type" wrong_return_type_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "wrong implicit return type"
+    wrong_return_type_pipeline.semantic.diagnostics;
 
   let missing_return_pipeline =
-    parse_to_core "pub fn main() -> i32 { let x = 5; }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> i32 { let x = 5; }"
+    |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "missing non-void return" missing_return_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "missing non-void return"
+    missing_return_pipeline.semantic.diagnostics;
 
   let immutable_assign_pipeline =
     parse_to_core "pub fn main() -> void { let i32 x = 0; x = as<i32>(1); }"
@@ -566,12 +595,13 @@ pub fn sut() -> i32 {
     bad_multi_payload_pattern_pipeline.semantic.diagnostics;
 
   let non_exhaustive_match_pipeline =
-    parse_to_core "pub fn main() -> i32 { match 5 { 5 => 5 } }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> i32 { match 5 { 5 => 5 } }"
+    |> Analysis.Pipeline.run_core
   in
   assert_has_diagnostics "non-exhaustive match should fail"
     non_exhaustive_match_pipeline.semantic.diagnostics;
-  assert_diagnostic_message_contains "non-exhaustive match wording" "not exhaustive"
-    non_exhaustive_match_pipeline.semantic.diagnostics;
+  assert_diagnostic_message_contains "non-exhaustive match wording"
+    "not exhaustive" non_exhaustive_match_pipeline.semantic.diagnostics;
 
   let mismatched_match_arms_pipeline =
     parse_to_core "pub fn main() -> i32 { match 5 { 5 => 5, _ => \"hi\" } }"
@@ -581,9 +611,11 @@ pub fn sut() -> i32 {
     mismatched_match_arms_pipeline.semantic.diagnostics;
 
   let bad_binary_pipeline =
-    parse_to_core "pub fn main() -> void { let x = \"hi\" * 2; }" |> Analysis.Pipeline.run_core
+    parse_to_core "pub fn main() -> void { let x = \"hi\" * 2; }"
+    |> Analysis.Pipeline.run_core
   in
-  assert_has_diagnostics "invalid binary operands should fail" bad_binary_pipeline.semantic.diagnostics;
+  assert_has_diagnostics "invalid binary operands should fail"
+    bad_binary_pipeline.semantic.diagnostics;
 
   let bad_vector_binary_pipeline =
     parse_to_core "pub fn main(fvec3 v) -> void { let x = v + 1.0; }"

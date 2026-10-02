@@ -1,13 +1,14 @@
 open Format
 open Haven_core
 open Haven_token.Token
-
 module Surface = Surface_ast
 module Core = Core_ast
 
 let pp_sep fmt () = fprintf fmt ",@ "
 
-let pp_surface_identifier fmt (id : Surface.identifier) = fprintf fmt "%s" id.value
+let pp_surface_identifier fmt (id : Surface.identifier) =
+  fprintf fmt "%s" id.value
+
 let pp_core_identifier fmt (id : Core.identifier) = fprintf fmt "%s" id.value
 
 let pp_surface_unary_op fmt = function
@@ -77,8 +78,8 @@ let rec pp_surface_type fmt (ty : Surface.haven_type) =
   | FunctionType fn ->
       fprintf fmt "%sFunction<(%a) -> %a>"
         (if fn.value.vararg then "VA" else "")
-        (pp_print_list ~pp_sep pp_surface_type) fn.value.param_types pp_surface_type
-        fn.value.return_type
+        (pp_print_list ~pp_sep pp_surface_type)
+        fn.value.param_types pp_surface_type fn.value.return_type
   | PointerType inner -> fprintf fmt "Pointer<%a>" pp_surface_type inner
   | BoxType inner -> fprintf fmt "Box<%a>" pp_surface_type inner
   | ArrayType arr ->
@@ -86,7 +87,8 @@ let rec pp_surface_type fmt (ty : Surface.haven_type) =
         pp_surface_type arr.value.element
   | TemplatedType templ ->
       fprintf fmt "%a<%a>" pp_surface_identifier templ.value.outer
-        (pp_print_list ~pp_sep pp_surface_type) templ.value.inner
+        (pp_print_list ~pp_sep pp_surface_type)
+        templ.value.inner
 
 and pp_surface_literal fmt (lit : Surface.literal) =
   match lit.value with
@@ -118,8 +120,8 @@ and pp_surface_expression fmt (expr : Surface.expression) =
   match expr.value with
   | Surface.Binary binary ->
       fprintf fmt "@[<hv 2>Binary(@,%a,@ %a,@ %a@,)@]" pp_surface_expression
-        binary.value.left pp_surface_binary_op binary.value.op pp_surface_expression
-        binary.value.right
+        binary.value.left pp_surface_binary_op binary.value.op
+        pp_surface_expression binary.value.right
   | Unary unary ->
       fprintf fmt "Unary(%a, %a)" pp_surface_unary_op unary.value.op
         pp_surface_expression unary.value.inner
@@ -139,12 +141,13 @@ and pp_surface_expression fmt (expr : Surface.expression) =
   | Zero -> fprintf fmt "Zero"
   | If ifx ->
       fprintf fmt "@[<hv 2>If(@,cond=%a,@ then=%a,@ else=%a@,)@]"
-        pp_surface_expression ifx.value.cond pp_surface_block ifx.value.then_branch
+        pp_surface_expression ifx.value.cond pp_surface_block
+        ifx.value.then_branch
         (pp_print_option pp_surface_block)
         ifx.value.else_branch
   | Match m ->
-      fprintf fmt "@[<hv 2>Match(@,expr=%a,@ arms=%a@,)@]"
-        pp_surface_expression m.value.expr
+      fprintf fmt "@[<hv 2>Match(@,expr=%a,@ arms=%a@,)@]" pp_surface_expression
+        m.value.expr
         (pp_print_list ~pp_sep pp_surface_match_arm)
         m.value.arms
   | BoxExpr inner -> fprintf fmt "BoxExpr(%a)" pp_surface_expression inner
@@ -186,8 +189,7 @@ and pp_surface_binding fmt (binding : Surface.pattern_binding) =
 
 and pp_surface_statement fmt (stmt : Surface.statement) =
   match stmt.value with
-  | Surface.Expression expr ->
-      fprintf fmt "Expr(%a)" pp_surface_expression expr
+  | Surface.Expression expr -> fprintf fmt "Expr(%a)" pp_surface_expression expr
   | Let binding ->
       fprintf fmt "Let(mut=%a, name=%a, ty=%a, init=%a)" pp_print_bool
         binding.value.mut pp_surface_identifier binding.value.name
@@ -221,15 +223,18 @@ and pp_surface_block fmt (block : Surface.block) =
     block.value.result
 
 let pp_surface_param fmt (param : Surface.param) =
-  fprintf fmt "Param(%a, %a)" pp_surface_type param.value.ty pp_surface_identifier
-    param.value.name
+  fprintf fmt "Param(%a, %a)" pp_surface_type param.value.ty
+    pp_surface_identifier param.value.name
 
 let rec pp_surface_function fmt (fn : Surface.function_decl) =
   fprintf fmt
-    "@[<hv 2>Function(@,visibility=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ intrinsic=%a,@ body=%a@,)@]"
+    "@[<hv 2>Function(@,\
+     visibility=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ \
+     intrinsic=%a,@ body=%a@,\
+     )@]"
     (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
-    fn.value.visibility pp_print_bool fn.value.impure
-    pp_surface_identifier fn.value.name
+    fn.value.visibility pp_print_bool fn.value.impure pp_surface_identifier
+    fn.value.name
     (pp_print_list ~pp_sep pp_surface_param)
     fn.value.params.value.params
     (pp_print_option pp_surface_type)
@@ -248,18 +253,19 @@ let pp_surface_var_decl fmt (decl : Surface.var_decl) =
   fprintf fmt "Var(%a, visibility=%a, mutable=%a, ty=%a, init=%a)"
     pp_surface_identifier decl.value.name
     (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
-    decl.value.visibility
-    pp_print_bool decl.value.is_mutable pp_surface_type decl.value.ty
+    decl.value.visibility pp_print_bool decl.value.is_mutable pp_surface_type
+    decl.value.ty
     (pp_print_option pp_surface_expression)
     decl.value.init_expr
 
 let pp_surface_struct_field fmt (field : Surface.struct_field) =
-  fprintf fmt "Field(%a, %a)" pp_surface_type field.value.ty pp_surface_identifier
-    field.value.name
+  fprintf fmt "Field(%a, %a)" pp_surface_type field.value.ty
+    pp_surface_identifier field.value.name
 
 let pp_surface_enum_variant fmt (variant : Surface.enum_variant) =
   fprintf fmt "Variant(%a, inner=[%a])" pp_surface_identifier variant.value.name
-    (pp_print_list ~pp_sep pp_surface_type) variant.value.inner_tys
+    (pp_print_list ~pp_sep pp_surface_type)
+    variant.value.inner_tys
 
 let pp_surface_type_decl_data fmt = function
   | Surface.TypeDeclAlias ty -> fprintf fmt "Alias(%a)" pp_surface_type ty
@@ -279,7 +285,8 @@ let pp_surface_lifecycle_fn fmt = function
   | Some (fn : Surface.function_decl) -> pp_surface_identifier fmt fn.value.name
   | None -> fprintf fmt "None"
 
-let pp_surface_lifecycle_construct fmt (construct : Surface.lifecycle_construct) =
+let pp_surface_lifecycle_construct fmt (construct : Surface.lifecycle_construct)
+    =
   fprintf fmt "Construct(params=[%a], body=%a)"
     (pp_print_list ~pp_sep pp_surface_param)
     construct.value.params pp_surface_block construct.value.body
@@ -287,16 +294,19 @@ let pp_surface_lifecycle_construct fmt (construct : Surface.lifecycle_construct)
 let pp_surface_type_extend fmt (ext : Surface.type_extend) =
   fprintf fmt "Extend(%a, construct=%a, destruct=%a)" pp_surface_identifier
     ext.value.target
-    (pp_print_option pp_surface_lifecycle_construct) ext.value.construct
-    (pp_print_option pp_surface_block) ext.value.destruct
+    (pp_print_option pp_surface_lifecycle_construct)
+    ext.value.construct
+    (pp_print_option pp_surface_block)
+    ext.value.destruct
 
 let pp_surface_decl fmt (decl : Surface.top_decl) =
   match decl.value with
   | Surface.FDecl fn -> fprintf fmt "FDecl(%a)" pp_surface_function fn
   | TDecl ty ->
-      fprintf fmt "TypeDecl(%a, %a, construct=%a, destruct=%a)" pp_surface_identifier
-        ty.value.name pp_surface_type_decl_data ty.value.data pp_surface_lifecycle_fn
-        ty.value.construct pp_surface_lifecycle_fn ty.value.destruct
+      fprintf fmt "TypeDecl(%a, %a, construct=%a, destruct=%a)"
+        pp_surface_identifier ty.value.name pp_surface_type_decl_data
+        ty.value.data pp_surface_lifecycle_fn ty.value.construct
+        pp_surface_lifecycle_fn ty.value.destruct
   | Extend ext -> pp_surface_type_extend fmt ext
   | VDecl v -> pp_surface_var_decl fmt v
   | Import i -> fprintf fmt "Import(%s)" i.value
@@ -331,8 +341,8 @@ let rec pp_core_type fmt (ty : Core.haven_type) =
   | FunctionType fn ->
       fprintf fmt "%sFunction<(%a) -> %a>"
         (if fn.value.vararg then "VA" else "")
-        (pp_print_list ~pp_sep pp_core_type) fn.value.param_types pp_core_type
-        fn.value.return_type
+        (pp_print_list ~pp_sep pp_core_type)
+        fn.value.param_types pp_core_type fn.value.return_type
   | PointerType inner -> fprintf fmt "Pointer<%a>" pp_core_type inner
   | BoxType inner -> fprintf fmt "Box<%a>" pp_core_type inner
   | ArrayType arr ->
@@ -340,7 +350,8 @@ let rec pp_core_type fmt (ty : Core.haven_type) =
         arr.value.element
   | TemplatedType templ ->
       fprintf fmt "%a<%a>" pp_core_identifier templ.value.outer
-        (pp_print_list ~pp_sep pp_core_type) templ.value.inner
+        (pp_print_list ~pp_sep pp_core_type)
+        templ.value.inner
 
 and pp_core_literal fmt (lit : Core.literal) =
   match lit.value with
@@ -456,7 +467,8 @@ and pp_core_statement fmt (stmt : Core.statement) =
   | CompileAssert compile_assert ->
       fprintf fmt "CompileAssert(cond=%a, message=%S)" pp_core_expression
         compile_assert.value.cond compile_assert.value.message.value
-  | Return expr -> fprintf fmt "Return(%a)" (pp_print_option pp_core_expression) expr
+  | Return expr ->
+      fprintf fmt "Return(%a)" (pp_print_option pp_core_expression) expr
   | Defer expr -> fprintf fmt "Defer(%a)" pp_core_expression expr
   | Loop loop ->
       fprintf fmt "Loop(init=%a, cond=%a, step=%a, hint=%a, body=%a)"
@@ -486,10 +498,13 @@ let pp_core_param fmt (param : Core.param) =
 
 let rec pp_core_function fmt (fn : Core.function_decl) =
   fprintf fmt
-    "@[<hv 2>Function(@,visibility=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ intrinsic=%a,@ body=%a@,)@]"
+    "@[<hv 2>Function(@,\
+     visibility=%a,@ impure=%a,@ name=%a,@ params=%a,@ return=%a,@ \
+     intrinsic=%a,@ body=%a@,\
+     )@]"
     (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
-    fn.value.visibility pp_print_bool fn.value.impure
-    pp_core_identifier fn.value.name
+    fn.value.visibility pp_print_bool fn.value.impure pp_core_identifier
+    fn.value.name
     (pp_print_list ~pp_sep pp_core_param)
     fn.value.params.value.params
     (pp_print_option pp_core_type)
@@ -508,8 +523,8 @@ let pp_core_var_decl fmt (decl : Core.var_decl) =
   fprintf fmt "Var(%a, visibility=%a, mutable=%a, ty=%a, init=%a)"
     pp_core_identifier decl.value.name
     (fun fmt visibility -> fprintf fmt "%s" (Visibility.to_string visibility))
-    decl.value.visibility
-    pp_print_bool decl.value.is_mutable pp_core_type decl.value.ty
+    decl.value.visibility pp_print_bool decl.value.is_mutable pp_core_type
+    decl.value.ty
     (pp_print_option pp_core_expression)
     decl.value.init_expr
 
@@ -519,7 +534,8 @@ let pp_core_struct_field fmt (field : Core.struct_field) =
 
 let pp_core_enum_variant fmt (variant : Core.enum_variant) =
   fprintf fmt "Variant(%a, inner=[%a])" pp_core_identifier variant.value.name
-    (pp_print_list ~pp_sep pp_core_type) variant.value.inner_tys
+    (pp_print_list ~pp_sep pp_core_type)
+    variant.value.inner_tys
 
 let pp_core_type_decl_data fmt = function
   | Core.TypeDeclAlias ty -> fprintf fmt "Alias(%a)" pp_core_type ty
@@ -543,9 +559,10 @@ let pp_core_decl fmt (decl : Core.top_decl) =
   match decl.value with
   | Core.FDecl fn -> fprintf fmt "FDecl(%a)" pp_core_function fn
   | TDecl ty ->
-      fprintf fmt "TypeDecl(%a, %a, construct=%a, destruct=%a)" pp_core_identifier
-        ty.value.name pp_core_type_decl_data ty.value.data pp_core_lifecycle_fn
-        ty.value.construct pp_core_lifecycle_fn ty.value.destruct
+      fprintf fmt "TypeDecl(%a, %a, construct=%a, destruct=%a)"
+        pp_core_identifier ty.value.name pp_core_type_decl_data ty.value.data
+        pp_core_lifecycle_fn ty.value.construct pp_core_lifecycle_fn
+        ty.value.destruct
   | VDecl v -> pp_core_var_decl fmt v
   | Import i -> fprintf fmt "Import(%s)" i.value
   | CImport i -> fprintf fmt "CImport(%s)" i.value

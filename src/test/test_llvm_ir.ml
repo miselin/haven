@@ -28,8 +28,13 @@ let next_loc =
 
 let node value = { Core.value; loc = next_loc (); analysis_scope = None }
 let ident value = node value
-let ty_i32 = node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 32 })
-let ty_i8 = node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 8 })
+
+let ty_i32 =
+  node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 32 })
+
+let ty_i8 =
+  node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 8 })
+
 let ty_i8_ptr = node (Core.PointerType ty_i8)
 let ty_void = node Core.VoidType
 let ty_buffer = node (Core.CustomType { name = ident "Buffer" })
@@ -39,64 +44,46 @@ let nil_expr = node Core.Nil
 let box_buffer_expr = node (Core.BoxType ty_buffer)
 
 let field_expr target ~arrow name =
-  node
-    (Core.Field
-       (node
-          {
-            Core.target = target;
-            arrow;
-            field = ident name;
-          }))
+  node (Core.Field (node { Core.target; arrow; field = ident name }))
 
 let assign_stmt target value =
-  node
-    (Core.Expression
-       (node
-          (Core.Assign
-             (node
-                {
-                  Core.target = target;
-                  value;
-                }))))
+  node (Core.Expression (node (Core.Assign (node { Core.target; value }))))
 
 let let_stmt ~mut name init_expr =
-  node
-    (Core.Let
-       (node
-          {
-            Core.mut = mut;
-            ty = None;
-            name = ident name;
-            init_expr;
-          }))
+  node (Core.Let (node { Core.mut; ty = None; name = ident name; init_expr }))
 
-let block ?result statements = node { Core.statements = statements; result }
+let block ?result statements = node { Core.statements; result }
 
-let fn_decl ?(public = false) ?(impure = false) ?(definition = None) ?(params = [])
-    ?(return_type = Some ty_void) name =
+let fn_decl ?(public = false) ?(impure = false) ?(definition = None)
+    ?(params = []) ?(return_type = Some ty_void) name =
   node
     {
       Core.visibility =
-        if public then Haven_core.Visibility.External else Haven_core.Visibility.File;
+        (if public then Haven_core.Visibility.External
+         else Haven_core.Visibility.File);
       impure;
       name = ident name;
       definition;
       intrinsic = None;
-      params = node { Core.params = params; vararg = false };
+      params = node { Core.params; vararg = false };
       return_type;
       vararg = false;
     }
 
 let param ty name = node { Core.name = ident name; ty }
-let struct_field ty name = node ({ Core.name = ident name; ty } : Core.struct_field_desc)
+
+let struct_field ty name =
+  node ({ Core.name = ident name; ty } : Core.struct_field_desc)
 
 let emit_core_ir program =
-  let pipeline = Analysis.Pipeline.run_core { Core.program = program } in
+  let pipeline = Analysis.Pipeline.run_core { Core.program } in
   let fail_if_diagnostics label diagnostics =
     if diagnostics <> [] then
       let messages =
         String.concat " | "
-          (List.map (fun (diag : Analysis.diagnostic) -> diag.message) diagnostics)
+          (List.map
+             (fun (diag : Analysis.diagnostic) -> diag.message)
+             diagnostics)
       in
       failwith (label ^ ": " ^ messages)
   in
@@ -118,7 +105,9 @@ let run () =
 
   let ctor_ir =
     emit_ir
-      "fn make(i32 value) -> i32 { value }\ndata i32 GLOBAL = make(7);\npub fn main() -> i32 { GLOBAL }"
+      "fn make(i32 value) -> i32 { value }\n\
+       data i32 GLOBAL = make(7);\n\
+       pub fn main() -> i32 { GLOBAL }"
   in
   assert_true "non-constant globals should synthesize a ctor"
     (string_contains ctor_ir "@llvm.global_ctors");
@@ -129,37 +118,45 @@ let run () =
 
   let external_ir =
     emit_ir
-      "pub state i32 supplied_elsewhere;\npub fn read() -> i32 { supplied_elsewhere }"
+      "pub state i32 supplied_elsewhere;\n\
+       pub fn read() -> i32 { supplied_elsewhere }"
   in
-  assert_true "initializer-less public state should remain an external declaration"
+  assert_true
+    "initializer-less public state should remain an external declaration"
     (string_contains external_ir "@supplied_elsewhere = external global i32");
-  assert_true "external declarations should not synthesize startup initialization"
+  assert_true
+    "external declarations should not synthesize startup initialization"
     (not (string_contains external_ir "@__haven_global_init"));
 
   let zero_aggregate_ir =
-    emit_ir "pub state i32[4] values = zero;\npub fn read() -> i32 { values[3] }"
+    emit_ir
+      "pub state i32[4] values = zero;\npub fn read() -> i32 { values[3] }"
   in
   assert_true "aggregate zero initializers should emit zero-filled definitions"
-    (string_contains zero_aggregate_ir "@values = global [4 x i32] zeroinitializer");
+    (string_contains zero_aggregate_ir
+       "@values = global [4 x i32] zeroinitializer");
 
   let zero_struct_ir =
     emit_ir
-      "type Buffer = struct { i8* ptr; u64 length; };\npub state Buffer buffer = zero;"
+      "type Buffer = struct { i8* ptr; u64 length; };\n\
+       pub state Buffer buffer = zero;"
   in
-  assert_true "struct zero initializers should recursively include pointer fields"
+  assert_true
+    "struct zero initializers should recursively include pointer fields"
     (string_contains zero_struct_ir
        "@buffer = global %haven.struct.Buffer zeroinitializer");
 
   let local_zero_ir =
     emit_ir
-      "pub impure fn read() -> i32 { let mut i32[4] values = zero; values[3] = 7; values[0] }"
+      "pub impure fn read() -> i32 { let mut i32[4] values = zero; values[3] = \
+       7; values[0] }"
   in
-  assert_true "local aggregate zero initializers should store a zero-filled value"
+  assert_true
+    "local aggregate zero initializers should store a zero-filled value"
     (string_contains local_zero_ir "store [4 x i32] zeroinitializer");
 
   let constant_cast_ir =
-    emit_ir
-      "data u32 ZERO = as<u32>(0);\npub fn main() -> u32 { ZERO }"
+    emit_ir "data u32 ZERO = as<u32>(0);\npub fn main() -> u32 { ZERO }"
   in
   assert_true "constant casts should match the declared global type"
     (string_contains constant_cast_ir "@ZERO = internal constant i32 0");
@@ -226,7 +223,9 @@ pub impure fn test() -> i1 { 0 && rhs() }
   assert_true "logical RHS should only be emitted in the conditional block"
     (count_occurrences short_circuit_ir "call i32 @rhs()" = 1);
 
-  let box_ir = emit_ir "pub fn forward(i32^ input) -> i32^ { defer unbox input; input }" in
+  let box_ir =
+    emit_ir "pub fn forward(i32^ input) -> i32^ { defer unbox input; input }"
+  in
   assert_true "box ownership should call box ref"
     (string_contains box_ir "@__haven_box_ref");
   assert_true "box ownership should call box unref"
@@ -261,7 +260,8 @@ pub fn main() -> void {}
     (string_contains vec_mat_ir "fmul <3 x float>");
   assert_true "matrix multiply should declare the correctly typed intrinsic"
     (string_contains vec_mat_ir "@llvm.matrix.multiply.v8f32.v12f32.v6f32");
-  assert_true "vector-matrix multiply should declare the correctly typed intrinsic"
+  assert_true
+    "vector-matrix multiply should declare the correctly typed intrinsic"
     (string_contains vec_mat_ir "@llvm.matrix.multiply.v3f32.v6f32.v2f32");
 
   assert_true "vector negation should lower to floating-point lane negation"
@@ -309,9 +309,11 @@ pub fn make_mat(float x) -> mat2x2 { Mat<Vec<x, 2.0>, Vec<3.0, 4.0>> }
 pub fn main() -> void {}
 |}
   in
-  assert_true "non-constant vector literals should be assembled with insertelement"
+  assert_true
+    "non-constant vector literals should be assembled with insertelement"
     (string_contains literal_ir "define <3 x float> @make_vec");
-  assert_true "non-constant matrix literals should lower to their flat vector form"
+  assert_true
+    "non-constant matrix literals should lower to their flat vector form"
     (string_contains literal_ir "define <4 x float> @make_mat");
 
   let multi_shape_ir =
@@ -339,7 +341,8 @@ pub fn main() -> fvec3 { vadd(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>) }
   in
   assert_true "specialization should clone concrete vector variants before LLVM"
     (string_contains specialization_ir "@vadd__spec__fvec3__fvec3");
-  assert_true "specialized vector addition should lower with concrete vector ops"
+  assert_true
+    "specialized vector addition should lower with concrete vector ops"
     (string_contains specialization_ir "fadd <3 x float>");
 
   let shape_property_ir =
@@ -349,7 +352,8 @@ fn width(mat? m) { m.cols }
 pub fn main() -> u32 { width(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>>) }
 |}
   in
-  assert_true "shape property specialization should lower concrete matrix helpers"
+  assert_true
+    "shape property specialization should lower concrete matrix helpers"
     (string_contains shape_property_ir "@width__spec__mat2x2");
   assert_true "shape properties should lower as plain integer constants"
     (string_contains shape_property_ir "store i32 2");
@@ -365,7 +369,8 @@ pub fn main() -> fvec3 {
   in
   assert_true "get_mat_row should clone a concrete helper before LLVM"
     (string_contains get_mat_row_ir "@get_mat_row__spec__mat2x3");
-  assert_true "specialized matrix row access should still lower through row addressing"
+  assert_true
+    "specialized matrix row access should still lower through row addressing"
     (string_contains get_mat_row_ir "getelementptr inbounds float");
 
   let compile_assert_ir =
@@ -410,13 +415,19 @@ pub impure fn main() -> i32 {
 }
 |}
   in
-  assert_true "surface lifecycle lowering should emit the synthesized constructor"
-    (string_contains surface_lifecycle_ir "define internal void @__haven_construct_Buffer");
-  assert_true "surface lifecycle lowering should emit the synthesized destructor"
-    (string_contains surface_lifecycle_ir "define internal void @__haven_destruct_Buffer");
-  assert_true "surface lifecycle lowering should call the synthesized constructor"
+  assert_true
+    "surface lifecycle lowering should emit the synthesized constructor"
+    (string_contains surface_lifecycle_ir
+       "define internal void @__haven_construct_Buffer");
+  assert_true
+    "surface lifecycle lowering should emit the synthesized destructor"
+    (string_contains surface_lifecycle_ir
+       "define internal void @__haven_destruct_Buffer");
+  assert_true
+    "surface lifecycle lowering should call the synthesized constructor"
     (string_contains surface_lifecycle_ir "call void @__haven_construct_Buffer");
-  assert_true "surface lifecycle lowering should call the synthesized destructor"
+  assert_true
+    "surface lifecycle lowering should call the synthesized destructor"
     (string_contains surface_lifecycle_ir "call void @__haven_destruct_Buffer");
 
   let ctor_decl =

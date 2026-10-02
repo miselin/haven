@@ -1,5 +1,4 @@
 open Analysis_types
-
 module Typing = Analysis_typing.Typing
 
 module Semantic = struct
@@ -13,10 +12,10 @@ module Semantic = struct
   }
 
   let add_diagnostic_with_category state category level loc message =
-    state.diagnostics_rev <- { category; level; loc; message } :: state.diagnostics_rev
+    state.diagnostics_rev <-
+      { category; level; loc; message } :: state.diagnostics_rev
 
   let add_diagnostic state = add_diagnostic_with_category state Semantic
-
   let push_scope env = String_map.empty :: env
 
   let bind_current env name binding =
@@ -112,9 +111,7 @@ module Semantic = struct
       program.value.decls
 
   let duplicate_binding env name =
-    match env with
-    | [] -> false
-    | scope :: _ -> String_map.mem name scope
+    match env with [] -> false | scope :: _ -> String_map.mem name scope
 
   let bool_match_is_exhaustive (match_expr : Core.match_expr) =
     let has_true =
@@ -139,7 +136,8 @@ module Semantic = struct
     if expr.value = Core.Nil then resolved_is_pointerish expected
     else
       match expr_annotation state expr with
-      | Some { resolved_type = Some actual; _ } -> resolved_compatible actual expected
+      | Some { resolved_type = Some actual; _ } ->
+          resolved_compatible actual expected
       | _ -> false
 
   let expr_resolved_type state (expr : Core.expression) =
@@ -147,10 +145,11 @@ module Semantic = struct
     | Some { resolved_type = Some ty; _ } -> Some ty
     | _ -> None
 
-  let check_expr_matches_expected state (expr : Core.expression) expected mismatch_message
-      nil_message =
+  let check_expr_matches_expected state (expr : Core.expression) expected
+      mismatch_message nil_message =
     if expr.value = Core.Nil then (
-      if not (resolved_is_pointerish expected) then add_diagnostic state Error expr.loc nil_message)
+      if not (resolved_is_pointerish expected) then
+        add_diagnostic state Error expr.loc nil_message)
     else
       match expr_resolved_type state expr with
       | Some actual when not (resolved_compatible actual expected) ->
@@ -158,7 +157,10 @@ module Semantic = struct
       | _ -> ()
 
   let expr_matches_single_field_struct state (expr : Core.expression) expected =
-    match (expr_resolved_type state expr, lookup_struct_fields state.type_env expr.loc expected) with
+    match
+      ( expr_resolved_type state expr,
+        lookup_struct_fields state.type_env expr.loc expected )
+    with
     | Some actual, Some [ (_, field_ty) ] -> resolved_compatible actual field_ty
     | _ -> false
 
@@ -174,7 +176,9 @@ module Semantic = struct
   let equality_operands_compatible state left_expr right_expr =
     let left_resolved = expr_resolved_type state left_expr in
     let right_resolved = expr_resolved_type state right_expr in
-    match (left_expr.value, right_expr.value, left_resolved, right_resolved) with
+    match
+      (left_expr.value, right_expr.value, left_resolved, right_resolved)
+    with
     | Core.Nil, _, _, Some expected when resolved_is_pointerish expected ->
         annotate_nil_expr state left_expr expected;
         true
@@ -188,22 +192,27 @@ module Semantic = struct
     let check_slots slots too_many_message too_few_message mismatch_for_index =
       let actual_count = List.length init.value.exprs in
       let expected_count = List.length slots in
-      if actual_count > expected_count then add_diagnostic state Error loc too_many_message;
-      if actual_count < expected_count then add_diagnostic state Error loc too_few_message;
+      if actual_count > expected_count then
+        add_diagnostic state Error loc too_many_message;
+      if actual_count < expected_count then
+        add_diagnostic state Error loc too_few_message;
       List.iteri
         (fun index expected_slot ->
           if index < actual_count then
             let expr = List.nth init.value.exprs index in
             check_expr_matches_expected state expr expected_slot
-              (mismatch_for_index index) "nil is only valid for pointer-like initializer elements")
+              (mismatch_for_index index)
+              "nil is only valid for pointer-like initializer elements")
         slots
     in
     match expected with
     | ResolvedArray (element_ty, count) ->
-        check_slots (List.init count (fun _ -> element_ty))
+        check_slots
+          (List.init count (fun _ -> element_ty))
           "array initializer has more elements than the target type"
           "array initializer has fewer elements than the target type"
-          (fun _ -> "array initializer element type does not match the target type")
+          (fun _ ->
+            "array initializer element type does not match the target type")
     | ResolvedNamed _ as struct_ty -> (
         match lookup_struct_fields state.type_env loc struct_ty with
         | Some fields ->
@@ -213,47 +222,55 @@ module Semantic = struct
               "struct initializer has fewer elements than the target type"
               (fun index ->
                 let field_name =
-                  if index < List.length field_names then List.nth field_names index
+                  if index < List.length field_names then
+                    List.nth field_names index
                   else "<unknown>"
                 in
                 Printf.sprintf
-                  "struct initializer field %s does not match the declared field type"
+                  "struct initializer field %s does not match the declared \
+                   field type"
                   field_name)
         | None -> ())
     | ResolvedVec vec ->
-        check_slots (List.init vec.dimension (fun _ -> ResolvedFloat))
+        check_slots
+          (List.init vec.dimension (fun _ -> ResolvedFloat))
           "vector initializer has more elements than the target type"
           "vector initializer has fewer elements than the target type"
-          (fun _ -> "vector initializer element type does not match the target type")
+          (fun _ ->
+            "vector initializer element type does not match the target type")
     | ResolvedMatrix mat ->
         check_slots
-          (List.init mat.rows (fun _ -> ResolvedVec { kind = FloatVec; dimension = mat.columns }))
+          (List.init mat.rows (fun _ ->
+               ResolvedVec { kind = FloatVec; dimension = mat.columns }))
           "matrix initializer has more rows than the target type"
           "matrix initializer has fewer rows than the target type"
-          (fun _ -> "matrix initializer row type does not match the target type")
+          (fun _ ->
+            "matrix initializer row type does not match the target type")
     | _ -> ()
 
   let statement_guarantees_return (stmt : Core.statement) =
     match stmt.value with Core.Return _ -> true | _ -> false
 
   let block_guarantees_return (block : Core.block) =
-    Option.is_some block.value.result || List.exists statement_guarantees_return block.value.statements
+    Option.is_some block.value.result
+    || List.exists statement_guarantees_return block.value.statements
 
-  let rec check_block state env loop_depth ~return_expected (block : Core.block) =
+  let rec check_block state env loop_depth ~return_expected (block : Core.block)
+      =
     let env = push_scope env in
     let env =
       List.fold_left
         (fun env (stmt : Core.statement) ->
           check_statement state env loop_depth ~return_expected stmt)
-        env
-        block.value.statements
+        env block.value.statements
     in
     Option.iter
       (fun (expr : Core.expression) ->
         check_expression state env loop_depth expr;
         match return_expected with
         | Some ResolvedVoid ->
-            add_diagnostic state Error expr.loc "void function cannot return a value"
+            add_diagnostic state Error expr.loc
+              "void function cannot return a value"
         | Some expected when not (return_value_matches state expected expr) ->
             add_diagnostic state Error expr.loc
               "returned value does not match the function return type"
@@ -261,7 +278,8 @@ module Semantic = struct
       block.value.result;
     env
 
-  and check_statement state env loop_depth ~return_expected (stmt : Core.statement) =
+  and check_statement state env loop_depth ~return_expected
+      (stmt : Core.statement) =
     match stmt.value with
     | Core.Expression expr ->
         check_expression_in_context state env loop_depth true expr;
@@ -313,15 +331,18 @@ module Semantic = struct
                 expr_annotation state binding.value.init_expr )
             with
             | Some expected, Some { resolved_type = Some actual; _ }
-              when not (resolved_compatible actual expected)
-                   && not (expr_matches_single_field_struct state binding.value.init_expr expected)
-              ->
+              when (not (resolved_compatible actual expected))
+                   && not
+                        (expr_matches_single_field_struct state
+                           binding.value.init_expr expected) ->
                 add_diagnostic state Error binding.value.init_expr.loc
-                  "let initializer type does not match the declared binding type"
+                  "let initializer type does not match the declared binding \
+                   type"
             | Some expected, _ -> (
                 match binding.value.init_expr.value with
                 | Core.Initializer init ->
-                    check_initializer_shape state binding.value.init_expr.loc init expected
+                    check_initializer_shape state binding.value.init_expr.loc
+                      init expected
                 | _ -> ())
             | _ -> ())
         | None -> ());
@@ -350,7 +371,9 @@ module Semantic = struct
             env loop.value.init
         in
         check_expression state env (loop_depth + 1) loop.value.cond;
-        ignore (check_block state env (loop_depth + 1) ~return_expected loop.value.body);
+        ignore
+          (check_block state env (loop_depth + 1) ~return_expected
+             loop.value.body);
         ignore
           (List.fold_left
              (fun env (stmt : Core.statement) ->
@@ -369,7 +392,8 @@ module Semantic = struct
           let allowed =
             match resolved_type with
             | Some resolved ->
-                resolved_is_bool resolved || resolved_is_numeric resolved
+                resolved_is_bool resolved
+                || resolved_is_numeric resolved
                 || resolved_is_pointerish resolved
             | None -> is_scalar_truthy_type ty || is_boolean_type ty
           in
@@ -379,19 +403,23 @@ module Semantic = struct
       | _ -> ()
     in
     match expr.value with
-    | Core.Identifier _ | Core.Literal _ | Core.Nil | Core.Zero | Core.SizeType _ -> ()
+    | Core.Identifier _ | Core.Literal _ | Core.Nil | Core.Zero
+    | Core.SizeType _ ->
+        ()
     | Core.ToBool inner ->
         check_expression state env loop_depth inner;
         check_scalar_truthy inner
-    | Core.Unary unary -> check_expression state env loop_depth unary.value.inner
-    | Core.Binary binary ->
+    | Core.Unary unary ->
+        check_expression state env loop_depth unary.value.inner
+    | Core.Binary binary -> (
         check_expression state env loop_depth binary.value.left;
         check_expression state env loop_depth binary.value.right;
         let left_resolved = expr_resolved_type state binary.value.left in
         let right_resolved = expr_resolved_type state binary.value.right in
         let numeric_pair =
           match (left_resolved, right_resolved) with
-          | Some left, Some right -> resolved_is_numeric left && resolved_is_numeric right
+          | Some left, Some right ->
+              resolved_is_numeric left && resolved_is_numeric right
           | _ -> false
         in
         let pointer_numeric_pair =
@@ -408,20 +436,25 @@ module Semantic = struct
           | _ -> None
         in
         let compatible_pair =
-          equality_operands_compatible state binary.value.left binary.value.right
+          equality_operands_compatible state binary.value.left
+            binary.value.right
         in
-        (match binary.value.op with
+        match binary.value.op with
         | Core.Add | Core.Subtract ->
-            if not (numeric_pair || pointer_numeric_pair || Option.is_some vector_or_matrix_result)
+            if
+              not
+                (numeric_pair || pointer_numeric_pair
+                || Option.is_some vector_or_matrix_result)
             then
               add_diagnostic state Error expr.loc
-                "binary arithmetic requires numeric operands or pointer arithmetic"
+                "binary arithmetic requires numeric operands or pointer \
+                 arithmetic"
         | Core.Multiply | Core.Divide | Core.Modulo ->
             if not (numeric_pair || Option.is_some vector_or_matrix_result) then
               add_diagnostic state Error expr.loc
                 "binary arithmetic requires numeric operands"
-        | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr | Core.BitwiseXor
-          ->
+        | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
+        | Core.BitwiseXor ->
             if not numeric_pair then
               add_diagnostic state Error expr.loc
                 "bitwise operations require numeric operands"
@@ -429,7 +462,8 @@ module Semantic = struct
             if not compatible_pair then
               add_diagnostic state Error expr.loc
                 "comparison operands must have compatible types"
-        | Core.LessThan | Core.LessThanOrEqual | Core.GreaterThan | Core.GreaterThanOrEqual ->
+        | Core.LessThan | Core.LessThanOrEqual | Core.GreaterThan
+        | Core.GreaterThanOrEqual ->
             if not numeric_pair then
               add_diagnostic state Error expr.loc
                 "ordered comparisons require numeric operands"
@@ -440,17 +474,18 @@ module Semantic = struct
         ignore (check_block state env loop_depth ~return_expected:None block)
     | Core.Initializer init ->
         List.iter (check_expression state env loop_depth) init.value.exprs
-    | Core.As cast ->
+    | Core.As cast -> (
         check_expression state env loop_depth cast.value.inner;
-        (match
-           ( expr_resolved_type state cast.value.inner,
-             resolve_core_type state.type_env [] [] cast.loc cast.value.target_type )
-         with
+        match
+          ( expr_resolved_type state cast.value.inner,
+            resolve_core_type state.type_env [] [] cast.loc
+              cast.value.target_type )
+        with
         | Some source, Some target when not (resolved_can_cast source target) ->
             add_diagnostic state Error cast.loc "incompatible cast"
         | _ -> ())
     | Core.SizeExpr inner -> check_expression state env loop_depth inner
-    | Core.Match match_expr ->
+    | Core.Match match_expr -> (
         check_expression state env loop_depth match_expr.value.expr;
         let is_bool_scrutinee =
           match expr_annotation state match_expr.value.expr with
@@ -459,14 +494,16 @@ module Semantic = struct
         in
         let has_default =
           List.exists
-            (fun (arm : Core.match_arm) -> arm.value.pattern.value = Core.PatternDefault)
+            (fun (arm : Core.match_arm) ->
+              arm.value.pattern.value = Core.PatternDefault)
             match_expr.value.arms
         in
         if
           (not statement_context) && (not has_default)
-          && (not (is_bool_scrutinee && bool_match_is_exhaustive match_expr))
+          && not (is_bool_scrutinee && bool_match_is_exhaustive match_expr)
         then
-          add_diagnostic state Error expr.loc "match expression is not exhaustive";
+          add_diagnostic state Error expr.loc
+            "match expression is not exhaustive";
         List.iter
           (fun (arm : Core.match_arm) ->
             let env = push_scope env in
@@ -490,18 +527,23 @@ module Semantic = struct
             in
             check_expression state env loop_depth arm.value.expr)
           match_expr.value.arms;
-        let arm_exprs = List.map (fun (arm : Core.match_arm) -> arm.value.expr) match_expr.value.arms in
+        let arm_exprs =
+          List.map
+            (fun (arm : Core.match_arm) -> arm.value.expr)
+            match_expr.value.arms
+        in
         let expected_arm_type = expr_resolved_type state expr in
         (match expected_arm_type with
         | Some expected ->
             List.iter
               (fun arm_expr ->
                 check_expr_matches_expected state arm_expr expected
-                  "match arm type does not match the rest of the match expression"
+                  "match arm type does not match the rest of the match \
+                   expression"
                   "nil is only valid for pointer-like match arm types")
               arm_exprs
         | None -> ());
-        (match expr_annotation state match_expr.value.expr with
+        match expr_annotation state match_expr.value.expr with
         | Some { resolved_type = Some scrutinee_ty; _ } ->
             List.iter
               (fun (arm : Core.match_arm) ->
@@ -513,39 +555,43 @@ module Semantic = struct
                     with
                     | None ->
                         add_diagnostic state Error arm.loc
-                          "enum pattern variant does not exist on the scrutinee type"
-                    | Some (_, inner_ty) ->
+                          "enum pattern variant does not exist on the \
+                           scrutinee type"
+                    | Some (_, inner_ty) -> (
                         Option.iter
                           (fun (enum_name : Core.identifier) ->
                             match scrutinee_ty with
                             | ResolvedNamed (name, _)
                               when not (String.equal name enum_name.value) ->
                                 add_diagnostic state Error arm.loc
-                                  "pattern enum name does not match the scrutinee type"
+                                  "pattern enum name does not match the \
+                                   scrutinee type"
                             | _ -> ())
                           enum.value.enum_name;
-                        (match (inner_ty, enum.value.binding) with
+                        match (inner_ty, enum.value.binding) with
                         | _ :: _, [] ->
                             add_diagnostic state Error arm.loc
-                              "enum pattern requires a binding or explicit (_) payload"
+                              "enum pattern requires a binding or explicit (_) \
+                               payload"
                         | [], _ :: _ ->
                             add_diagnostic state Error arm.loc
                               "enum pattern does not take payload bindings"
                         | payload_tys, bindings
-                          when List.length payload_tys <> List.length bindings ->
+                          when List.length payload_tys <> List.length bindings
+                          ->
                             add_diagnostic state Error arm.loc
-                              "enum pattern payload binding count does not match the variant"
+                              "enum pattern payload binding count does not \
+                               match the variant"
                         | _ -> ()))
                 | Core.PatternDefault | Core.PatternLiteral _ -> ())
               match_expr.value.arms
         | _ -> ())
-    | Core.BoxExpr inner ->
-        check_expression state env loop_depth inner
+    | Core.BoxExpr inner -> check_expression state env loop_depth inner
     | Core.BoxConstruct box ->
         List.iter (check_expression state env loop_depth) box.value.args
-    | Core.Unbox inner ->
+    | Core.Unbox inner -> (
         check_expression state env loop_depth inner;
-        (match expr_resolved_type state inner with
+        match expr_resolved_type state inner with
         | Some (ResolvedBox _) -> ()
         | Some _ ->
             add_diagnostic state Error expr.loc
@@ -556,30 +602,34 @@ module Semantic = struct
         if not (is_lvalue inner) then
           add_diagnostic state Error expr.loc
             "ref expression must resolve to an assignable target"
-    | Core.Load inner ->
+    | Core.Load inner -> (
         check_expression state env loop_depth inner;
-        (match expr_resolved_type state inner with
+        match expr_resolved_type state inner with
         | Some (ResolvedPointer _ | ResolvedBox _ | ResolvedCell _) -> ()
         | Some _ ->
             add_diagnostic state Error expr.loc
               "load expression must resolve to a pointer-like reference"
         | None -> ())
     | Core.BoxType _ -> ()
-    | Core.Call call ->
+    | Core.Call call -> (
         check_expression state env loop_depth call.value.target;
         List.iter (check_expression state env loop_depth) call.value.params;
-        (match (call.value.target.value, expr_annotation state call.value.target) with
+        (match
+           (call.value.target.value, expr_annotation state call.value.target)
+         with
         | Core.Identifier id, _ -> (
             match lookup_function state id.value with
             | Some fn_decl when function_has_specialization_param fn_decl ->
                 let actual_arity = List.length call.value.params in
-                let required_arity = List.length fn_decl.value.params.value.params in
+                let required_arity =
+                  List.length fn_decl.value.params.value.params
+                in
                 if actual_arity <> required_arity then
                   add_diagnostic state Error call.loc
                     "call argument count does not match the function signature"
             | _ -> ())
         | _ -> ());
-        (match call.value.target.value with
+        match call.value.target.value with
         | Core.Identifier id -> (
             match lookup_function state id.value with
             | Some fn_decl when function_has_specialization_param fn_decl -> ()
@@ -592,41 +642,56 @@ module Semantic = struct
                         let required_arity = List.length fn.value.param_types in
                         if
                           actual_arity < required_arity
-                          || ((not fn.value.vararg) && actual_arity > required_arity)
+                          || (not fn.value.vararg)
+                             && actual_arity > required_arity
                         then
                           add_diagnostic state Error call.loc
-                            "call argument count does not match the function signature";
+                            "call argument count does not match the function \
+                             signature";
                         List.iter2
                           (fun (arg : Core.expression) expected_ty ->
                             if arg.value = Core.Nil then
-                              match resolve_core_type state.type_env [] [] arg.loc expected_ty with
-                              | Some resolved when resolved_is_pointerish resolved -> ()
+                              match
+                                resolve_core_type state.type_env [] [] arg.loc
+                                  expected_ty
+                              with
+                              | Some resolved
+                                when resolved_is_pointerish resolved ->
+                                  ()
                               | _ ->
                                   add_diagnostic state Error arg.loc
-                                    "nil is only valid for pointer-like parameter types")
+                                    "nil is only valid for pointer-like \
+                                     parameter types")
                           (List.filteri
-                             (fun index _ -> index < List.length fn.value.param_types)
+                             (fun index _ ->
+                               index < List.length fn.value.param_types)
                              call.value.params)
                           (List.filteri
-                             (fun index _ -> index < List.length call.value.params)
+                             (fun index _ ->
+                               index < List.length call.value.params)
                              fn.value.param_types);
                         List.iter2
                           (fun (arg : Core.expression) expected_ty ->
                             match
                               ( expr_annotation state arg,
-                                resolve_core_type state.type_env [] [] arg.loc expected_ty )
+                                resolve_core_type state.type_env [] [] arg.loc
+                                  expected_ty )
                             with
-                            | Some { resolved_type = Some actual; _ }, Some expected
-                              when not (resolved_compatible actual expected)
+                            | ( Some { resolved_type = Some actual; _ },
+                                Some expected )
+                              when (not (resolved_compatible actual expected))
                                    && arg.value <> Core.Nil ->
                                 add_diagnostic state Error arg.loc
-                                  "call argument type does not match the function signature"
+                                  "call argument type does not match the \
+                                   function signature"
                             | _ -> ())
                           (List.filteri
-                             (fun index _ -> index < List.length fn.value.param_types)
+                             (fun index _ ->
+                               index < List.length fn.value.param_types)
                              call.value.params)
                           (List.filteri
-                             (fun index _ -> index < List.length call.value.params)
+                             (fun index _ ->
+                               index < List.length call.value.params)
                              fn.value.param_types)
                     | _ -> ())
                 | Some { resolved_type = Some enum_ty; _ } -> (
@@ -635,14 +700,17 @@ module Semantic = struct
                         match literal.value with
                         | Core.Enum enum_lit -> (
                             match
-                              lookup_enum_variant state.type_env call.loc enum_ty
-                                enum_lit.value.enum_variant.value
+                              lookup_enum_variant state.type_env call.loc
+                                enum_ty enum_lit.value.enum_variant.value
                             with
                             | Some (_, expected_payloads) ->
-                                if List.length call.value.params <> List.length expected_payloads
+                                if
+                                  List.length call.value.params
+                                  <> List.length expected_payloads
                                 then
                                   add_diagnostic state Error call.loc
-                                    "enum constructor argument count does not match the variant";
+                                    "enum constructor argument count does not \
+                                     match the variant";
                                 List.iter2
                                   (fun (arg : Core.expression) expected_ty ->
                                     match
@@ -650,14 +718,21 @@ module Semantic = struct
                                         expected_ty,
                                         arg.value )
                                     with
-                                    | Some { resolved_type = Some actual; _ }, expected, _
-                                      when not (resolved_compatible actual expected) ->
+                                    | ( Some { resolved_type = Some actual; _ },
+                                        expected,
+                                        _ )
+                                      when not
+                                             (resolved_compatible actual
+                                                expected) ->
                                         add_diagnostic state Error arg.loc
-                                          "enum constructor argument type does not match the variant"
+                                          "enum constructor argument type does \
+                                           not match the variant"
                                     | _, expected, Core.Nil ->
-                                        if not (resolved_is_pointerish expected) then
+                                        if not (resolved_is_pointerish expected)
+                                        then
                                           add_diagnostic state Error arg.loc
-                                            "nil is only valid for pointer-like enum payloads"
+                                            "nil is only valid for \
+                                             pointer-like enum payloads"
                                     | _ -> ())
                                   (List.filteri
                                      (fun index _ ->
@@ -671,94 +746,115 @@ module Semantic = struct
                         | _ -> ())
                     | _ -> ())
                 | _ -> ()))
-        | _ ->
-            (match expr_annotation state call.value.target with
-        | Some { inferred_type = Some ty; _ } -> (
-            match ty.value with
-            | Core.FunctionType fn ->
-                let actual_arity = List.length call.value.params in
-                let required_arity = List.length fn.value.param_types in
-                if
-                  actual_arity < required_arity
-                  || ((not fn.value.vararg) && actual_arity > required_arity)
-                then
-                  add_diagnostic state Error call.loc
-                    "call argument count does not match the function signature";
-                List.iter2
-                  (fun (arg : Core.expression) expected_ty ->
-                    if arg.value = Core.Nil then
-                      match resolve_core_type state.type_env [] [] arg.loc expected_ty with
-                      | Some resolved when resolved_is_pointerish resolved -> ()
-                      | _ ->
-                          add_diagnostic state Error arg.loc
-                            "nil is only valid for pointer-like parameter types")
-                  (List.filteri
-                     (fun index _ -> index < List.length fn.value.param_types)
-                     call.value.params)
-                  (List.filteri
-                     (fun index _ -> index < List.length call.value.params)
-                     fn.value.param_types);
-                List.iter2
-                  (fun (arg : Core.expression) expected_ty ->
-                    match
-                      ( expr_annotation state arg,
-                        resolve_core_type state.type_env [] [] arg.loc expected_ty )
-                    with
-                    | Some { resolved_type = Some actual; _ }, Some expected
-                      when not (resolved_compatible actual expected)
-                           && arg.value <> Core.Nil ->
-                        add_diagnostic state Error arg.loc
-                          "call argument type does not match the function signature"
-                    | _ -> ())
-                  (List.filteri
-                     (fun index _ -> index < List.length fn.value.param_types)
-                     call.value.params)
-                  (List.filteri
-                     (fun index _ -> index < List.length call.value.params)
-                     fn.value.param_types)
-            | _ -> ())
-        | Some { resolved_type = Some enum_ty; _ } -> (
-            match call.value.target.value with
-            | Core.Literal literal -> (
-                match literal.value with
-                | Core.Enum enum_lit -> (
-                    match
-                      lookup_enum_variant state.type_env call.loc enum_ty
-                        enum_lit.value.enum_variant.value
-                    with
-                    | Some (_, expected_payloads) ->
-                        if List.length call.value.params <> List.length expected_payloads then
-                          add_diagnostic state Error call.loc
-                            "enum constructor payload count does not match the variant";
-                        List.iter2
-                          (fun (arg : Core.expression) expected ->
-                            match expr_annotation state arg with
-                            | Some { resolved_type = Some actual; _ }
-                              when not (resolved_compatible actual expected)
-                                   && arg.value <> Core.Nil ->
-                                add_diagnostic state Error arg.loc
-                                  "enum payload type does not match the variant"
-                            | Some _ when arg.value = Core.Nil ->
-                                if not (resolved_is_pointerish expected) then
-                                  add_diagnostic state Error arg.loc
-                                    "nil is only valid for pointer-like enum payloads"
-                            | _ -> ())
-                          (List.filteri
-                             (fun index _ -> index < List.length expected_payloads)
-                             call.value.params)
-                          (List.filteri
-                             (fun index _ -> index < List.length call.value.params)
-                             expected_payloads)
-                    | None -> ())
+        | _ -> (
+            match expr_annotation state call.value.target with
+            | Some { inferred_type = Some ty; _ } -> (
+                match ty.value with
+                | Core.FunctionType fn ->
+                    let actual_arity = List.length call.value.params in
+                    let required_arity = List.length fn.value.param_types in
+                    if
+                      actual_arity < required_arity
+                      || ((not fn.value.vararg) && actual_arity > required_arity)
+                    then
+                      add_diagnostic state Error call.loc
+                        "call argument count does not match the function \
+                         signature";
+                    List.iter2
+                      (fun (arg : Core.expression) expected_ty ->
+                        if arg.value = Core.Nil then
+                          match
+                            resolve_core_type state.type_env [] [] arg.loc
+                              expected_ty
+                          with
+                          | Some resolved when resolved_is_pointerish resolved
+                            ->
+                              ()
+                          | _ ->
+                              add_diagnostic state Error arg.loc
+                                "nil is only valid for pointer-like parameter \
+                                 types")
+                      (List.filteri
+                         (fun index _ ->
+                           index < List.length fn.value.param_types)
+                         call.value.params)
+                      (List.filteri
+                         (fun index _ -> index < List.length call.value.params)
+                         fn.value.param_types);
+                    List.iter2
+                      (fun (arg : Core.expression) expected_ty ->
+                        match
+                          ( expr_annotation state arg,
+                            resolve_core_type state.type_env [] [] arg.loc
+                              expected_ty )
+                        with
+                        | Some { resolved_type = Some actual; _ }, Some expected
+                          when (not (resolved_compatible actual expected))
+                               && arg.value <> Core.Nil ->
+                            add_diagnostic state Error arg.loc
+                              "call argument type does not match the function \
+                               signature"
+                        | _ -> ())
+                      (List.filteri
+                         (fun index _ ->
+                           index < List.length fn.value.param_types)
+                         call.value.params)
+                      (List.filteri
+                         (fun index _ -> index < List.length call.value.params)
+                         fn.value.param_types)
                 | _ -> ())
-            | _ -> ())
-        | _ -> ()))
+            | Some { resolved_type = Some enum_ty; _ } -> (
+                match call.value.target.value with
+                | Core.Literal literal -> (
+                    match literal.value with
+                    | Core.Enum enum_lit -> (
+                        match
+                          lookup_enum_variant state.type_env call.loc enum_ty
+                            enum_lit.value.enum_variant.value
+                        with
+                        | Some (_, expected_payloads) ->
+                            if
+                              List.length call.value.params
+                              <> List.length expected_payloads
+                            then
+                              add_diagnostic state Error call.loc
+                                "enum constructor payload count does not match \
+                                 the variant";
+                            List.iter2
+                              (fun (arg : Core.expression) expected ->
+                                match expr_annotation state arg with
+                                | Some { resolved_type = Some actual; _ }
+                                  when (not
+                                          (resolved_compatible actual expected))
+                                       && arg.value <> Core.Nil ->
+                                    add_diagnostic state Error arg.loc
+                                      "enum payload type does not match the \
+                                       variant"
+                                | Some _ when arg.value = Core.Nil ->
+                                    if not (resolved_is_pointerish expected)
+                                    then
+                                      add_diagnostic state Error arg.loc
+                                        "nil is only valid for pointer-like \
+                                         enum payloads"
+                                | _ -> ())
+                              (List.filteri
+                                 (fun index _ ->
+                                   index < List.length expected_payloads)
+                                 call.value.params)
+                              (List.filteri
+                                 (fun index _ ->
+                                   index < List.length call.value.params)
+                                 expected_payloads)
+                        | None -> ())
+                    | _ -> ())
+                | _ -> ())
+            | _ -> ()))
     | Core.Index index ->
         check_expression state env loop_depth index.value.target;
         check_expression state env loop_depth index.value.index
-    | Core.Field field ->
+    | Core.Field field -> (
         check_expression state env loop_depth field.value.target;
-        if field.value.arrow then (
+        if field.value.arrow then
           match expr_annotation state field.value.target with
           | Some { inferred_type = Some ty; _ } -> (
               match ty.value with
@@ -767,7 +863,7 @@ module Semantic = struct
                   add_diagnostic state Error field.loc
                     "arrow field access requires a pointer-like target")
           | _ -> ())
-    | Core.Assign write ->
+    | Core.Assign write -> (
         check_expression state env loop_depth write.value.target;
         check_expression state env loop_depth write.value.value;
         if not (is_lvalue write.value.target) then
@@ -786,23 +882,27 @@ module Semantic = struct
            ( expr_annotation state write.value.target,
              expr_annotation state write.value.value )
          with
-        | Some { resolved_type = Some expected; _ }, Some { resolved_type = Some actual; _ }
+        | ( Some { resolved_type = Some expected; _ },
+            Some { resolved_type = Some actual; _ } )
           when not (resolved_compatible actual expected) ->
             add_diagnostic state Error write.value.value.loc
               "assignment value type does not match the target"
         | Some { resolved_type = Some expected; _ }, _ -> (
             match write.value.value.value with
             | Core.Initializer init ->
-                check_initializer_shape state write.value.value.loc init expected
+                check_initializer_shape state write.value.value.loc init
+                  expected
             | _ -> ())
         | _ -> ());
-        if write.value.value.value = Core.Nil then (
+        if write.value.value.value = Core.Nil then
           match expr_annotation state write.value.target with
-          | Some { resolved_type = Some resolved; _ } when resolved_is_pointerish resolved -> ()
+          | Some { resolved_type = Some resolved; _ }
+            when resolved_is_pointerish resolved ->
+              ()
           | _ ->
               add_diagnostic state Error write.value.value.loc
                 "nil is only valid for pointer-like assignment targets")
-    | Core.Mutate write ->
+    | Core.Mutate write -> (
         check_expression state env loop_depth write.value.target;
         check_expression state env loop_depth write.value.value;
         if not statement_context then
@@ -824,12 +924,12 @@ module Semantic = struct
            ( expr_annotation state write.value.target,
              expr_annotation state write.value.value )
          with
-        | Some { resolved_type = Some (ResolvedPointer expected); _ },
-          Some { resolved_type = Some actual; _ }
-        | Some { resolved_type = Some (ResolvedBox expected); _ },
-          Some { resolved_type = Some actual; _ }
-        | Some { resolved_type = Some (ResolvedCell expected); _ },
-          Some { resolved_type = Some actual; _ }
+        | ( Some { resolved_type = Some (ResolvedPointer expected); _ },
+            Some { resolved_type = Some actual; _ } )
+        | ( Some { resolved_type = Some (ResolvedBox expected); _ },
+            Some { resolved_type = Some actual; _ } )
+        | ( Some { resolved_type = Some (ResolvedCell expected); _ },
+            Some { resolved_type = Some actual; _ } )
           when not (resolved_compatible actual expected) ->
             add_diagnostic state Error write.value.value.loc
               "mutation value type does not match the pointed-to type"
@@ -838,15 +938,17 @@ module Semantic = struct
         | Some { resolved_type = Some (ResolvedCell expected); _ }, _ -> (
             match write.value.value.value with
             | Core.Initializer init ->
-                check_initializer_shape state write.value.value.loc init expected
+                check_initializer_shape state write.value.value.loc init
+                  expected
             | _ -> ())
         | _ -> ());
-        if write.value.value.value = Core.Nil then (
+        if write.value.value.value = Core.Nil then
           match expr_annotation state write.value.target with
           | Some { resolved_type = Some (ResolvedPointer inner); _ }
           | Some { resolved_type = Some (ResolvedBox inner); _ }
           | Some { resolved_type = Some (ResolvedCell inner); _ }
-            when resolved_is_pointerish inner -> ()
+            when resolved_is_pointerish inner ->
+              ()
           | _ ->
               add_diagnostic state Error write.value.value.loc
                 "nil is only valid for pointer-like mutation targets")
@@ -868,7 +970,7 @@ module Semantic = struct
         | Core.FDecl fn -> (
             match fn.value.definition with
             | None -> ()
-            | Some body ->
+            | Some body -> (
                 let return_expected =
                   Option.bind fn.value.return_type
                     (resolve_core_type state.type_env [] [] fn.loc)
@@ -878,19 +980,20 @@ module Semantic = struct
                   List.fold_left
                     (fun env (param : Core.param) ->
                       let resolved_type =
-                        resolve_core_type state.type_env [] [] param.loc param.value.ty
+                        resolve_core_type state.type_env [] [] param.loc
+                          param.value.ty
                       in
                       bind_current env param.value.name.value
                         {
                           inferred_type = Some param.value.ty;
                           resolved_type;
                           metavar = metavar_of_type param.value.ty;
-                              is_mutable = false;
-                            })
+                          is_mutable = false;
+                        })
                     env fn.value.params.value.params
                 in
                 ignore (check_block state env 0 ~return_expected body);
-                (match return_expected with
+                match return_expected with
                 | Some ResolvedVoid -> ()
                 | Some _ when block_guarantees_return body -> ()
                 | Some _ ->
@@ -902,7 +1005,7 @@ module Semantic = struct
               (fun (fn : Core.function_decl) ->
                 match fn.value.definition with
                 | None -> ()
-                | Some body ->
+                | Some body -> (
                     let return_expected =
                       Option.bind fn.value.return_type
                         (resolve_core_type state.type_env [] [] fn.loc)
@@ -912,7 +1015,8 @@ module Semantic = struct
                       List.fold_left
                         (fun env (param : Core.param) ->
                           let resolved_type =
-                            resolve_core_type state.type_env [] [] param.loc param.value.ty
+                            resolve_core_type state.type_env [] [] param.loc
+                              param.value.ty
                           in
                           bind_current env param.value.name.value
                             {
@@ -924,7 +1028,7 @@ module Semantic = struct
                         env fn.value.params.value.params
                     in
                     ignore (check_block state env 0 ~return_expected body);
-                    (match return_expected with
+                    match return_expected with
                     | Some ResolvedVoid -> ()
                     | Some _ when block_guarantees_return body -> ()
                     | Some _ ->
@@ -937,7 +1041,8 @@ module Semantic = struct
               (fun init ->
                 check_expression state env 0 init;
                 match
-                  ( resolve_core_type state.type_env [] [] binding.loc binding.value.ty,
+                  ( resolve_core_type state.type_env [] [] binding.loc
+                      binding.value.ty,
                     init.value )
                 with
                 | Some expected, Core.Initializer init ->

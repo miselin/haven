@@ -39,16 +39,20 @@ module Verify = struct
         | Some { resolved_type = Some _; _ } -> ()
         | Some _ | None ->
             add_diagnostic state Error expr.loc
-              (Printf.sprintf "%s still has an unresolved expression type after typing"
+              (Printf.sprintf
+                 "%s still has an unresolved expression type after typing"
                  context))
 
   let verify_default_constructible state loc context ty =
     match resolve_core_type state.type_env [] [] loc ty with
-    | Some resolved when resolved_default_constructible state.type_env resolved -> ()
+    | Some resolved when resolved_default_constructible state.type_env resolved
+      ->
+        ()
     | Some resolved ->
         add_diagnostic state Error loc
-          (Printf.sprintf "%s requires a default-constructible type, but %s is not"
-             context (string_of_resolved_ty resolved))
+          (Printf.sprintf
+             "%s requires a default-constructible type, but %s is not" context
+             (string_of_resolved_ty resolved))
     | None -> ()
 
   let verify_binding_annotation state (binding : Core.let_stmt) =
@@ -66,7 +70,8 @@ module Verify = struct
   and verify_statement state (stmt : Core.statement) =
     match stmt.value with
     | Core.Expression expr -> verify_expression state expr
-    | Core.CompileAssert compile_assert -> verify_expression state compile_assert.value.cond
+    | Core.CompileAssert compile_assert ->
+        verify_expression state compile_assert.value.cond
     | Core.Return expr -> Option.iter (verify_expression state) expr
     | Core.Defer expr -> verify_expression state expr
     | Core.Let binding ->
@@ -94,17 +99,16 @@ module Verify = struct
       | Core.Ref inner
       | Core.Load inner ->
           verify_expression state inner
-      | Core.Unary unary ->
-          verify_expression state unary.value.inner
+      | Core.Unary unary -> verify_expression state unary.value.inner
       | Core.Binary binary ->
           verify_expression state binary.value.left;
           verify_expression state binary.value.right
-      | Core.Block block ->
-          verify_block state block
+      | Core.Block block -> verify_block state block
       | Core.Initializer init ->
           List.iter (verify_expression state) init.value.exprs
       | Core.As cast ->
-          verify_declared_type state cast.loc "cast target" cast.value.target_type;
+          verify_declared_type state cast.loc "cast target"
+            cast.value.target_type;
           verify_expression state cast.value.inner
       | Core.SizeType ty ->
           verify_declared_type state expr.loc "embedded type expression" ty
@@ -112,12 +116,14 @@ module Verify = struct
           verify_declared_type state expr.loc "embedded type expression" ty;
           verify_default_constructible state expr.loc "box type construction" ty
       | Core.BoxConstruct box ->
-          verify_declared_type state expr.loc "embedded type expression" box.value.ty;
+          verify_declared_type state expr.loc "embedded type expression"
+            box.value.ty;
           List.iter (verify_expression state) box.value.args
       | Core.Match match_expr ->
           verify_expression state match_expr.value.expr;
           List.iter
-            (fun (arm : Core.match_arm) -> verify_expression state arm.value.expr)
+            (fun (arm : Core.match_arm) ->
+              verify_expression state arm.value.expr)
             match_expr.value.arms
       | Core.Call call ->
           (match call.value.target.value with
@@ -131,8 +137,7 @@ module Verify = struct
       | Core.Index index ->
           verify_expression state index.value.target;
           verify_expression state index.value.index
-      | Core.Field field ->
-          verify_expression state field.value.target
+      | Core.Field field -> verify_expression state field.value.target
       | Core.Assign write | Core.Mutate write ->
           verify_expression state write.value.target;
           verify_expression state write.value.value
@@ -191,14 +196,16 @@ module Verify = struct
   let verify_top_decl state (decl : Core.top_decl) =
     match decl.value with
     | Core.FDecl fn -> verify_function state fn
-    | Core.Foreign foreign -> List.iter (verify_function state) foreign.value.decls
+    | Core.Foreign foreign ->
+        List.iter (verify_function state) foreign.value.decls
     | Core.VDecl binding ->
         verify_declared_type state binding.loc
           (Printf.sprintf "global %s" binding.value.name.value)
           binding.value.ty;
         if binding.value.init_expr = None then
           verify_default_constructible state binding.loc
-            (Printf.sprintf "global %s default initialization" binding.value.name.value)
+            (Printf.sprintf "global %s default initialization"
+               binding.value.name.value)
             binding.value.ty;
         Option.iter (verify_expression state) binding.value.init_expr
     | Core.TDecl decl -> verify_type_decl state decl
@@ -206,7 +213,11 @@ module Verify = struct
 
   let run typed : verify_result =
     let state =
-      { typed; type_env = type_env_of_program typed.program.program; diagnostics_rev = [] }
+      {
+        typed;
+        type_env = type_env_of_program typed.program.program;
+        diagnostics_rev = [];
+      }
     in
     List.iter (verify_top_decl state) typed.program.program.value.decls;
     { diagnostics = List.rev state.diagnostics_rev }

@@ -1,12 +1,8 @@
 open Analysis_types
-
 module ConstantFold = Analysis_cfold.ConstantFold
 
 module Assert = struct
-  type result = {
-    program : Core.parsed_program;
-    diagnostics : diagnostic list;
-  }
+  type result = { program : Core.parsed_program; diagnostics : diagnostic list }
 
   type state = {
     typed : typing_result;
@@ -18,7 +14,8 @@ module Assert = struct
 
   let add_diagnostic state loc message =
     state.diagnostics_rev <-
-      { category = Semantic; level = Error; loc; message } :: state.diagnostics_rev
+      { category = Semantic; level = Error; loc; message }
+      :: state.diagnostics_rev
 
   let exact_integer_of_annotation (ann : expr_annotation) =
     Option.bind ann.metavar.integer (fun integer -> integer.exact_value)
@@ -53,9 +50,7 @@ module Assert = struct
     | Core.BitwiseXor -> 4
     | Core.BitwiseAnd -> 5
     | Core.IsEqual | Core.NotEqual -> 6
-    | Core.LessThan
-    | Core.LessThanOrEqual
-    | Core.GreaterThan
+    | Core.LessThan | Core.LessThanOrEqual | Core.GreaterThan
     | Core.GreaterThanOrEqual ->
         7
     | Core.LeftShift | Core.RightShift -> 8
@@ -101,8 +96,7 @@ module Assert = struct
             | Core.Complement -> "~"
           in
           op ^ render_expression ~ctx_prec:11 unary.value.inner
-      | Core.ToBool inner ->
-          Printf.sprintf "bool(%s)" (render_expression inner)
+      | Core.ToBool inner -> Printf.sprintf "bool(%s)" (render_expression inner)
       | Core.Call call ->
           Printf.sprintf "%s(%s)"
             (render_expression ~ctx_prec:12 call.value.target)
@@ -132,10 +126,12 @@ module Assert = struct
       | Core.Ref inner -> "ref " ^ render_expression ~ctx_prec:11 inner
       | Core.Load inner -> "load " ^ render_expression ~ctx_prec:11 inner
       | Core.Assign write ->
-          Printf.sprintf "%s = %s" (render_expression write.value.target)
+          Printf.sprintf "%s = %s"
+            (render_expression write.value.target)
             (render_expression write.value.value)
       | Core.Mutate write ->
-          Printf.sprintf "%s := %s" (render_expression write.value.target)
+          Printf.sprintf "%s := %s"
+            (render_expression write.value.target)
             (render_expression write.value.value)
       | Core.SizeType _ -> "size<type>"
       | Core.Nil -> "nil"
@@ -143,7 +139,8 @@ module Assert = struct
     in
     if self_prec < ctx_prec then "(" ^ rendered ^ ")" else rendered
 
-  let rec render_specialized_expression ?(ctx_prec = 0) state (expr : Core.expression) =
+  let rec render_specialized_expression ?(ctx_prec = 0) state
+      (expr : Core.expression) =
     match expr.value with
     | Core.Field _ -> (
         match exact_integer state expr with
@@ -153,9 +150,11 @@ module Assert = struct
         let prec = binary_precedence binary.value.op in
         let rendered =
           Printf.sprintf "%s %s %s"
-            (render_specialized_expression ~ctx_prec:prec state binary.value.left)
+            (render_specialized_expression ~ctx_prec:prec state
+               binary.value.left)
             (binary_op_string binary.value.op)
-            (render_specialized_expression ~ctx_prec:(prec + 1) state binary.value.right)
+            (render_specialized_expression ~ctx_prec:(prec + 1) state
+               binary.value.right)
         in
         if prec < ctx_prec then "(" ^ rendered ^ ")" else rendered
     | Core.Unary unary ->
@@ -165,7 +164,10 @@ module Assert = struct
           | Core.Negate -> "-"
           | Core.Complement -> "~"
         in
-        let rendered = op ^ render_specialized_expression ~ctx_prec:11 state unary.value.inner in
+        let rendered =
+          op
+          ^ render_specialized_expression ~ctx_prec:11 state unary.value.inner
+        in
         if 11 < ctx_prec then "(" ^ rendered ^ ")" else rendered
     | Core.Call call ->
         Printf.sprintf "%s(%s)"
@@ -207,8 +209,8 @@ module Assert = struct
              (List.map
                 (fun expr -> render_specialized_expression state expr)
                 box.value.args))
-    | (Core.Literal _ | Core.Identifier _ | Core.Block _ | Core.Initializer _ | Core.Match _
-      | Core.BoxType _ | Core.SizeType _ | Core.Nil | Core.Zero) ->
+    | Core.Literal _ | Core.Identifier _ | Core.Block _ | Core.Initializer _
+    | Core.Match _ | Core.BoxType _ | Core.SizeType _ | Core.Nil | Core.Zero ->
         render_expression ~ctx_prec expr
 
   let assert_context (compile_assert : Core.compile_assert) suffix =
@@ -216,18 +218,22 @@ module Assert = struct
       (render_expression compile_assert.value.cond)
       suffix
 
-  let assert_failure_message state (compile_assert : Core.compile_assert) message =
+  let assert_failure_message state (compile_assert : Core.compile_assert)
+      message =
     let message =
-      if String.equal message "" then "compile-time assertion failed" else message
+      if String.equal message "" then "compile-time assertion failed"
+      else message
     in
     let source = render_expression compile_assert.value.cond in
-    let specialized = render_specialized_expression state compile_assert.value.cond in
+    let specialized =
+      render_specialized_expression state compile_assert.value.cond
+    in
     if String.equal source specialized then
       Printf.sprintf "%s\n  compile-time assertion failed: %s" message source
     else
       Printf.sprintf
-        "%s\n  compile-time assertion failed: %s\n  specialized as: %s"
-        message source specialized
+        "%s\n  compile-time assertion failed: %s\n  specialized as: %s" message
+        source specialized
 
   let constant_of_annotation (ann : expr_annotation) =
     match ann.metavar.constant with
@@ -254,10 +260,12 @@ module Assert = struct
             ConstantFold.fold_unary unary.value.op inner)
     | Core.Binary binary ->
         Option.bind (constant_of_expr state binary.value.left) (fun left ->
-            Option.bind (constant_of_expr state binary.value.right) (fun right ->
-                ConstantFold.fold_binary binary.value.op left right))
+            Option.bind (constant_of_expr state binary.value.right)
+              (fun right -> ConstantFold.fold_binary binary.value.op left right))
     | Core.ToBool inner ->
-        Option.bind (constant_of_expr state inner) ConstantFold.truthy_of_constant
+        Option.bind
+          (constant_of_expr state inner)
+          ConstantFold.truthy_of_constant
         |> Option.map (fun value -> ConstantBool value)
     | Core.Block block when block.value.statements = [] ->
         Option.bind block.value.result (constant_of_expr state)
@@ -266,7 +274,8 @@ module Assert = struct
   let assert_message (compile_assert : Core.compile_assert) fallback =
     let message = compile_assert.value.message.value in
     if String.equal message "" then assert_context compile_assert fallback
-    else Printf.sprintf "%s (%s)" message (assert_context compile_assert fallback)
+    else
+      Printf.sprintf "%s (%s)" message (assert_context compile_assert fallback)
 
   let eval_assert_condition state (compile_assert : Core.compile_assert) =
     match constant_of_expr state compile_assert.value.cond with
@@ -280,8 +289,7 @@ module Assert = struct
             false
         | None ->
             add_diagnostic state compile_assert.loc
-              (assert_message compile_assert
-                 "must be a scalar constant");
+              (assert_message compile_assert "must be a scalar constant");
             false)
     | None ->
         add_diagnostic state compile_assert.loc
@@ -290,11 +298,7 @@ module Assert = struct
 
   let rec rewrite_statement state (stmt : Core.statement) =
     match stmt.value with
-    | Core.Expression _
-    | Core.Return _
-    | Core.Defer _
-    | Core.Let _
-    | Core.Break
+    | Core.Expression _ | Core.Return _ | Core.Defer _ | Core.Let _ | Core.Break
     | Core.Continue ->
         [ stmt ]
     | Core.CompileAssert compile_assert ->
@@ -311,9 +315,13 @@ module Assert = struct
                   value =
                     {
                       loop.value with
-                      init = List.concat_map (rewrite_statement state) loop.value.init;
+                      init =
+                        List.concat_map (rewrite_statement state)
+                          loop.value.init;
                       body = rewrite_block state loop.value.body;
-                      step = List.concat_map (rewrite_statement state) loop.value.step;
+                      step =
+                        List.concat_map (rewrite_statement state)
+                          loop.value.step;
                     };
                 };
           };
@@ -325,7 +333,8 @@ module Assert = struct
     | stmt :: rest -> (
         match stmt.value with
         | Core.CompileAssert compile_assert ->
-            if eval_assert_condition state compile_assert then rewrite_statements state rest
+            if eval_assert_condition state compile_assert then
+              rewrite_statements state rest
             else []
         | _ ->
             let stmt' = rewrite_statement state stmt in
@@ -351,7 +360,8 @@ module Assert = struct
               value =
                 {
                   fn.value with
-                  definition = Option.map (rewrite_block state) fn.value.definition;
+                  definition =
+                    Option.map (rewrite_block state) fn.value.definition;
                 };
             }
       | Core.Foreign foreign ->
@@ -369,7 +379,9 @@ module Assert = struct
                           value =
                             {
                               fn.value with
-                              definition = Option.map (rewrite_block state) fn.value.definition;
+                              definition =
+                                Option.map (rewrite_block state)
+                                  fn.value.definition;
                             };
                         })
                       foreign.value.decls;
@@ -382,7 +394,8 @@ module Assert = struct
               value =
                 {
                   binding.value with
-                  init_expr = Option.map (fun expr -> expr) binding.value.init_expr;
+                  init_expr =
+                    Option.map (fun expr -> expr) binding.value.init_expr;
                 };
             }
       | (Core.TDecl _ | Core.Import _ | Core.CImport _) as value -> value
@@ -399,13 +412,11 @@ module Assert = struct
             value =
               {
                 Core.decls =
-                  List.map (rewrite_decl state) typed.program.program.value.decls;
+                  List.map (rewrite_decl state)
+                    typed.program.program.value.decls;
               };
           };
       }
     in
-    {
-      program;
-      diagnostics = List.rev state.diagnostics_rev;
-    }
+    { program; diagnostics = List.rev state.diagnostics_rev }
 end

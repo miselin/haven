@@ -1,6 +1,5 @@
 open Haven_token.Token
 open Haven_core
-
 module Core = Core_ast
 module String_map = Map.Make (String)
 
@@ -35,16 +34,10 @@ type integer_shape = {
   signedness : signedness option;
 }
 
-type target_profile = {
-  native_integer_bits : int;
-  c_integer_bits : int;
-}
+type target_profile = { native_integer_bits : int; c_integer_bits : int }
 
 let default_target_profile =
-  {
-    native_integer_bits = Sys.word_size;
-    c_integer_bits = min 32 Sys.word_size;
-  }
+  { native_integer_bits = Sys.word_size; c_integer_bits = min 32 Sys.word_size }
 
 type metavar = {
   classes : type_class list;
@@ -184,10 +177,7 @@ type ownership_result = {
 }
 
 let make_annotations () =
-  {
-    exprs = Hashtbl.create 256;
-    bindings = Hashtbl.create 256;
-  }
+  { exprs = Hashtbl.create 256; bindings = Hashtbl.create 256 }
 
 let node_id (loc : Loc.t) =
   let start_pos = loc.start_pos in
@@ -231,6 +221,7 @@ let mk_literal loc value : Core.literal =
 let void_type loc = mk_type loc Core.VoidType
 let float_type loc = mk_type loc Core.FloatType
 let string_type loc = mk_type loc Core.StringType
+
 let bool_type loc =
   mk_type loc (Core.NumericType { signedness = Unsigned; bits = 1 })
 
@@ -243,9 +234,7 @@ let box_type loc inner = mk_type loc (Core.BoxType inner)
 let rec type_has_specialization_hole (ty : Core.haven_type) =
   match ty.value with
   | Core.VecHoleType | Core.MatrixHoleType -> true
-  | Core.CellType inner
-  | Core.PointerType inner
-  | Core.BoxType inner ->
+  | Core.CellType inner | Core.PointerType inner | Core.BoxType inner ->
       type_has_specialization_hole inner
   | Core.ArrayType arr -> type_has_specialization_hole arr.value.element
   | Core.FunctionType fn ->
@@ -253,13 +242,8 @@ let rec type_has_specialization_hole (ty : Core.haven_type) =
       || List.exists type_has_specialization_hole fn.value.param_types
   | Core.TemplatedType templ ->
       List.exists type_has_specialization_hole templ.value.inner
-  | Core.NumericType _
-  | Core.VecType _
-  | Core.MatrixType _
-  | Core.FloatType
-  | Core.VoidType
-  | Core.StringType
-  | Core.CustomType _ ->
+  | Core.NumericType _ | Core.VecType _ | Core.MatrixType _ | Core.FloatType
+  | Core.VoidType | Core.StringType | Core.CustomType _ ->
       false
 
 let function_has_specialization_param (fn : Core.function_decl) =
@@ -287,7 +271,8 @@ let type_class_of_type (ty : Core.haven_type) =
   | Core.CellType _ -> [ TypeClassPointer ]
   | Core.TemplatedType templ -> [ TypeClassCustom templ.value.outer.value ]
 
-let unknown_metavar = { classes = [ TypeClassUnknown ]; constant = None; integer = None }
+let unknown_metavar =
+  { classes = [ TypeClassUnknown ]; constant = None; integer = None }
 
 let metavar_of_type ?constant ?integer ty =
   { classes = type_class_of_type ty; constant; integer }
@@ -299,7 +284,7 @@ let exact_integer_bits value =
   if value >= 0 then
     let rec loop bits =
       if bits >= Sys.int_size - 1 then bits
-      else if value <= ((1 lsl bits) - 1) then max 1 bits
+      else if value <= (1 lsl bits) - 1 then max 1 bits
       else loop (bits + 1)
     in
     loop 1
@@ -328,8 +313,7 @@ let integer_fits signedness bits value =
           let magnitude = 1 lsl (bits - 1) in
           value >= -magnitude && value <= magnitude - 1
     | Unsigned ->
-        value >= 0
-        && (bits >= Sys.int_size || value <= (1 lsl bits) - 1)
+        value >= 0 && (bits >= Sys.int_size || value <= (1 lsl bits) - 1)
 
 let equal_list eq a b =
   let rec loop xs ys =
@@ -362,7 +346,8 @@ let rec equal_type (left : Core.haven_type) (right : Core.haven_type) =
   | Core.VoidType, Core.VoidType
   | Core.StringType, Core.StringType ->
       true
-  | Core.CustomType a, Core.CustomType b -> String.equal a.name.value b.name.value
+  | Core.CustomType a, Core.CustomType b ->
+      String.equal a.name.value b.name.value
   | Core.CellType a, Core.CellType b
   | Core.PointerType a, Core.PointerType b
   | Core.BoxType a, Core.BoxType b ->
@@ -372,7 +357,8 @@ let rec equal_type (left : Core.haven_type) (right : Core.haven_type) =
       && equal_type a.value.return_type b.value.return_type
       && equal_list equal_type a.value.param_types b.value.param_types
   | Core.ArrayType a, Core.ArrayType b ->
-      equal_type a.value.element b.value.element && a.value.count.value = b.value.count.value
+      equal_type a.value.element b.value.element
+      && a.value.count.value = b.value.count.value
   | Core.TemplatedType a, Core.TemplatedType b ->
       String.equal a.value.outer.value b.value.outer.value
       && equal_list equal_type a.value.inner b.value.inner
@@ -388,10 +374,7 @@ let is_numeric_type (ty : Core.haven_type) =
 
 let is_scalar_truthy_type (ty : Core.haven_type) =
   match ty.value with
-  | Core.NumericType _
-  | Core.FloatType
-  | Core.PointerType _
-  | Core.BoxType _
+  | Core.NumericType _ | Core.FloatType | Core.PointerType _ | Core.BoxType _
   | Core.CellType _ ->
       true
   | _ -> false
@@ -411,15 +394,15 @@ let rec equal_resolved_type left right =
       lc = rc && equal_resolved_type le re
   | ResolvedVec left, ResolvedVec right -> left = right
   | ResolvedMatrix left, ResolvedMatrix right -> left = right
-  | ResolvedVecHole, ResolvedVecHole
-  | ResolvedMatrixHole, ResolvedMatrixHole ->
+  | ResolvedVecHole, ResolvedVecHole | ResolvedMatrixHole, ResolvedMatrixHole ->
       true
   | ResolvedFunction (lp, lr, lv), ResolvedFunction (rp, rr, rv) ->
       lv = rv && equal_resolved_type lr rr
       && equal_list equal_resolved_type lp rp
   | ResolvedNamed (ln, la), ResolvedNamed (rn, ra) ->
       String.equal ln rn && equal_list equal_resolved_type la ra
-  | ResolvedGenericParam left, ResolvedGenericParam right -> String.equal left right
+  | ResolvedGenericParam left, ResolvedGenericParam right ->
+      String.equal left right
   | _ -> false
 
 let rec core_type_of_resolved_ty loc = function
@@ -427,9 +410,11 @@ let rec core_type_of_resolved_ty loc = function
   | ResolvedFloat -> float_type loc
   | ResolvedString -> string_type loc
   | ResolvedVoid -> void_type loc
-  | ResolvedPointer inner -> pointer_type loc (core_type_of_resolved_ty loc inner)
+  | ResolvedPointer inner ->
+      pointer_type loc (core_type_of_resolved_ty loc inner)
   | ResolvedBox inner -> box_type loc (core_type_of_resolved_ty loc inner)
-  | ResolvedCell inner -> mk_type loc (Core.CellType (core_type_of_resolved_ty loc inner))
+  | ResolvedCell inner ->
+      mk_type loc (Core.CellType (core_type_of_resolved_ty loc inner))
   | ResolvedArray (inner, count) ->
       mk_type loc
         (Core.ArrayType
@@ -459,7 +444,8 @@ let rec core_type_of_resolved_ty loc = function
              loc;
              analysis_scope = None;
            })
-  | ResolvedGenericParam name -> mk_type loc (Core.CustomType { name = mk_identifier loc name })
+  | ResolvedGenericParam name ->
+      mk_type loc (Core.CustomType { name = mk_identifier loc name })
   | ResolvedNamed (name, []) ->
       mk_type loc (Core.CustomType { name = mk_identifier loc name })
   | ResolvedNamed (name, args) ->
@@ -498,10 +484,17 @@ let rec string_of_resolved_ty = function
 
 let resolved_is_bool = function ResolvedInt (Unsigned, 1) -> true | _ -> false
 
-let resolved_is_numeric = function ResolvedInt _ | ResolvedFloat -> true | _ -> false
+let resolved_is_numeric = function
+  | ResolvedInt _ | ResolvedFloat -> true
+  | _ -> false
 
-let resolved_is_vector = function ResolvedVec _ | ResolvedVecHole -> true | _ -> false
-let resolved_is_matrix = function ResolvedMatrix _ | ResolvedMatrixHole -> true | _ -> false
+let resolved_is_vector = function
+  | ResolvedVec _ | ResolvedVecHole -> true
+  | _ -> false
+
+let resolved_is_matrix = function
+  | ResolvedMatrix _ | ResolvedMatrixHole -> true
+  | _ -> false
 
 let resolved_is_pointerish = function
   | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedString -> true
@@ -522,59 +515,65 @@ let resolved_arithmetic_binary_result op left right =
   (* TODO: Provide a strict-mode escape hatch before broadening implicit
      variable-to-variable widening. Literal operands are checked against the
      other operand first and never widen an operation merely to fit a value. *)
-  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
-    | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
-    | Core.BitwiseXor ),
-    ResolvedInt (left_signedness, left_bits),
-    ResolvedInt (right_signedness, right_bits)
+  | ( ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
+      | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
+      | Core.BitwiseXor ),
+      ResolvedInt (left_signedness, left_bits),
+      ResolvedInt (right_signedness, right_bits) )
     when left_signedness = right_signedness ->
       Some (ResolvedInt (left_signedness, max left_bits right_bits))
-  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
-    | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
-    | Core.BitwiseXor ),
-    ResolvedInt (Signed, signed_bits),
-    ResolvedInt (Unsigned, unsigned_bits)
-  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
-    | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
-    | Core.BitwiseXor ),
-    ResolvedInt (Unsigned, unsigned_bits),
-    ResolvedInt (Signed, signed_bits)
+  | ( ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
+      | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
+      | Core.BitwiseXor ),
+      ResolvedInt (Signed, signed_bits),
+      ResolvedInt (Unsigned, unsigned_bits) )
+  | ( ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo
+      | Core.LeftShift | Core.RightShift | Core.BitwiseAnd | Core.BitwiseOr
+      | Core.BitwiseXor ),
+      ResolvedInt (Unsigned, unsigned_bits),
+      ResolvedInt (Signed, signed_bits) )
     when signed_bits > unsigned_bits ->
       Some (ResolvedInt (Signed, signed_bits))
-  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
-    ResolvedFloat,
-    ResolvedFloat ->
+  | ( (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+      ResolvedFloat,
+      ResolvedFloat ) ->
       Some ResolvedFloat
-  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
-    ResolvedInt _,
-    ResolvedFloat
-  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
-    ResolvedFloat,
-    ResolvedInt _ ->
+  | ( (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+      ResolvedInt _,
+      ResolvedFloat )
+  | ( (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+      ResolvedFloat,
+      ResolvedInt _ ) ->
       Some ResolvedFloat
-  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo ),
-    ResolvedVec left,
-    ResolvedVec right
+  | ( (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+      ResolvedVec left,
+      ResolvedVec right )
     when left = right ->
       Some (ResolvedVec left)
-  | (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
-    ResolvedVecHole,
-    ResolvedVecHole ->
+  | ( (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+      ResolvedVecHole,
+      ResolvedVecHole ) ->
       Some ResolvedVecHole
   | (Core.Add | Core.Subtract), ResolvedVec concrete, ResolvedVecHole
   | (Core.Add | Core.Subtract), ResolvedVecHole, ResolvedVec concrete ->
       Some (ResolvedVec concrete)
   | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedVec vec, ResolvedFloat
-  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedFloat, ResolvedVec vec ->
+  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedFloat, ResolvedVec vec
+    ->
       Some (ResolvedVec vec)
   | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedVecHole, ResolvedFloat
-  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedFloat, ResolvedVecHole ->
+  | (Core.Multiply | Core.Divide | Core.Modulo), ResolvedFloat, ResolvedVecHole
+    ->
       Some ResolvedVecHole
   | (Core.Add | Core.Subtract), ResolvedMatrix left, ResolvedMatrix right
     when left.rows = right.rows && left.columns = right.columns ->
       Some
         (ResolvedMatrix
-           { kind = combine_matrix_kind left right; rows = left.rows; columns = left.columns })
+           {
+             kind = combine_matrix_kind left right;
+             rows = left.rows;
+             columns = left.columns;
+           })
   | (Core.Add | Core.Subtract), ResolvedMatrixHole, ResolvedMatrixHole ->
       Some ResolvedMatrixHole
   | (Core.Add | Core.Subtract), ResolvedMatrix concrete, ResolvedMatrixHole
@@ -584,7 +583,11 @@ let resolved_arithmetic_binary_result op left right =
     when left.columns = right.rows ->
       Some
         (ResolvedMatrix
-           { kind = combine_matrix_kind left right; rows = left.rows; columns = right.columns })
+           {
+             kind = combine_matrix_kind left right;
+             rows = left.rows;
+             columns = right.columns;
+           })
   | Core.Multiply, ResolvedMatrixHole, ResolvedMatrixHole
   | Core.Multiply, ResolvedMatrix _, ResolvedMatrixHole
   | Core.Multiply, ResolvedMatrixHole, ResolvedMatrix _ ->
@@ -608,15 +611,18 @@ let rec resolved_compatible actual expected =
   equal_resolved_type actual expected
   ||
   match (actual, expected) with
-  | actual, expected when resolved_is_numeric actual && resolved_is_numeric expected -> true
+  | actual, expected
+    when resolved_is_numeric actual && resolved_is_numeric expected ->
+      true
   | ResolvedPointer actual, ResolvedPointer expected
   | ResolvedBox actual, ResolvedBox expected
   | ResolvedCell actual, ResolvedCell expected ->
       resolved_compatible actual expected
-  | ResolvedArray (actual, actual_count), ResolvedArray (expected, expected_count) ->
+  | ( ResolvedArray (actual, actual_count),
+      ResolvedArray (expected, expected_count) ) ->
       actual_count = expected_count && resolved_compatible actual expected
-  | ResolvedFunction (actual_params, actual_ret, actual_vararg),
-    ResolvedFunction (expected_params, expected_ret, expected_vararg) ->
+  | ( ResolvedFunction (actual_params, actual_ret, actual_vararg),
+      ResolvedFunction (expected_params, expected_ret, expected_vararg) ) ->
       actual_vararg = expected_vararg
       && equal_list resolved_compatible actual_params expected_params
       && resolved_compatible actual_ret expected_ret
@@ -624,7 +630,8 @@ let rec resolved_compatible actual expected =
   | ResolvedNamed (actual_name, _), ResolvedNamed (expected_name, [])
     when String.equal actual_name expected_name ->
       true
-  | ResolvedNamed (actual_name, actual_args), ResolvedNamed (expected_name, expected_args)
+  | ( ResolvedNamed (actual_name, actual_args),
+      ResolvedNamed (expected_name, expected_args) )
     when String.equal actual_name expected_name ->
       equal_list resolved_compatible actual_args expected_args
   | _ -> false
@@ -633,17 +640,23 @@ let resolved_can_cast source target =
   resolved_compatible source target
   ||
   match (resolved_value_type source, target) with
-  | source, target when resolved_is_numeric source && resolved_is_numeric target -> true
-  | source, target when resolved_is_pointerish source && resolved_is_pointerish target -> true
+  | source, target when resolved_is_numeric source && resolved_is_numeric target
+    ->
+      true
+  | source, target
+    when resolved_is_pointerish source && resolved_is_pointerish target ->
+      true
   | _ -> false
 
 let coerce_annotation_to_expected loc expected (annotation : expr_annotation) =
   let coerced_resolved =
     match annotation.resolved_type with
     | Some actual when equal_resolved_type actual expected -> Some expected
-    | Some (ResolvedCell actual) when equal_resolved_type actual expected -> Some expected
-    | None when List.mem TypeClassNil annotation.metavar.classes && resolved_is_pointerish expected
-      ->
+    | Some (ResolvedCell actual) when equal_resolved_type actual expected ->
+        Some expected
+    | None
+      when List.mem TypeClassNil annotation.metavar.classes
+           && resolved_is_pointerish expected ->
         Some expected
     | _ -> None
   in
@@ -653,7 +666,8 @@ let coerce_annotation_to_expected loc expected (annotation : expr_annotation) =
       {
         inferred_type = Some inferred_type;
         resolved_type = Some resolved;
-        metavar = { annotation.metavar with classes = type_class_of_type inferred_type };
+        metavar =
+          { annotation.metavar with classes = type_class_of_type inferred_type };
       }
   | None -> annotation
 
@@ -663,17 +677,25 @@ let type_env_of_program (program : Core.program) =
       match decl.value with
       | Core.TDecl type_decl -> (
           let lifecycle =
-            { construct = type_decl.value.construct; destruct = type_decl.value.destruct }
+            {
+              construct = type_decl.value.construct;
+              destruct = type_decl.value.destruct;
+            }
           in
           match type_decl.value.data with
           | Core.TypeDeclAlias ty ->
               String_map.add type_decl.value.name.value (TypeAlias ty) env
           | Core.TypeDeclStruct struct_decl ->
-              String_map.add type_decl.value.name.value (TypeStruct (struct_decl, lifecycle)) env
+              String_map.add type_decl.value.name.value
+                (TypeStruct (struct_decl, lifecycle))
+                env
           | Core.TypeDeclEnum enum_decl ->
-              String_map.add type_decl.value.name.value (TypeEnum (enum_decl, lifecycle)) env
+              String_map.add type_decl.value.name.value
+                (TypeEnum (enum_decl, lifecycle))
+                env
           | Core.TypeDeclForward ->
-              String_map.add type_decl.value.name.value (TypeForward lifecycle) env)
+              String_map.add type_decl.value.name.value (TypeForward lifecycle)
+                env)
       | _ -> env)
     String_map.empty program.value.decls
 
@@ -696,12 +718,17 @@ let lifecycle_has_default_construct (lifecycle : type_lifecycle) =
   | None -> true
 
 let resolve_array_count (lit : Core.literal) =
-  match lit.value with Core.Integer count when count >= 0 -> Some count | _ -> None
+  match lit.value with
+  | Core.Integer count when count >= 0 -> Some count
+  | _ -> None
 
 let rec substitute_resolved_ty subst = function
   | ResolvedGenericParam name -> (
-      match List.assoc_opt name subst with Some ty -> ty | None -> ResolvedGenericParam name)
-  | ResolvedPointer inner -> ResolvedPointer (substitute_resolved_ty subst inner)
+      match List.assoc_opt name subst with
+      | Some ty -> ty
+      | None -> ResolvedGenericParam name)
+  | ResolvedPointer inner ->
+      ResolvedPointer (substitute_resolved_ty subst inner)
   | ResolvedBox inner -> ResolvedBox (substitute_resolved_ty subst inner)
   | ResolvedCell inner -> ResolvedCell (substitute_resolved_ty subst inner)
   | ResolvedArray (inner, count) ->
@@ -741,13 +768,16 @@ and resolve_core_type type_env active subst loc (ty : Core.haven_type) =
   | Core.VecHoleType -> Some ResolvedVecHole
   | Core.MatrixHoleType -> Some ResolvedMatrixHole
   | Core.PointerType inner ->
-      Option.map (fun inner -> ResolvedPointer inner)
+      Option.map
+        (fun inner -> ResolvedPointer inner)
         (resolve_core_type type_env active subst loc inner)
   | Core.BoxType inner ->
-      Option.map (fun inner -> ResolvedBox inner)
+      Option.map
+        (fun inner -> ResolvedBox inner)
         (resolve_core_type type_env active subst loc inner)
   | Core.CellType inner ->
-      Option.map (fun inner -> ResolvedCell inner)
+      Option.map
+        (fun inner -> ResolvedCell inner)
         (resolve_core_type type_env active subst loc inner)
   | Core.ArrayType arr -> (
       match
@@ -758,7 +788,9 @@ and resolve_core_type type_env active subst loc (ty : Core.haven_type) =
       | _ -> None)
   | Core.FunctionType fn -> (
       let params =
-        List.map (resolve_core_type type_env active subst loc) fn.value.param_types
+        List.map
+          (resolve_core_type type_env active subst loc)
+          fn.value.param_types
       in
       let rec collect = function
         | [] -> Some []
@@ -785,22 +817,14 @@ and resolve_core_type type_env active subst loc (ty : Core.haven_type) =
       in
       match collect args with
       | Some args ->
-          resolve_named_type type_env active subst loc templ.value.outer.value args
+          resolve_named_type type_env active subst loc templ.value.outer.value
+            args
       | None -> None)
 
 let rec resolved_default_constructible type_env = function
-  | ResolvedInt _
-  | ResolvedFloat
-  | ResolvedString
-  | ResolvedVoid
-  | ResolvedVec _
-  | ResolvedMatrix _
-  | ResolvedVecHole
-  | ResolvedMatrixHole
-  | ResolvedPointer _
-  | ResolvedBox _
-  | ResolvedCell _
-  | ResolvedFunction _ ->
+  | ResolvedInt _ | ResolvedFloat | ResolvedString | ResolvedVoid
+  | ResolvedVec _ | ResolvedMatrix _ | ResolvedVecHole | ResolvedMatrixHole
+  | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedFunction _ ->
       true
   | ResolvedGenericParam _ -> false
   | ResolvedArray (inner, _) -> resolved_default_constructible type_env inner
@@ -812,13 +836,15 @@ let rec resolved_default_constructible type_env = function
           | None -> false)
       | Some (TypeStruct (decl, lifecycle)) ->
           lifecycle_has_default_construct lifecycle
-          &&
-          List.for_all
-            (fun (field : Core.struct_field) ->
-              match resolve_core_type type_env [] [] field.loc field.value.ty with
-              | Some resolved -> resolved_default_constructible type_env resolved
-              | None -> false)
-            decl.value.fields
+          && List.for_all
+               (fun (field : Core.struct_field) ->
+                 match
+                   resolve_core_type type_env [] [] field.loc field.value.ty
+                 with
+                 | Some resolved ->
+                     resolved_default_constructible type_env resolved
+                 | None -> false)
+               decl.value.fields
       | Some (TypeEnum (_, lifecycle)) | Some (TypeForward lifecycle) ->
           lifecycle_has_default_construct lifecycle
       | None -> false)
@@ -844,7 +870,11 @@ let rec lookup_enum_decl type_env loc ty =
       | Some (TypeEnum (decl, _)) ->
           Option.map
             (fun subst -> (decl, subst))
-            (zip_lists (List.map (fun (id : Core.identifier) -> id.value) decl.value.generics) args)
+            (zip_lists
+               (List.map
+                  (fun (id : Core.identifier) -> id.value)
+                  decl.value.generics)
+               args)
       | Some (TypeAlias alias) -> (
           match resolve_core_type type_env [] [] loc alias with
           | Some ty -> lookup_enum_decl type_env loc ty
@@ -868,7 +898,8 @@ let lookup_enum_variant type_env loc ty variant_name =
                 | Some resolved -> resolve_payloads (resolved :: acc) rest
                 | None -> None)
           in
-          Option.map (fun payload_tys -> (variant, payload_tys))
+          Option.map
+            (fun payload_tys -> (variant, payload_tys))
             (resolve_payloads [] variant.value.inner_tys))
   | None -> None
 
@@ -900,17 +931,9 @@ let rec lookup_struct_fields type_env loc ty =
 let rec resolved_contains_box_ownership type_env active loc ty =
   match ty with
   | ResolvedBox _ -> true
-  | ResolvedPointer _
-  | ResolvedCell _
-  | ResolvedString
-  | ResolvedInt _
-  | ResolvedFloat
-  | ResolvedVoid
-  | ResolvedVec _
-  | ResolvedMatrix _
-  | ResolvedVecHole
-  | ResolvedMatrixHole
-  | ResolvedFunction _
+  | ResolvedPointer _ | ResolvedCell _ | ResolvedString | ResolvedInt _
+  | ResolvedFloat | ResolvedVoid | ResolvedVec _ | ResolvedMatrix _
+  | ResolvedVecHole | ResolvedMatrixHole | ResolvedFunction _
   | ResolvedGenericParam _ ->
       false
   | ResolvedArray (inner, _) ->
@@ -922,15 +945,18 @@ let rec resolved_contains_box_ownership type_env active loc ty =
         | Some (TypeAlias alias) -> (
             match resolve_core_type type_env [] [] loc alias with
             | Some alias_ty ->
-                resolved_contains_box_ownership type_env (name :: active) loc alias_ty
+                resolved_contains_box_ownership type_env (name :: active) loc
+                  alias_ty
             | None -> false)
         | Some (TypeStruct (decl, _)) ->
             List.exists
               (fun (field : Core.struct_field) ->
-                match resolve_core_type type_env [] [] field.loc field.value.ty with
+                match
+                  resolve_core_type type_env [] [] field.loc field.value.ty
+                with
                 | Some field_ty ->
-                    resolved_contains_box_ownership type_env (name :: active) field.loc
-                      field_ty
+                    resolved_contains_box_ownership type_env (name :: active)
+                      field.loc field_ty
                 | None -> false)
               decl.value.fields
         | Some (TypeEnum (decl, _)) -> (
@@ -940,10 +966,13 @@ let rec resolved_contains_box_ownership type_env active loc ty =
                   (fun (variant : Core.enum_variant) ->
                     List.exists
                       (fun inner_ty ->
-                        match resolve_core_type type_env [] subst variant.loc inner_ty with
+                        match
+                          resolve_core_type type_env [] subst variant.loc
+                            inner_ty
+                        with
                         | Some variant_ty ->
-                            resolved_contains_box_ownership type_env (name :: active)
-                              variant.loc variant_ty
+                            resolved_contains_box_ownership type_env
+                              (name :: active) variant.loc variant_ty
                         | None -> false)
                       variant.value.inner_tys)
                   decl.value.variants
@@ -961,8 +990,7 @@ let vector_field_index field =
   | "z" | "b" | "p" -> Some 2
   | "w" | "a" | "q" -> Some 3
   | "s" -> Some 0
-  | _ -> (
-      try Some (int_of_string field) with Failure _ -> None)
+  | _ -> ( try Some (int_of_string field) with Failure _ -> None)
 
 let root_identifier_name (expr : Core.expression) =
   let rec loop (expr : Core.expression) =

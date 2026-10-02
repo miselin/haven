@@ -1,5 +1,4 @@
 open Analysis_types
-
 module Cst = Haven_cst.Cst
 module Parser = Haven_parser.Parser
 module Yojson = Yojson.Basic
@@ -47,10 +46,7 @@ type c_decl =
   | CVarDecl of { name : string; ty : c_type }
   | CConstDecl of { name : string; ty : c_type; value : string }
 
-type result = {
-  decls : Cst.top_decl list;
-  diagnostics : diagnostic list;
-}
+type result = { decls : Cst.top_decl list; diagnostics : diagnostic list }
 
 let target_info_cache : target_info option ref = ref None
 
@@ -64,10 +60,13 @@ let read_file path =
 
 let write_file path contents =
   let ch = open_out path in
-  Fun.protect ~finally:(fun () -> close_out_noerr ch) (fun () -> output_string ch contents)
+  Fun.protect
+    ~finally:(fun () -> close_out_noerr ch)
+    (fun () -> output_string ch contents)
 
 let rec waitpid_nointr pid =
-  try Unix.waitpid [] pid with Unix.Unix_error (Unix.EINTR, "waitpid", _) -> waitpid_nointr pid
+  try Unix.waitpid [] pid
+  with Unix.Unix_error (Unix.EINTR, "waitpid", _) -> waitpid_nointr pid
 
 let run_command_capture ?stdin ~prog ~args () =
   let stdout_path = Filename.temp_file "haven-cimport-stdout" ".txt" in
@@ -86,14 +85,19 @@ let run_command_capture ?stdin ~prog ~args () =
     | None -> Unix.stdin
   in
   let stdout_fd =
-    Unix.openfile stdout_path [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ] 0o600
+    Unix.openfile stdout_path
+      [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ]
+      0o600
   in
   let stderr_fd =
-    Unix.openfile stderr_path [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ] 0o600
+    Unix.openfile stderr_path
+      [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ]
+      0o600
   in
   let argv = Array.of_list (prog :: args) in
   let pid =
-    Unix.create_process_env prog argv (Unix.environment ()) stdin_fd stdout_fd stderr_fd
+    Unix.create_process_env prog argv (Unix.environment ()) stdin_fd stdout_fd
+      stderr_fd
   in
   if stdin_fd <> Unix.stdin then Unix.close stdin_fd;
   Unix.close stdout_fd;
@@ -127,7 +131,10 @@ let replace_all text needle replacement =
     let buffer = Buffer.create len in
     let rec loop index =
       if index >= len then ()
-      else if index + needle_len <= len && String.equal needle (String.sub text index needle_len) then (
+      else if
+        index + needle_len <= len
+        && String.equal needle (String.sub text index needle_len)
+      then (
         Buffer.add_string buffer replacement;
         loop (index + needle_len))
       else (
@@ -149,7 +156,8 @@ let contains_substring text needle =
   else
     let rec loop index =
       index + needle_len <= len
-      && (String.equal needle (String.sub text index needle_len) || loop (index + 1))
+      && (String.equal needle (String.sub text index needle_len)
+         || loop (index + 1))
     in
     loop 0
 
@@ -157,7 +165,9 @@ let skip_spaces text index =
   let len = String.length text in
   let rec loop index =
     if index < len then
-      match text.[index] with ' ' | '\t' | '\n' | '\r' -> loop (index + 1) | _ -> index
+      match text.[index] with
+      | ' ' | '\t' | '\n' | '\r' -> loop (index + 1)
+      | _ -> index
     else index
   in
   loop index
@@ -171,8 +181,7 @@ let skip_balanced text index =
       else
         match text.[index] with
         | '(' -> loop (index + 1) (depth + 1)
-        | ')' ->
-            if depth = 1 then index + 1 else loop (index + 1) (depth - 1)
+        | ')' -> if depth = 1 then index + 1 else loop (index + 1) (depth - 1)
         | _ -> loop (index + 1) depth
     in
     loop index 0
@@ -184,11 +193,16 @@ let remove_gnu_attributes text =
   let rec loop index =
     if index >= len then ()
     else
-      match List.find_opt (fun prefix -> starts_with_at text ~index ~prefix) prefixes with
+      match
+        List.find_opt
+          (fun prefix -> starts_with_at text ~index ~prefix)
+          prefixes
+      with
       | Some prefix ->
           let after_prefix = index + String.length prefix |> skip_spaces text in
           let after_attr =
-            if after_prefix < len && text.[after_prefix] = '(' then skip_balanced text after_prefix
+            if after_prefix < len && text.[after_prefix] = '(' then
+              skip_balanced text after_prefix
             else after_prefix
           in
           loop after_attr
@@ -200,22 +214,20 @@ let remove_gnu_attributes text =
   Buffer.contents buffer
 
 let split_lines text =
-  if String.equal text "" then []
-  else String.split_on_char '\n' text
+  if String.equal text "" then [] else String.split_on_char '\n' text
 
 let remove_prefix prefix text =
   if starts_with ~prefix text then
-    String.sub text (String.length prefix) (String.length text - String.length prefix)
+    String.sub text (String.length prefix)
+      (String.length text - String.length prefix)
   else text
 
 let strip_tag_prefix text =
-  text
-  |> remove_prefix "struct "
-  |> fun text -> remove_prefix "union " text
-  |> fun text -> remove_prefix "enum " text
-  |> trim
+  text |> remove_prefix "struct " |> fun text ->
+  remove_prefix "union " text |> fun text -> remove_prefix "enum " text |> trim
 
-let should_skip_exported_name name = String.equal name "" || starts_with ~prefix:"__" name
+let should_skip_exported_name name =
+  String.equal name "" || starts_with ~prefix:"__" name
 
 let is_haven_keyword =
   let keywords =
@@ -271,10 +283,12 @@ let is_valid_identifier name =
   in
   len > 0
   && is_start name.[0]
-  && not (is_haven_keyword name)
+  && (not (is_haven_keyword name))
   &&
   let rec loop index =
-    if index >= len then true else if is_inner name.[index] then loop (index + 1) else false
+    if index >= len then true
+    else if is_inner name.[index] then loop (index + 1)
+    else false
   in
   loop 1
 
@@ -288,7 +302,10 @@ let get_macro_define name lines =
     | [] -> None
     | line :: rest ->
         if starts_with ~prefix line then
-          Some (String.trim (String.sub line (String.length prefix) (String.length line - String.length prefix)))
+          Some
+            (String.trim
+               (String.sub line (String.length prefix)
+                  (String.length line - String.length prefix)))
         else loop rest
   in
   loop lines
@@ -296,9 +313,13 @@ let get_macro_define name lines =
 let load_target_info () =
   match !target_info_cache with
   | Some info -> Ok info
-  | None ->
-      let result = run_command_capture ~prog:"clang" ~args:[ "-dM"; "-E"; "-x"; "c"; "/dev/null" ] () in
-      (match result.status with
+  | None -> (
+      let result =
+        run_command_capture ~prog:"clang"
+          ~args:[ "-dM"; "-E"; "-x"; "c"; "/dev/null" ]
+          ()
+      in
+      match result.status with
       | Unix.WEXITED 0 ->
           let lines = split_lines result.stdout in
           let find_int name =
@@ -314,28 +335,35 @@ let load_target_info () =
               long_bits = find_int "__SIZEOF_LONG__" * 8;
               long_long_bits = find_int "__SIZEOF_LONG_LONG__" * 8;
               pointer_bits = find_int "__SIZEOF_POINTER__" * 8;
-              char_unsigned = Option.is_some (get_macro_define "__CHAR_UNSIGNED__" lines);
+              char_unsigned =
+                Option.is_some (get_macro_define "__CHAR_UNSIGNED__" lines);
             }
           in
           target_info_cache := Some info;
           Ok info
       | Unix.WEXITED code ->
-          Error (Printf.sprintf "clang macro query failed with exit code %d\n%s" code result.stderr)
+          Error
+            (Printf.sprintf "clang macro query failed with exit code %d\n%s"
+               code result.stderr)
       | Unix.WSIGNALED signal ->
-          Error (Printf.sprintf "clang macro query terminated by signal %d" signal)
+          Error
+            (Printf.sprintf "clang macro query terminated by signal %d" signal)
       | Unix.WSTOPPED signal ->
-          Error (Printf.sprintf "clang macro query stopped by signal %d" signal))
+          Error (Printf.sprintf "clang macro query stopped by signal %d" signal)
+      )
 
 let yojson_member_opt name (json : Yojson.t) =
-  match json with
-  | `Assoc fields -> List.assoc_opt name fields
-  | _ -> None
+  match json with `Assoc fields -> List.assoc_opt name fields | _ -> None
 
 let yojson_string_opt name json =
-  match yojson_member_opt name json with Some (`String value) -> Some value | _ -> None
+  match yojson_member_opt name json with
+  | Some (`String value) -> Some value
+  | _ -> None
 
 let yojson_bool name json =
-  match yojson_member_opt name json with Some (`Bool value) -> value | _ -> false
+  match yojson_member_opt name json with
+  | Some (`Bool value) -> value
+  | _ -> false
 
 let yojson_list name json =
   match yojson_member_opt name json with Some (`List items) -> items | _ -> []
@@ -408,9 +436,7 @@ let split_array_suffix text =
     | None -> None
     | Some left ->
         let before = String.sub text 0 left |> trim in
-        let size =
-          String.sub text (left + 1) (len - left - 2) |> trim
-        in
+        let size = String.sub text (left + 1) (len - left - 2) |> trim in
         Some (before, size)
 
 let split_call_suffix text =
@@ -422,9 +448,7 @@ let split_call_suffix text =
     | None -> None
     | Some left ->
         let before = String.sub text 0 left |> trim in
-        let inside =
-          String.sub text (left + 1) (len - left - 2) |> trim
-        in
+        let inside = String.sub text (left + 1) (len - left - 2) |> trim in
         Some (before, inside)
 
 let remove_qualifiers text =
@@ -438,8 +462,7 @@ let remove_qualifiers text =
   let text = replace_all text "_Nullable" "" in
   let text = replace_all text "_Noreturn" "" in
   let text = replace_all text "noreturn" "" in
-  text
-  |> String.split_on_char ' '
+  text |> String.split_on_char ' '
   |> List.filter (fun token -> not (String.equal token ""))
   |> String.concat " "
 
@@ -463,7 +486,8 @@ let rec parse_c_type target_info text =
             let before = trim before in
             if ends_with ~suffix:"(*)" before then
               let ret_text =
-                String.sub before 0 (String.length before - String.length "(*)") |> trim
+                String.sub before 0 (String.length before - String.length "(*)")
+                |> trim
               in
               let ret = parse_c_type target_info ret_text in
               let params, vararg = parse_param_types target_info args_text in
@@ -479,9 +503,9 @@ let rec parse_c_type target_info text =
               let inner =
                 String.sub text 0 (len - 1) |> trim |> parse_c_type target_info
               in
-              (match inner with
+              match inner with
               | CInt (_, bits) when bits = target_info.char_bits -> CString
-              | _ -> CPointer inner)
+              | _ -> CPointer inner
             else parse_base_type target_info text)
 
 and parse_param_types target_info args_text =
@@ -507,7 +531,8 @@ and parse_base_type target_info text =
   | "float" | "double" | "long double" -> CFloat
   | "char" ->
       CInt
-        ( (if target_info.char_unsigned then Haven_token.Token.Unsigned else Haven_token.Token.Signed),
+        ( (if target_info.char_unsigned then Haven_token.Token.Unsigned
+           else Haven_token.Token.Signed),
           target_info.char_bits )
   | "signed char" -> CInt (Haven_token.Token.Signed, target_info.char_bits)
   | "unsigned char" -> CInt (Haven_token.Token.Unsigned, target_info.char_bits)
@@ -523,7 +548,8 @@ and parse_base_type target_info text =
       CInt (Haven_token.Token.Signed, target_info.long_bits)
   | "unsigned long" | "unsigned long int" ->
       CInt (Haven_token.Token.Unsigned, target_info.long_bits)
-  | "long long" | "long long int" | "signed long long" | "signed long long int" ->
+  | "long long" | "long long int" | "signed long long" | "signed long long int"
+    ->
       CInt (Haven_token.Token.Signed, target_info.long_long_bits)
   | "unsigned long long" | "unsigned long long int" ->
       CInt (Haven_token.Token.Unsigned, target_info.long_long_bits)
@@ -533,12 +559,15 @@ let rec c_type_to_haven = function
   | CVoid -> "void"
   | CInt (signedness, bits) ->
       Printf.sprintf "%c%d"
-        (match signedness with Haven_token.Token.Signed -> 'i' | Haven_token.Token.Unsigned -> 'u')
+        (match signedness with
+        | Haven_token.Token.Signed -> 'i'
+        | Haven_token.Token.Unsigned -> 'u')
         bits
   | CFloat -> "float"
   | CString -> "str"
   | CPointer inner -> Printf.sprintf "%s*" (c_type_to_haven inner)
-  | CArray (inner, count) -> Printf.sprintf "%s[%d]" (c_type_to_haven inner) count
+  | CArray (inner, count) ->
+      Printf.sprintf "%s[%d]" (c_type_to_haven inner) count
   | CFunction (params, ret, true) ->
       Printf.sprintf "VAFunction<(%s) -> %s>"
         (String.concat ", " (List.map c_type_to_haven params))
@@ -579,8 +608,10 @@ let decl_referenced_names = function
       List.fold_left (fun acc (_, ty) -> collect_named_types acc ty) [] fields
   | CTypeAlias (_, ty) -> collect_named_types [] ty
   | CFunctionDecl { params; return_type; _ } ->
-      List.fold_left (fun acc (_, ty) -> collect_named_types acc ty)
-        (collect_named_types [] return_type) params
+      List.fold_left
+        (fun acc (_, ty) -> collect_named_types acc ty)
+        (collect_named_types [] return_type)
+        params
   | CVarDecl { ty; _ } -> collect_named_types [] ty
   | CConstDecl { ty; _ } -> collect_named_types [] ty
 
@@ -598,7 +629,9 @@ let rec collect_value_named_types acc ?(behind_pointer = false) = function
 let decl_value_referenced_names = function
   | CTypeForward _ -> []
   | CTypeStruct (_, fields) ->
-      List.fold_left (fun acc (_, ty) -> collect_value_named_types acc ty) [] fields
+      List.fold_left
+        (fun acc (_, ty) -> collect_value_named_types acc ty)
+        [] fields
   | CTypeAlias (_, ty) -> collect_value_named_types [] ty
   | CFunctionDecl { params; return_type; _ } ->
       List.fold_left
@@ -626,26 +659,30 @@ let render_decl = function
   | CTypeStruct (name, fields) ->
       let rendered_fields =
         fields
-        |> List.map (fun (field_name, ty) -> Printf.sprintf "  %s %s;" (c_type_to_haven ty) field_name)
+        |> List.map (fun (field_name, ty) ->
+            Printf.sprintf "  %s %s;" (c_type_to_haven ty) field_name)
         |> String.concat "\n"
       in
       Printf.sprintf "type %s = struct {\n%s\n};" name rendered_fields
-  | CTypeAlias (name, ty) -> Printf.sprintf "type %s = %s;" name (c_type_to_haven ty)
+  | CTypeAlias (name, ty) ->
+      Printf.sprintf "type %s = %s;" name (c_type_to_haven ty)
   | CFunctionDecl { name; params; return_type; vararg } ->
       let fixed =
         params
-        |> List.map (fun (param_name, ty) -> Printf.sprintf "%s %s" (c_type_to_haven ty) param_name)
+        |> List.map (fun (param_name, ty) ->
+            Printf.sprintf "%s %s" (c_type_to_haven ty) param_name)
       in
       let params =
         if vararg then
-          match fixed with
-          | [] -> "*"
-          | _ -> String.concat ", " fixed ^ ", *"
+          match fixed with [] -> "*" | _ -> String.concat ", " fixed ^ ", *"
         else String.concat ", " fixed
       in
-      Printf.sprintf "pub impure fn %s(%s) -> %s;" name params (c_type_to_haven return_type)
-  | CVarDecl { name; ty } -> Printf.sprintf "pub state %s %s;" (c_type_to_haven ty) name
-  | CConstDecl { name; ty; value } -> Printf.sprintf "pub data %s %s = %s;" (c_type_to_haven ty) name value
+      Printf.sprintf "pub impure fn %s(%s) -> %s;" name params
+        (c_type_to_haven return_type)
+  | CVarDecl { name; ty } ->
+      Printf.sprintf "pub state %s %s;" (c_type_to_haven ty) name
+  | CConstDecl { name; ty; value } ->
+      Printf.sprintf "pub data %s %s = %s;" (c_type_to_haven ty) name value
 
 let parse_constant_value json =
   let rec loop node =
@@ -655,7 +692,9 @@ let parse_constant_value json =
         let rec inner = function
           | [] -> None
           | child :: rest -> (
-              match loop child with Some value -> Some value | None -> inner rest)
+              match loop child with
+              | Some value -> Some value
+              | None -> inner rest)
         in
         inner (yojson_list "inner" node)
   in
@@ -664,18 +703,18 @@ let parse_constant_value json =
 let field_decls target_info fields =
   let rec loop acc = function
     | [] -> Some (List.rev acc)
-    | field :: rest ->
+    | field :: rest -> (
         let name = node_name field in
         let ty_text = Option.value ~default:"" (qual_type field) in
         if should_skip_exported_name name || not (is_valid_identifier name) then
           None
-        else if has_unsupported_c_syntax ty_text then
-          None
+        else if has_unsupported_c_syntax ty_text then None
         else
           try
             let ty = parse_c_type target_info ty_text in
-            if is_renderable_type ty then loop ((name, ty) :: acc) rest else None
-          with Failure _ -> None
+            if is_renderable_type ty then loop ((name, ty) :: acc) rest
+            else None
+          with Failure _ -> None)
   in
   loop [] fields
 
@@ -690,8 +729,7 @@ let make_struct_decl target_info ~name json qual =
     |> List.filter (fun child -> String.equal (node_kind child) "FieldDecl")
   in
   if fields = [] then Some (CTypeForward name)
-  else if record_is_union json qual then
-    Some (CTypeForward name)
+  else if record_is_union json qual then Some (CTypeForward name)
   else
     match field_decls target_info fields with
     | Some rendered_fields -> Some (CTypeStruct (name, rendered_fields))
@@ -701,15 +739,19 @@ let enum_decls target_info name json =
   let underlying = CInt (Haven_token.Token.Signed, target_info.int_bits) in
   let constants =
     yojson_list "inner" json
-    |> List.filter (fun child -> String.equal (node_kind child) "EnumConstantDecl")
+    |> List.filter (fun child ->
+        String.equal (node_kind child) "EnumConstantDecl")
     |> List.filter_map (fun constant ->
-           let constant_name = node_name constant in
-           if should_skip_exported_name constant_name || not (is_valid_identifier constant_name) then
-             None
-           else
-             match parse_constant_value constant with
-             | Some value -> Some (CConstDecl { name = constant_name; ty = underlying; value })
-             | None -> None)
+        let constant_name = node_name constant in
+        if
+          should_skip_exported_name constant_name
+          || not (is_valid_identifier constant_name)
+        then None
+        else
+          match parse_constant_value constant with
+          | Some value ->
+              Some (CConstDecl { name = constant_name; ty = underlying; value })
+          | None -> None)
   in
   CTypeAlias (name, underlying) :: constants
 
@@ -717,7 +759,9 @@ let typedef_owned_tag json =
   let rec find_owned_tag = function
     | [] -> None
     | child :: rest -> (
-        match yojson_member_opt "ownedTagDecl" child with Some tag -> Some tag | None -> find_owned_tag rest)
+        match yojson_member_opt "ownedTagDecl" child with
+        | Some tag -> Some tag
+        | None -> find_owned_tag rest)
   in
   find_owned_tag (yojson_list "inner" json)
 
@@ -727,56 +771,71 @@ let decls_of_node target_info node_by_id json =
   if yojson_bool "isImplicit" json then []
   else
     match kind with
-    | "FunctionDecl" ->
-        if should_skip_exported_name name || not (is_valid_identifier name) then []
-        else (
+    | "FunctionDecl" -> (
+        if should_skip_exported_name name || not (is_valid_identifier name) then
+          []
+        else
           try
             let ty_text = Option.value ~default:"" (qual_type json) in
             if has_unsupported_c_syntax ty_text then []
             else
               match parse_c_type target_info ty_text with
-            | CFunction (param_types, return_type, vararg) ->
-                let param_nodes =
-                  yojson_list "inner" json
-                  |> List.filter (fun child -> String.equal (node_kind child) "ParmVarDecl")
-                in
-                let params =
-                  List.mapi
-                    (fun index ty ->
-                      let param_name =
-                        match List.nth_opt param_nodes index with
-                        | Some param ->
-                            let name = node_name param in
-                            if String.equal name "" then Printf.sprintf "p%d" index else name
-                        | None -> Printf.sprintf "p%d" index
-                      in
-                      (param_name, ty))
-                    param_types
-                in
-                if List.exists (fun (param_name, _) -> not (is_valid_identifier param_name)) params then (
-                  [])
-                else if is_renderable_type return_type && List.for_all (fun (_, ty) -> is_renderable_type ty) params then
-                  [ CFunctionDecl { name; params; return_type; vararg } ]
-                else []
-            | _ -> []
+              | CFunction (param_types, return_type, vararg) ->
+                  let param_nodes =
+                    yojson_list "inner" json
+                    |> List.filter (fun child ->
+                        String.equal (node_kind child) "ParmVarDecl")
+                  in
+                  let params =
+                    List.mapi
+                      (fun index ty ->
+                        let param_name =
+                          match List.nth_opt param_nodes index with
+                          | Some param ->
+                              let name = node_name param in
+                              if String.equal name "" then
+                                Printf.sprintf "p%d" index
+                              else name
+                          | None -> Printf.sprintf "p%d" index
+                        in
+                        (param_name, ty))
+                      param_types
+                  in
+                  if
+                    List.exists
+                      (fun (param_name, _) ->
+                        not (is_valid_identifier param_name))
+                      params
+                  then []
+                  else if
+                    is_renderable_type return_type
+                    && List.for_all
+                         (fun (_, ty) -> is_renderable_type ty)
+                         params
+                  then [ CFunctionDecl { name; params; return_type; vararg } ]
+                  else []
+              | _ -> []
           with Failure _ -> [])
-    | "VarDecl" ->
-        if should_skip_exported_name name || not (is_valid_identifier name) then []
-        else (
+    | "VarDecl" -> (
+        if should_skip_exported_name name || not (is_valid_identifier name) then
+          []
+        else
           try
             let ty_text = Option.value ~default:"" (qual_type json) in
             if has_unsupported_c_syntax ty_text then []
             else
               let ty = parse_c_type target_info ty_text in
-            if is_renderable_type ty then [ CVarDecl { name; ty } ] else []
+              if is_renderable_type ty then [ CVarDecl { name; ty } ] else []
           with Failure _ -> [])
-    | "TypedefDecl" ->
+    | "TypedefDecl" -> (
         if String.equal name "" || not (is_valid_identifier name) then []
-        else (
+        else
           match typedef_owned_tag json with
           | Some tag -> (
               let tag =
-                match Hashtbl.find_opt node_by_id (node_id tag) with Some node -> node | None -> tag
+                match Hashtbl.find_opt node_by_id (node_id tag) with
+                | Some node -> node
+                | None -> tag
               in
               let tag_kind = node_kind tag in
               let typedef_qual = Option.value ~default:"" (qual_type json) in
@@ -787,7 +846,7 @@ let decls_of_node target_info node_by_id json =
                   | None -> [])
               | "EnumDecl" -> enum_decls target_info name tag
               | _ -> [])
-          | None ->
+          | None -> (
               let typedef_qual = Option.value ~default:"" (qual_type json) in
               let stripped = strip_tag_prefix typedef_qual in
               if String.equal stripped name then []
@@ -795,11 +854,12 @@ let decls_of_node target_info node_by_id json =
               else
                 try
                   let ty = parse_c_type target_info typedef_qual in
-                  if is_renderable_type ty then [ CTypeAlias (name, ty) ] else []
-                with Failure _ -> [])
-    | "RecordDecl" ->
+                  if is_renderable_type ty then [ CTypeAlias (name, ty) ]
+                  else []
+                with Failure _ -> []))
+    | "RecordDecl" -> (
         if String.equal name "" || not (is_valid_identifier name) then []
-        else (
+        else
           let qual = Printf.sprintf "struct %s" name in
           match make_struct_decl target_info ~name json qual with
           | Some decl -> [ decl ]
@@ -814,11 +874,14 @@ let render_source decls =
     decls |> List.concat_map decl_defined_names |> List.sort_uniq String.compare
   in
   let referenced_names =
-    decls |> List.concat_map decl_referenced_names |> List.sort_uniq String.compare
+    decls
+    |> List.concat_map decl_referenced_names
+    |> List.sort_uniq String.compare
   in
   let forward_decls =
     referenced_names
-    |> List.filter (fun name -> not (List.mem name defined_names) && is_valid_identifier name)
+    |> List.filter (fun name ->
+        (not (List.mem name defined_names)) && is_valid_identifier name)
     |> List.map (fun name -> CTypeForward name)
   in
   String.concat "\n\n" (List.map render_decl (forward_decls @ decls))
@@ -826,13 +889,15 @@ let render_source decls =
 let prune_unlowerable_decls decls =
   let rec loop decls =
     let value_defined_names =
-      decls |> List.concat_map decl_value_defined_names |> List.sort_uniq String.compare
+      decls
+      |> List.concat_map decl_value_defined_names
+      |> List.sort_uniq String.compare
     in
     let filtered =
       decls
       |> List.filter (fun decl ->
-             decl_value_referenced_names decl
-             |> List.for_all (fun name -> List.mem name value_defined_names))
+          decl_value_referenced_names decl
+          |> List.for_all (fun name -> List.mem name value_defined_names))
     in
     if List.length filtered = List.length decls then decls else loop filtered
   in
@@ -854,7 +919,8 @@ let top_level_nodes ast =
   let rec drop_prelude = function
     | [] -> []
     | node :: rest ->
-        if Option.is_some (loc_file node) then node :: rest else drop_prelude rest
+        if Option.is_some (loc_file node) then node :: rest
+        else drop_prelude rest
   in
   drop_prelude nodes
 
@@ -864,87 +930,100 @@ let expand_header ~search_dirs ~sysroot ~current_file ~header ~loc =
   | Error message ->
       add_diagnostic diagnostics_rev loc message;
       { decls = []; diagnostics = List.rev !diagnostics_rev }
-  | Ok target_info ->
+  | Ok target_info -> (
       let wrapper = Filename.temp_file "haven-cimport" ".c" in
-      write_file wrapper (Printf.sprintf "#include \"%s\"\n" (escape_string header));
+      write_file wrapper
+        (Printf.sprintf "#include \"%s\"\n" (escape_string header));
       let command =
-        [
-          "-Xclang";
-          "-ast-dump=json";
-          "-fsyntax-only";
-          "-x";
-          "c";
-        ]
+        [ "-Xclang"; "-ast-dump=json"; "-fsyntax-only"; "-x"; "c" ]
         @ include_args ?sysroot search_dirs current_file
         @ [ wrapper ]
       in
       let result = run_command_capture ~prog:"clang" ~args:command () in
       Sys.remove wrapper;
-      (match result.status with
+      match result.status with
       | Unix.WEXITED 0 -> (
           try
             let ast = Yojson.from_string result.stdout in
             let nodes = top_level_nodes ast in
-            let node_by_id : (string, Yojson.t) Hashtbl.t = Hashtbl.create 128 in
+            let node_by_id : (string, Yojson.t) Hashtbl.t =
+              Hashtbl.create 128
+            in
             List.iter
               (fun node ->
                 let id = node_id node in
-                if not (String.equal id "") then Hashtbl.replace node_by_id id node)
+                if not (String.equal id "") then
+                  Hashtbl.replace node_by_id id node)
               nodes;
             let table : (string, int * c_decl) Hashtbl.t = Hashtbl.create 64 in
-            let remember key order decl = Hashtbl.replace table key (order, decl) in
+            let remember key order decl =
+              Hashtbl.replace table key (order, decl)
+            in
             nodes
             |> List.iteri (fun index node ->
-                   List.iter
-                     (fun decl ->
-                       let key =
-                         match decl with
-                         | CTypeForward name -> "type-forward:" ^ name
-                         | CTypeStruct (name, _) -> "type-struct:" ^ name
-                         | CTypeAlias (name, _) -> "type-alias:" ^ name
-                         | CFunctionDecl { name; _ } -> "fn:" ^ name
-                         | CVarDecl { name; _ } -> "var:" ^ name
-                         | CConstDecl { name; _ } -> "const:" ^ name
-                       in
-                       remember key index decl)
-                     (decls_of_node target_info node_by_id node));
+                List.iter
+                  (fun decl ->
+                    let key =
+                      match decl with
+                      | CTypeForward name -> "type-forward:" ^ name
+                      | CTypeStruct (name, _) -> "type-struct:" ^ name
+                      | CTypeAlias (name, _) -> "type-alias:" ^ name
+                      | CFunctionDecl { name; _ } -> "fn:" ^ name
+                      | CVarDecl { name; _ } -> "var:" ^ name
+                      | CConstDecl { name; _ } -> "const:" ^ name
+                    in
+                    remember key index decl)
+                  (decls_of_node target_info node_by_id node));
             let decls =
               Hashtbl.to_seq_values table
               |> List.of_seq
               |> List.sort (fun (left, _) (right, _) -> Int.compare left right)
-              |> List.map snd
-              |> prune_unlowerable_decls
+              |> List.map snd |> prune_unlowerable_decls
             in
             let source = render_source decls in
             if Sys.getenv_opt "HAVEN_CIMPORT_DEBUG" = Some "1" then
               prerr_endline
                 (Printf.sprintf "[haven-cimport] %s\n%s" header source);
-            if String.equal source "" then { decls = []; diagnostics = List.rev !diagnostics_rev }
+            if String.equal source "" then
+              { decls = []; diagnostics = List.rev !diagnostics_rev }
             else
               let parsed =
-                Parser.parse_string ~filename:(Printf.sprintf "<cimport:%s>" header) source
+                Parser.parse_string
+                  ~filename:(Printf.sprintf "<cimport:%s>" header)
+                  source
               in
-              { decls = parsed.program.value.decls; diagnostics = List.rev !diagnostics_rev }
+              {
+                decls = parsed.program.value.decls;
+                diagnostics = List.rev !diagnostics_rev;
+              }
           with
           | Failure message ->
               add_diagnostic diagnostics_rev loc
-                (Printf.sprintf "failed to parse generated Haven for cimport %S: %s" header message);
+                (Printf.sprintf
+                   "failed to parse generated Haven for cimport %S: %s" header
+                   message);
               { decls = []; diagnostics = List.rev !diagnostics_rev }
           | exn ->
               let message = Printexc.to_string exn in
               add_diagnostic diagnostics_rev loc
-                (Printf.sprintf "failed to decode clang JSON for cimport %S: %s" header message);
+                (Printf.sprintf "failed to decode clang JSON for cimport %S: %s"
+                   header message);
               { decls = []; diagnostics = List.rev !diagnostics_rev })
       | Unix.WEXITED code ->
           add_diagnostic diagnostics_rev loc
-            (Printf.sprintf "clang failed while expanding cimport %S with exit code %d\n%s" header
-               code result.stderr);
+            (Printf.sprintf
+               "clang failed while expanding cimport %S with exit code %d\n%s"
+               header code result.stderr);
           { decls = []; diagnostics = List.rev !diagnostics_rev }
       | Unix.WSIGNALED signal ->
           add_diagnostic diagnostics_rev loc
-            (Printf.sprintf "clang terminated with signal %d while expanding cimport %S" signal header);
+            (Printf.sprintf
+               "clang terminated with signal %d while expanding cimport %S"
+               signal header);
           { decls = []; diagnostics = List.rev !diagnostics_rev }
       | Unix.WSTOPPED signal ->
           add_diagnostic diagnostics_rev loc
-            (Printf.sprintf "clang stopped with signal %d while expanding cimport %S" signal header);
+            (Printf.sprintf
+               "clang stopped with signal %d while expanding cimport %S" signal
+               header);
           { decls = []; diagnostics = List.rev !diagnostics_rev })

@@ -1,8 +1,7 @@
 open Test_support
 
 let run () =
-  assert_parse_ok "vararg parameter list"
-    "pub fn printf(str fmt, *) -> i32;";
+  assert_parse_ok "vararg parameter list" "pub fn printf(str fmt, *) -> i32;";
 
   assert_parse_ok "ignores preprocessor directives"
     "#if 0\n#line 1 \"orig.hv\"\npub fn main() -> i32 { 0 }";
@@ -11,7 +10,8 @@ let run () =
     "pub fn main() -> i32 { let x = Mat<Vec<1.0, 0.0>, Vec<0.0, 1.0>>; 0 }";
 
   assert_parse_ok "matrix literal accepts vector expressions"
-    "pub fn main() -> i32 { let v = Vec<3.0, 4.0>; let x = Mat<Vec<1.0, 0.0>, v>; 0 }";
+    "pub fn main() -> i32 { let v = Vec<3.0, 4.0>; let x = Mat<Vec<1.0, 0.0>, \
+     v>; 0 }";
 
   assert_parse_ok "specialization hole parameter types"
     "fn vadd(fvec? a, mat? b) { a }";
@@ -23,7 +23,8 @@ let run () =
     "pub fn first(i8*[2] values) -> i8* { values[0] }";
 
   assert_parse_ok "compile-time assert statement"
-    "fn vadd(fvec? a, fvec? b) { @assert a.dim == b.dim, \"dims must match\"; a + b }";
+    "fn vadd(fvec? a, fvec? b) { @assert a.dim == b.dim, \"dims must match\"; \
+     a + b }";
 
   assert_parse_ok "multi-payload enum variants"
     "type Pair = enum { Both(i32, i32), Empty }; pub fn main() -> i32 { 0 }";
@@ -35,10 +36,10 @@ let run () =
     "pub fn main() -> i32 { match 5 { 5 => 0 _ => 1 } }";
 
   assert_parse_ok "initializer without trailing comma"
-    "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1 }; thing.value }";
+    "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing \
+     thing = { 1 }; thing.value }";
 
-  assert_parse_ok "aggregate zero initializer"
-    "pub state i32[4] values = zero;";
+  assert_parse_ok "aggregate zero initializer" "pub state i32[4] values = zero;";
 
   let visibility_core =
     parse_to_core
@@ -66,7 +67,8 @@ pub(module) {
   assert_function_visibility "module_helper" Haven_core.Visibility.Module;
   assert_function_visibility "public_helper" Haven_core.Visibility.External;
   assert_function_visibility "grouped_helper" Haven_core.Visibility.Module;
-  assert_function_visibility "grouped_public_helper" Haven_core.Visibility.External;
+  assert_function_visibility "grouped_public_helper"
+    Haven_core.Visibility.External;
   let find_decl name =
     List.find
       (fun (decl : Core.top_decl) ->
@@ -106,10 +108,12 @@ extend Buffer with {
 |};
 
   assert_parse_error_contains "initializer trailing comma" "parse error"
-    "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing thing = { 1, }; thing.value }";
+    "type Thing = struct { i32 value; }; pub fn main() -> i32 { let Thing \
+     thing = { 1, }; thing.value }";
 
   assert_parse_error_contains "legacy store statement removed" "parse error"
-    "pub impure fn main() -> void { let mut i32 x = 0; store ref x as<i32>(1); }";
+    "pub impure fn main() -> void { let mut i32 x = 0; store ref x as<i32>(1); \
+     }";
 
   let remapped =
     Haven.Parser.parse_string
@@ -144,26 +148,35 @@ extend Buffer with {
   | [ vec_param; mat_param ] -> (
       match (vec_param.value.ty.value, mat_param.value.ty.value) with
       | Core.VecHoleType, Core.MatrixHoleType -> ()
-      | _ -> failwith "expected specialization hole parameter types to survive into core AST")
+      | _ ->
+          failwith
+            "expected specialization hole parameter types to survive into core \
+             AST")
   | _ -> failwith "expected vadd to have two parameters");
-  assert_true "specialization function should keep omitted return type through core conversion"
+  assert_true
+    "specialization function should keep omitted return type through core \
+     conversion"
     (specialized_fn.value.return_type = None);
 
   let associativity_core =
     parse_to_core "pub fn calculate() -> i32 { 15 * 100 / 400 }"
   in
   let calculate_fn = find_named_function "calculate" associativity_core in
-  (match Option.bind calculate_fn.value.definition (fun body -> body.value.result) with
-  | Some { value = Core.Binary divide; _ }
-    when divide.value.op = Core.Divide -> (
+  (match
+     Option.bind calculate_fn.value.definition (fun body -> body.value.result)
+   with
+  | Some { value = Core.Binary divide; _ } when divide.value.op = Core.Divide
+    -> (
       match divide.value.left.value with
       | Core.Binary multiply when multiply.value.op = Core.Multiply -> ()
-      | _ -> failwith "expected multiplication to be the left operand of division")
+      | _ ->
+          failwith "expected multiplication to be the left operand of division")
   | _ -> failwith "expected same-tier arithmetic operators to associate left");
 
   let assert_core =
     parse_to_core
-      "fn vadd(fvec? a, fvec? b) { @assert a.dim == b.dim, \"dims must match\"; a + b }"
+      "fn vadd(fvec? a, fvec? b) { @assert a.dim == b.dim, \"dims must \
+       match\"; a + b }"
   in
   let assert_fn = find_named_function "vadd" assert_core in
   (match

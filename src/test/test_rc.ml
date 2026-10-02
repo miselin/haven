@@ -2,15 +2,8 @@ module Analysis = Haven.Ast.Analysis
 module Llvm_ir = Haven.Ast.Llvm_ir
 module Platform_defaults_common = Haven.Ast.Platform_defaults_common
 
-type rc_case = {
-  name : string;
-  expected_rc : int;
-}
-
-type opt_case = {
-  label : string;
-  opt_level : Llvm_ir.opt_level;
-}
+type rc_case = { name : string; expected_rc : int }
+type opt_case = { label : string; opt_level : Llvm_ir.opt_level }
 
 let rc_cases =
   [
@@ -133,17 +126,15 @@ int main(void) {
 }
 |}
 
-type command_result = {
-  status : Unix.process_status;
-  output : string;
-}
+type command_result = { status : Unix.process_status; output : string }
 
 let rec find_repo_root dir =
   let marker = Filename.concat dir "tests/inputs/add.hv" in
   if Sys.file_exists marker then dir
   else
     let parent = Filename.dirname dir in
-    if String.equal parent dir then failwith "failed to locate repository root" else find_repo_root parent
+    if String.equal parent dir then failwith "failed to locate repository root"
+    else find_repo_root parent
 
 let resolve_repo_root () =
   match Sys.getenv_opt "HAVEN_REPO_ROOT" with
@@ -170,7 +161,8 @@ let run_command_capture ~prog ~args =
   let read_fd, write_fd = Unix.pipe () in
   let argv = Array.of_list (prog :: args) in
   let pid =
-    Unix.create_process_env prog argv (Unix.environment ()) Unix.stdin write_fd write_fd
+    Unix.create_process_env prog argv (Unix.environment ()) Unix.stdin write_fd
+      write_fd
   in
   Unix.close write_fd;
   let output = read_all read_fd in
@@ -183,29 +175,31 @@ let require_success label result =
   | Unix.WEXITED 0 -> ()
   | Unix.WEXITED code ->
       failwith
-        (Printf.sprintf "%s failed with exit code %d\n%s" label code result.output)
+        (Printf.sprintf "%s failed with exit code %d\n%s" label code
+           result.output)
   | Unix.WSIGNALED signal ->
       failwith
-        (Printf.sprintf "%s terminated by signal %d\n%s" label signal result.output)
+        (Printf.sprintf "%s terminated by signal %d\n%s" label signal
+           result.output)
   | Unix.WSTOPPED signal ->
       failwith
         (Printf.sprintf "%s stopped by signal %d\n%s" label signal result.output)
 
 let pipeline_errors (pipeline : Analysis.Pipeline.result) =
   let diagnostics =
-    pipeline.typing.diagnostics
-    @ pipeline.verify.diagnostics
-    @ pipeline.semantic.diagnostics
-    @ pipeline.asserts.diagnostics
-    @ pipeline.purity.diagnostics
-    @ pipeline.ownership.diagnostics
+    pipeline.typing.diagnostics @ pipeline.verify.diagnostics
+    @ pipeline.semantic.diagnostics @ pipeline.asserts.diagnostics
+    @ pipeline.purity.diagnostics @ pipeline.ownership.diagnostics
   in
-  List.filter (fun (d : Analysis.diagnostic) -> d.level = Analysis.Error) diagnostics
+  List.filter
+    (fun (d : Analysis.diagnostic) -> d.level = Analysis.Error)
+    diagnostics
 
 let format_diagnostic (diagnostic : Analysis.diagnostic) =
   let loc = diagnostic.loc in
   let file =
-    if loc.start_pos.Lexing.pos_fname = "" then "<stdin>" else loc.start_pos.Lexing.pos_fname
+    if loc.start_pos.Lexing.pos_fname = "" then "<stdin>"
+    else loc.start_pos.Lexing.pos_fname
   in
   let line = loc.start_pos.Lexing.pos_lnum in
   let col = loc.start_pos.Lexing.pos_cnum - loc.start_pos.Lexing.pos_bol + 1 in
@@ -218,20 +212,23 @@ let require_compile_error ~source ~expected_substrings =
   match diagnostics with
   | [] ->
       failwith
-        (Printf.sprintf "expected compiler diagnostics while compiling %s" source)
+        (Printf.sprintf "expected compiler diagnostics while compiling %s"
+           source)
   | diagnostic :: _ ->
       List.iter
         (fun expected ->
           if not (Test_support.string_contains diagnostic.message expected) then
             failwith
               (Printf.sprintf
-                 "expected diagnostic for %s to include %S, but got:\n%s"
-                 source expected (format_diagnostic diagnostic)))
+                 "expected diagnostic for %s to include %S, but got:\n%s" source
+                 expected
+                 (format_diagnostic diagnostic)))
         expected_substrings;
       if pipeline.semantic.diagnostics <> [] then
         failwith
           (Printf.sprintf
-             "expected failing compile-time assert to short-circuit later semantic diagnostics for %s"
+             "expected failing compile-time assert to short-circuit later \
+              semantic diagnostics for %s"
              source)
 
 let compile_case_to_object ~source ~output_path opt_level =
@@ -240,12 +237,16 @@ let compile_case_to_object ~source ~output_path opt_level =
   match pipeline_errors pipeline with
   | [] ->
       let module_ir =
-        Llvm_ir.compile ~options:{ Llvm_ir.opt_level; debug_llvm = false; emit_preamble = true } pipeline
+        Llvm_ir.compile
+          ~options:
+            { Llvm_ir.opt_level; debug_llvm = false; emit_preamble = true }
+          pipeline
       in
       Llvm_ir.emit_object_file module_ir output_path
   | diagnostic :: _ ->
       failwith
-        (Printf.sprintf "unexpected compiler diagnostics while compiling %s\n%s" source
+        (Printf.sprintf "unexpected compiler diagnostics while compiling %s\n%s"
+           source
            (format_diagnostic diagnostic))
 
 let link_case_executable ~harness_obj ~sut_obj ~output_path =
@@ -254,9 +255,7 @@ let link_case_executable ~harness_obj ~sut_obj ~output_path =
     @ (if Platform_defaults_common.is_linux_host () then [ "-no-pie" ] else [])
     @ [ "-o"; output_path ]
   in
-  let result =
-    run_command_capture ~prog:"cc" ~args:linker_args
-  in
+  let result = run_command_capture ~prog:"cc" ~args:linker_args in
   require_success ("link " ^ output_path) result
 
 let extract_reported_rc output =
@@ -266,8 +265,13 @@ let extract_reported_rc output =
   let rec loop = function
     | [] -> None
     | line :: rest ->
-        if String.length line >= prefix_len && String.sub line 0 prefix_len = prefix then
-          Some (int_of_string (String.sub line prefix_len (String.length line - prefix_len)))
+        if
+          String.length line >= prefix_len
+          && String.sub line 0 prefix_len = prefix
+        then
+          Some
+            (int_of_string
+               (String.sub line prefix_len (String.length line - prefix_len)))
         else loop rest
   in
   loop lines
@@ -285,13 +289,14 @@ let run_case temp_dir harness_obj root (case : rc_case) (opt : opt_case) =
     | Some actual when actual = case.expected_rc -> None
     | Some actual ->
         Some
-          (Printf.sprintf "%s/%s returned %d, expected %d\n%s" case.name opt.label actual
-             case.expected_rc result.output)
+          (Printf.sprintf "%s/%s returned %d, expected %d\n%s" case.name
+             opt.label actual case.expected_rc result.output)
     | None ->
         Some
-          (Printf.sprintf "%s/%s did not report a result marker\n%s" case.name opt.label
-             result.output)
-  with Failure message -> Some (Printf.sprintf "%s/%s failed\n%s" case.name opt.label message)
+          (Printf.sprintf "%s/%s did not report a result marker\n%s" case.name
+             opt.label result.output)
+  with Failure message ->
+    Some (Printf.sprintf "%s/%s failed\n%s" case.name opt.label message)
 
 let run () =
   let root = resolve_repo_root () in
@@ -310,7 +315,8 @@ let run () =
       let harness_obj = Filename.concat temp_dir "rc_harness.o" in
       Test_support.write_file harness_c runtime_harness_c;
       require_success "compile rc harness"
-        (run_command_capture ~prog:"cc" ~args:[ "-c"; harness_c; "-o"; harness_obj ]);
+        (run_command_capture ~prog:"cc"
+           ~args:[ "-c"; harness_c; "-o"; harness_obj ]);
       let failures =
         List.fold_left
           (fun failures case ->

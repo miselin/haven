@@ -1,5 +1,4 @@
 open Linol.Lsp.Types
-
 module Cst = Haven.Cst.Cst
 module Locate = Haven.Cst.Locate
 
@@ -47,17 +46,17 @@ let import_folding_ranges (parsed : Cst.parsed_program) =
     | _ -> acc
   in
   let rec loop start_loc end_loc acc = function
-    | [] ->
-        List.rev (flush start_loc end_loc acc)
+    | [] -> List.rev (flush start_loc end_loc acc)
     | (decl : Cst.top_decl) :: rest -> (
         match decl.value with
         | Cst.Import _ | Cst.CImport _ ->
             let start_loc =
-              match start_loc with None -> Some decl.loc | Some loc -> Some loc
+              match start_loc with
+              | None -> Some decl.loc
+              | Some loc -> Some loc
             in
             loop start_loc (Some decl.loc) acc rest
-        | _ ->
-            loop None None (flush start_loc end_loc acc) rest)
+        | _ -> loop None None (flush start_loc end_loc acc) rest)
   in
   loop None None [] parsed.program.value.decls
 
@@ -65,23 +64,23 @@ let folding_ranges (parsed : Cst.parsed_program) =
   let structural =
     Locate.nodes_matching
       (function
-        | Locate.Block _ | StructDecl _ | EnumDecl _ | Foreign _ | TypeExtend _ -> true
+        | Locate.Block _ | StructDecl _ | EnumDecl _ | Foreign _ | TypeExtend _
+          ->
+            true
         | _ -> false)
       parsed.program
     |> List.filter_map (fun node ->
-           match node with
-           | Locate.Block block ->
-               folding_range ~kind:FoldingRangeKind.Region block.loc
-           | StructDecl struct_decl ->
-               folding_range ~kind:FoldingRangeKind.Region struct_decl.loc
-           | EnumDecl enum_decl ->
-               folding_range ~kind:FoldingRangeKind.Region enum_decl.loc
-           | Foreign foreign ->
-               folding_range ~kind:FoldingRangeKind.Region foreign.loc
-           | TypeExtend ext ->
-               folding_range ~kind:FoldingRangeKind.Region ext.loc
-           | _ ->
-               None)
+        match node with
+        | Locate.Block block ->
+            folding_range ~kind:FoldingRangeKind.Region block.loc
+        | StructDecl struct_decl ->
+            folding_range ~kind:FoldingRangeKind.Region struct_decl.loc
+        | EnumDecl enum_decl ->
+            folding_range ~kind:FoldingRangeKind.Region enum_decl.loc
+        | Foreign foreign ->
+            folding_range ~kind:FoldingRangeKind.Region foreign.loc
+        | TypeExtend ext -> folding_range ~kind:FoldingRangeKind.Region ext.loc
+        | _ -> None)
   in
   import_folding_ranges parsed @ structural
 
@@ -97,7 +96,9 @@ let selection_range_at_position (parsed : Cst.parsed_program) position =
     | loc :: rest ->
         let parent = build rest in
         Some
-          (SelectionRange.create ?parent ~range:(Lsp_helpers.loc_to_range loc) ())
+          (SelectionRange.create ?parent
+             ~range:(Lsp_helpers.loc_to_range loc)
+             ())
   in
   match build locs with
   | Some range -> range

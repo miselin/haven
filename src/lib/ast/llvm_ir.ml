@@ -1,5 +1,4 @@
 open Haven_core
-
 module Core = Core_ast
 module Analysis = Analysis
 module String_map = Map.Make (String)
@@ -7,15 +6,9 @@ module String_map = Map.Make (String)
 exception Error of Loc.t option * string
 
 let fail ?loc fmt = Printf.ksprintf (fun msg -> raise (Error (loc, msg))) fmt
-
 let with_default default = function Some value -> value | None -> default
 
-type opt_level =
-  | O0
-  | O1
-  | O2
-  | O3
-  | Os
+type opt_level = O0 | O1 | O2 | O3 | Os
 
 type codegen_options = {
   opt_level : opt_level;
@@ -23,7 +16,8 @@ type codegen_options = {
   emit_preamble : bool;
 }
 
-let default_codegen_options = { opt_level = O0; debug_llvm = false; emit_preamble = true }
+let default_codegen_options =
+  { opt_level = O0; debug_llvm = false; emit_preamble = true }
 
 type symbol =
   | Function_symbol of {
@@ -65,10 +59,7 @@ type preamble = {
   free_ty : Llvm.lltype;
 }
 
-type global_init = {
-  decl : Core.var_decl;
-  storage : Llvm.llvalue;
-}
+type global_init = { decl : Core.var_decl; storage : Llvm.llvalue }
 
 type t = {
   pipeline : Analysis.Pipeline.result;
@@ -120,7 +111,9 @@ let sanitize_name s =
 let rec mangle_resolved_ty = function
   | Analysis.ResolvedInt (signedness, bits) ->
       Printf.sprintf "%c%d"
-        (match signedness with Haven_token.Token.Signed -> 'i' | Unsigned -> 'u')
+        (match signedness with
+        | Haven_token.Token.Signed -> 'i'
+        | Unsigned -> 'u')
         bits
   | ResolvedFloat -> "f32"
   | ResolvedString -> "str"
@@ -130,18 +123,15 @@ let rec mangle_resolved_ty = function
   | ResolvedCell inner -> "cell." ^ mangle_resolved_ty inner
   | ResolvedArray (inner, count) ->
       Printf.sprintf "array.%d.%s" count (mangle_resolved_ty inner)
-  | ResolvedVec vec ->
-      Printf.sprintf "vec.%d"
-        vec.Haven_token.Token.dimension
-  | ResolvedMatrix mat ->
-      Printf.sprintf "mat.%d.%d" mat.rows mat.columns
+  | ResolvedVec vec -> Printf.sprintf "vec.%d" vec.Haven_token.Token.dimension
+  | ResolvedMatrix mat -> Printf.sprintf "mat.%d.%d" mat.rows mat.columns
   | ResolvedVecHole -> "vec.hole"
   | ResolvedMatrixHole -> "mat.hole"
   | ResolvedFunction (params, ret, vararg) ->
       String.concat "."
         ([ "fn" ]
         @ List.map mangle_resolved_ty params
-        @ [ if vararg then "vararg" else "fixed"; mangle_resolved_ty ret ])
+        @ [ (if vararg then "vararg" else "fixed"); mangle_resolved_ty ret ])
   | ResolvedNamed (name, []) -> sanitize_name name
   | ResolvedNamed (name, args) ->
       String.concat "."
@@ -211,7 +201,6 @@ let void_type t = Llvm.void_type t.context
 let unit_value t = Llvm.const_int (i1_type t) 0
 let dummy_loc = { Loc.start_pos = Lexing.dummy_pos; end_pos = Lexing.dummy_pos }
 let const_i32 t value = Llvm.const_int (i32_type t) value
-
 let llvm_vector_type t dimension = Llvm.vector_type (float_type t) dimension
 
 let llvm_matrix_flat_type t (mat : Haven_token.Token.mat_type) =
@@ -235,13 +224,15 @@ let expr_resolved_type t (expr : Core.expression) =
   match expr_annotation t expr with
   | Some { resolved_type = Some ty; _ } -> ty
   | Some _ | None ->
-      fail ~loc:expr.loc "missing resolved type for expression during LLVM lowering"
+      fail ~loc:expr.loc
+        "missing resolved type for expression during LLVM lowering"
 
 let binding_resolved_type t (binding : Core.let_stmt) =
   match Hashtbl.find_opt t.binding_annotations (binding_id binding) with
   | Some { resolved_type = Some ty; _ } -> ty
   | Some _ | None ->
-      fail ~loc:binding.loc "missing resolved type for binding during LLVM lowering"
+      fail ~loc:binding.loc
+        "missing resolved type for binding during LLVM lowering"
 
 let function_resolved_type t (fn : Core.function_decl) =
   let return_ty =
@@ -261,8 +252,10 @@ let llvm_intrinsic_suffix ?loc = function
   | Analysis.ResolvedInt (_, bits) -> Printf.sprintf "i%d" bits
   | Analysis.ResolvedFloat -> "f32"
   | Analysis.ResolvedPointer _ -> "p0"
-  | Analysis.ResolvedVec vec -> Printf.sprintf "v%df32" vec.Haven_token.Token.dimension
-  | Analysis.ResolvedMatrix mat -> Printf.sprintf "v%df32" (mat.rows * mat.columns)
+  | Analysis.ResolvedVec vec ->
+      Printf.sprintf "v%df32" vec.Haven_token.Token.dimension
+  | Analysis.ResolvedMatrix mat ->
+      Printf.sprintf "v%df32" (mat.rows * mat.columns)
   | ty ->
       fail ?loc "unsupported intrinsic overload type %s during LLVM lowering"
         (mangle_resolved_ty ty)
@@ -277,7 +270,8 @@ let rec llvm_type_of_resolved t ?loc = function
   | ResolvedFloat -> float_type t
   | ResolvedString -> ptr_type t
   | ResolvedVoid -> void_type t
-  | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedFunction _ -> ptr_type t
+  | ResolvedPointer _ | ResolvedBox _ | ResolvedCell _ | ResolvedFunction _ ->
+      ptr_type t
   | ResolvedArray (inner, count) ->
       Llvm.array_type (llvm_type_of_resolved t ?loc inner) count
   | ResolvedVec vec -> llvm_vector_type t vec.Haven_token.Token.dimension
@@ -286,7 +280,7 @@ let rec llvm_type_of_resolved t ?loc = function
       fail ?loc "specialization vector hole reached LLVM lowering"
   | ResolvedMatrixHole ->
       fail ?loc "specialization matrix hole reached LLVM lowering"
-  | (ResolvedNamed _ as resolved) -> llvm_named_type t ?loc resolved
+  | ResolvedNamed _ as resolved -> llvm_named_type t ?loc resolved
   | ResolvedGenericParam name ->
       fail ?loc "unresolved generic parameter %s reached LLVM lowering" name
 
@@ -294,10 +288,16 @@ and llvm_named_type t ?loc (resolved : Analysis.resolved_ty) =
   match resolved with
   | Analysis.ResolvedNamed (name, _args) -> (
       match Analysis.lookup_named_type t.type_env name with
-      | Some (Analysis.TypeStruct (decl, _)) -> llvm_struct_type t ?loc resolved decl
-      | Some (Analysis.TypeEnum (decl, _)) -> llvm_enum_type t ?loc resolved decl
-      | Some Analysis.TypeAlias alias -> (
-          match Analysis.resolve_core_type t.type_env [] [] (with_default dummy_loc loc) alias with
+      | Some (Analysis.TypeStruct (decl, _)) ->
+          llvm_struct_type t ?loc resolved decl
+      | Some (Analysis.TypeEnum (decl, _)) ->
+          llvm_enum_type t ?loc resolved decl
+      | Some (Analysis.TypeAlias alias) -> (
+          match
+            Analysis.resolve_core_type t.type_env [] []
+              (with_default dummy_loc loc)
+              alias
+          with
           | Some alias_ty -> llvm_type_of_resolved t ?loc alias_ty
           | None ->
               fail ?loc "failed to resolve alias %s during LLVM lowering" name)
@@ -318,7 +318,10 @@ and llvm_struct_type t ?loc:_ resolved (decl : Core.struct_decl) =
           (List.map
              (fun (field : Core.struct_field) ->
                let resolved_field =
-                 match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+                 match
+                   Analysis.resolve_core_type t.type_env [] [] field.loc
+                     field.value.ty
+                 with
                  | Some resolved_field -> resolved_field
                  | None ->
                      fail ~loc:field.loc "failed to resolve field type for %s"
@@ -336,7 +339,11 @@ and llvm_enum_type t ?loc resolved decl =
   | Some ty -> ty
   | None ->
       let subst =
-        match Analysis.lookup_enum_decl t.type_env (with_default dummy_loc loc) resolved with
+        match
+          Analysis.lookup_enum_decl t.type_env
+            (with_default dummy_loc loc)
+            resolved
+        with
         | Some (_, subst) -> subst
         | None -> []
       in
@@ -349,19 +356,24 @@ and llvm_enum_type t ?loc resolved decl =
                 let rec resolve_payloads acc = function
                   | [] -> List.rev acc
                   | inner_ty :: rest -> (
-                      match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
-                      | Some resolved_inner -> resolve_payloads (resolved_inner :: acc) rest
+                      match
+                        Analysis.resolve_core_type t.type_env [] subst
+                          variant.loc inner_ty
+                      with
+                      | Some resolved_inner ->
+                          resolve_payloads (resolved_inner :: acc) rest
                       | None ->
-                          fail ~loc:variant.loc "failed to resolve enum payload for %s"
+                          fail ~loc:variant.loc
+                            "failed to resolve enum payload for %s"
                             variant.value.name.value)
                 in
                 Some (variant, resolve_payloads [] inner_tys))
           decl.value.variants
       in
-      if payload_types = [] then
+      if payload_types = [] then (
         let ty = i32_type t in
         Hashtbl.add t.enum_types key ty;
-        ty
+        ty)
       else
         let name = "haven.enum." ^ key in
         let ty = Llvm.named_struct_type t.context name in
@@ -371,7 +383,9 @@ and llvm_enum_type t ?loc resolved decl =
             (fun size (_, payload_tys) ->
               let payload_size =
                 Llvm_target.DataLayout.abi_size
-                  (llvm_enum_payload_type t ~loc:(with_default dummy_loc loc) payload_tys)
+                  (llvm_enum_payload_type t
+                     ~loc:(with_default dummy_loc loc)
+                     payload_tys)
                   t.data_layout
                 |> Int64.to_int
               in
@@ -400,19 +414,21 @@ and enum_payload_fields t ?loc payload_tys buf_ptr =
   match payload_tys with
   | [] -> []
   | [ payload_ty ] ->
-      [ (payload_ty, Llvm.build_pointercast buf_ptr (ptr_type t) "enum.payload.ptr" t.builder) ]
+      [
+        ( payload_ty,
+          Llvm.build_pointercast buf_ptr (ptr_type t) "enum.payload.ptr"
+            t.builder );
+      ]
   | _ ->
-      let payload_struct_ty =
-        llvm_enum_payload_type t ?loc payload_tys
-      in
+      let payload_struct_ty = llvm_enum_payload_type t ?loc payload_tys in
       let payload_ptr =
         Llvm.build_pointercast buf_ptr (ptr_type t) "enum.payload.ptr" t.builder
       in
       List.mapi
         (fun index payload_ty ->
           ( payload_ty,
-            Llvm.build_struct_gep payload_struct_ty payload_ptr index "enum.payload.field"
-              t.builder ))
+            Llvm.build_struct_gep payload_struct_ty payload_ptr index
+              "enum.payload.field" t.builder ))
         payload_tys
 
 let declare_matrix_multiply_intrinsic t ?loc result_ty lhs_ty rhs_ty =
@@ -441,7 +457,8 @@ let zero_constant t resolved =
 let build_vector_value t vector_ty values =
   List.fold_left
     (fun current (index, value) ->
-      Llvm.build_insertelement current value (const_i32 t index) "vec.insert" t.builder)
+      Llvm.build_insertelement current value (const_i32 t index) "vec.insert"
+        t.builder)
     (Llvm.undef vector_ty)
     (List.mapi (fun index value -> (index, value)) values)
 
@@ -450,15 +467,22 @@ let require_preamble t ?loc feature =
   | Some preamble -> preamble
   | None ->
       fail ?loc
-        "LLVM lowering for %s requires the default preamble; rerun without --no-preamble"
+        "LLVM lowering for %s requires the default preamble; rerun without \
+         --no-preamble"
         feature
 
-let matrix_row_base_ptr t matrix_storage (mat : Haven_token.Token.mat_type) row_index =
-  let raw = Llvm.build_pointercast matrix_storage (ptr_type t) "matrix.row.raw" t.builder in
-  let base =
-    Llvm.build_mul row_index (const_i32 t mat.columns) "matrix.row.base" t.builder
+let matrix_row_base_ptr t matrix_storage (mat : Haven_token.Token.mat_type)
+    row_index =
+  let raw =
+    Llvm.build_pointercast matrix_storage (ptr_type t) "matrix.row.raw"
+      t.builder
   in
-  Llvm.build_in_bounds_gep (float_type t) raw [| base |] "matrix.row.ptr" t.builder
+  let base =
+    Llvm.build_mul row_index (const_i32 t mat.columns) "matrix.row.base"
+      t.builder
+  in
+  Llvm.build_in_bounds_gep (float_type t) raw [| base |] "matrix.row.ptr"
+    t.builder
 
 let load_matrix_row t row_ptr (mat : Haven_token.Token.mat_type) =
   let elements =
@@ -468,7 +492,8 @@ let load_matrix_row t row_ptr (mat : Haven_token.Token.mat_type) =
             [| const_i32 t index |]
             "matrix.row.element.ptr" t.builder
         in
-        Llvm.build_load (float_type t) element_ptr "matrix.row.element" t.builder)
+        Llvm.build_load (float_type t) element_ptr "matrix.row.element"
+          t.builder)
   in
   build_vector_value t (llvm_matrix_row_type t mat) elements
 
@@ -476,7 +501,8 @@ let store_matrix_row t row_ptr (mat : Haven_token.Token.mat_type) value =
   List.iter
     (fun index ->
       let element =
-        Llvm.build_extractelement value (const_i32 t index) "matrix.row.extract" t.builder
+        Llvm.build_extractelement value (const_i32 t index) "matrix.row.extract"
+          t.builder
       in
       let element_ptr =
         Llvm.build_in_bounds_gep (float_type t) row_ptr
@@ -498,7 +524,8 @@ let create_preamble context llmodule =
   let i32_type = Llvm.i32_type context in
   let void_type = Llvm.void_type context in
   let new_empty_box, new_empty_box_ty =
-    declare_runtime_function llmodule "__haven_new_empty_box" ptr_type [ i32_type ]
+    declare_runtime_function llmodule "__haven_new_empty_box" ptr_type
+      [ i32_type ]
   in
   let new_box, new_box_ty =
     declare_runtime_function llmodule "__haven_new_box" ptr_type
@@ -510,7 +537,9 @@ let create_preamble context llmodule =
   let box_unref, box_unref_ty =
     declare_runtime_function llmodule "__haven_box_unref" void_type [ ptr_type ]
   in
-  let free, free_ty = declare_runtime_function llmodule "free" void_type [ ptr_type ] in
+  let free, free_ty =
+    declare_runtime_function llmodule "free" void_type [ ptr_type ]
+  in
   {
     new_empty_box;
     new_empty_box_ty;
@@ -538,7 +567,8 @@ let pass_pipeline = function
   | O3 -> "globaldce,default<O3>"
   | Os -> "globaldce,default<Os>"
 
-let create_context ?(options = default_codegen_options) (pipeline : Analysis.Pipeline.result) =
+let create_context ?(options = default_codegen_options)
+    (pipeline : Analysis.Pipeline.result) =
   initialize_llvm ();
   configure_llvm ();
   let context = Llvm.create_context () in
@@ -556,7 +586,8 @@ let create_context ?(options = default_codegen_options) (pipeline : Analysis.Pip
   let builder = Llvm.builder context in
   let type_env = Analysis.type_env_of_program pipeline.cleaned.program in
   let preamble =
-    if options.emit_preamble then Some (create_preamble context llmodule) else None
+    if options.emit_preamble then Some (create_preamble context llmodule)
+    else None
   in
   {
     pipeline;
@@ -630,7 +661,8 @@ let constant_cast t value source target =
           (fun constant ->
             Llvm.const_of_int64
               (Llvm.integer_type t.context bits)
-              constant (constant_is_signed source))
+              constant
+              (constant_is_signed source))
           (Llvm.int64_of_const value)
     | Analysis.ResolvedInt _, Analysis.ResolvedFloat ->
         Option.map
@@ -642,7 +674,8 @@ let constant_cast t value source target =
           (fun constant ->
             Llvm.const_of_int64
               (Llvm.integer_type t.context bits)
-              (Int64.of_float constant) (constant_is_signed target))
+              (Int64.of_float constant)
+              (constant_is_signed target))
           (Llvm.float_of_const value)
     | source, target
       when Analysis.resolved_is_pointerish source
@@ -650,11 +683,9 @@ let constant_cast t value source target =
         Some (Llvm.const_pointercast value (ptr_type t))
     | source, Analysis.ResolvedInt (_, bits)
       when Analysis.resolved_is_pointerish source ->
-        Some
-          (Llvm.const_ptrtoint value
-             (Llvm.integer_type t.context bits))
-    | Analysis.ResolvedInt _, target
-      when Analysis.resolved_is_pointerish target ->
+        Some (Llvm.const_ptrtoint value (Llvm.integer_type t.context bits))
+    | Analysis.ResolvedInt _, target when Analysis.resolved_is_pointerish target
+      ->
         Some (Llvm.const_inttoptr value (ptr_type t))
     | _ -> None
 
@@ -666,12 +697,8 @@ let rec constant_of_expr t (expr : Core.expression) =
       Some (Llvm.const_null (llvm_type_of_resolved t resolved))
   | Core.Zero -> Some (zero_constant t resolved)
   | Core.As cast ->
-      Option.bind
-        (constant_of_expr t cast.value.inner)
-        (fun value ->
-          constant_cast t value
-            (expr_resolved_type t cast.value.inner)
-            resolved)
+      Option.bind (constant_of_expr t cast.value.inner) (fun value ->
+          constant_cast t value (expr_resolved_type t cast.value.inner) resolved)
   | Core.SizeExpr inner ->
       let size =
         Llvm_target.DataLayout.abi_size
@@ -683,7 +710,9 @@ let rec constant_of_expr t (expr : Core.expression) =
       match Analysis.resolve_core_type t.type_env [] [] ty.loc ty with
       | Some resolved_ty ->
           let size =
-            Llvm_target.DataLayout.abi_size (llvm_type_of_resolved t resolved_ty) t.data_layout
+            Llvm_target.DataLayout.abi_size
+              (llvm_type_of_resolved t resolved_ty)
+              t.data_layout
           in
           Some (Llvm.const_int (i64_type t) (Int64.to_int size))
       | None -> None)
@@ -695,35 +724,41 @@ and constant_of_literal t loc resolved (lit : Core.literal) =
   | Core.Integer value, Analysis.ResolvedInt (_, bits) ->
       Some (Llvm.const_int (Llvm.integer_type t.context bits) value)
   | Core.Bool value, Analysis.ResolvedInt (_, bits) ->
-      Some (Llvm.const_int (Llvm.integer_type t.context bits) (if value then 1 else 0))
+      Some
+        (Llvm.const_int
+           (Llvm.integer_type t.context bits)
+           (if value then 1 else 0))
   | Core.Float value, Analysis.ResolvedFloat ->
       Some (Llvm.const_float (float_type t) value)
   | Core.Char value, Analysis.ResolvedInt (_, bits) ->
       Some (Llvm.const_int (Llvm.integer_type t.context bits) (Char.code value))
-  | Core.String value, Analysis.ResolvedString -> Some (create_string_literal t value)
-  | Core.Enum enum_lit, Analysis.ResolvedNamed _ -> constant_of_enum_literal t loc resolved enum_lit
-  | Core.Vector vec, Analysis.ResolvedVec _ -> (
+  | Core.String value, Analysis.ResolvedString ->
+      Some (create_string_literal t value)
+  | Core.Enum enum_lit, Analysis.ResolvedNamed _ ->
+      constant_of_enum_literal t loc resolved enum_lit
+  | Core.Vector vec, Analysis.ResolvedVec _ ->
       let values = List.map (constant_of_expr t) vec.value.elements in
       if List.for_all Option.is_some values then
-        Some
-          (Llvm.const_vector
-             (Array.of_list (List.map Option.get values)))
-      else None)
-  | Core.Matrix mat, Analysis.ResolvedMatrix resolved_mat -> (
+        Some (Llvm.const_vector (Array.of_list (List.map Option.get values)))
+      else None
+  | Core.Matrix mat, Analysis.ResolvedMatrix resolved_mat ->
       let values =
         List.map
           (fun (row : Core.expression) ->
             match expr_resolved_type t row with
-            | Analysis.ResolvedVec vec when vec.dimension = resolved_mat.columns -> (
+            | Analysis.ResolvedVec vec when vec.dimension = resolved_mat.columns
+              -> (
                 match constant_of_expr t row with
                 | Some row_value ->
                     Some
                       (List.init resolved_mat.columns (fun index ->
-                           Llvm.const_extractelement row_value (const_i32 t index)))
+                           Llvm.const_extractelement row_value
+                             (const_i32 t index)))
                 | None -> None)
             | Analysis.ResolvedVec vec ->
                 fail ~loc:row.loc
-                  "matrix row has width %d but the matrix expects width %d during LLVM lowering"
+                  "matrix row has width %d but the matrix expects width %d \
+                   during LLVM lowering"
                   vec.dimension resolved_mat.columns
             | _ ->
                 fail ~loc:row.loc
@@ -735,31 +770,33 @@ and constant_of_literal t loc resolved (lit : Core.literal) =
         Some
           (Llvm.const_bitcast
              (Llvm.const_vector
-                (Array.of_list
-                   (List.concat (List.map Option.get values))))
+                (Array.of_list (List.concat (List.map Option.get values))))
              vector_ty)
-      else None)
+      else None
   | _ -> None
 
 and constant_of_enum_literal t loc resolved (enum_lit : Core.enum_literal) =
-  match Analysis.lookup_enum_variant t.type_env loc resolved enum_lit.value.enum_variant.value with
+  match
+    Analysis.lookup_enum_variant t.type_env loc resolved
+      enum_lit.value.enum_variant.value
+  with
   | Some (_, []) ->
-      let tag = enum_tag_value enum_lit.value.enum_variant.value resolved t.type_env loc in
+      let tag =
+        enum_tag_value enum_lit.value.enum_variant.value resolved t.type_env loc
+      in
       Some (Llvm.const_int (i32_type t) tag)
   | Some (_, _ :: _) | None -> None
 
 and constant_of_initializer t loc resolved init =
   match resolved with
-  | Analysis.ResolvedArray (inner, _) -> (
-      let elements =
-        List.map (constant_of_expr t) init.value.exprs
-      in
+  | Analysis.ResolvedArray (inner, _) ->
+      let elements = List.map (constant_of_expr t) init.value.exprs in
       if List.for_all Option.is_some elements then
         let element_ty = llvm_type_of_resolved t inner in
         Some
           (Llvm.const_array element_ty
              (Array.of_list (List.map Option.get elements)))
-      else None)
+      else None
   | Analysis.ResolvedNamed _ as struct_ty -> (
       match Analysis.lookup_struct_fields t.type_env loc struct_ty with
       | Some _fields ->
@@ -774,9 +811,7 @@ and constant_of_initializer t loc resolved init =
   | Analysis.ResolvedVec _ ->
       let elements = List.map (constant_of_expr t) init.value.exprs in
       if List.for_all Option.is_some elements then
-        Some
-          (Llvm.const_vector
-             (Array.of_list (List.map Option.get elements)))
+        Some (Llvm.const_vector (Array.of_list (List.map Option.get elements)))
       else None
   | Analysis.ResolvedMatrix mat ->
       let elements = List.map (constant_of_expr t) init.value.exprs in
@@ -813,7 +848,8 @@ let emit_cast t value source target =
     match (source, target) with
     | Analysis.ResolvedInt (_, sbits), Analysis.ResolvedInt (_, tbits) ->
         let dest_ty = Llvm.integer_type t.context tbits in
-        if sbits = tbits then Llvm.build_bitcast value dest_ty "int.cast" t.builder
+        if sbits = tbits then
+          Llvm.build_bitcast value dest_ty "int.cast" t.builder
         else if sbits < tbits then
           if resolved_is_signed source then
             Llvm.build_sext value dest_ty "sext" t.builder
@@ -822,56 +858,78 @@ let emit_cast t value source target =
     | Analysis.ResolvedInt _, Analysis.ResolvedFloat ->
         Llvm.build_sitofp value (float_type t) "sitofp" t.builder
     | Analysis.ResolvedFloat, Analysis.ResolvedInt (_, bits) ->
-        Llvm.build_fptosi value (Llvm.integer_type t.context bits) "fptosi" t.builder
+        Llvm.build_fptosi value
+          (Llvm.integer_type t.context bits)
+          "fptosi" t.builder
     | source, target
       when Analysis.resolved_is_pointerish source
            && Analysis.resolved_is_pointerish target ->
         Llvm.build_pointercast value (ptr_type t) "ptr.cast" t.builder
     | source, Analysis.ResolvedInt (_, bits)
       when Analysis.resolved_is_pointerish source ->
-        Llvm.build_ptrtoint value (Llvm.integer_type t.context bits) "ptrtoint" t.builder
-    | Analysis.ResolvedInt _, target
-      when Analysis.resolved_is_pointerish target ->
+        Llvm.build_ptrtoint value
+          (Llvm.integer_type t.context bits)
+          "ptrtoint" t.builder
+    | Analysis.ResolvedInt _, target when Analysis.resolved_is_pointerish target
+      ->
         Llvm.build_inttoptr value (ptr_type t) "inttoptr" t.builder
     | _ ->
         fail "unsupported cast from %s to %s during LLVM lowering"
-          (mangle_resolved_ty source) (mangle_resolved_ty target)
+          (mangle_resolved_ty source)
+          (mangle_resolved_ty target)
 
 let emit_box_ref t box =
   let preamble = require_preamble t "box retain/release" in
-  ignore (Llvm.build_call preamble.box_ref_ty preamble.box_ref [| box |] "" t.builder)
+  ignore
+    (Llvm.build_call preamble.box_ref_ty preamble.box_ref [| box |] "" t.builder)
 
 let lookup_lifecycle t = function
-  | Analysis.ResolvedNamed (name, _) -> Analysis.lookup_type_lifecycle t.type_env name
+  | Analysis.ResolvedNamed (name, _) ->
+      Analysis.lookup_type_lifecycle t.type_env name
   | _ -> None
 
-let emit_lifecycle_call t _resolved (fn_decl : Core.function_decl) storage extra_args =
+let emit_lifecycle_call t _resolved (fn_decl : Core.function_decl) storage
+    extra_args =
   match lookup_function_symbol t fn_decl.value.name.value with
-  | Function_symbol { fn; fn_type; resolved_type = Analysis.ResolvedFunction (params, ret, _); named_params; _ } ->
+  | Function_symbol
+      {
+        fn;
+        fn_type;
+        resolved_type = Analysis.ResolvedFunction (params, ret, _);
+        named_params;
+        _;
+      } -> (
       if named_params <> 1 + List.length extra_args then
         fail ~loc:fn_decl.loc
           "lifecycle hook %s expected %d argument(s), but lowering produced %d"
-          fn_decl.value.name.value named_params (1 + List.length extra_args);
+          fn_decl.value.name.value named_params
+          (1 + List.length extra_args);
       if not (Analysis.equal_resolved_type ret Analysis.ResolvedVoid) then
-        fail ~loc:fn_decl.loc "lifecycle hook %s must return void" fn_decl.value.name.value;
-      (match params with
+        fail ~loc:fn_decl.loc "lifecycle hook %s must return void"
+          fn_decl.value.name.value;
+      match params with
       | self_param :: extra_param_tys
         when Analysis.resolved_is_pointerish self_param
              && List.length extra_param_tys = List.length extra_args ->
-          ignore (Llvm.build_call fn_type fn (Array.of_list (storage :: extra_args)) "" t.builder)
-      | self_param :: _
-        when not (Analysis.resolved_is_pointerish self_param) ->
+          ignore
+            (Llvm.build_call fn_type fn
+               (Array.of_list (storage :: extra_args))
+               "" t.builder)
+      | self_param :: _ when not (Analysis.resolved_is_pointerish self_param) ->
           fail ~loc:fn_decl.loc
             "lifecycle hook %s self parameter must be pointer-like"
             fn_decl.value.name.value
       | _ ->
-          fail ~loc:fn_decl.loc "lifecycle hook %s must start with exactly one self parameter"
+          fail ~loc:fn_decl.loc
+            "lifecycle hook %s must start with exactly one self parameter"
             fn_decl.value.name.value)
   | Function_symbol _ ->
-      fail ~loc:fn_decl.loc "lifecycle hook %s did not resolve to a callable function type"
+      fail ~loc:fn_decl.loc
+        "lifecycle hook %s did not resolve to a callable function type"
         fn_decl.value.name.value
   | Variable_symbol _ ->
-      fail ~loc:fn_decl.loc "lifecycle hook %s unexpectedly resolved to a variable"
+      fail ~loc:fn_decl.loc
+        "lifecycle hook %s unexpectedly resolved to a variable"
         fn_decl.value.name.value
 
 let emit_default_constructor_call t resolved storage =
@@ -889,17 +947,21 @@ let emit_constructor_call t resolved storage extra_args =
 
 let emit_destructor_call t resolved storage =
   match lookup_lifecycle t resolved with
-  | Some { destruct = Some fn_decl; _ } -> emit_lifecycle_call t resolved fn_decl storage []
+  | Some { destruct = Some fn_decl; _ } ->
+      emit_lifecycle_call t resolved fn_decl storage []
   | _ -> ()
 
 let rec resolved_has_destructor_hook t = function
-  | (Analysis.ResolvedNamed (name, _) as resolved) -> (
+  | Analysis.ResolvedNamed (name, _) as resolved -> (
       match Analysis.lookup_named_type t.type_env name with
       | Some (Analysis.TypeStruct (decl, lifecycle)) ->
           Option.is_some lifecycle.destruct
           || List.exists
                (fun (field : Core.struct_field) ->
-                 match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+                 match
+                   Analysis.resolve_core_type t.type_env [] [] field.loc
+                     field.value.ty
+                 with
                  | Some field_ty -> resolved_has_destructor_hook t field_ty
                  | None -> false)
                decl.value.fields
@@ -912,8 +974,12 @@ let rec resolved_has_destructor_hook t = function
                 (fun (variant : Core.enum_variant) ->
                   List.exists
                     (fun inner_ty ->
-                      match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
-                      | Some resolved_inner -> resolved_has_destructor_hook t resolved_inner
+                      match
+                        Analysis.resolve_core_type t.type_env [] subst
+                          variant.loc inner_ty
+                      with
+                      | Some resolved_inner ->
+                          resolved_has_destructor_hook t resolved_inner
                       | None -> false)
                     variant.value.inner_tys)
                 decl.value.variants
@@ -922,21 +988,27 @@ let rec resolved_has_destructor_hook t = function
           match Analysis.resolve_core_type t.type_env [] [] dummy_loc alias with
           | Some alias_ty -> resolved_has_destructor_hook t alias_ty
           | None -> false)
-      | Some (Analysis.TypeForward lifecycle) -> Option.is_some lifecycle.destruct
+      | Some (Analysis.TypeForward lifecycle) ->
+          Option.is_some lifecycle.destruct
       | None -> false)
   | Analysis.ResolvedArray (inner, _) -> resolved_has_destructor_hook t inner
   | _ -> false
 
-let rec emit_default_initialize_storage ?(run_constructor = true) t resolved storage =
-  ignore (Llvm.build_store (Llvm.const_null (llvm_type_of_resolved t resolved)) storage t.builder);
+let rec emit_default_initialize_storage ?(run_constructor = true) t resolved
+    storage =
+  ignore
+    (Llvm.build_store
+       (Llvm.const_null (llvm_type_of_resolved t resolved))
+       storage t.builder);
   match resolved with
   | Analysis.ResolvedArray (inner, count) ->
       for index = 0 to count - 1 do
         let zero = Llvm.const_int (i32_type t) 0 in
         let idx = Llvm.const_int (i32_type t) index in
         let element_ptr =
-          Llvm.build_in_bounds_gep (llvm_type_of_resolved t resolved) storage
-            [| zero; idx |] "array.init.elem" t.builder
+          Llvm.build_in_bounds_gep
+            (llvm_type_of_resolved t resolved)
+            storage [| zero; idx |] "array.init.elem" t.builder
         in
         emit_default_initialize_storage t inner element_ptr
       done
@@ -946,20 +1018,28 @@ let rec emit_default_initialize_storage ?(run_constructor = true) t resolved sto
           let struct_ty = llvm_type_of_resolved t resolved in
           List.iteri
             (fun index (field : Core.struct_field) ->
-              match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+              match
+                Analysis.resolve_core_type t.type_env [] [] field.loc
+                  field.value.ty
+              with
               | Some field_ty ->
                   let field_ptr =
-                    Llvm.build_struct_gep struct_ty storage index "field.init" t.builder
+                    Llvm.build_struct_gep struct_ty storage index "field.init"
+                      t.builder
                   in
                   emit_default_initialize_storage t field_ty field_ptr
               | None -> ())
             decl.value.fields;
-          if run_constructor then emit_default_constructor_call t resolved storage
+          if run_constructor then
+            emit_default_constructor_call t resolved storage
       | Some (Analysis.TypeEnum _) | Some (Analysis.TypeForward _) ->
-          if run_constructor then emit_default_constructor_call t resolved storage
+          if run_constructor then
+            emit_default_constructor_call t resolved storage
       | Some (Analysis.TypeAlias alias) -> (
           match Analysis.resolve_core_type t.type_env [] [] dummy_loc alias with
-          | Some alias_ty -> emit_default_initialize_storage ~run_constructor t alias_ty storage
+          | Some alias_ty ->
+              emit_default_initialize_storage ~run_constructor t alias_ty
+                storage
           | None -> ())
       | None -> ())
   | _ -> ()
@@ -974,8 +1054,9 @@ and emit_recursive_destruct_on_storage t resolved storage =
         let zero = Llvm.const_int (i32_type t) 0 in
         let idx = Llvm.const_int (i32_type t) index in
         let element_ptr =
-          Llvm.build_in_bounds_gep (llvm_type_of_resolved t resolved) storage
-            [| zero; idx |] "array.drop.elem" t.builder
+          Llvm.build_in_bounds_gep
+            (llvm_type_of_resolved t resolved)
+            storage [| zero; idx |] "array.drop.elem" t.builder
         in
         emit_recursive_destruct_on_storage t inner element_ptr
       done
@@ -986,10 +1067,14 @@ and emit_recursive_destruct_on_storage t resolved storage =
           let struct_ty = llvm_type_of_resolved t resolved in
           List.iteri
             (fun index (field : Core.struct_field) ->
-              match Analysis.resolve_core_type t.type_env [] [] field.loc field.value.ty with
+              match
+                Analysis.resolve_core_type t.type_env [] [] field.loc
+                  field.value.ty
+              with
               | Some field_ty ->
                   let field_ptr =
-                    Llvm.build_struct_gep struct_ty storage index "field.drop" t.builder
+                    Llvm.build_struct_gep struct_ty storage index "field.drop"
+                      t.builder
                   in
                   emit_recursive_destruct_on_storage t field_ty field_ptr
               | None -> ())
@@ -998,7 +1083,8 @@ and emit_recursive_destruct_on_storage t resolved storage =
           emit_destructor_call t resolved storage
       | Some (Analysis.TypeAlias alias) -> (
           match Analysis.resolve_core_type t.type_env [] [] dummy_loc alias with
-          | Some alias_ty -> emit_recursive_destruct_on_storage t alias_ty storage
+          | Some alias_ty ->
+              emit_recursive_destruct_on_storage t alias_ty storage
           | None -> ())
       | Some (Analysis.TypeForward _) -> emit_destructor_call t resolved storage
       | None -> ())
@@ -1006,11 +1092,14 @@ and emit_recursive_destruct_on_storage t resolved storage =
 
 and emit_box_unref t inner box =
   let preamble = require_preamble t "box retain/release" in
-  if Analysis.resolved_contains_box_ownership t.type_env [] dummy_loc inner
-     || resolved_has_destructor_hook t inner
+  if
+    Analysis.resolved_contains_box_ownership t.type_env [] dummy_loc inner
+    || resolved_has_destructor_hook t inner
   then (
     let fn = current_function t in
-    let done_block = Llvm.append_block t.context "box.release.done" fn.fn_value in
+    let done_block =
+      Llvm.append_block t.context "box.release.done" fn.fn_value
+    in
     let release_block = Llvm.append_block t.context "box.release" fn.fn_value in
     let keep_block = Llvm.append_block t.context "box.keep" fn.fn_value in
     let box_is_null = Llvm.build_is_null box "box.isnull" t.builder in
@@ -1018,22 +1107,25 @@ and emit_box_unref t inner box =
     Llvm.position_at_end release_block t.builder;
     let rc_ptr = Llvm.build_pointercast box (ptr_type t) "box.rc" t.builder in
     let rc = Llvm.build_load (i32_type t) rc_ptr "box.rc.value" t.builder in
-    let new_rc = Llvm.build_sub rc (Llvm.const_int (i32_type t) 1) "box.rc.dec" t.builder in
+    let new_rc =
+      Llvm.build_sub rc (Llvm.const_int (i32_type t) 1) "box.rc.dec" t.builder
+    in
     ignore (Llvm.build_store new_rc rc_ptr t.builder);
     let rc_is_zero =
-      Llvm.build_icmp Llvm.Icmp.Eq new_rc (Llvm.const_int (i32_type t) 0) "box.rc.zero"
-        t.builder
+      Llvm.build_icmp Llvm.Icmp.Eq new_rc
+        (Llvm.const_int (i32_type t) 0)
+        "box.rc.zero" t.builder
     in
     ignore (Llvm.build_cond_br rc_is_zero keep_block done_block t.builder);
     Llvm.position_at_end keep_block t.builder;
     let box_raw = Llvm.build_pointercast box (ptr_type t) "box.raw" t.builder in
     let payload_raw =
-      Llvm.build_in_bounds_gep (i8_type t) box_raw [| const_i32 t 16 |] "box.payload.raw"
-        t.builder
+      Llvm.build_in_bounds_gep (i8_type t) box_raw
+        [| const_i32 t 16 |]
+        "box.payload.raw" t.builder
     in
     let payload_ptr =
-      Llvm.build_pointercast payload_raw
-        (ptr_type t) "box.payload" t.builder
+      Llvm.build_pointercast payload_raw (ptr_type t) "box.payload" t.builder
     in
     emit_recursive_destruct_on_storage t inner payload_ptr;
     let free_fn_ty = Llvm.function_type (void_type t) [| ptr_type t |] in
@@ -1044,7 +1136,9 @@ and emit_box_unref t inner box =
     ignore (Llvm.build_br done_block t.builder);
     Llvm.position_at_end done_block t.builder)
   else
-    ignore (Llvm.build_call preamble.box_unref_ty preamble.box_unref [| box |] "" t.builder)
+    ignore
+      (Llvm.build_call preamble.box_unref_ty preamble.box_unref [| box |] ""
+         t.builder)
 
 let ensure_storage t resolved value =
   let slot = build_alloca t (llvm_type_of_resolved t resolved) "spill" in
@@ -1052,10 +1146,16 @@ let ensure_storage t resolved value =
   slot
 
 let coerce_store_value t ?loc value source target =
-  if Analysis.equal_resolved_type source target then emit_cast t value source target
+  if Analysis.equal_resolved_type source target then
+    emit_cast t value source target
   else
-    match Analysis.lookup_struct_fields t.type_env (with_default dummy_loc loc) target with
-    | Some [ (_, field_ty) ] when Analysis.resolved_compatible source field_ty ->
+    match
+      Analysis.lookup_struct_fields t.type_env
+        (with_default dummy_loc loc)
+        target
+    with
+    | Some [ (_, field_ty) ] when Analysis.resolved_compatible source field_ty
+      ->
         let cast_field = emit_cast t value source field_ty in
         Llvm.build_insertvalue
           (Llvm.undef (llvm_type_of_resolved t target))
@@ -1066,31 +1166,28 @@ let rec emit_ownership_on_storage t kind resolved storage =
   match resolved with
   | Analysis.ResolvedBox inner ->
       let box = Llvm.build_load (ptr_type t) storage "box.handle" t.builder in
-      if kind = Analysis.Retain then emit_box_ref t box else emit_box_unref t inner box
+      if kind = Analysis.Retain then emit_box_ref t box
+      else emit_box_unref t inner box
   | Analysis.ResolvedArray (inner, count) ->
       for index = 0 to count - 1 do
         let zero = Llvm.const_int (i32_type t) 0 in
         let idx = Llvm.const_int (i32_type t) index in
         let element_ptr =
-          Llvm.build_in_bounds_gep (llvm_type_of_resolved t resolved) storage
-            [| zero; idx |] "array.elem" t.builder
+          Llvm.build_in_bounds_gep
+            (llvm_type_of_resolved t resolved)
+            storage [| zero; idx |] "array.elem" t.builder
         in
         emit_ownership_on_storage t kind inner element_ptr
       done
-  | (Analysis.ResolvedNamed _ as named) -> emit_ownership_on_named t kind named storage
-  | Analysis.ResolvedPointer _
-  | Analysis.ResolvedCell _
-  | Analysis.ResolvedString
-  | Analysis.ResolvedInt _
-  | Analysis.ResolvedFloat
-  | Analysis.ResolvedVoid
-  | Analysis.ResolvedFunction _
+  | Analysis.ResolvedNamed _ as named ->
+      emit_ownership_on_named t kind named storage
+  | Analysis.ResolvedPointer _ | Analysis.ResolvedCell _
+  | Analysis.ResolvedString | Analysis.ResolvedInt _ | Analysis.ResolvedFloat
+  | Analysis.ResolvedVoid | Analysis.ResolvedFunction _
   | Analysis.ResolvedGenericParam _ ->
       ()
-  | Analysis.ResolvedVec _
-  | Analysis.ResolvedMatrix _
-  | Analysis.ResolvedVecHole
-  | Analysis.ResolvedMatrixHole ->
+  | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _
+  | Analysis.ResolvedVecHole | Analysis.ResolvedMatrixHole ->
       ()
 
 and emit_ownership_on_named t kind resolved storage =
@@ -1099,7 +1196,8 @@ and emit_ownership_on_named t kind resolved storage =
       match Analysis.lookup_named_type t.type_env name with
       | Some (Analysis.TypeStruct (decl, _)) ->
           let field_types =
-            with_default [] (Analysis.lookup_struct_fields t.type_env decl.loc resolved)
+            with_default []
+              (Analysis.lookup_struct_fields t.type_env decl.loc resolved)
           in
           let struct_ty = llvm_type_of_resolved t resolved in
           List.iteri
@@ -1127,10 +1225,15 @@ and emit_ownership_on_enum t kind resolved decl storage =
             let rec resolve_payloads acc = function
               | [] -> List.rev acc
               | inner_ty :: rest -> (
-                  match Analysis.resolve_core_type t.type_env [] subst variant.loc inner_ty with
-                  | Some resolved_inner -> resolve_payloads (resolved_inner :: acc) rest
+                  match
+                    Analysis.resolve_core_type t.type_env [] subst variant.loc
+                      inner_ty
+                  with
+                  | Some resolved_inner ->
+                      resolve_payloads (resolved_inner :: acc) rest
                   | None ->
-                      fail ~loc:variant.loc "failed to resolve enum payload for %s"
+                      fail ~loc:variant.loc
+                        "failed to resolve enum payload for %s"
                         variant.value.name.value)
             in
             match resolve_payloads [] variant.value.inner_tys with
@@ -1138,7 +1241,8 @@ and emit_ownership_on_enum t kind resolved decl storage =
             | payload_tys ->
                 if
                   List.exists
-                    (Analysis.resolved_contains_box_ownership t.type_env [] variant.loc)
+                    (Analysis.resolved_contains_box_ownership t.type_env []
+                       variant.loc)
                     payload_tys
                 then Some (variant, payload_tys)
                 else None)
@@ -1146,29 +1250,44 @@ and emit_ownership_on_enum t kind resolved decl storage =
       in
       if owned_variants <> [] then (
         let enum_ty = llvm_type_of_resolved t resolved in
-        let tag_ptr = Llvm.build_struct_gep enum_ty storage 0 "enum.tag" t.builder in
-        let buf_ptr = Llvm.build_struct_gep enum_ty storage 1 "enum.buf" t.builder in
-        let tag = Llvm.build_load (i32_type t) tag_ptr "enum.tag.value" t.builder in
+        let tag_ptr =
+          Llvm.build_struct_gep enum_ty storage 0 "enum.tag" t.builder
+        in
+        let buf_ptr =
+          Llvm.build_struct_gep enum_ty storage 1 "enum.buf" t.builder
+        in
+        let tag =
+          Llvm.build_load (i32_type t) tag_ptr "enum.tag.value" t.builder
+        in
         let current_block = Llvm.insertion_block t.builder in
         let fn_value = Llvm.block_parent current_block in
         let end_block = Llvm.append_block t.context "enum.own.end" fn_value in
-        let default_block = Llvm.append_block t.context "enum.own.default" fn_value in
-        let switch = Llvm.build_switch tag default_block (List.length owned_variants) t.builder in
+        let default_block =
+          Llvm.append_block t.context "enum.own.default" fn_value
+        in
+        let switch =
+          Llvm.build_switch tag default_block
+            (List.length owned_variants)
+            t.builder
+        in
         List.iter
           (fun ((variant : Core.enum_variant), payload_tys) ->
             let tag_value =
-              enum_tag_value variant.value.name.value resolved t.type_env variant.loc
+              enum_tag_value variant.value.name.value resolved t.type_env
+                variant.loc
             in
             let arm_block =
               Llvm.append_block t.context "enum.own.arm" fn_value
             in
-            Llvm.add_case switch (Llvm.const_int (i32_type t) tag_value) arm_block;
+            Llvm.add_case switch
+              (Llvm.const_int (i32_type t) tag_value)
+              arm_block;
             Llvm.position_at_end arm_block t.builder;
             List.iter
               (fun (payload_ty, payload_ptr) ->
                 if
-                  Analysis.resolved_contains_box_ownership t.type_env [] variant.loc
-                    payload_ty
+                  Analysis.resolved_contains_box_ownership t.type_env []
+                    variant.loc payload_ty
                 then emit_ownership_on_storage t kind payload_ty payload_ptr)
               (enum_payload_fields t ~loc:variant.loc payload_tys buf_ptr);
             ignore (Llvm.build_br end_block t.builder))
@@ -1181,7 +1300,8 @@ and emit_ownership_on_enum t kind resolved decl storage =
 let emit_ownership_on_value t kind resolved value =
   match resolved with
   | Analysis.ResolvedBox inner ->
-      if kind = Analysis.Retain then emit_box_ref t value else emit_box_unref t inner value
+      if kind = Analysis.Retain then emit_box_ref t value
+      else emit_box_unref t inner value
   | _ ->
       let storage = ensure_storage t resolved value in
       emit_ownership_on_storage t kind resolved storage
@@ -1205,7 +1325,8 @@ let emit_before_expr_actions t (expr : Core.expression) =
           | Some storage -> emit_ownership_on_storage t kind resolved storage
           | None ->
               fail ~loc:expr.loc
-                "missing ownership target storage for expression during LLVM lowering")
+                "missing ownership target storage for expression during LLVM \
+                 lowering")
       | _ -> ())
     (Analysis.Ownership.actions_before_expr t.pipeline.ownership expr)
 
@@ -1235,7 +1356,8 @@ let emit_function_exit_actions t fn_decl =
   List.iter (emit_scope_action t)
     (Analysis.Ownership.actions_on_function_exit t.pipeline.ownership fn_decl)
 
-let load_variable t storage resolved = Llvm.build_load (llvm_type_of_resolved t resolved) storage "load" t.builder
+let load_variable t storage resolved =
+  Llvm.build_load (llvm_type_of_resolved t resolved) storage "load" t.builder
 
 let emit_to_bool t (expr : Core.expression) value =
   match expr_resolved_type t expr with
@@ -1248,7 +1370,8 @@ let emit_to_bool t (expr : Core.expression) value =
       Llvm.build_fcmp Llvm.Fcmp.One value
         (Llvm.const_float (float_type t) 0.0)
         "tobool" t.builder
-  | ty when Analysis.resolved_is_pointerish ty -> Llvm.build_is_not_null value "tobool" t.builder
+  | ty when Analysis.resolved_is_pointerish ty ->
+      Llvm.build_is_not_null value "tobool" t.builder
   | ty ->
       fail ~loc:expr.loc "cannot convert %s to bool during LLVM lowering"
         (mangle_resolved_ty ty)
@@ -1259,11 +1382,10 @@ let rec emit_lvalue t (expr : Core.expression) =
       match lookup_symbol t id.value with
       | Variable_symbol { storage; _ } -> storage
       | Function_symbol _ ->
-          fail ~loc:expr.loc "function %s is not addressable as an lvalue" id.value)
-  | Core.Field field ->
-      emit_field_lvalue t expr field
-  | Core.Index index ->
-      emit_index_lvalue t expr index
+          fail ~loc:expr.loc "function %s is not addressable as an lvalue"
+            id.value)
+  | Core.Field field -> emit_field_lvalue t expr field
+  | Core.Index index -> emit_index_lvalue t expr index
   | Core.Unbox inner ->
       let inner_ty = expr_resolved_type t inner in
       let box_handle = emit_expr t inner in
@@ -1308,12 +1430,12 @@ and emit_field_lvalue t (expr : Core.expression) (field : Core.field) =
       let pointer_value = emit_expr t field.value.target in
       let pointee =
         match target_resolved with
-        | Analysis.ResolvedPointer inner
-        | Analysis.ResolvedCell inner ->
+        | Analysis.ResolvedPointer inner | Analysis.ResolvedCell inner ->
             (pointer_value, inner)
         | Analysis.ResolvedBox inner ->
             (emit_box_value_ptr t target_resolved pointer_value, inner)
-        | _ -> fail ~loc:expr.loc "arrow field access requires pointer-like target"
+        | _ ->
+            fail ~loc:expr.loc "arrow field access requires pointer-like target"
       in
       pointee
     else
@@ -1340,7 +1462,9 @@ and emit_field_lvalue t (expr : Core.expression) (field : Core.field) =
           fail ~loc:expr.loc "unknown matrix row %s during LLVM lowering"
             field.value.field.value)
   | _ -> (
-      match Analysis.lookup_struct_fields t.type_env expr.loc target_value_resolved with
+      match
+        Analysis.lookup_struct_fields t.type_env expr.loc target_value_resolved
+      with
       | Some fields ->
           let rec find_index index = function
             | [] ->
@@ -1351,10 +1475,11 @@ and emit_field_lvalue t (expr : Core.expression) (field : Core.field) =
                 else find_index (index + 1) rest
           in
           let struct_ty = llvm_type_of_resolved t target_value_resolved in
-          Llvm.build_struct_gep struct_ty target_storage (find_index 0 fields) "field.ptr"
-            t.builder
+          Llvm.build_struct_gep struct_ty target_storage (find_index 0 fields)
+            "field.ptr" t.builder
       | None ->
-          fail ~loc:expr.loc "field access requires a struct target during LLVM lowering")
+          fail ~loc:expr.loc
+            "field access requires a struct target during LLVM lowering")
 
 and emit_index_lvalue t (expr : Core.expression) (index : Core.index) =
   let target_ty = expr_resolved_type t index.value.target in
@@ -1362,16 +1487,21 @@ and emit_index_lvalue t (expr : Core.expression) (index : Core.index) =
   match target_ty with
   | Analysis.ResolvedPointer inner ->
       let target = emit_expr t index.value.target in
-      Llvm.build_in_bounds_gep (llvm_type_of_resolved t inner) target [| idx |] "ptr.index"
-        t.builder
+      Llvm.build_in_bounds_gep
+        (llvm_type_of_resolved t inner)
+        target [| idx |] "ptr.index" t.builder
   | Analysis.ResolvedArray (_inner, _) ->
       let target = emit_addressable_struct t index.value.target in
-      Llvm.build_in_bounds_gep (llvm_type_of_resolved t target_ty) target
+      Llvm.build_in_bounds_gep
+        (llvm_type_of_resolved t target_ty)
+        target
         [| const_i32 t 0; idx |]
         "array.index" t.builder
   | Analysis.ResolvedVec _ ->
       let target = emit_addressable_struct t index.value.target in
-      Llvm.build_in_bounds_gep (llvm_type_of_resolved t target_ty) target
+      Llvm.build_in_bounds_gep
+        (llvm_type_of_resolved t target_ty)
+        target
         [| const_i32 t 0; idx |]
         "vec.index" t.builder
   | Analysis.ResolvedMatrix mat ->
@@ -1396,11 +1526,11 @@ and matrix_row_access t (expr : Core.expression) =
           | Analysis.ResolvedBox inner ->
               Some inner
           | _ -> None
-        else
-          Some (expr_resolved_type t field.value.target)
+        else Some (expr_resolved_type t field.value.target)
       in
       match target_ty with
-      | Some (Analysis.ResolvedMatrix mat) -> Some (mat, emit_field_lvalue t expr field)
+      | Some (Analysis.ResolvedMatrix mat) ->
+          Some (mat, emit_field_lvalue t expr field)
       | _ -> None)
   | _ -> None
 
@@ -1425,9 +1555,12 @@ and emit_splat_float_vector t width scalar =
 
 and emit_splat_matrix t (mat : Haven_token.Token.mat_type) scalar =
   let count = mat.rows * mat.columns in
-  build_vector_value t (llvm_matrix_flat_type t mat) (List.init count (fun _ -> scalar))
+  build_vector_value t
+    (llvm_matrix_flat_type t mat)
+    (List.init count (fun _ -> scalar))
 
-and emit_matrix_multiply t ?loc result_ty lhs rhs lhs_ty rhs_ty ~rows ~columns ~inner =
+and emit_matrix_multiply t ?loc result_ty lhs rhs lhs_ty rhs_ty ~rows ~columns
+    ~inner =
   let intrinsic, fn_ty =
     declare_matrix_multiply_intrinsic t ?loc result_ty rhs_ty lhs_ty
   in
@@ -1435,40 +1568,56 @@ and emit_matrix_multiply t ?loc result_ty lhs rhs lhs_ty rhs_ty ~rows ~columns ~
      Compute B^T * A^T = (A * B)^T so the returned column-major lanes
      are already the row-major lanes expected by Haven row access. *)
   Llvm.build_call fn_ty intrinsic
-    [|
-      rhs;
-      lhs;
-      const_i32 t columns;
-      const_i32 t inner;
-      const_i32 t rows;
-    |]
+    [| rhs; lhs; const_i32 t columns; const_i32 t inner; const_i32 t rows |]
     "matrix.multiply" t.builder
 
-and emit_vector_or_matrix_binary t (expr : Core.expression) (binary : Core.binary) lhs rhs lhs_ty rhs_ty result_ty =
+and emit_vector_or_matrix_binary t (expr : Core.expression)
+    (binary : Core.binary) lhs rhs lhs_ty rhs_ty result_ty =
   match (binary.value.op, lhs_ty, rhs_ty, result_ty) with
-  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo ),
-    Analysis.ResolvedVec _,
-    Analysis.ResolvedVec _,
-    Analysis.ResolvedVec _ ->
+  | ( (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+      Analysis.ResolvedVec _,
+      Analysis.ResolvedVec _,
+      Analysis.ResolvedVec _ ) ->
       emit_float_vector_op t binary.value.op lhs rhs
-  | (Core.Multiply | Core.Divide | Core.Modulo), Analysis.ResolvedVec vec, Analysis.ResolvedFloat, Analysis.ResolvedVec _ ->
+  | ( (Core.Multiply | Core.Divide | Core.Modulo),
+      Analysis.ResolvedVec vec,
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedVec _ ) ->
       let rhs = emit_splat_float_vector t vec.Haven_token.Token.dimension rhs in
       emit_float_vector_op t binary.value.op lhs rhs
-  | (Core.Multiply | Core.Divide | Core.Modulo), Analysis.ResolvedFloat, Analysis.ResolvedVec vec, Analysis.ResolvedVec _ ->
+  | ( (Core.Multiply | Core.Divide | Core.Modulo),
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedVec vec,
+      Analysis.ResolvedVec _ ) ->
       let lhs = emit_splat_float_vector t vec.Haven_token.Token.dimension lhs in
       emit_float_vector_op t binary.value.op lhs rhs
-  | Core.Multiply, Analysis.ResolvedVec _, Analysis.ResolvedMatrix mat, Analysis.ResolvedVec _ ->
-      emit_matrix_multiply t ~loc:expr.loc result_ty lhs rhs lhs_ty rhs_ty ~rows:1
-        ~columns:mat.columns ~inner:mat.rows
-  | (Core.Add | Core.Subtract), Analysis.ResolvedMatrix _, Analysis.ResolvedMatrix _, Analysis.ResolvedMatrix _ ->
+  | ( Core.Multiply,
+      Analysis.ResolvedVec _,
+      Analysis.ResolvedMatrix mat,
+      Analysis.ResolvedVec _ ) ->
+      emit_matrix_multiply t ~loc:expr.loc result_ty lhs rhs lhs_ty rhs_ty
+        ~rows:1 ~columns:mat.columns ~inner:mat.rows
+  | ( (Core.Add | Core.Subtract),
+      Analysis.ResolvedMatrix _,
+      Analysis.ResolvedMatrix _,
+      Analysis.ResolvedMatrix _ ) ->
       emit_float_vector_op t binary.value.op lhs rhs
-  | Core.Multiply, Analysis.ResolvedMatrix left, Analysis.ResolvedMatrix right, Analysis.ResolvedMatrix _ ->
-      emit_matrix_multiply t ~loc:expr.loc result_ty lhs rhs lhs_ty rhs_ty ~rows:left.rows
-        ~columns:right.columns ~inner:left.columns
-  | Core.Multiply, Analysis.ResolvedMatrix mat, Analysis.ResolvedFloat, Analysis.ResolvedMatrix _ ->
+  | ( Core.Multiply,
+      Analysis.ResolvedMatrix left,
+      Analysis.ResolvedMatrix right,
+      Analysis.ResolvedMatrix _ ) ->
+      emit_matrix_multiply t ~loc:expr.loc result_ty lhs rhs lhs_ty rhs_ty
+        ~rows:left.rows ~columns:right.columns ~inner:left.columns
+  | ( Core.Multiply,
+      Analysis.ResolvedMatrix mat,
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedMatrix _ ) ->
       let rhs = emit_splat_matrix t mat rhs in
       Llvm.build_fmul lhs rhs "fmul" t.builder
-  | Core.Multiply, Analysis.ResolvedFloat, Analysis.ResolvedMatrix mat, Analysis.ResolvedMatrix _ ->
+  | ( Core.Multiply,
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedMatrix mat,
+      Analysis.ResolvedMatrix _ ) ->
       let lhs = emit_splat_matrix t mat lhs in
       Llvm.build_fmul lhs rhs "fmul" t.builder
   | _ -> emit_nonfloat_binary t expr binary lhs rhs lhs_ty rhs_ty result_ty
@@ -1484,7 +1633,9 @@ and emit_literal t (expr : Core.expression) lit =
             List.map
               (fun element ->
                 let value = emit_expr t element in
-                emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
+                emit_cast t value
+                  (expr_resolved_type t element)
+                  Analysis.ResolvedFloat)
               vec.value.elements
           in
           build_vector_value t
@@ -1495,23 +1646,27 @@ and emit_literal t (expr : Core.expression) lit =
             List.concat_map
               (fun (row : Core.expression) ->
                 match expr_resolved_type t row with
-                | Analysis.ResolvedVec vec when vec.dimension = resolved_mat.columns ->
+                | Analysis.ResolvedVec vec
+                  when vec.dimension = resolved_mat.columns ->
                     let row_value = emit_expr t row in
                     List.init resolved_mat.columns (fun index ->
                         Llvm.build_extractelement row_value (const_i32 t index)
                           "matrix.row.element" t.builder)
                 | Analysis.ResolvedVec vec ->
                     fail ~loc:row.loc
-                      "matrix row has width %d but the matrix expects width %d during LLVM lowering"
+                      "matrix row has width %d but the matrix expects width %d \
+                       during LLVM lowering"
                       vec.dimension resolved_mat.columns
                 | _ ->
                     fail ~loc:row.loc
-                      "matrix rows must be vector expressions during LLVM lowering")
+                      "matrix rows must be vector expressions during LLVM \
+                       lowering")
               mat.value.rows
           in
           build_vector_value t (llvm_matrix_flat_type t resolved_mat) elements
       | _ ->
-          fail ~loc:expr.loc "non-constant literal form unsupported during LLVM lowering")
+          fail ~loc:expr.loc
+            "non-constant literal form unsupported during LLVM lowering")
 
 and emit_initializer t (expr : Core.expression) (init : Core.init_list) =
   let resolved = expr_resolved_type t expr in
@@ -1545,13 +1700,16 @@ and emit_initializer t (expr : Core.expression) (init : Core.init_list) =
             (Llvm.undef (llvm_type_of_resolved t resolved))
             (List.mapi (fun index value -> (value, index)) elements)
       | None ->
-          fail ~loc:expr.loc "initializer expects struct target during LLVM lowering")
+          fail ~loc:expr.loc
+            "initializer expects struct target during LLVM lowering")
   | Analysis.ResolvedVec vec ->
       let elements =
         List.map
           (fun element ->
             let value = emit_expr t element in
-            emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
+            emit_cast t value
+              (expr_resolved_type t element)
+              Analysis.ResolvedFloat)
           init.value.exprs
       in
       build_vector_value t
@@ -1562,57 +1720,75 @@ and emit_initializer t (expr : Core.expression) (init : Core.init_list) =
         List.map
           (fun element ->
             let value = emit_expr t element in
-            emit_cast t value (expr_resolved_type t element) Analysis.ResolvedFloat)
+            emit_cast t value
+              (expr_resolved_type t element)
+              Analysis.ResolvedFloat)
           init.value.exprs
       in
       build_vector_value t (llvm_matrix_flat_type t mat) elements
-  | _ -> fail ~loc:expr.loc "initializer unsupported for this type during LLVM lowering"
+  | _ ->
+      fail ~loc:expr.loc
+        "initializer unsupported for this type during LLVM lowering"
 
-and emit_enum_literal t (expr : Core.expression) (enum_lit : Core.enum_literal) =
+and emit_enum_literal t (expr : Core.expression) (enum_lit : Core.enum_literal)
+    =
   let resolved = expr_resolved_type t expr in
   match resolved with
   | Analysis.ResolvedNamed _ -> (
-      match Analysis.lookup_enum_variant t.type_env expr.loc resolved enum_lit.value.enum_variant.value with
+      match
+        Analysis.lookup_enum_variant t.type_env expr.loc resolved
+          enum_lit.value.enum_variant.value
+      with
       | Some (_, []) ->
           Llvm.const_int (i32_type t)
-            (enum_tag_value enum_lit.value.enum_variant.value resolved t.type_env expr.loc)
+            (enum_tag_value enum_lit.value.enum_variant.value resolved
+               t.type_env expr.loc)
       | Some (_, payload_tys) ->
           let enum_ty = llvm_type_of_resolved t resolved in
           let slot = build_alloca t enum_ty "enum.literal" in
-          let tag_ptr = Llvm.build_struct_gep enum_ty slot 0 "enum.tag" t.builder in
-          let buf_ptr = Llvm.build_struct_gep enum_ty slot 1 "enum.buf" t.builder in
+          let tag_ptr =
+            Llvm.build_struct_gep enum_ty slot 0 "enum.tag" t.builder
+          in
+          let buf_ptr =
+            Llvm.build_struct_gep enum_ty slot 1 "enum.buf" t.builder
+          in
           ignore
             (Llvm.build_store
                (Llvm.const_int (i32_type t)
-                  (enum_tag_value enum_lit.value.enum_variant.value resolved t.type_env expr.loc))
+                  (enum_tag_value enum_lit.value.enum_variant.value resolved
+                     t.type_env expr.loc))
                tag_ptr t.builder);
           if List.length enum_lit.value.wrapped <> List.length payload_tys then
-            fail ~loc:expr.loc "enum constructor payload count does not match the variant";
+            fail ~loc:expr.loc
+              "enum constructor payload count does not match the variant";
           List.iter2
             (fun wrapped (payload_ty, payload_ptr) ->
               let payload = emit_expr t wrapped in
               let payload_slot =
                 ensure_storage t payload_ty
-                  (emit_cast t payload (expr_resolved_type t wrapped) payload_ty)
+                  (emit_cast t payload
+                     (expr_resolved_type t wrapped)
+                     payload_ty)
               in
               let payload_value =
-                Llvm.build_load (llvm_type_of_resolved t payload_ty) payload_slot "enum.payload"
-                  t.builder
+                Llvm.build_load
+                  (llvm_type_of_resolved t payload_ty)
+                  payload_slot "enum.payload" t.builder
               in
               ignore (Llvm.build_store payload_value payload_ptr t.builder))
             enum_lit.value.wrapped
             (enum_payload_fields t ~loc:expr.loc payload_tys buf_ptr);
           Llvm.build_load enum_ty slot "enum.literal.value" t.builder
       | None ->
-          fail ~loc:expr.loc "failed to resolve enum literal during LLVM lowering")
-  | _ -> fail ~loc:expr.loc "enum literal requires enum type during LLVM lowering"
+          fail ~loc:expr.loc
+            "failed to resolve enum literal during LLVM lowering")
+  | _ ->
+      fail ~loc:expr.loc "enum literal requires enum type during LLVM lowering"
 
 and emit_binary t (expr : Core.expression) (binary : Core.binary) =
   match binary.value.op with
-  | Core.LogicAnd | Core.LogicOr ->
-      emit_logical_binary t expr binary
-  | _ ->
-      emit_eager_binary t expr binary
+  | Core.LogicAnd | Core.LogicOr -> emit_logical_binary t expr binary
+  | _ -> emit_eager_binary t expr binary
 
 and emit_eager_binary t (expr : Core.expression) (binary : Core.binary) =
   let lhs = emit_expr t binary.value.left in
@@ -1621,10 +1797,10 @@ and emit_eager_binary t (expr : Core.expression) (binary : Core.binary) =
   let rhs_ty = expr_resolved_type t binary.value.right in
   let result_ty = expr_resolved_type t expr in
   match (binary.value.op, lhs_ty, rhs_ty, result_ty) with
-  | ( Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo ),
-    Analysis.ResolvedFloat,
-    Analysis.ResolvedFloat,
-    Analysis.ResolvedFloat -> (
+  | ( (Core.Add | Core.Subtract | Core.Multiply | Core.Divide | Core.Modulo),
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedFloat ) -> (
       match binary.value.op with
       | Core.Add -> Llvm.build_fadd lhs rhs "fadd" t.builder
       | Core.Subtract -> Llvm.build_fsub lhs rhs "fsub" t.builder
@@ -1632,11 +1808,11 @@ and emit_eager_binary t (expr : Core.expression) (binary : Core.binary) =
       | Core.Divide -> Llvm.build_fdiv lhs rhs "fdiv" t.builder
       | Core.Modulo -> Llvm.build_frem lhs rhs "frem" t.builder
       | _ -> assert false)
-  | ( Core.IsEqual | Core.NotEqual | Core.LessThan | Core.LessThanOrEqual | Core.GreaterThan
-    | Core.GreaterThanOrEqual ),
-    Analysis.ResolvedFloat,
-    Analysis.ResolvedFloat,
-    Analysis.ResolvedInt (_, 1) ->
+  | ( ( Core.IsEqual | Core.NotEqual | Core.LessThan | Core.LessThanOrEqual
+      | Core.GreaterThan | Core.GreaterThanOrEqual ),
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedFloat,
+      Analysis.ResolvedInt (_, 1) ) ->
       let pred =
         match binary.value.op with
         | Core.IsEqual -> Llvm.Fcmp.Oeq
@@ -1654,8 +1830,11 @@ and emit_eager_binary t (expr : Core.expression) (binary : Core.binary) =
 
 and emit_logical_binary t (expr : Core.expression) (binary : Core.binary) =
   let result_ty = expr_resolved_type t expr in
-  if not (Analysis.equal_resolved_type result_ty (Analysis.ResolvedInt (Unsigned, 1))) then
-    fail ~loc:expr.loc "logical operator lowering bug";
+  if
+    not
+      (Analysis.equal_resolved_type result_ty
+         (Analysis.ResolvedInt (Unsigned, 1)))
+  then fail ~loc:expr.loc "logical operator lowering bug";
   let lhs = emit_expr t binary.value.left in
   let lhs_bool = emit_to_bool t binary.value.left lhs in
   let current_block = Llvm.insertion_block t.builder in
@@ -1675,13 +1854,20 @@ and emit_logical_binary t (expr : Core.expression) (binary : Core.binary) =
   Llvm.position_at_end end_block t.builder;
   let incoming =
     if binary.value.op = Core.LogicAnd then
-      [ (Llvm.const_int (i1_type t) 0, current_block); (rhs_bool, rhs_block_final) ]
+      [
+        (Llvm.const_int (i1_type t) 0, current_block);
+        (rhs_bool, rhs_block_final);
+      ]
     else
-      [ (Llvm.const_int (i1_type t) 1, current_block); (rhs_bool, rhs_block_final) ]
+      [
+        (Llvm.const_int (i1_type t) 1, current_block);
+        (rhs_bool, rhs_block_final);
+      ]
   in
   Llvm.build_phi incoming "logic.phi" t.builder
 
-and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty result_ty =
+and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty
+    result_ty =
   let cast_to_result lhs rhs =
     if Analysis.resolved_is_numeric result_ty then
       ( emit_cast t lhs lhs_ty result_ty,
@@ -1713,9 +1899,11 @@ and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty
   | Core.Add when Analysis.resolved_is_pointerish result_ty ->
       Llvm.build_in_bounds_gep
         (llvm_type_of_resolved t
-           (match result_ty with Analysis.ResolvedPointer inner -> inner | _ -> result_ty))
+           (match result_ty with
+           | Analysis.ResolvedPointer inner -> inner
+           | _ -> result_ty))
         (if Analysis.resolved_is_pointerish lhs_ty then lhs else rhs)
-        [| if Analysis.resolved_is_pointerish lhs_ty then rhs else lhs |]
+        [| (if Analysis.resolved_is_pointerish lhs_ty then rhs else lhs) |]
         "ptr.add" t.builder
   | Core.Add ->
       let lhs, rhs, _ = cast_to_result lhs rhs in
@@ -1753,19 +1941,21 @@ and emit_nonfloat_binary t (expr : Core.expression) binary lhs rhs lhs_ty rhs_ty
   | Core.LogicAnd | Core.LogicOr ->
       fail ~loc:expr.loc "logical operator lowering bug"
 
-and emit_integer_or_pointer_cmp t (_expr : Core.expression) pred lhs rhs lhs_ty _rhs_ty =
+and emit_integer_or_pointer_cmp t (_expr : Core.expression) pred lhs rhs lhs_ty
+    _rhs_ty =
   let lhs, rhs =
     if Analysis.resolved_is_pointerish lhs_ty then
       ( emit_cast t lhs lhs_ty (Analysis.ResolvedInt (Unsigned, 64)),
         emit_cast t rhs lhs_ty (Analysis.ResolvedInt (Unsigned, 64)) )
     else
       let cmp_ty =
-        match Analysis.resolved_arithmetic_binary_result Core.Add lhs_ty _rhs_ty with
+        match
+          Analysis.resolved_arithmetic_binary_result Core.Add lhs_ty _rhs_ty
+        with
         | Some cmp_ty when Analysis.resolved_is_numeric cmp_ty -> cmp_ty
         | _ -> lhs_ty
       in
-      ( emit_cast t lhs lhs_ty cmp_ty,
-        emit_cast t rhs _rhs_ty cmp_ty )
+      (emit_cast t lhs lhs_ty cmp_ty, emit_cast t rhs _rhs_ty cmp_ty)
   in
   Llvm.build_icmp pred lhs rhs "icmp" t.builder
 
@@ -1786,8 +1976,14 @@ and emit_call t (expr : Core.expression) (call : Core.call) =
            (fun index arg ->
              let arg_value = emit_expr t arg in
              let arg_resolved = expr_resolved_type t arg in
-             if vararg && index >= List.length params && Analysis.equal_resolved_type arg_resolved Analysis.ResolvedFloat then
-               Llvm.build_fpext arg_value (double_type t) "vararg.float" t.builder
+             if
+               vararg
+               && index >= List.length params
+               && Analysis.equal_resolved_type arg_resolved
+                    Analysis.ResolvedFloat
+             then
+               Llvm.build_fpext arg_value (double_type t) "vararg.float"
+                 t.builder
              else
                let expected =
                  match List.nth_opt params index with
@@ -1799,18 +1995,22 @@ and emit_call t (expr : Core.expression) (call : Core.call) =
     in
     let fn_ty =
       if vararg then
-        Llvm.var_arg_function_type (llvm_type_of_resolved t ret)
+        Llvm.var_arg_function_type
+          (llvm_type_of_resolved t ret)
           (Array.of_list (List.map (llvm_type_of_resolved t) params))
       else
-        Llvm.function_type (llvm_type_of_resolved t ret)
+        Llvm.function_type
+          (llvm_type_of_resolved t ret)
           (Array.of_list (List.map (llvm_type_of_resolved t) params))
     in
     let result =
       Llvm.build_call fn_ty target_value args
-        (if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then "" else "call")
+        (if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then ""
+         else "call")
         t.builder
     in
-    if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then unit_value t else result
+    if Analysis.equal_resolved_type ret Analysis.ResolvedVoid then unit_value t
+    else result
   in
   let emit_expected_enum_constructor (id : Core.identifier) enum_ty enum_name =
     match Analysis.lookup_enum_variant t.type_env call.loc enum_ty id.value with
@@ -1828,8 +2028,7 @@ and emit_call t (expr : Core.expression) (call : Core.call) =
                loc = call.loc;
                analysis_scope = call.analysis_scope;
              })
-    | None ->
-        None
+    | None -> None
   in
   match call.value.target.value with
   | Core.Identifier id -> (
@@ -1842,27 +2041,39 @@ and emit_call t (expr : Core.expression) (call : Core.call) =
               | Analysis.ResolvedFunction (params, ret, vararg) ->
                   emit_function_call params ret vararg
               | Analysis.ResolvedNamed _ ->
-                  fail ~loc:expr.loc "call target is not callable during LLVM lowering"
-              | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering"))
+                  fail ~loc:expr.loc
+                    "call target is not callable during LLVM lowering"
+              | _ ->
+                  fail ~loc:expr.loc
+                    "call target is not callable during LLVM lowering"))
       | _ -> (
           match expr_resolved_type t call.value.target with
           | Analysis.ResolvedFunction (params, ret, vararg) ->
               emit_function_call params ret vararg
           | Analysis.ResolvedNamed _ ->
-              fail ~loc:expr.loc "call target is not callable during LLVM lowering"
-          | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering"))
+              fail ~loc:expr.loc
+                "call target is not callable during LLVM lowering"
+          | _ ->
+              fail ~loc:expr.loc
+                "call target is not callable during LLVM lowering"))
   | _ -> (
       match expr_resolved_type t call.value.target with
       | Analysis.ResolvedNamed _ -> (
           match call.value.target.value with
           | Core.Literal literal -> (
               match literal.value with
-              | Core.Enum enum_lit -> emit_enum_constructor_call t expr call enum_lit
-              | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
-          | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
+              | Core.Enum enum_lit ->
+                  emit_enum_constructor_call t expr call enum_lit
+              | _ ->
+                  fail ~loc:expr.loc
+                    "call target is not callable during LLVM lowering")
+          | _ ->
+              fail ~loc:expr.loc
+                "call target is not callable during LLVM lowering")
       | Analysis.ResolvedFunction (params, ret, vararg) ->
           emit_function_call params ret vararg
-      | _ -> fail ~loc:expr.loc "call target is not callable during LLVM lowering")
+      | _ ->
+          fail ~loc:expr.loc "call target is not callable during LLVM lowering")
 
 and emit_match t (expr : Core.expression) (match_expr : Core.match_expr) =
   let result_ty = expr_resolved_type t expr in
@@ -1879,9 +2090,13 @@ and emit_match t (expr : Core.expression) (match_expr : Core.match_expr) =
   in
   let switch_value =
     match (scrutinee_ty, scrutinee_storage) with
-    | Analysis.ResolvedNamed _, Some storage when Llvm.classify_type (llvm_type_of_resolved t scrutinee_ty) = Llvm.TypeKind.Struct ->
+    | Analysis.ResolvedNamed _, Some storage
+      when Llvm.classify_type (llvm_type_of_resolved t scrutinee_ty)
+           = Llvm.TypeKind.Struct ->
         let enum_ty = llvm_type_of_resolved t scrutinee_ty in
-        let tag_ptr = Llvm.build_struct_gep enum_ty storage 0 "match.tag" t.builder in
+        let tag_ptr =
+          Llvm.build_struct_gep enum_ty storage 0 "match.tag" t.builder
+        in
         Llvm.build_load (i32_type t) tag_ptr "match.tag.value" t.builder
     | _, _ -> scrutinee_value
   in
@@ -1897,26 +2112,35 @@ and emit_match t (expr : Core.expression) (match_expr : Core.match_expr) =
         | _ -> Some arm)
       match_expr.value.arms
   in
-  let switch = Llvm.build_switch switch_value default_block (List.length cases) t.builder in
+  let switch =
+    Llvm.build_switch switch_value default_block (List.length cases) t.builder
+  in
   List.iter
     (fun (arm : Core.match_arm) ->
       let arm_block = Llvm.append_block t.context "match.arm" fn_value in
-      Llvm.add_case switch (match_pattern_value t scrutinee_ty arm.value.pattern) arm_block;
-      emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot end_block arm
-        arm_block)
+      Llvm.add_case switch
+        (match_pattern_value t scrutinee_ty arm.value.pattern)
+        arm_block;
+      emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot
+        end_block arm arm_block)
     cases;
   Llvm.position_at_end default_block t.builder;
-  (match List.find_opt
-           (fun (arm : Core.match_arm) ->
-             arm.value.pattern.value = Core.PatternDefault)
-           match_expr.value.arms with
+  (match
+     List.find_opt
+       (fun (arm : Core.match_arm) ->
+         arm.value.pattern.value = Core.PatternDefault)
+       match_expr.value.arms
+   with
   | Some default_arm ->
-      emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot end_block
-        default_arm default_block
+      emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot
+        end_block default_arm default_block
   | None -> ignore (Llvm.build_br end_block t.builder));
   Llvm.position_at_end end_block t.builder;
   match result_slot with
-  | Some slot -> Llvm.build_load (llvm_type_of_resolved t result_ty) slot "match.result" t.builder
+  | Some slot ->
+      Llvm.build_load
+        (llvm_type_of_resolved t result_ty)
+        slot "match.result" t.builder
   | None -> unit_value t
 
 and match_pattern_value t scrutinee_ty (pattern : Core.match_pattern) =
@@ -1926,13 +2150,15 @@ and match_pattern_value t scrutinee_ty (pattern : Core.match_pattern) =
   | Core.PatternLiteral lit -> (
       match constant_of_literal t pattern.loc scrutinee_ty lit with
       | Some value -> value
-      | None -> fail ~loc:pattern.loc "non-constant pattern during LLVM lowering")
+      | None ->
+          fail ~loc:pattern.loc "non-constant pattern during LLVM lowering")
   | Core.PatternEnum enum_pat ->
       Llvm.const_int (i32_type t)
-        (enum_tag_value enum_pat.value.enum_variant.value scrutinee_ty t.type_env pattern.loc)
+        (enum_tag_value enum_pat.value.enum_variant.value scrutinee_ty
+           t.type_env pattern.loc)
 
-and emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot end_block arm
-    arm_block =
+and emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot
+    end_block arm arm_block =
   Llvm.position_at_end arm_block t.builder;
   push_scope t;
   (match (arm.value.pattern.value, scrutinee_ty, scrutinee_storage) with
@@ -1948,31 +2174,44 @@ and emit_match_arm t result_ty scrutinee_ty scrutinee_storage result_slot end_bl
       ignore (Llvm.build_store cast_value slot t.builder)
   | None -> ());
   pop_scope t;
-  if not (current_block_terminated t) then ignore (Llvm.build_br end_block t.builder)
+  if not (current_block_terminated t) then
+    ignore (Llvm.build_br end_block t.builder)
 
 and bind_enum_pattern_payload t enum_pat scrutinee_ty storage =
-  match Analysis.lookup_enum_variant t.type_env enum_pat.loc scrutinee_ty
-          enum_pat.value.enum_variant.value with
+  match
+    Analysis.lookup_enum_variant t.type_env enum_pat.loc scrutinee_ty
+      enum_pat.value.enum_variant.value
+  with
   | Some (_, []) -> ()
   | Some (_, payload_tys) ->
       if List.length enum_pat.value.binding <> List.length payload_tys then
         fail ~loc:enum_pat.loc
           "enum pattern payload binding count does not match the variant";
       let enum_ty = llvm_type_of_resolved t scrutinee_ty in
-      let buf_ptr = Llvm.build_struct_gep enum_ty storage 1 "match.buf" t.builder in
+      let buf_ptr =
+        Llvm.build_struct_gep enum_ty storage 1 "match.buf" t.builder
+      in
       List.iter2
         (fun (binding : Core.pattern_binding) (payload_ty, payload_ptr) ->
           match binding.value with
           | Core.BindingIgnored -> ()
           | Core.BindingNamed id ->
               let payload_value =
-                Llvm.build_load (llvm_type_of_resolved t payload_ty) payload_ptr
-                  "match.payload" t.builder
+                Llvm.build_load
+                  (llvm_type_of_resolved t payload_ty)
+                  payload_ptr "match.payload" t.builder
               in
-              let slot = build_alloca t (llvm_type_of_resolved t payload_ty) id.value in
+              let slot =
+                build_alloca t (llvm_type_of_resolved t payload_ty) id.value
+              in
               ignore (Llvm.build_store payload_value slot t.builder);
               add_symbol t id.value
-                (Variable_symbol { storage = slot; resolved_type = payload_ty; is_mutable = false }))
+                (Variable_symbol
+                   {
+                     storage = slot;
+                     resolved_type = payload_ty;
+                     is_mutable = false;
+                   }))
         enum_pat.value.binding
         (enum_payload_fields t ~loc:enum_pat.loc payload_tys buf_ptr)
   | None -> ()
@@ -1981,7 +2220,9 @@ and emit_deferred_exprs t =
   let fn = current_function t in
   if not fn.emitting_defers then (
     fn.emitting_defers <- true;
-    List.iter (fun expr -> ignore (emit_expr t expr)) (List.rev fn.defer_exprs_rev);
+    List.iter
+      (fun expr -> ignore (emit_expr t expr))
+      (List.rev fn.defer_exprs_rev);
     fn.emitting_defers <- false)
 
 and emit_expr t (expr : Core.expression) =
@@ -1998,7 +2239,9 @@ and emit_expr t (expr : Core.expression) =
     | Core.Initializer init -> emit_initializer t expr init
     | Core.As cast ->
         let value = emit_expr t cast.value.inner in
-        emit_cast t value (expr_resolved_type t cast.value.inner) (expr_resolved_type t expr)
+        emit_cast t value
+          (expr_resolved_type t cast.value.inner)
+          (expr_resolved_type t expr)
     | Core.SizeExpr _ | Core.SizeType _ -> (
         match constant_of_expr t expr with
         | Some value -> value
@@ -2014,23 +2257,26 @@ and emit_expr t (expr : Core.expression) =
     | Core.Ref inner -> emit_lvalue t inner
     | Core.Load inner ->
         let ptr = emit_expr t inner in
-        Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) ptr "load"
-          t.builder
+        Llvm.build_load
+          (llvm_type_of_resolved t (expr_resolved_type t expr))
+          ptr "load" t.builder
     | Core.Call call -> emit_call t expr call
-    | Core.Index index ->
-        (match matrix_row_access t expr with
+    | Core.Index index -> (
+        match matrix_row_access t expr with
         | Some (mat, row_ptr) -> load_matrix_row t row_ptr mat
         | None ->
             let ptr = emit_index_lvalue t expr index in
-            Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) ptr "index.load"
-              t.builder)
-    | Core.Field field ->
-        (match matrix_row_access t expr with
+            Llvm.build_load
+              (llvm_type_of_resolved t (expr_resolved_type t expr))
+              ptr "index.load" t.builder)
+    | Core.Field field -> (
+        match matrix_row_access t expr with
         | Some (mat, row_ptr) -> load_matrix_row t row_ptr mat
         | None ->
             let ptr = emit_field_lvalue t expr field in
-            Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) ptr "field.load"
-              t.builder)
+            Llvm.build_load
+              (llvm_type_of_resolved t (expr_resolved_type t expr))
+              ptr "field.load" t.builder)
     | Core.Assign write -> emit_assign t expr write
     | Core.Mutate write -> emit_mutate t expr write
   in
@@ -2048,10 +2294,13 @@ and emit_box_expr t (expr : Core.expression) inner =
       let payload = emit_expr t inner in
       let payload_slot = ensure_storage t inner_resolved payload in
       let payload_ptr =
-        Llvm.build_pointercast payload_slot (ptr_type t) "box.payload.ptr" t.builder
+        Llvm.build_pointercast payload_slot (ptr_type t) "box.payload.ptr"
+          t.builder
       in
       let value_size =
-        Llvm_target.DataLayout.abi_size (llvm_type_of_resolved t inner_resolved) t.data_layout
+        Llvm_target.DataLayout.abi_size
+          (llvm_type_of_resolved t inner_resolved)
+          t.data_layout
         |> Int64.to_int
       in
       let preamble = require_preamble t ~loc:expr.loc "box allocation" in
@@ -2075,12 +2324,17 @@ and emit_box_type_expr t (expr : Core.expression) ty =
       [| Llvm.const_int (i32_type t) box_size |]
       "box.new.empty" t.builder
   in
-  let value_ptr = emit_box_value_ptr t (Analysis.ResolvedBox inner_resolved) box_handle in
+  let value_ptr =
+    emit_box_value_ptr t (Analysis.ResolvedBox inner_resolved) box_handle
+  in
   emit_default_initialize_storage t inner_resolved value_ptr;
   box_handle
 
-and emit_box_construct_expr t (expr : Core.expression) (box : Core.box_construct) =
-  let inner_resolved = resolved_type_of_core_type t box.value.ty.loc box.value.ty in
+and emit_box_construct_expr t (expr : Core.expression)
+    (box : Core.box_construct) =
+  let inner_resolved =
+    resolved_type_of_core_type t box.value.ty.loc box.value.ty
+  in
   let box_layout = emit_box_layout t inner_resolved in
   let box_size =
     Llvm_target.DataLayout.abi_size box_layout t.data_layout |> Int64.to_int
@@ -2091,8 +2345,11 @@ and emit_box_construct_expr t (expr : Core.expression) (box : Core.box_construct
       [| Llvm.const_int (i32_type t) box_size |]
       "box.new.empty" t.builder
   in
-  let value_ptr = emit_box_value_ptr t (Analysis.ResolvedBox inner_resolved) box_handle in
-  emit_default_initialize_storage ~run_constructor:false t inner_resolved value_ptr;
+  let value_ptr =
+    emit_box_value_ptr t (Analysis.ResolvedBox inner_resolved) box_handle
+  in
+  emit_default_initialize_storage ~run_constructor:false t inner_resolved
+    value_ptr;
   let arg_values = List.map (emit_expr t) box.value.args in
   emit_constructor_call t inner_resolved value_ptr arg_values;
   box_handle
@@ -2101,17 +2358,21 @@ and emit_unbox t (expr : Core.expression) inner =
   let inner_value = emit_expr t inner in
   let inner_ty = expr_resolved_type t inner in
   let value_ptr = emit_box_value_ptr t inner_ty inner_value in
-  Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) value_ptr "unbox"
-    t.builder
+  Llvm.build_load
+    (llvm_type_of_resolved t (expr_resolved_type t expr))
+    value_ptr "unbox" t.builder
 
 and emit_assign t (expr : Core.expression) (write : Core.write) =
   let target_ptr = emit_lvalue t write.value.target in
-  Hashtbl.replace t.ownership_target_storage (expr_id write.value.target) target_ptr;
+  Hashtbl.replace t.ownership_target_storage
+    (expr_id write.value.target)
+    target_ptr;
   emit_before_expr_actions t expr;
   let target_resolved = expr_resolved_type t write.value.target in
   let value = emit_expr t write.value.value in
   let cast_value =
-    coerce_store_value t ~loc:expr.loc value (expr_resolved_type t write.value.value)
+    coerce_store_value t ~loc:expr.loc value
+      (expr_resolved_type t write.value.value)
       target_resolved
   in
   (match matrix_row_access t write.value.target with
@@ -2124,26 +2385,37 @@ and emit_mutate t (expr : Core.expression) (write : Core.write) =
   let target_resolved = expr_resolved_type t write.value.target in
   let pointee, target_ptr =
     match target_resolved with
-    | Analysis.ResolvedPointer inner | Analysis.ResolvedCell inner -> (inner, target_value)
-    | Analysis.ResolvedBox inner -> (inner, emit_box_value_ptr t target_resolved target_value)
+    | Analysis.ResolvedPointer inner | Analysis.ResolvedCell inner ->
+        (inner, target_value)
+    | Analysis.ResolvedBox inner ->
+        (inner, emit_box_value_ptr t target_resolved target_value)
     | _ ->
-        fail ~loc:expr.loc "mutate requires pointer-like target during LLVM lowering"
+        fail ~loc:expr.loc
+          "mutate requires pointer-like target during LLVM lowering"
   in
-  Hashtbl.replace t.ownership_target_storage (expr_id write.value.target) target_ptr;
+  Hashtbl.replace t.ownership_target_storage
+    (expr_id write.value.target)
+    target_ptr;
   emit_before_expr_actions t expr;
   let value = emit_expr t write.value.value in
-  let cast_value = emit_cast t value (expr_resolved_type t write.value.value) pointee in
+  let cast_value =
+    emit_cast t value (expr_resolved_type t write.value.value) pointee
+  in
   ignore (Llvm.build_store cast_value target_ptr t.builder);
   cast_value
 
 and emit_unary t (expr : Core.expression) (unary : Core.unary) =
   let inner = emit_expr t unary.value.inner in
   match (unary.value.op, expr_resolved_type t unary.value.inner) with
-  | Core.Negate, (Analysis.ResolvedFloat | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _) ->
+  | ( Core.Negate,
+      ( Analysis.ResolvedFloat | Analysis.ResolvedVec _
+      | Analysis.ResolvedMatrix _ ) ) ->
       Llvm.build_fneg inner "fneg" t.builder
   | Core.Negate, Analysis.ResolvedInt _ ->
       let inner_cast =
-        emit_cast t inner (expr_resolved_type t unary.value.inner) (expr_resolved_type t expr)
+        emit_cast t inner
+          (expr_resolved_type t unary.value.inner)
+          (expr_resolved_type t expr)
       in
       Llvm.build_neg inner_cast "neg" t.builder
   | Core.Not, _ ->
@@ -2151,7 +2423,9 @@ and emit_unary t (expr : Core.expression) (unary : Core.unary) =
       Llvm.build_not bool_value "not" t.builder
   | Core.Complement, Analysis.ResolvedInt _ ->
       let inner_cast =
-        emit_cast t inner (expr_resolved_type t unary.value.inner) (expr_resolved_type t expr)
+        emit_cast t inner
+          (expr_resolved_type t unary.value.inner)
+          (expr_resolved_type t expr)
       in
       Llvm.build_not inner_cast "compl" t.builder
   | _ -> fail ~loc:expr.loc "unsupported unary operator during LLVM lowering"
@@ -2162,7 +2436,9 @@ and emit_block_expr t (expr : Core.expression) block =
     | Analysis.ResolvedVoid -> None
     | ty -> Some (build_alloca t (llvm_type_of_resolved t ty) "block.result")
   in
-  let end_block = Llvm.append_block t.context "block.end" (current_function t).fn_value in
+  let end_block =
+    Llvm.append_block t.context "block.end" (current_function t).fn_value
+  in
   push_scope t;
   emit_statements t block.value.statements;
   if not (current_block_terminated t) then (
@@ -2173,7 +2449,9 @@ and emit_block_expr t (expr : Core.expression) block =
         | Some slot ->
             ignore
               (Llvm.build_store
-                 (emit_cast t value (expr_resolved_type t result) (expr_resolved_type t expr))
+                 (emit_cast t value
+                    (expr_resolved_type t result)
+                    (expr_resolved_type t expr))
                  slot t.builder)
         | None -> ())
       block.value.result;
@@ -2182,22 +2460,25 @@ and emit_block_expr t (expr : Core.expression) block =
   pop_scope t;
   Llvm.position_at_end end_block t.builder;
   match slot with
-  | Some slot -> Llvm.build_load (llvm_type_of_resolved t (expr_resolved_type t expr)) slot "block.result" t.builder
+  | Some slot ->
+      Llvm.build_load
+        (llvm_type_of_resolved t (expr_resolved_type t expr))
+        slot "block.result" t.builder
   | None -> unit_value t
 
-and emit_statements t statements =
-  List.iter (emit_statement t) statements
+and emit_statements t statements = List.iter (emit_statement t) statements
 
 and emit_statement t (stmt : Core.statement) =
   match stmt.value with
-  | Core.Expression expr ->
-      ignore (emit_expr t expr)
+  | Core.Expression expr -> ignore (emit_expr t expr)
   | Core.CompileAssert _ ->
       fail ~loc:stmt.loc "compile-time assert reached LLVM lowering"
   | Core.Let binding ->
       let resolved = binding_resolved_type t binding in
       let slot =
-        build_alloca t (llvm_type_of_resolved t resolved) binding.value.name.value
+        build_alloca t
+          (llvm_type_of_resolved t resolved)
+          binding.value.name.value
       in
       let value = emit_expr t binding.value.init_expr in
       ignore
@@ -2222,7 +2503,8 @@ and emit_statement t (stmt : Core.statement) =
           | Some slot ->
               ignore
                 (Llvm.build_store
-                   (emit_cast t value (expr_resolved_type t returned)
+                   (emit_cast t value
+                      (expr_resolved_type t returned)
                       fn.return_resolved_type)
                    slot t.builder)
           | None -> ())
@@ -2235,28 +2517,33 @@ and emit_statement t (stmt : Core.statement) =
   | Core.Defer expr ->
       let fn = current_function t in
       fn.defer_exprs_rev <- expr :: fn.defer_exprs_rev
-  | Core.Loop loop ->
-      emit_loop t stmt loop
+  | Core.Loop loop -> emit_loop t stmt loop
   | Core.Break ->
       emit_before_stmt_actions t stmt;
       let _, break_block =
         match (current_function t).loop_stack with
         | loop :: _ -> loop
-        | [] -> fail ~loc:stmt.loc "break used outside a loop during LLVM lowering"
+        | [] ->
+            fail ~loc:stmt.loc "break used outside a loop during LLVM lowering"
       in
       ignore (Llvm.build_br break_block t.builder);
-      let dead_block = Llvm.append_block t.context "after.break" (current_function t).fn_value in
+      let dead_block =
+        Llvm.append_block t.context "after.break" (current_function t).fn_value
+      in
       Llvm.position_at_end dead_block t.builder
   | Core.Continue ->
       emit_before_stmt_actions t stmt;
       let continue_block, _ =
         match (current_function t).loop_stack with
         | loop :: _ -> loop
-        | [] -> fail ~loc:stmt.loc "continue used outside a loop during LLVM lowering"
+        | [] ->
+            fail ~loc:stmt.loc
+              "continue used outside a loop during LLVM lowering"
       in
       ignore (Llvm.build_br continue_block t.builder);
       let dead_block =
-        Llvm.append_block t.context "after.continue" (current_function t).fn_value
+        Llvm.append_block t.context "after.continue"
+          (current_function t).fn_value
       in
       Llvm.position_at_end dead_block t.builder
 
@@ -2272,13 +2559,18 @@ and emit_loop t stmt (loop : Core.loop_stmt) =
   fn.loop_stack <- (step_block, end_block) :: fn.loop_stack;
   Llvm.position_at_end cond_block t.builder;
   let cond_value = emit_expr t loop.value.cond in
-  ignore (Llvm.build_cond_br (emit_to_bool t loop.value.cond cond_value) body_block end_block t.builder);
+  ignore
+    (Llvm.build_cond_br
+       (emit_to_bool t loop.value.cond cond_value)
+       body_block end_block t.builder);
   Llvm.position_at_end body_block t.builder;
   emit_block_statements t loop.value.body;
-  if not (current_block_terminated t) then ignore (Llvm.build_br step_block t.builder);
+  if not (current_block_terminated t) then
+    ignore (Llvm.build_br step_block t.builder);
   Llvm.position_at_end step_block t.builder;
   emit_statements t loop.value.step;
-  if not (current_block_terminated t) then ignore (Llvm.build_br cond_block t.builder);
+  if not (current_block_terminated t) then
+    ignore (Llvm.build_br cond_block t.builder);
   Llvm.position_at_end end_block t.builder;
   fn.loop_stack <- List.tl fn.loop_stack;
   emit_loop_exit_actions t stmt;
@@ -2298,10 +2590,12 @@ let declare_function_symbol t (fn : Core.function_decl) =
   | Analysis.ResolvedFunction (params, ret, vararg) ->
       let fn_ty =
         if vararg then
-          Llvm.var_arg_function_type (llvm_type_of_resolved t ret)
+          Llvm.var_arg_function_type
+            (llvm_type_of_resolved t ret)
             (Array.of_list (List.map (llvm_type_of_resolved t) params))
         else
-          Llvm.function_type (llvm_type_of_resolved t ret)
+          Llvm.function_type
+            (llvm_type_of_resolved t ret)
             (Array.of_list (List.map (llvm_type_of_resolved t) params))
       in
       let fn_value =
@@ -2321,9 +2615,12 @@ let declare_function_symbol t (fn : Core.function_decl) =
             in
             declare_function_if_missing t name fn_ty
         | None ->
-            let fn_value = Llvm.declare_function fn.value.name.value fn_ty t.llmodule in
+            let fn_value =
+              Llvm.declare_function fn.value.name.value fn_ty t.llmodule
+            in
             Llvm.set_linkage
-              (if Visibility.is_external fn.value.visibility then Llvm.Linkage.External
+              (if Visibility.is_external fn.value.visibility then
+                 Llvm.Linkage.External
                else Llvm.Linkage.Internal)
               fn_value;
             Llvm.set_function_call_conv Llvm.CallConv.c fn_value;
@@ -2341,20 +2638,25 @@ let declare_function_symbol t (fn : Core.function_decl) =
       in
       Hashtbl.replace t.functions fn.value.name.value symbol;
       symbol
-  | _ -> fail ~loc:fn.loc "function declaration did not resolve to function type"
+  | _ ->
+      fail ~loc:fn.loc "function declaration did not resolve to function type"
 
 let declare_global_symbol t (decl : Core.var_decl) =
   let resolved = resolved_type_of_core_type t decl.loc decl.value.ty in
   let storage =
-    Llvm.declare_global (llvm_type_of_resolved t resolved) decl.value.name.value t.llmodule
+    Llvm.declare_global
+      (llvm_type_of_resolved t resolved)
+      decl.value.name.value t.llmodule
   in
   Llvm.set_linkage
     (if Visibility.is_external decl.value.visibility then Llvm.Linkage.External
      else Llvm.Linkage.Internal)
     storage;
   Llvm.set_global_constant (not decl.value.is_mutable) storage;
-  if decl.value.init_expr = None && not (Visibility.is_external decl.value.visibility) then
-    Llvm.set_initializer (zero_constant t resolved) storage;
+  if
+    decl.value.init_expr = None
+    && not (Visibility.is_external decl.value.visibility)
+  then Llvm.set_initializer (zero_constant t resolved) storage;
   let symbol =
     Variable_symbol
       { storage; resolved_type = resolved; is_mutable = decl.value.is_mutable }
@@ -2365,15 +2667,15 @@ let declare_global_symbol t (decl : Core.var_decl) =
 let rec declare_toplevel t (decl : Core.top_decl) =
   match decl.value with
   | Core.TDecl ty -> declare_type_decl t ty
-  | Core.FDecl fn ->
-      ignore (declare_function_symbol t fn)
+  | Core.FDecl fn -> ignore (declare_function_symbol t fn)
   | Core.Foreign foreign ->
       List.iter
         (fun (fn : Core.function_decl) ->
-          ignore (declare_function_symbol t { fn with value = { fn.value with definition = None } }))
+          ignore
+            (declare_function_symbol t
+               { fn with value = { fn.value with definition = None } }))
         foreign.value.decls
-  | Core.VDecl binding ->
-      ignore (declare_global_symbol t binding)
+  | Core.VDecl binding -> ignore (declare_global_symbol t binding)
   | Core.Import _ | Core.CImport _ -> ()
 
 and declare_type_decl t (ty : Core.type_decl) =
@@ -2402,13 +2704,13 @@ let lower_global_initializer t (decl : Core.var_decl) =
             t.global_inits_rev <- { decl; storage } :: t.global_inits_rev)
       | Some init -> (
           match constant_of_expr t init with
-          | Some constant ->
-              Llvm.set_initializer constant storage
+          | Some constant -> Llvm.set_initializer constant storage
           | None ->
               Llvm.set_global_constant false storage;
               Llvm.set_initializer (zero_constant t resolved_type) storage;
               t.global_inits_rev <- { decl; storage } :: t.global_inits_rev))
-  | Function_symbol _ -> fail "global %s unexpectedly resolved to function" decl.value.name.value
+  | Function_symbol _ ->
+      fail "global %s unexpectedly resolved to function" decl.value.name.value
 
 let lower_globals t =
   List.iter
@@ -2435,11 +2737,27 @@ let emit_global_ctor t =
                 {
                   visibility = Visibility.File;
                   impure = true;
-                  name = { value = "__haven_global_init"; loc = dummy_loc; analysis_scope = None };
+                  name =
+                    {
+                      value = "__haven_global_init";
+                      loc = dummy_loc;
+                      analysis_scope = None;
+                    };
                   definition = None;
                   intrinsic = None;
-                  params = { value = { params = []; vararg = false }; loc = dummy_loc; analysis_scope = None };
-                  return_type = Some { value = Core.VoidType; loc = dummy_loc; analysis_scope = None };
+                  params =
+                    {
+                      value = { params = []; vararg = false };
+                      loc = dummy_loc;
+                      analysis_scope = None;
+                    };
+                  return_type =
+                    Some
+                      {
+                        value = Core.VoidType;
+                        loc = dummy_loc;
+                        analysis_scope = None;
+                      };
                   vararg = false;
                 };
               loc = dummy_loc;
@@ -2462,8 +2780,7 @@ let emit_global_ctor t =
         (fun { decl; storage } ->
           let resolved = resolved_type_of_core_type t decl.loc decl.value.ty in
           match decl.value.init_expr with
-          | None ->
-              emit_default_initialize_storage t resolved storage
+          | None -> emit_default_initialize_storage t resolved storage
           | Some init ->
               let value = emit_expr t init in
               ignore
@@ -2475,7 +2792,9 @@ let emit_global_ctor t =
       Llvm.position_at_end fn_state.return_block t.builder;
       ignore (Llvm.build_ret_void t.builder);
       t.current_function <- None;
-      let ctor_ty = Llvm.struct_type t.context [| i32_type t; ptr_type t; ptr_type t |] in
+      let ctor_ty =
+        Llvm.struct_type t.context [| i32_type t; ptr_type t; ptr_type t |]
+      in
       let entry =
         Llvm.const_struct t.context
           [|
@@ -2486,7 +2805,8 @@ let emit_global_ctor t =
       in
       let global =
         Llvm.define_global "llvm.global_ctors"
-          (Llvm.const_array ctor_ty [| entry |]) t.llmodule
+          (Llvm.const_array ctor_ty [| entry |])
+          t.llmodule
       in
       Llvm.set_linkage Llvm.Linkage.Appending global
 
@@ -2500,7 +2820,7 @@ let lower_function_body t (fn_decl : Core.function_decl) =
   in
   match fn_decl.value.definition with
   | None -> ()
-  | Some body -> (
+  | Some body ->
       let entry =
         match Llvm.block_begin symbol_fn with
         | Llvm.Before block -> block
@@ -2517,7 +2837,10 @@ let lower_function_body t (fn_decl : Core.function_decl) =
         match return_resolved_type with
         | Analysis.ResolvedVoid -> None
         | ret ->
-            Some (Llvm.build_alloca (llvm_type_of_resolved t ret) "retval" t.builder)
+            Some
+              (Llvm.build_alloca
+                 (llvm_type_of_resolved t ret)
+                 "retval" t.builder)
       in
       let fn_state =
         {
@@ -2537,14 +2860,19 @@ let lower_function_body t (fn_decl : Core.function_decl) =
       Llvm.position_at_end entry t.builder;
       List.iteri
         (fun index (param : Core.param) ->
-          let resolved = resolved_type_of_core_type t param.loc param.value.ty in
+          let resolved =
+            resolved_type_of_core_type t param.loc param.value.ty
+          in
           let slot =
-            build_alloca t (llvm_type_of_resolved t resolved) param.value.name.value
+            build_alloca t
+              (llvm_type_of_resolved t resolved)
+              param.value.name.value
           in
           let param_value = Llvm.param symbol_fn index in
           ignore (Llvm.build_store param_value slot t.builder);
           add_symbol t param.value.name.value
-            (Variable_symbol { storage = slot; resolved_type = resolved; is_mutable = false }))
+            (Variable_symbol
+               { storage = slot; resolved_type = resolved; is_mutable = false }))
         fn_decl.value.params.value.params;
       push_scope t;
       emit_statements t body.value.statements;
@@ -2556,7 +2884,9 @@ let lower_function_body t (fn_decl : Core.function_decl) =
             | Some slot ->
                 ignore
                   (Llvm.build_store
-                     (emit_cast t value (expr_resolved_type t result) return_resolved_type)
+                     (emit_cast t value
+                        (expr_resolved_type t result)
+                        return_resolved_type)
                      slot t.builder)
             | None -> ())
           body.value.result;
@@ -2571,11 +2901,12 @@ let lower_function_body t (fn_decl : Core.function_decl) =
       | Some slot ->
           ignore
             (Llvm.build_ret
-               (Llvm.build_load (llvm_type_of_resolved t return_resolved_type) slot "retval"
-                  t.builder)
+               (Llvm.build_load
+                  (llvm_type_of_resolved t return_resolved_type)
+                  slot "retval" t.builder)
                t.builder)
       | None -> ignore (Llvm.build_ret_void t.builder));
-      t.current_function <- None)
+      t.current_function <- None
 
 let lower_functions t =
   List.iter
@@ -2589,15 +2920,19 @@ let lower_functions t =
 let verify_and_run_passes ?(options = default_codegen_options) t =
   match Llvm_analysis.verify_module t.llmodule with
   | Some reason -> fail "LLVM module verification failed:\n%s" reason
-  | None ->
+  | None -> (
       let opts = Llvm_passbuilder.create_passbuilder_options () in
-      Llvm_passbuilder.passbuilder_options_set_debug_logging opts options.debug_llvm;
+      Llvm_passbuilder.passbuilder_options_set_debug_logging opts
+        options.debug_llvm;
       let result =
-        Llvm_passbuilder.run_passes t.llmodule (pass_pipeline options.opt_level)
+        Llvm_passbuilder.run_passes t.llmodule
+          (pass_pipeline options.opt_level)
           t.target_machine opts
       in
       Llvm_passbuilder.dispose_passbuilder_options opts;
-      (match result with Ok () -> () | Error msg -> fail "LLVM pass pipeline failed: %s" msg)
+      match result with
+      | Ok () -> ()
+      | Error msg -> fail "LLVM pass pipeline failed: %s" msg)
 
 let compile ?(options = default_codegen_options) pipeline =
   let t = create_context ~options pipeline in
