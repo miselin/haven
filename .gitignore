@@ -93,3 +93,8 @@ fuzz/findings/
 
 # Example renderers and browser evidence
 /output/
+
+# Local generated artifacts
+/result
+/src-ml/_build/
+/test
