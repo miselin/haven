@@ -239,6 +239,16 @@ pub fn sut() -> void {}
   assert_no_diagnostics "vector and matrix operator semantic"
     vector_matrix_pipeline.semantic.diagnostics;
 
+  let mismatched_matrix_pipeline =
+    parse_to_core "pub fn bad(fvec3 v, mat2x3 m) -> fvec3 { v * m }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_diagnostic_category "mismatched vector-matrix dimensions" Analysis.Semantic
+    mismatched_matrix_pipeline.semantic.diagnostics;
+  assert_diagnostic_message_contains "mismatched vector-matrix dimensions"
+    "binary arithmetic requires numeric operands"
+    mismatched_matrix_pipeline.semantic.diagnostics;
+
   let assignment_enum_pipeline =
     parse_to_core
       {|

@@ -103,6 +103,12 @@ semantic: error: vector dimensions must match
 
 Haven offers `matMxN` matrix types of floating point numbers.
 
+`Mat<Vec<...>, Vec<...>>` supplies rows, and `m[row][column]` selects an
+element. Vectors multiply matrices on the left: `v * m` treats `v` as a row
+vector. Transform composition therefore applies from left to right; for
+homogeneous transforms, translation belongs in the last row. Matrix products
+preserve this row-major layout.
+
 Like vectors, matrices support specialization holes in function signatures through `mat?`.
 
 ```

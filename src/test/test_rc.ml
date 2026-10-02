@@ -54,6 +54,7 @@ let rc_cases =
     { name = "struct_ret"; expected_rc = 6 };
     { name = "match_stmt"; expected_rc = 5 };
     { name = "mat_extract"; expected_rc = 2 };
+    { name = "matrix_transform"; expected_rc = 0 };
     { name = "array_local"; expected_rc = 16 };
     { name = "numeric_inference"; expected_rc = 5 };
   ]

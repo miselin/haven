@@ -250,6 +250,8 @@ pub fn pow3(float x) -> float { __builtin_ipow(x, 3) }
     emit_ir
       {|
 pub fn scale(fvec3 v, float s) -> fvec3 { v * s }
+pub fn neg_vec(fvec3 v) -> fvec3 { -v }
+pub fn neg_mat(mat2x3 m) -> mat2x3 { -m }
 pub fn mmul(mat2x3 a, mat3x4 b) -> mat2x4 { a * b }
 pub fn vmul(fvec2 v, mat2x3 m) -> fvec3 { v * m }
 pub fn main() -> void {}
@@ -258,9 +260,14 @@ pub fn main() -> void {}
   assert_true "vector scalar multiply should splat the scalar"
     (string_contains vec_mat_ir "fmul <3 x float>");
   assert_true "matrix multiply should declare the correctly typed intrinsic"
-    (string_contains vec_mat_ir "@llvm.matrix.multiply.v8f32.v6f32.v12f32");
+    (string_contains vec_mat_ir "@llvm.matrix.multiply.v8f32.v12f32.v6f32");
   assert_true "vector-matrix multiply should declare the correctly typed intrinsic"
-    (string_contains vec_mat_ir "@llvm.matrix.multiply.v3f32.v2f32.v6f32");
+    (string_contains vec_mat_ir "@llvm.matrix.multiply.v3f32.v6f32.v2f32");
+
+  assert_true "vector negation should lower to floating-point lane negation"
+    (string_contains vec_mat_ir "fneg <3 x float>");
+  assert_true "matrix negation should lower to floating-point lane negation"
+    (string_contains vec_mat_ir "fneg <6 x float>");
 
   let field_ir =
     emit_ir

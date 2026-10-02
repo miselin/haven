@@ -1429,15 +1429,18 @@ and emit_splat_matrix t (mat : Haven_token.Token.mat_type) scalar =
 
 and emit_matrix_multiply t ?loc result_ty lhs rhs lhs_ty rhs_ty ~rows ~columns ~inner =
   let intrinsic, fn_ty =
-    declare_matrix_multiply_intrinsic t ?loc result_ty lhs_ty rhs_ty
+    declare_matrix_multiply_intrinsic t ?loc result_ty rhs_ty lhs_ty
   in
+  (* Haven flattens rows, while LLVM interprets flat vectors as columns.
+     Compute B^T * A^T = (A * B)^T so the returned column-major lanes
+     are already the row-major lanes expected by Haven row access. *)
   Llvm.build_call fn_ty intrinsic
     [|
-      lhs;
       rhs;
-      const_i32 t rows;
-      const_i32 t inner;
+      lhs;
       const_i32 t columns;
+      const_i32 t inner;
+      const_i32 t rows;
     |]
     "matrix.multiply" t.builder
 
@@ -2135,7 +2138,8 @@ and emit_mutate t (expr : Core.expression) (write : Core.write) =
 and emit_unary t (expr : Core.expression) (unary : Core.unary) =
   let inner = emit_expr t unary.value.inner in
   match (unary.value.op, expr_resolved_type t unary.value.inner) with
-  | Core.Negate, Analysis.ResolvedFloat -> Llvm.build_fneg inner "fneg" t.builder
+  | Core.Negate, (Analysis.ResolvedFloat | Analysis.ResolvedVec _ | Analysis.ResolvedMatrix _) ->
+      Llvm.build_fneg inner "fneg" t.builder
   | Core.Negate, Analysis.ResolvedInt _ ->
       let inner_cast =
         emit_cast t inner (expr_resolved_type t unary.value.inner) (expr_resolved_type t expr)

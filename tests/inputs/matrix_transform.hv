@@ -1,0 +1,36 @@
+// Non-symmetric and rectangular cases distinguish row-major from column-major.
+fn vmul(fvec2 v, mat2x3 m) -> fvec3 { v * m }
+fn mmul(mat2x3 a, mat3x2 b) -> mat2x2 { a * b }
+fn transform(fvec4 v, mat4x4 a, mat4x4 b) -> fvec4 { v * (a * b) }
+
+fn negate(fvec3 v) -> fvec3 { -v }
+fn negate_matrix(mat2x3 m) -> mat2x3 { -m }
+
+pub fn sut() -> i32 {
+    let a = Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>;
+    let b = Mat<Vec<7.0, 8.0>, Vec<9.0, 10.0>, Vec<11.0, 12.0>>;
+    let v = vmul(Vec<10.0, 20.0>, a);
+    if v.x != 90.0 || v.y != 120.0 || v.z != 150.0 { ret 1; };
+    let m = mmul(a, b);
+    if m[0][0] != 58.0 || m[0][1] != 64.0 || m[1][0] != 139.0 || m[1][1] != 154.0 { ret 2; };
+    let mut changed = m;
+    changed[1] = Vec<2.0, 3.0>;
+    let row = changed.y;
+    if row.x != 2.0 || row.y != 3.0 { ret 3; };
+    let rz = Mat<Vec<0.0, 1.0, 0.0, 0.0>, Vec<-1.0, 0.0, 0.0, 0.0>,
+                 Vec<0.0, 0.0, 1.0, 0.0>, Vec<0.0, 0.0, 0.0, 1.0>>;
+    let translation = Mat<Vec<1.0, 0.0, 0.0, 0.0>, Vec<0.0, 1.0, 0.0, 0.0>,
+                          Vec<0.0, 0.0, 1.0, 0.0>, Vec<10.0, 20.0, 30.0, 1.0>>;
+    let p = Vec<1.0, 2.0, 3.0, 1.0>;
+    let t = transform(p, rz, translation);
+    if t.x != 8.0 || t.y != 21.0 || t.z != 33.0 || t.w != 1.0 { ret 4; };
+    let reverse = transform(p, translation, rz);
+    if reverse.x != -22.0 || reverse.y != 11.0 || reverse.z != 33.0 || reverse.w != 1.0 { ret 5; };
+    let sequential = (p * rz) * translation;
+    if sequential.x != t.x || sequential.y != t.y || sequential.z != t.z || sequential.w != t.w { ret 6; };
+    let neg = negate(Vec<1.0, -2.0, 3.0>);
+    if neg.x != -1.0 || neg.y != 2.0 || neg.z != -3.0 { ret 7; };
+    let neg_m = negate_matrix(a);
+    if neg_m[0][1] != -2.0 || neg_m[1][2] != -6.0 { ret 8; };
+    0
+}
