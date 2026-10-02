@@ -1826,6 +1826,7 @@ and emit_call t (expr : Core.expression) (call : Core.call) =
                    wrapped = call.value.params;
                  };
                loc = call.loc;
+               analysis_scope = call.analysis_scope;
              })
     | None ->
         None
@@ -2434,14 +2435,15 @@ let emit_global_ctor t =
                 {
                   visibility = Visibility.File;
                   impure = true;
-                  name = { value = "__haven_global_init"; loc = dummy_loc };
+                  name = { value = "__haven_global_init"; loc = dummy_loc; analysis_scope = None };
                   definition = None;
                   intrinsic = None;
-                  params = { value = { params = []; vararg = false }; loc = dummy_loc };
-                  return_type = Some { value = Core.VoidType; loc = dummy_loc };
+                  params = { value = { params = []; vararg = false }; loc = dummy_loc; analysis_scope = None };
+                  return_type = Some { value = Core.VoidType; loc = dummy_loc; analysis_scope = None };
                   vararg = false;
                 };
               loc = dummy_loc;
+              analysis_scope = None;
             };
           fn_value = fn;
           entry_block = entry;

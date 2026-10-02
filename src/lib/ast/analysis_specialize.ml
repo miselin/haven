@@ -20,9 +20,22 @@ module Specialize = struct
     typed : typing_result;
     functions : Core.function_decl String_map.t;
     instances : (string, instance) Hashtbl.t;
+    mutable analysis_scope : string option;
+    mutable clone_only : bool;
     mutable queue_rev : instance list;
     mutable diagnostics_rev : diagnostic list;
   }
+
+  let with_rewrite_context state ~analysis_scope ~clone_only f =
+    let previous_scope = state.analysis_scope in
+    let previous_clone_only = state.clone_only in
+    state.analysis_scope <- analysis_scope;
+    state.clone_only <- clone_only;
+    Fun.protect
+      ~finally:(fun () ->
+        state.analysis_scope <- previous_scope;
+        state.clone_only <- previous_clone_only)
+      f
 
   let add_diagnostic state level loc message =
     state.diagnostics_rev <-
@@ -38,8 +51,17 @@ module Specialize = struct
     Option.bind (expr_annotation annotations expr) (fun ann ->
         Option.bind ann.metavar.integer (fun integer -> integer.exact_value))
 
-  let is_shape_property name =
-    String.equal name "dim" || String.equal name "rows" || String.equal name "cols"
+  let is_shape_property annotations (field : Core.field) =
+    let target_ty = resolved_expr_type annotations field.value.target in
+    let target_ty =
+      if field.value.arrow then Option.bind target_ty resolved_deref_once
+      else target_ty
+    in
+    match (target_ty, field.value.field.value) with
+    | Some (ResolvedVec _ | ResolvedVecHole), "dim"
+    | Some (ResolvedMatrix _ | ResolvedMatrixHole), ("rows" | "cols") ->
+        true
+    | _ -> false
 
   let sanitize_name raw =
     let buf = Buffer.create (String.length raw) in
@@ -97,6 +119,8 @@ module Specialize = struct
       typed;
       functions = collect_functions typed.program.program;
       instances = Hashtbl.create 32;
+      analysis_scope = None;
+      clone_only = false;
       queue_rev = [];
       diagnostics_rev = [];
     }
@@ -141,6 +165,11 @@ module Specialize = struct
     mk_expr loc (Core.Literal (mk_literal loc (Core.Integer value)))
 
   let rec rewrite_expression state annotations (expr : Core.expression) :
+      Core.expression =
+    let rewritten = rewrite_expression_value state annotations expr in
+    { rewritten with analysis_scope = state.analysis_scope }
+
+  and rewrite_expression_value state annotations (expr : Core.expression) :
       Core.expression =
     match expr.value with
     | Core.Binary binary ->
@@ -274,7 +303,7 @@ module Specialize = struct
         }
     | Core.Field field ->
         let target = rewrite_expression state annotations field.value.target in
-        if is_shape_property field.value.field.value then
+        if not state.clone_only && is_shape_property annotations field then
           match exact_integer annotations expr with
           | Some value -> literal_int expr.loc value
           | None ->
@@ -320,23 +349,76 @@ module Specialize = struct
                   };
               };
         }
-    | (Core.Identifier _ | Core.Literal _ | Core.SizeType _ | Core.Nil | Core.Zero
-      | Core.BoxType _) ->
+    | Core.Literal literal ->
+        let value =
+          match literal.value with
+          | Core.Vector vec ->
+              Core.Vector
+                {
+                  vec with
+                  value =
+                    {
+                      Core.elements =
+                        List.map
+                          (rewrite_expression state annotations)
+                          vec.value.elements;
+                    };
+                }
+          | Core.Matrix mat ->
+              Core.Matrix
+                {
+                  mat with
+                  value =
+                    {
+                      Core.rows =
+                        List.map
+                          (rewrite_expression state annotations)
+                          mat.value.rows;
+                    };
+                }
+          | Core.Enum enum ->
+              Core.Enum
+                {
+                  enum with
+                  value =
+                    {
+                      enum.value with
+                      wrapped =
+                        List.map
+                          (rewrite_expression state annotations)
+                          enum.value.wrapped;
+                    };
+                }
+          | ( Core.Integer _ | Core.Bool _ | Core.Float _ | Core.String _
+            | Core.Char _ ) as value ->
+              value
+        in
+        { expr with value = Core.Literal { literal with value } }
+    | Core.Identifier _ | Core.SizeType _ | Core.Nil | Core.Zero
+    | Core.BoxType _ ->
         expr
 
-  and rewrite_call state annotations (expr : Core.expression) (call : Core.call) =
+  and rewrite_call state annotations (expr : Core.expression) (call : Core.call)
+      =
     let target = rewrite_expression state annotations call.value.target in
-    let params = List.map (rewrite_expression state annotations) call.value.params in
+    let params =
+      List.map (rewrite_expression state annotations) call.value.params
+    in
     match call.value.target.value with
     | Core.Identifier id -> (
         match String_map.find_opt id.value state.functions with
-        | Some fn when function_has_specialization_param fn -> (
-            let arg_types = List.map (resolved_expr_type annotations) call.value.params in
+        | Some fn
+          when (not state.clone_only) && function_has_specialization_param fn
+          -> (
+            let arg_types =
+              List.map (resolved_expr_type annotations) call.value.params
+            in
             let return_type = resolved_expr_type annotations expr in
             match
               ( List.for_all Option.is_some arg_types,
                 return_type,
-                List.length arg_types = List.length fn.value.params.value.params )
+                List.length arg_types = List.length fn.value.params.value.params
+              )
             with
             | true, Some return_type, true ->
                 let arg_types = List.map Option.get arg_types in
@@ -357,9 +439,12 @@ module Specialize = struct
                         value =
                           {
                             Core.target =
-                              mk_expr call.value.target.loc
-                                (Core.Identifier
-                                   (clone_identifier id specialized_name));
+                              {
+                                target with
+                                value =
+                                  Core.Identifier
+                                    (clone_identifier id specialized_name);
+                              };
                             params;
                           };
                       };
@@ -367,13 +452,24 @@ module Specialize = struct
             | _ ->
                 add_diagnostic state Error expr.loc
                   (Printf.sprintf
-                     "could not concretize specialization call to %s before lowering"
+                     "could not concretize specialization call to %s before \
+                      lowering"
                      id.value);
-                { expr with value = Core.Call { call with value = { Core.target = target; params } } })
+                {
+                  expr with
+                  value =
+                    Core.Call { call with value = { Core.target; params } };
+                })
         | _ ->
-            { expr with value = Core.Call { call with value = { Core.target = target; params } } })
+            {
+              expr with
+              value = Core.Call { call with value = { Core.target; params } };
+            })
     | _ ->
-        { expr with value = Core.Call { call with value = { Core.target = target; params } } }
+        {
+          expr with
+          value = Core.Call { call with value = { Core.target; params } };
+        }
 
   and rewrite_statement state annotations (stmt : Core.statement) =
     let value =
@@ -382,7 +478,19 @@ module Specialize = struct
           Core.Expression (rewrite_expression state annotations expr)
       | Core.CompileAssert compile_assert ->
           Core.CompileAssert
-            compile_assert
+            {
+              compile_assert with
+              value =
+                {
+                  compile_assert.value with
+                  cond =
+                    with_rewrite_context state
+                      ~analysis_scope:state.analysis_scope ~clone_only:true
+                      (fun () ->
+                        rewrite_expression state annotations
+                          compile_assert.value.cond);
+                };
+            }
       | Core.Return expr ->
           Core.Return (Option.map (rewrite_expression state annotations) expr)
       | Core.Defer expr ->
@@ -391,6 +499,7 @@ module Specialize = struct
           Core.Let
             {
               binding with
+              analysis_scope = state.analysis_scope;
               value =
                 {
                   binding.value with
@@ -413,11 +522,12 @@ module Specialize = struct
             }
       | Core.Break | Core.Continue as value -> value
     in
-    { stmt with value }
+    { stmt with value; analysis_scope = state.analysis_scope }
 
   and rewrite_block state annotations (block : Core.block) =
     {
       block with
+      analysis_scope = state.analysis_scope;
       value =
         {
           Core.statements =
@@ -465,30 +575,39 @@ module Specialize = struct
         inst.template.value.params.value.params inst.param_types
     in
     let temp_typed, _body_result =
-      Typing.analyze_function_body
-        ~target_profile:state.typed.target_profile state.typed.program
+      Typing.analyze_function_body ~target_profile:state.typed.target_profile
+        state.typed.program
         ~active_specializations:[ function_id inst.template ]
         ~param_bindings inst.template
     in
     List.iter
-      (fun diagnostic -> state.diagnostics_rev <- diagnostic :: state.diagnostics_rev)
+      (fun diagnostic ->
+        state.diagnostics_rev <- diagnostic :: state.diagnostics_rev)
       (List.rev temp_typed.diagnostics);
     let params =
-      List.map2 specialize_param inst.template.value.params.value.params inst.param_types
+      List.map2 specialize_param inst.template.value.params.value.params
+        inst.param_types
     in
     {
       inst.template with
+      analysis_scope = Some inst.key;
       value =
         {
           inst.template.value with
           name = clone_identifier inst.template.value.name inst.name;
           params =
-            { inst.template.value.params with value = { inst.template.value.params.value with params } };
+            {
+              inst.template.value.params with
+              value = { inst.template.value.params.value with params };
+            };
           return_type =
             Some (core_type_of_resolved_ty inst.template.loc inst.return_type);
           definition =
             Option.map
-              (rewrite_block state temp_typed.annotations)
+              (fun block ->
+                with_rewrite_context state ~analysis_scope:(Some inst.key)
+                  ~clone_only:false (fun () ->
+                    rewrite_block state temp_typed.annotations block))
               inst.template.value.definition;
         };
     }
@@ -499,7 +618,13 @@ module Specialize = struct
     | inst :: rest ->
         state.queue_rev <- rest;
         let fn = specialize_instance_decl state inst in
-        let decl : Core.top_decl = { Core.value = Core.FDecl fn; loc = fn.loc } in
+        let decl : Core.top_decl =
+          {
+            Core.value = Core.FDecl fn;
+            loc = fn.loc;
+            analysis_scope = fn.analysis_scope;
+          }
+        in
         drain_instances state (decl :: acc)
 
   let rewrite_decl state annotations (decl : Core.top_decl) =

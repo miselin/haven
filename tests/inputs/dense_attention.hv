@@ -1,0 +1,90 @@
+pub impure fn printf(str fmt, *) -> i32;
+pub impure fn sut_runtime_input(i32 value) -> i32;
+pub fn expf(float x) -> float intrinsic "llvm.exp" float;
+pub fn sqrtf(float x) -> float intrinsic "llvm.sqrt" float;
+
+fn vector_dim(fvec? v) -> i32 { as<i32>(v.dim) }
+fn matrix_extent(mat? m) -> i32 { as<i32>(m.rows * 100 + m.cols) }
+fn sum(fvec? v) -> float {
+    let mut total = 0.0;
+    iter 0:(v.dim - 1) i { total = total + v[i]; };
+    total
+}
+fn dense(fvec? x, mat? weights, fvec? bias) {
+    @assert x.dim == weights.rows, "dense input dimension mismatch";
+    @assert bias.dim == weights.cols, "dense bias dimension mismatch";
+    x * weights + bias
+}
+fn relu(fvec? v) {
+    let mut out = v;
+    iter 0:(v.dim - 1) i { if out[i] < 0.0 { out[i] = 0.0; }; };
+    out
+}
+fn softmax(fvec? values) {
+    let mut maximum = values[0];
+    iter 1:(values.dim - 1) i { if values[i] > maximum { maximum = values[i]; }; };
+    let mut out = values;
+    let mut denominator = 0.0;
+    iter 0:(values.dim - 1) i {
+        out[i] = expf(values[i] - maximum);
+        denominator = denominator + out[i];
+    };
+    out / denominator
+}
+fn transpose_into(mat? src, mat? destination) {
+    @assert src.rows == destination.cols, "transpose output columns mismatch";
+    @assert src.cols == destination.rows, "transpose output rows mismatch";
+    let mut out = destination;
+    iter 0:(src.rows - 1) row {
+        iter 0:(src.cols - 1) col { out[col][row] = src[row][col]; };
+    };
+    out
+}
+fn attention(mat? query, mat? transposed_key, mat? value) {
+    @assert query.cols == transposed_key.rows, "attention key dimension mismatch";
+    @assert transposed_key.cols == value.rows, "attention value rows mismatch";
+    let scores = (query * transposed_key) * (1.0 / sqrtf(as<float>(query.cols)));
+    let mut probabilities = scores;
+    iter 0:(scores.rows - 1) row { probabilities[row] = softmax(scores[row]); };
+    probabilities * value
+}
+
+pub impure fn sut() -> i32 {
+    let runtime_index = sut_runtime_input(2);
+    let x = Vec<(as<float>(runtime_index) - 1.0), -2.0>;
+    let w = Mat<Vec<0.5, -1.0, 2.0>, Vec<1.5, 0.25, -0.5>>;
+    let y = dense(x, w, Vec<0.5, 0.5, -1.0>);
+    let z = relu(y);
+    printf("dense %f %f %f\n", y.x, y.y, y.z);
+    printf("relu %f %f %f\n", z.x, z.y, z.z);
+    let w2 = Mat<Vec<1.0, 0.0>, Vec<0.0, 1.0>, Vec<1.0, 1.0>>;
+    let y2 = dense(Vec<1.0, 2.0, 3.0>, w2, Vec<0.5, -0.5>);
+    printf("dense2 %f %f\n", y2.x, y2.y);
+    printf("dimensions %d %d %d %d\n", vector_dim(x), vector_dim(y), matrix_extent(w), matrix_extent(w2));
+    printf("runtime_index %f\n", y[runtime_index]);
+    printf("sum %f\n", sum(y));
+    let stable = softmax(Vec<1000.0, 1001.0, 999.0>);
+    let single = softmax(Vec<1000.0>);
+    printf("softmax %f %f %f sum %f singleton %f\n", stable.x, stable.y, stable.z, sum(stable), single.x);
+    let mat3x2 blank = zero;
+    let wt = transpose_into(w, blank);
+    printf("transpose %f %f %f %f %f %f\n", wt[0][0], wt[0][1], wt[1][0], wt[1][1], wt[2][0], wt[2][1]);
+    let query = Mat<Vec<1.0, 0.0, 1.0>, Vec<0.0, 1.0, 1.0>>;
+    let key = Mat<Vec<1.0, 0.0, 0.0>, Vec<0.0, 1.0, 0.0>>;
+    let key_t = transpose_into(key, blank);
+    let value = Mat<Vec<2.0, 0.0>, Vec<0.0, 4.0>>;
+    let context = attention(query, key_t, value);
+    printf("attention %f %f %f %f\n", context[0][0], context[0][1], context[1][0], context[1][1]);
+    if y.x != -2.0 || y.y != -1.0 || y.z != 2.0 { ret 1; };
+    if z.x != 0.0 || z.y != 0.0 || z.z != 2.0 { ret 2; };
+    if y2.x != 4.5 || y2.y != 4.5 { ret 3; };
+    if stable.x < 0.244727 || stable.x > 0.244730 ||
+       stable.y < 0.665239 || stable.y > 0.665243 ||
+       stable.z < 0.090029 || stable.z > 0.090033 || single.x != 1.0 { ret 4; };
+    if wt[0][0] != 0.5 || wt[2][1] != -0.5 { ret 5; };
+    if context[0][0] < 1.280913 || context[0][0] > 1.280917 ||
+       context[0][1] < 1.438168 || context[0][1] > 1.438172 ||
+       context[1][0] < 0.719083 || context[1][0] > 0.719087 ||
+       context[1][1] < 2.561828 || context[1][1] > 2.561832 { ret 6; };
+    0
+}

@@ -26,7 +26,7 @@ let next_loc =
     let end_pos = { start_pos with pos_cnum = start_cnum + 1 } in
     { Haven_core.Loc.start_pos; end_pos }
 
-let node value = { Core.value; loc = next_loc () }
+let node value = { Core.value; loc = next_loc (); analysis_scope = None }
 let ident value = node value
 let ty_i32 = node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 32 })
 let ty_i8 = node (Core.NumericType { Haven_token.Token.signedness = Signed; bits = 8 })
@@ -313,6 +313,22 @@ pub fn main() -> void {}
     (string_contains literal_ir "define <3 x float> @make_vec");
   assert_true "non-constant matrix literals should lower to their flat vector form"
     (string_contains literal_ir "define <4 x float> @make_mat");
+
+  let multi_shape_ir =
+    emit_ir
+      "fn dot(fvec? a, fvec? b) -> float {\n\
+      \  let product = a * b; let mut total = 0.0;\n\
+      \  iter 0:(a.dim - 1) i { total = total + product[i]; }; total\n\
+       }\n\
+       pub fn main() -> float {\n\
+      \  dot(Vec<1.0, 2.0>, Vec<3.0, 4.0>) +\n\
+      \  dot(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>)\n\
+       }"
+  in
+  assert_true
+    "each specialization needs storage matching its local vector width"
+    (string_contains multi_shape_ir "%product = alloca <2 x float>"
+    && string_contains multi_shape_ir "%product = alloca <3 x float>");
 
   let specialization_ir =
     emit_ir

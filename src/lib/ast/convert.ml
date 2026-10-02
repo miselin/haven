@@ -36,20 +36,45 @@ let mk_surface_vec loc value : Surface.vec_literal = { value; loc }
 let mk_surface_mat loc value : Surface.mat_literal = { value; loc }
 let mk_surface_enum loc value : Surface.enum_literal = { value; loc }
 
-let mk_core loc value : _ Core.node = { value; loc }
-let mk_core_ident loc value : Core.identifier = { value; loc }
-let mk_core_expr loc value : Core.expression = { value; loc }
-let mk_core_stmt loc value : Core.statement = { value; loc }
-let mk_core_block loc value : Core.block = { value; loc }
-let mk_core_type loc value : Core.haven_type = { value; loc }
-let mk_core_literal loc value : Core.literal = { value; loc }
-let mk_core_pattern loc value : Core.match_pattern = { value; loc }
-let mk_core_binding loc value : Core.pattern_binding = { value; loc }
-let mk_core_arm loc value : Core.match_arm = { value; loc }
-let mk_core_vec loc value : Core.vec_literal = { value; loc }
-let mk_core_mat loc value : Core.mat_literal = { value; loc }
-let mk_core_enum loc value : Core.enum_literal = { value; loc }
-let mk_core_iteration_hint loc value : Core.iteration_hint = { value; loc }
+let mk_core loc value : _ Core.node = { value; loc; analysis_scope = None }
+
+let mk_core_ident loc value : Core.identifier =
+  { value; loc; analysis_scope = None }
+
+let mk_core_expr loc value : Core.expression =
+  { value; loc; analysis_scope = None }
+
+let mk_core_stmt loc value : Core.statement =
+  { value; loc; analysis_scope = None }
+
+let mk_core_block loc value : Core.block = { value; loc; analysis_scope = None }
+
+let mk_core_type loc value : Core.haven_type =
+  { value; loc; analysis_scope = None }
+
+let mk_core_literal loc value : Core.literal =
+  { value; loc; analysis_scope = None }
+
+let mk_core_pattern loc value : Core.match_pattern =
+  { value; loc; analysis_scope = None }
+
+let mk_core_binding loc value : Core.pattern_binding =
+  { value; loc; analysis_scope = None }
+
+let mk_core_arm loc value : Core.match_arm =
+  { value; loc; analysis_scope = None }
+
+let mk_core_vec loc value : Core.vec_literal =
+  { value; loc; analysis_scope = None }
+
+let mk_core_mat loc value : Core.mat_literal =
+  { value; loc; analysis_scope = None }
+
+let mk_core_enum loc value : Core.enum_literal =
+  { value; loc; analysis_scope = None }
+
+let mk_core_iteration_hint loc value : Core.iteration_hint =
+  { value; loc; analysis_scope = None }
 
 type surface_extension_hooks = {
   construct : Surface.lifecycle_construct option;
@@ -962,8 +987,8 @@ and surface_top_decl_to_core st (decl : Surface.top_decl) : Core.top_decl =
     | Surface.FDecl fn -> Core.FDecl (surface_function_decl_to_core st fn)
     | Surface.TDecl ty -> Core.TDecl (surface_type_decl_to_core st ty)
     | Surface.VDecl v -> Core.VDecl (surface_var_decl_to_core st v)
-    | Surface.Import i -> Core.Import { value = i.value; loc = i.loc }
-    | Surface.CImport i -> Core.CImport { value = i.value; loc = i.loc }
+    | Surface.Import i -> Core.Import { value = i.value; loc = i.loc; analysis_scope = None }
+    | Surface.CImport i -> Core.CImport { value = i.value; loc = i.loc; analysis_scope = None }
     | Surface.Foreign f -> Core.Foreign (surface_foreign_to_core st f)
     | Surface.Extend _ ->
         failwith "surface extend declarations must be merged before core lowering"
@@ -989,7 +1014,7 @@ and surface_function_decl_to_core st (fn : Surface.function_decl) : Core.functio
 and surface_intrinsic_to_core _st (intr : Surface.intrinsic) : Core.intrinsic =
   mk_core intr.loc
     {
-      Core.name = { value = intr.value.name.value; loc = intr.value.name.loc };
+      Core.name = { value = intr.value.name.value; loc = intr.value.name.loc; analysis_scope = None };
       types = List.map surface_type_to_core intr.value.types;
     }
 
@@ -1089,7 +1114,7 @@ and surface_foreign_to_core st (foreign : Surface.foreign) : Core.foreign =
   in
   mk_core foreign.loc
     {
-      Core.lib = { value = foreign.value.lib.value; loc = foreign.value.lib.loc };
+      Core.lib = { value = foreign.value.lib.value; loc = foreign.value.lib.loc; analysis_scope = None };
       decls =
         List.map
           (fun fn -> surface_function_decl_to_core st (normalize_foreign_decl fn))
@@ -1140,6 +1165,7 @@ and surface_statement_to_core st (stmt : Surface.statement) : Core.statement lis
                     {
                       value = compile_assert.value.message.value;
                       loc = compile_assert.value.message.loc;
+                      analysis_scope = None;
                     };
                 }));
       ]

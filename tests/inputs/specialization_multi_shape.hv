@@ -1,0 +1,33 @@
+pub impure fn sut_runtime_input(i32 value) -> i32;
+fn dot(fvec? a, fvec? b) -> float {
+    @assert a.dim == b.dim, "dot dimensions must match";
+    let product = a * b;
+    let mut total = 0.0;
+    iter 0:(a.dim - 1) i { total = total + product[i]; };
+    total
+}
+fn scale(fvec? v, float factor) { let result = v / factor; result }
+fn nested(fvec? v) -> float { dot(scale(v, 2.0), v) }
+fn literal_calls(fvec? v) { Vec<nested(v), as<float>(v.dim)> }
+fn multiply(mat? a, mat? b) { let result = a * b; result }
+
+pub impure fn sut() -> i32 {
+    let n = as<float>(sut_runtime_input(2));
+    let a = Vec<(n - 1.0), 2.0>;
+    let b = Vec<(n - 1.0), 2.0, 3.0>;
+    if dot(a, Vec<3.0, 4.0>) != 11.0 { ret 1; };
+    if dot(b, Vec<4.0, 5.0, 6.0>) != 32.0 { ret 2; };
+    let b2 = scale(b, 2.0);
+    let a2 = scale(a, 2.0);
+    if b2.z != 1.5 || a2.y != 1.0 { ret 3; };
+    let first = literal_calls(a);
+    let second = literal_calls(b);
+    if first.x != 2.5 || second.x != 7.0 || first.y != 2.0 || second.y != 3.0 { ret 4; };
+    let wide = Mat<Vec<n, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>;
+    let tall = Mat<Vec<7.0, 8.0>, Vec<9.0, 10.0>, Vec<11.0, 12.0>>;
+    let square = multiply(wide, tall);
+    let big = multiply(tall, wide);
+    if square[0][0] != 65.0 || square[1][1] != 154.0 { ret 5; };
+    if big[0][2] != 69.0 || big[2][0] != 70.0 { ret 6; };
+    0
+}

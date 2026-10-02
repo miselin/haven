@@ -198,10 +198,10 @@ module ConstantFold = struct
         mk_literal literal.loc value
 
   and fold_vec_literal (vec : Core.vec_literal) =
-    { loc = vec.loc; value = { elements = List.map fold_expression vec.value.elements } }
+    { vec with value = { elements = List.map fold_expression vec.value.elements } }
 
   and fold_mat_literal (mat : Core.mat_literal) =
-    { loc = mat.loc; value = { rows = List.map fold_expression mat.value.rows } }
+    { mat with value = { rows = List.map fold_expression mat.value.rows } }
 
   and fold_enum_literal (enum : Core.enum_literal) =
     { enum with value = { enum.value with wrapped = List.map fold_expression enum.value.wrapped } }
@@ -299,14 +299,14 @@ module ConstantFold = struct
     | Core.ToBool inner -> (
         match constant_of_expr inner with
         | Some constant -> (
-            match literal_of_constant expr.loc constant with Some folded -> folded | None -> expr)
+            match literal_of_constant expr.loc constant with Some folded -> { expr with value = folded.value } | None -> expr)
         | None -> expr)
     | Core.Unary unary -> (
         match constant_of_expr unary.value.inner with
         | Some constant -> (
             match fold_unary unary.value.op constant with
             | Some folded -> (
-                match literal_of_constant expr.loc folded with Some lit -> lit | None -> expr)
+                match literal_of_constant expr.loc folded with Some lit -> { expr with value = lit.value } | None -> expr)
             | None -> expr)
         | None -> expr)
     | Core.Binary binary -> (
@@ -314,7 +314,7 @@ module ConstantFold = struct
         | Some left, Some right -> (
             match fold_binary binary.value.op left right with
             | Some folded -> (
-                match literal_of_constant expr.loc folded with Some lit -> lit | None -> expr)
+                match literal_of_constant expr.loc folded with Some lit -> { expr with value = lit.value } | None -> expr)
             | None -> expr)
         | _ -> expr)
     | _ -> expr
@@ -370,7 +370,7 @@ module ConstantFold = struct
 
   and fold_block (block : Core.block) =
     {
-      loc = block.loc;
+      block with
       value =
         {
           statements = List.map fold_statement block.value.statements;
@@ -385,32 +385,40 @@ module ConstantFold = struct
         { fn.value with definition = Option.map fold_block fn.value.definition };
     }
 
-  let fold_top_decl = function
-    | ({ loc; value = Core.FDecl fn } : Core.top_decl) ->
-        ({ loc; value = Core.FDecl (fold_function_decl fn) } : Core.top_decl)
-    | ({ loc; value = Core.Foreign foreign } : Core.top_decl) ->
-        ({
-          loc;
-          value =
-            Core.Foreign
-              { foreign with value = { foreign.value with decls = List.map fold_function_decl foreign.value.decls } };
-        } : Core.top_decl)
-    | ({ loc; value = Core.VDecl binding } : Core.top_decl) ->
-        ({
-          loc;
-          value =
-            Core.VDecl
-              { binding with value = { binding.value with init_expr = Option.map fold_expression binding.value.init_expr } };
-        } : Core.top_decl)
-    | ({ loc; value = (Core.TDecl _ | Core.Import _ | Core.CImport _) as value } : Core.top_decl) ->
-        ({ loc; value } : Core.top_decl)
+  let fold_top_decl (decl : Core.top_decl) =
+    let value =
+      match decl.value with
+      | Core.FDecl fn -> Core.FDecl (fold_function_decl fn)
+      | Core.Foreign foreign ->
+          Core.Foreign
+            {
+              foreign with
+              value =
+                {
+                  foreign.value with
+                  decls = List.map fold_function_decl foreign.value.decls;
+                };
+            }
+      | Core.VDecl binding ->
+          Core.VDecl
+            {
+              binding with
+              value =
+                {
+                  binding.value with
+                  init_expr = Option.map fold_expression binding.value.init_expr;
+                };
+            }
+      | (Core.TDecl _ | Core.Import _ | Core.CImport _) as value -> value
+    in
+    { decl with value }
 
   let run ?program (typed : typing_result) =
     let program = Option.value ~default:typed.program program in
     {
       Core.program =
         {
-          loc = program.program.loc;
+          program.program with
           value = { Core.decls = List.map fold_top_decl program.program.value.decls };
         };
     }

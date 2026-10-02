@@ -1,0 +1,17 @@
+pub impure fn sut_runtime_input(i32 value) -> i32;
+type Tensor = struct { i32 rows; i32 cols; i32 dim; };
+type TensorAlias = Tensor;
+fn count(TensorAlias t) -> i32 { t.rows * t.cols + t.dim }
+impure fn pointer_count(Tensor* t) -> i32 { t->rows * t->cols + t->dim }
+fn extent(mat? m) -> i32 { as<i32>(m.rows * 100 + m.cols) }
+fn dimension(fvec? v) -> i32 { as<i32>(v.dim) }
+
+pub impure fn sut() -> i32 {
+    let Tensor t = {sut_runtime_input(3), sut_runtime_input(4), sut_runtime_input(5)};
+    if count(t) != 17 || pointer_count(ref t) != 17 { ret 1; };
+    let wide = Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>;
+    let tall = Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>, Vec<5.0, 6.0>>;
+    if extent(wide) != 203 || extent(tall) != 302 { ret 2; };
+    if dimension(Vec<1.0, 2.0>) != 2 || dimension(Vec<1.0, 2.0, 3.0>) != 3 { ret 3; };
+    0
+}

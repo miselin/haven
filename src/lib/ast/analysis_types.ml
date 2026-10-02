@@ -195,20 +195,38 @@ let node_id (loc : Loc.t) =
   Printf.sprintf "%s:%d:%d-%d:%d" start_pos.pos_fname start_pos.pos_lnum
     start_pos.pos_cnum end_pos.pos_lnum end_pos.pos_cnum
 
-let expr_id (expr : Core.expression) = node_id expr.loc
-let binding_id (binding : Core.let_stmt) = node_id binding.loc
-let statement_id (stmt : Core.statement) = node_id stmt.loc
-let block_id (block : Core.block) = node_id block.loc
-let function_id (fn : Core.function_decl) = node_id fn.loc
+let scoped_node_id (node : _ Core.node) =
+  let id = node_id node.loc in
+  match node.analysis_scope with None -> id | Some scope -> scope ^ "::" ^ id
 
-let mk_type loc value : Core.haven_type = { Core.value; loc }
-let mk_expr loc value : Core.expression = { Core.value; loc }
-let mk_stmt loc value : Core.statement = { Core.value; loc }
-let mk_block loc value : Core.block = { Core.value; loc }
-let mk_identifier loc value : Core.identifier = { Core.value; loc }
-let mk_pattern loc value : Core.match_pattern = { Core.value; loc }
-let mk_arm loc value : Core.match_arm = { Core.value; loc }
-let mk_literal loc value : Core.literal = { Core.value; loc }
+let expr_id (expr : Core.expression) = scoped_node_id expr
+let binding_id (binding : Core.let_stmt) = scoped_node_id binding
+let statement_id (stmt : Core.statement) = scoped_node_id stmt
+let block_id (block : Core.block) = scoped_node_id block
+let function_id (fn : Core.function_decl) = scoped_node_id fn
+
+let mk_type loc value : Core.haven_type =
+  { Core.value; loc; analysis_scope = None }
+
+let mk_expr loc value : Core.expression =
+  { Core.value; loc; analysis_scope = None }
+
+let mk_stmt loc value : Core.statement =
+  { Core.value; loc; analysis_scope = None }
+
+let mk_block loc value : Core.block = { Core.value; loc; analysis_scope = None }
+
+let mk_identifier loc value : Core.identifier =
+  { Core.value; loc; analysis_scope = None }
+
+let mk_pattern loc value : Core.match_pattern =
+  { Core.value; loc; analysis_scope = None }
+
+let mk_arm loc value : Core.match_arm =
+  { Core.value; loc; analysis_scope = None }
+
+let mk_literal loc value : Core.literal =
+  { Core.value; loc; analysis_scope = None }
 
 let void_type loc = mk_type loc Core.VoidType
 let float_type loc = mk_type loc Core.FloatType
@@ -422,6 +440,7 @@ let rec core_type_of_resolved_ty loc = function
                  count = mk_literal loc (Core.Integer count);
                };
              loc;
+             analysis_scope = None;
            })
   | ResolvedVec vec -> mk_type loc (Core.VecType vec)
   | ResolvedMatrix mat -> mk_type loc (Core.MatrixType mat)
@@ -438,6 +457,7 @@ let rec core_type_of_resolved_ty loc = function
                  vararg;
                };
              loc;
+             analysis_scope = None;
            })
   | ResolvedGenericParam name -> mk_type loc (Core.CustomType { name = mk_identifier loc name })
   | ResolvedNamed (name, []) ->
@@ -452,6 +472,7 @@ let rec core_type_of_resolved_ty loc = function
                  inner = List.map (core_type_of_resolved_ty loc) args;
                };
              loc;
+             analysis_scope = None;
            })
 
 let rec string_of_resolved_ty = function

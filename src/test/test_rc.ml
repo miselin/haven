@@ -55,6 +55,9 @@ let rc_cases =
     { name = "match_stmt"; expected_rc = 5 };
     { name = "mat_extract"; expected_rc = 2 };
     { name = "matrix_transform"; expected_rc = 0 };
+    { name = "specialization_multi_shape"; expected_rc = 0 };
+    { name = "struct_dimension_fields"; expected_rc = 0 };
+    { name = "dense_attention"; expected_rc = 0 };
     { name = "array_local"; expected_rc = 16 };
     { name = "numeric_inference"; expected_rc = 5 };
   ]
@@ -78,6 +81,11 @@ let runtime_harness_c =
 int sut_rc = 0;
 
 extern int sut(void);
+
+int sut_runtime_input(int value) {
+  volatile int runtime_value = value;
+  return runtime_value;
+}
 
 int sut_exit(int rc) {
   sut_rc = rc;

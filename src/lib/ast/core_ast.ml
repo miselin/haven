@@ -1,7 +1,12 @@
 open Haven_token.Token
 open Haven_core
 
-type 'a node = { value : 'a; loc : Loc.t }
+type 'a node = {
+  value : 'a;
+  loc : Loc.t;
+  (* Analysis identity is separate from the original diagnostic source span. *)
+  analysis_scope : string option;
+}
 type identifier = string node
 type unary_operator = Not | Negate | Complement
 

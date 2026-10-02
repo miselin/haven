@@ -242,4 +242,79 @@ let run () =
     compile_assert_short_circuit_pipeline.asserts.diagnostics;
   assert_no_diagnostics
     "failing compile assert should short-circuit later semantic analysis"
-    compile_assert_short_circuit_pipeline.semantic.diagnostics
+    compile_assert_short_circuit_pipeline.semantic.diagnostics;
+
+  let identity_pipeline =
+    parse_to_core
+      "fn product(fvec? a, fvec? b) { let p = a * b; p }\n\
+       pub fn main() -> float {\n\
+      \  let small = product(Vec<1.0, 2.0>, Vec<3.0, 4.0>);\n\
+      \  let large = product(Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>);\n\
+      \  small.y + large.z\n\
+       }"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "multi-shape pipeline"
+    (Analysis.Pipeline.analysis_diagnostics identity_pipeline);
+  let specialized_functions (program : Core.parsed_program) =
+    List.filter_map
+      (fun (decl : Core.top_decl) ->
+        match decl.value with
+        | Core.FDecl fn when fn.analysis_scope <> None -> Some fn
+        | _ -> None)
+      program.program.value.decls
+  in
+  let small, large =
+    match specialized_functions identity_pipeline.core with
+    | [ small; large ] ->
+        if small.value.name.value = "product__spec__fvec2__fvec2" then
+          (small, large)
+        else (large, small)
+    | _ -> failwith "expected two product specializations"
+  in
+  let body_binding (fn : Core.function_decl) =
+    let body = Option.get fn.value.definition in
+    match body.value.statements with
+    | [ stmt ] -> (
+        match stmt.value with
+        | Core.Let binding -> (body, stmt, binding)
+        | _ -> failwith "expected product local binding")
+    | _ -> failwith "expected one product statement"
+  in
+  let small_body, small_stmt, small_binding = body_binding small in
+  let large_body, large_stmt, large_binding = body_binding large in
+  assert_true "clone source spans remain unchanged"
+    (small.loc = large.loc
+    && small_body.loc = large_body.loc
+    && small_stmt.loc = large_stmt.loc
+    && small_binding.loc = large_binding.loc
+    && small_binding.value.init_expr.loc = large_binding.value.init_expr.loc);
+  assert_true "cloned analysis and ownership identities must be distinct"
+    (Analysis.function_id small <> Analysis.function_id large
+    && Analysis.block_id small_body <> Analysis.block_id large_body
+    && Analysis.statement_id small_stmt <> Analysis.statement_id large_stmt
+    && Analysis.binding_id small_binding <> Analysis.binding_id large_binding
+    && Analysis.expr_id small_binding.value.init_expr
+       <> Analysis.expr_id large_binding.value.init_expr);
+  let assert_width label expected binding =
+    let ann =
+      Hashtbl.find identity_pipeline.typing.annotations.bindings
+        (Analysis.binding_id binding)
+    in
+    match ann.resolved_type with
+    | Some (Analysis.ResolvedVec vec) when vec.dimension = expected -> ()
+    | _ -> failwith label
+  in
+  assert_width "small local type must remain fvec2" 2 small_binding;
+  assert_width "large local type must remain fvec3" 3 large_binding;
+  List.iter
+    (fun (program : Core.parsed_program) ->
+      List.iter
+        (fun (fn : Core.function_decl) ->
+          let body, _, binding = body_binding fn in
+          assert_true "folding and cleanup preserve scoped identities"
+            (body.analysis_scope = fn.analysis_scope
+            && binding.analysis_scope = fn.analysis_scope
+            && binding.value.init_expr.analysis_scope = fn.analysis_scope))
+        (specialized_functions program))
+    [ identity_pipeline.cfold; identity_pipeline.cleaned ]

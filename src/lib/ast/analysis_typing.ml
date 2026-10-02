@@ -104,6 +104,7 @@ module Typing = struct
                vararg = fn.value.vararg;
              };
            loc;
+           analysis_scope = None;
          })
 
   let function_type_of_decl (fn : Core.function_decl) =
@@ -810,6 +811,7 @@ module Typing = struct
                        inner = enum.value.types;
                      };
                    loc;
+                   analysis_scope = None;
                  })
         in
         List.iter
@@ -1665,6 +1667,7 @@ module Typing = struct
                            init_expr = init;
                          };
                        loc = binding.loc;
+                       analysis_scope = binding.analysis_scope;
                      }
                      {
                        inferred_type = Some binding.value.ty;
