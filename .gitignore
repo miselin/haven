@@ -90,3 +90,6 @@ fuzz/findings/
 
 # Logs
 *.log
+
+# Example renderers and browser evidence
+/output/

@@ -3,3 +3,6 @@
 !vec/
 !*.hv
 !2025h2/
+!cube/
+!cube/README.md
+!cube/run.py

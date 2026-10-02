@@ -1,0 +1,138 @@
+// CPU rasterizer: all geometry, transforms, lighting and pixels are Haven.
+// Emits 96 concatenated P6 images, one full rotation, to stdout.
+cimport "stdio.h";
+cimport "stdlib.h";
+pub fn sinf(float x) -> float intrinsic "llvm.sin" float;
+pub fn cosf(float x) -> float intrinsic "llvm.cos" float;
+pub fn sqrtf(float x) -> float intrinsic "llvm.sqrt" float;
+
+data i32 WIDTH = 480;
+data i32 HEIGHT = 360;
+data i32 FRAMES = 96;
+data fvec4[8] VERTICES = {
+    Vec<-1.0, -1.0, -1.0, 1.0>, Vec<1.0, -1.0, -1.0, 1.0>,
+    Vec<1.0, 1.0, -1.0, 1.0>, Vec<-1.0, 1.0, -1.0, 1.0>,
+    Vec<-1.0, -1.0, 1.0, 1.0>, Vec<1.0, -1.0, 1.0, 1.0>,
+    Vec<1.0, 1.0, 1.0, 1.0>, Vec<-1.0, 1.0, 1.0, 1.0>
+};
+data i32[36] INDICES = {
+    0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
+    0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5,
+    3, 7, 6, 3, 6, 2, 0, 1, 5, 0, 5, 4
+};
+data fvec3[6] COLORS = {
+    Vec<0.20, 0.75, 0.95>, Vec<0.18, 0.90, 0.72>,
+    Vec<0.55, 0.40, 0.95>, Vec<0.95, 0.45, 0.28>,
+    Vec<0.95, 0.78, 0.30>, Vec<0.35, 0.55, 0.95>
+};
+
+type Framebuffer = struct {
+    u8[518400] pixels;
+    float[172800] depth;
+};
+
+fn dot(fvec3 a, fvec3 b) -> float {
+    let p = a * b;
+    p.x + p.y + p.z
+}
+fn cross(fvec3 a, fvec3 b) -> fvec3 {
+    Vec<(a.y * b.z - a.z * b.y), (a.z * b.x - a.x * b.z), (a.x * b.y - a.y * b.x)>
+}
+fn xyz(fvec4 v) -> fvec3 { Vec<v.x, v.y, v.z> }
+fn min(float a, float b) -> float { if a < b { a } else { b } }
+fn max(float a, float b) -> float { if a > b { a } else { b } }
+fn abs_value(float a) -> float { if a < 0.0 { -a } else { a } }
+
+// Row-vector convention: v * Rx * Ry * translation * projection.
+fn rotation(float angle) -> mat4x4 {
+    let x = 0.45 + sinf(angle) * 0.25;
+    let cx = cosf(x);
+    let sx = sinf(x);
+    let cy = cosf(angle);
+    let sy = sinf(angle);
+    let rx = Mat<Vec<1.0, 0.0, 0.0, 0.0>, Vec<0.0, cx, sx, 0.0>,
+                 Vec<0.0, -sx, cx, 0.0>, Vec<0.0, 0.0, 0.0, 1.0>>;
+    let ry = Mat<Vec<cy, 0.0, -sy, 0.0>, Vec<0.0, 1.0, 0.0, 0.0>,
+                 Vec<sy, 0.0, cy, 0.0>, Vec<0.0, 0.0, 0.0, 1.0>>;
+    rx * ry
+}
+fn projection(mat4x4 model) -> mat4x4 {
+    let view = Mat<Vec<1.0, 0.0, 0.0, 0.0>, Vec<0.0, 1.0, 0.0, 0.0>,
+                   Vec<0.0, 0.0, 1.0, 0.0>, Vec<0.0, 0.0, 4.5, 1.0>>;
+    let perspective = Mat<Vec<1.125, 0.0, 0.0, 0.0>, Vec<0.0, 1.5, 0.0, 0.0>,
+                          Vec<0.0, 0.0, 1.0, 1.0>, Vec<0.0, 0.0, 0.0, 0.0>>;
+    model * view * perspective
+}
+fn project(fvec4 v, mat4x4 mvp) -> fvec3 {
+    let clip = v * mvp;
+    let inv_z = 1.0 / clip.w;
+    Vec<(240.0 + clip.x * inv_z * 240.0),
+        (180.0 - clip.y * inv_z * 180.0), inv_z>
+}
+fn edge(fvec3 a, fvec3 b, float x, float y) -> float {
+    (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)
+}
+
+impure fn triangle(Framebuffer *fb, fvec3 a, fvec3 b, fvec3 c, fvec3 color) -> void {
+    let area = edge(a, b, c.x, c.y);
+    if abs_value(area) > 0.001 {
+        let left = as<i32>(max(0.0, min(a.x, min(b.x, c.x))));
+        let right = as<i32>(min(479.0, max(a.x, max(b.x, c.x)) + 1.0));
+        let top = as<i32>(max(0.0, min(a.y, min(b.y, c.y))));
+        let bottom = as<i32>(min(359.0, max(a.y, max(b.y, c.y)) + 1.0));
+        iter top:bottom y {
+            iter left:right x {
+                let px = as<float>(x) + 0.5;
+                let py = as<float>(y) + 0.5;
+                let wa = edge(b, c, px, py) / area;
+                let wb = edge(c, a, px, py) / area;
+                let wc = edge(a, b, px, py) / area;
+                if wa >= 0.0 && wb >= 0.0 && wc >= 0.0 {
+                    let depth = wa * a.z + wb * b.z + wc * c.z;
+                    let offset = y * WIDTH + x;
+                    if depth > fb->depth[offset] {
+                        fb->depth[offset] = depth;
+                        fb->pixels[offset * 3] = as<u8>(color.x * 255.0);
+                        fb->pixels[offset * 3 + 1] = as<u8>(color.y * 255.0);
+                        fb->pixels[offset * 3 + 2] = as<u8>(color.z * 255.0);
+                    };
+                };
+            };
+        };
+    };
+}
+
+impure fn render(Framebuffer *fb, float angle) -> void {
+    iter 0:(HEIGHT - 1) y {
+        iter 0:(WIDTH - 1) x {
+            let offset = y * WIDTH + x;
+            fb->depth[offset] = 0.0;
+            fb->pixels[offset * 3] = as<u8>(12 + y / 36);
+            fb->pixels[offset * 3 + 1] = as<u8>(20 + y / 24);
+            fb->pixels[offset * 3 + 2] = as<u8>(34 + y / 18);
+        };
+    };
+    let model = rotation(angle);
+    let mvp = projection(model);
+    iter 0:11 face {
+        let va = VERTICES[INDICES[face * 3]];
+        let vb = VERTICES[INDICES[face * 3 + 1]];
+        let vc = VERTICES[INDICES[face * 3 + 2]];
+        let normal = cross(xyz((vb - va) * model), xyz((vc - va) * model));
+        let light = 0.25 + 0.75 * abs_value(dot(normal, Vec<0.35, 0.65, -0.675>)) / sqrtf(dot(normal, normal));
+        triangle(fb, project(va, mvp), project(vb, mvp), project(vc, mvp), COLORS[face / 2] * light);
+    };
+}
+
+pub impure fn main() -> i32 {
+    let framebuffer = as<Framebuffer*>(malloc(size<Framebuffer>));
+    if framebuffer == nil { ret 1; };
+    defer { free(as<void*>(framebuffer)); };
+    iter 0:(FRAMES - 1) frame {
+        let angle = as<float>(frame) * 6.283185307 / as<float>(FRAMES);
+        render(framebuffer, angle);
+        printf("P6\n%d %d\n255\n", WIDTH, HEIGHT);
+        iter 0:518399 i { putchar(as<i32>(framebuffer->pixels[i])); };
+    };
+    0
+}
