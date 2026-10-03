@@ -33,9 +33,10 @@
 
 (* Main keywords *)
 %token PUB MODULE FN MUT IF ELSE LET WHILE UNTIL BREAK CONTINUE MATCH AS ITER
+%token FILL MAP
 %token LOAD RET STRUCT TYPE NIL ZERO DEFER IMPURE ENUM IMPORT CIMPORT SIZE
 %token BOX UNBOX INTRINSIC FOREIGN DATA STATE VEC MAT FUNCTION
-%token VAFUNCTION CELL REF EXTEND WITH CONSTRUCT DESTRUCT
+%token VAFUNCTION CELL REF EXTEND WITH CONSTRUCT DESTRUCT FOLD EACH OF
 
 (* Operator precedence table *)
 %left LOGIC_OR
@@ -88,6 +89,11 @@ foreign_decl:
 fn_definition:
   f=fn_header b=block
     { let header = f.value in mk_loc $startpos $endpos { header with definition = Some b } }
+  | f=fn_header EQUAL e=expr SEMICOLON
+    { let item = mk_loc $startpos(e) $endpos(e) (BlockExpression e) in
+      let body = mk_loc $startpos(e) $endpos(e) { items = [item] } in
+      let header = f.value in
+      mk_loc $startpos $endpos { header with definition = Some body; expression_body = true } }
   ;
 
 fn_forward_decl:
@@ -97,7 +103,7 @@ fn_forward_decl:
 
 fn_header:
   visibility=visibility_opt impure=boption(IMPURE) FN name=identifier LPAREN p=params RPAREN rt=return_type?
-    { mk_loc $startpos $endpos { visibility; impure; name; definition = None; intrinsic = None; params = p; return_type = rt; vararg = p.value.vararg } }
+    { mk_loc $startpos $endpos { visibility; impure; name; definition = None; expression_body = false; intrinsic = None; params = p; return_type = rt; vararg = p.value.vararg } }
   ;
 return_type: ARROW t=haven_type { t } ;
 
@@ -203,13 +209,30 @@ stmt_inner:
     }
   | RET e=option(expr) { Return e }
   | DEFER e=expr { Defer e }
+  | ITER EACH v=identifier OF r=iter_range b=block { Iter (mk_loc $startpos $endpos { range = r; var = v; body = b }) }
+  | ITER EACH var=identifier OF source=expr index=option(iter_index) body=block
+      { Foreach (mk_loc $startpos $endpos ({ source; var; index; body } : foreach_stmt_desc)) }
   | ITER r=iter_range v=identifier b=block { Iter (mk_loc $startpos $endpos { range = r; var = v; body = b }) }
+  | ITER source=expr var=identifier index=option(preceded(COMMA, identifier)) body=block
+      { Foreach (mk_loc $startpos $endpos ({ source; var; index; body } : foreach_stmt_desc)) }
   | WHILE c=expr b=block { While (mk_loc $startpos $endpos { cond = c; body = b }) }
   | UNTIL c=expr b=block { While (mk_loc $startpos $endpos { cond = mk_unary $startpos(c) $endpos(c) Not c; body = b }) }
   | BREAK { Break }
   | CONTINUE { Continue }
   | e=expr { Expression e }
   | { Empty }
+  ;
+
+(* Contextual words: indexed and by remain ordinary identifiers elsewhere. *)
+iter_index:
+  | indexed=IDENT by=IDENT name=identifier {
+      if indexed <> "indexed" || by <> "by" then (
+        let pos = $startpos(indexed) in
+        failwith (Printf.sprintf "parse error: expected indexed by at %s:%d:%d"
+          pos.Lexing.pos_fname pos.Lexing.pos_lnum
+          (pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)));
+      name
+    }
   ;
 
 iter_range: s=expr COLON e=expr i=option(iter_incr) { mk_loc $startpos $endpos { range_start = s; range_end = e; range_incr = i } } ;
@@ -246,13 +269,14 @@ expr:
   | u=unary { u }
 
 unary:
+  | FILL e=unary { mk_expr $startpos $endpos (Fill e) }
   | BANG i=unary { mk_unary $startpos $endpos Not i }
   | MINUS i=unary %prec UMINUS { mk_unary $startpos $endpos Negate i }
   | TILDE i=unary { mk_unary $startpos $endpos Complement i }
   | REF e=unary { mk_expr $startpos $endpos (Ref e) }
   | LOAD e=unary { mk_expr $startpos $endpos (Load e) }
   | BOX e=unary { mk_expr $startpos $endpos (BoxExpr e) }
-  | BOX t=haven_type { mk_expr $startpos $endpos (BoxType t) }
+  | BOX t=box_type { mk_expr $startpos $endpos (BoxType t) }
   | UNBOX e=unary { mk_expr $startpos $endpos (Unbox e) }
   | p=postfix { p }
   ;
@@ -270,6 +294,8 @@ primary:
   | l=literal { mk_expr $startpos $endpos (Literal l) }
   | i=init { mk_expr $startpos $endpos (Initializer i) }
   | b=block { mk_expr $startpos $endpos (Block b) }
+  | m=map_expr { mk_expr $startpos $endpos (Map m) }
+  | f=fold_expr { mk_expr $startpos $endpos (Fold f) }
   | LPAREN e=expr RPAREN { mk_expr $startpos $endpos (ParenthesizedExpression e) }
   | i=identifier { mk_expr $startpos $endpos (Identifier i) }
   | i=if_expr { mk_expr $startpos $endpos (If i) }
@@ -284,6 +310,24 @@ primary:
 init: LBRACE exprs=separated_nonempty_list(COMMA, expr) RBRACE { mk_loc $startpos $endpos { exprs } } ;
 
 (** COMPLEX EXPRESSIONS **)
+
+map_expr:
+  | MAP EACH var=identifier OF source=expr index=option(iter_index) body=block {
+      mk_loc $startpos $endpos ({ source; var; index; body } : foreach_stmt_desc)
+    }
+  ;
+
+fold_expr:
+  | FOLD EACH var=identifier OF source=expr WITH binding=fold_binding body=block {
+      let accumulator_type, accumulator, seed = binding in
+      mk_loc $startpos $endpos { source; var; accumulator; accumulator_type; seed; body }
+    }
+  ;
+
+fold_binding:
+  | accumulator=identifier EQUAL seed=expr { None, accumulator, seed }
+  | ty=haven_type accumulator=identifier EQUAL seed=expr { Some ty, accumulator, seed }
+  ;
 
 if_expr: IF c=expr t=block e=option(else_expr) { mk_loc $startpos $endpos { cond = c; then_block = t; else_block = e } } ;
 else_expr:
@@ -354,7 +398,22 @@ haven_type:
   | t=haven_type LBRACKET c=integer_literal RBRACKET { mk_loc $startpos $endpos (ArrayType (mk_loc $startpos $endpos { element = t; count = c })) }
   ;
 
+(* Bare named BOX operands follow the value-expression path; lowering resolves
+   registered type names there. Builtin and structural types retain the explicit
+   type path. Avoid two identifier reductions at fold's WITH boundary. *)
+box_type:
+  | t=non_named_type_primary { t }
+  | t=box_type STAR { mk_loc $startpos $endpos (PointerType t) }
+  | t=box_type CARET { let ty : haven_type_desc = BoxType t in mk_loc $startpos $endpos ty }
+  | t=box_type LBRACKET c=integer_literal RBRACKET { mk_loc $startpos $endpos (ArrayType (mk_loc $startpos $endpos { element = t; count = c })) }
+  ;
+
 type_primary:
+  | t=non_named_type_primary { t }
+  | i=identifier { mk_loc $startpos $endpos (CustomType { name = i; }) }
+  ;
+
+non_named_type_primary:
   | t=builtin_type { t }
   | CELL LT t=haven_type GT { mk_loc $startpos $endpos (CellType t) }
   | FUNCTION LT LPAREN p=separated_list(COMMA, haven_type) RPAREN ARROW r=haven_type GT {
@@ -364,7 +423,6 @@ type_primary:
     mk_loc $startpos $endpos (FunctionType (mk_loc $startpos $endpos { param_types = p; return_type = r; vararg = true; }))
     }
   | o=identifier SCOPE LT i=separated_nonempty_list(COMMA, haven_type) GT { mk_loc $startpos $endpos (TemplatedType (mk_loc $startpos $endpos { outer = o; inner = i; })) }
-  | i=identifier { mk_loc $startpos $endpos (CustomType { name = i; }) }
   ;
 
 builtin_type:

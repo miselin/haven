@@ -23,6 +23,7 @@ type any_node =
   | Statement of statement
   | LetStmt of let_stmt
   | IterStmt of iter_stmt
+  | ForeachStmt of foreach_stmt
   | WhileStmt of while_stmt
   | IterRange of iter_range
   | Expression of expression
@@ -70,6 +71,7 @@ let location_of = function
   | Statement s -> s.loc
   | LetStmt s -> s.loc
   | IterStmt i -> i.loc
+  | ForeachStmt i -> i.loc
   | WhileStmt w -> w.loc
   | IterRange r -> r.loc
   | Expression e -> e.loc
@@ -179,6 +181,15 @@ and walk_expression predicate acc expr =
       walk_expression predicate acc u.value.inner
   | Literal lit -> walk_literal predicate acc lit
   | Block b -> walk_block predicate acc b
+  | Fold fold ->
+      let acc = walk_expression predicate acc fold.value.source in
+      let acc =
+        Option.fold ~none:acc
+          ~some:(walk_haven_type predicate acc)
+          fold.value.accumulator_type
+      in
+      let acc = walk_expression predicate acc fold.value.seed in
+      walk_block predicate acc fold.value.body
   | ParenthesizedExpression e -> walk_expression predicate acc e
   | Identifier _ -> acc
   | Initializer i ->
@@ -192,6 +203,10 @@ and walk_expression predicate acc expr =
   | SizeType t -> walk_haven_type predicate acc t
   | Nil -> acc
   | Zero -> acc
+  | Fill inner -> walk_expression predicate acc inner
+  | Map map ->
+      let acc = walk_expression predicate acc map.value.source in
+      walk_block predicate acc map.value.body
   | If i -> walk_if_expr predicate acc i
   | Match m ->
       let acc = add_if predicate (MatchExpr m) acc in
@@ -240,6 +255,10 @@ and walk_statement predicate acc stmt =
         | None -> acc
         | Some e -> walk_expression predicate acc e
       in
+      walk_block predicate acc i.value.body
+  | Foreach i ->
+      let acc = add_if predicate (ForeachStmt i) acc in
+      let acc = walk_expression predicate acc i.value.source in
       walk_block predicate acc i.value.body
   | While w ->
       let acc = add_if predicate (WhileStmt w) acc in

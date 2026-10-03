@@ -412,6 +412,25 @@ module Typing = struct
               { classes = [ TypeClassNil ]; constant = None; integer = None };
           }
       | Core.Zero -> infer_zero state ~expected_type expr.loc
+      | Core.Fill inner ->
+          let operand =
+            infer_value_expression state env ~expected_type:(Some ResolvedFloat)
+              inner
+          in
+          (match operand.resolved_type with
+          | Some (ResolvedFloat | ResolvedInt _) -> ()
+          | _ ->
+              add_diagnostic state Error inner.loc
+                "fill operand must be a numeric scalar");
+          (match expected_type with
+          | Some
+              ( ResolvedVec _ | ResolvedMatrix _ | ResolvedVecHole
+              | ResolvedMatrixHole ) ->
+              ()
+          | _ ->
+              add_diagnostic state Error expr.loc
+                "fill requires an explicit vector or matrix target type");
+          annotation_of_resolved expr.loc expected_type
       | Core.Match match_expr ->
           infer_match state env ~expected_type expr.loc match_expr
       | Core.BoxExpr inner -> (
@@ -566,65 +585,84 @@ module Typing = struct
             | false, Some ty -> Some ty
             | _, None -> None
           in
-          match target_ty with
-          | Some (ResolvedNamed _ as target_ty) -> (
-              match lookup_struct_fields state.type_env expr.loc target_ty with
-              | Some fields -> (
-                  match List.assoc_opt field.value.field.value fields with
-                  | Some field_ty ->
-                      let core_ty =
-                        core_type_of_resolved_ty expr.loc field_ty
-                      in
-                      {
-                        inferred_type = Some core_ty;
-                        resolved_type = Some field_ty;
-                        metavar = metavar_of_type core_ty;
-                      }
-                  | None -> unknown_expr_annotation)
-              | None -> unknown_expr_annotation)
-          | Some (ResolvedVec vec) -> (
-              match field.value.field.value with
-              | "dim" -> shape_property_annotation expr.loc vec.dimension
-              | _ -> (
-                  match vector_field_index field.value.field.value with
-                  | Some idx when idx < vec.dimension ->
-                      let core_ty = float_type expr.loc in
-                      {
-                        inferred_type = Some core_ty;
-                        resolved_type = Some ResolvedFloat;
-                        metavar = metavar_of_type core_ty;
-                      }
-                  | _ -> unknown_expr_annotation))
-          | Some (ResolvedMatrix mat) -> (
-              match field.value.field.value with
-              | "rows" -> shape_property_annotation expr.loc mat.rows
-              | "cols" -> shape_property_annotation expr.loc mat.columns
-              | _ -> (
-                  match vector_field_index field.value.field.value with
-                  | Some idx when idx < mat.rows ->
-                      let vec_ty =
-                        mk_type expr.loc
-                          (Core.VecType
-                             { kind = FloatVec; dimension = mat.columns })
-                      in
-                      {
-                        inferred_type = Some vec_ty;
-                        resolved_type =
-                          Some
-                            (ResolvedVec
-                               { kind = FloatVec; dimension = mat.columns });
-                        metavar = metavar_of_type vec_ty;
-                      }
-                  | _ -> unknown_expr_annotation))
-          | Some ResolvedVecHole -> (
-              match field.value.field.value with
-              | "dim" -> unknown_shape_property_annotation expr.loc
-              | _ -> unknown_expr_annotation)
-          | Some ResolvedMatrixHole -> (
-              match field.value.field.value with
-              | "rows" | "cols" -> unknown_shape_property_annotation expr.loc
-              | _ -> unknown_expr_annotation)
-          | _ -> unknown_expr_annotation)
+          if String.equal field.value.field.value "$iter.count" then (
+            (* This compiler-only property is unreachable from source identifiers.
+               Cardinality is resolved after generic shapes are instantiated. *)
+            match target_ty with
+            | Some (ResolvedVec vec) ->
+                shape_property_annotation expr.loc vec.dimension
+            | Some (ResolvedMatrix mat) ->
+                shape_property_annotation expr.loc mat.rows
+            | Some (ResolvedArray (_, count)) ->
+                shape_property_annotation expr.loc count
+            | Some (ResolvedVecHole | ResolvedMatrixHole) ->
+                unknown_shape_property_annotation expr.loc
+            | _ ->
+                add_diagnostic state Error expr.loc
+                  "value iteration requires a vector, matrix or fixed array";
+                unknown_shape_property_annotation expr.loc)
+          else
+            match target_ty with
+            | Some (ResolvedNamed _ as target_ty) -> (
+                match
+                  lookup_struct_fields state.type_env expr.loc target_ty
+                with
+                | Some fields -> (
+                    match List.assoc_opt field.value.field.value fields with
+                    | Some field_ty ->
+                        let core_ty =
+                          core_type_of_resolved_ty expr.loc field_ty
+                        in
+                        {
+                          inferred_type = Some core_ty;
+                          resolved_type = Some field_ty;
+                          metavar = metavar_of_type core_ty;
+                        }
+                    | None -> unknown_expr_annotation)
+                | None -> unknown_expr_annotation)
+            | Some (ResolvedVec vec) -> (
+                match field.value.field.value with
+                | "dim" -> shape_property_annotation expr.loc vec.dimension
+                | _ -> (
+                    match vector_field_index field.value.field.value with
+                    | Some idx when idx < vec.dimension ->
+                        let core_ty = float_type expr.loc in
+                        {
+                          inferred_type = Some core_ty;
+                          resolved_type = Some ResolvedFloat;
+                          metavar = metavar_of_type core_ty;
+                        }
+                    | _ -> unknown_expr_annotation))
+            | Some (ResolvedMatrix mat) -> (
+                match field.value.field.value with
+                | "rows" -> shape_property_annotation expr.loc mat.rows
+                | "cols" -> shape_property_annotation expr.loc mat.columns
+                | _ -> (
+                    match vector_field_index field.value.field.value with
+                    | Some idx when idx < mat.rows ->
+                        let vec_ty =
+                          mk_type expr.loc
+                            (Core.VecType
+                               { kind = FloatVec; dimension = mat.columns })
+                        in
+                        {
+                          inferred_type = Some vec_ty;
+                          resolved_type =
+                            Some
+                              (ResolvedVec
+                                 { kind = FloatVec; dimension = mat.columns });
+                          metavar = metavar_of_type vec_ty;
+                        }
+                    | _ -> unknown_expr_annotation))
+            | Some ResolvedVecHole -> (
+                match field.value.field.value with
+                | "dim" -> unknown_shape_property_annotation expr.loc
+                | _ -> unknown_expr_annotation)
+            | Some ResolvedMatrixHole -> (
+                match field.value.field.value with
+                | "rows" | "cols" -> unknown_shape_property_annotation expr.loc
+                | _ -> unknown_expr_annotation)
+            | _ -> unknown_expr_annotation)
       | Core.Assign write ->
           infer_write_like state env ~pointee_target:false write
       | Core.Mutate write ->

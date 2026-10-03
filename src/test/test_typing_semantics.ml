@@ -1,6 +1,217 @@
 open Test_support
 
 let run () =
+  let check_iteration_error label source category needle =
+    let pipeline = parse_to_core source |> Analysis.Pipeline.run_core in
+    let diagnostics =
+      pipeline.typing.diagnostics @ pipeline.semantic.diagnostics
+    in
+    assert_true
+      (label ^ " category and wording")
+      (List.exists
+         (fun (diagnostic : Analysis.diagnostic) ->
+           diagnostic.category = category
+           && string_contains diagnostic.message needle)
+         diagnostics)
+  in
+  List.iter
+    (fun (label, source, category, message) ->
+      check_iteration_error label source category message)
+    [
+      ( "fill missing context",
+        "fn f() -> void { let v = fill 1.0; }",
+        Analysis.TypeCheck,
+        "fill requires an explicit vector or matrix target type" );
+      ( "fill unsupported array",
+        "fn f() -> void { let i32[2] v = fill 1; }",
+        Analysis.TypeCheck,
+        "fill requires an explicit vector or matrix target type" );
+      ( "fill non-scalar",
+        "fn f() -> fvec2 = fill Vec<1.0, 2.0>;",
+        Analysis.TypeCheck,
+        "fill operand must be a numeric scalar" );
+      ( "map scalar source",
+        "fn f() -> i32 = map each x of 3 { x };",
+        Analysis.TypeCheck,
+        "value iteration requires a vector, matrix or fixed array" );
+      ( "map changes element type",
+        "fn f(fvec2 v) -> fvec2 = map each x of v { v };",
+        Analysis.Semantic,
+        "map body result type does not match the source element" );
+      ( "map changes row width",
+        "fn f(mat2x3 m) -> mat2x3 = map each row of m { Vec<1.0, 2.0> };",
+        Analysis.Semantic,
+        "map body result type does not match the source element" );
+      ( "map missing result even empty",
+        "fn f(i32[0] a) -> i32[0] = map each x of a { let y = x; };",
+        Analysis.Semantic,
+        "map body must produce an element value" );
+      ( "map immutable value",
+        "fn f(fvec2 v) -> fvec2 = map each x of v { x = 1.0; x };",
+        Analysis.Semantic,
+        "assignment to immutable binding x" );
+      ( "map index scope",
+        "fn f(fvec2 v) -> u32 { let result = map each x of v indexed by i { x \
+         }; i }",
+        Analysis.TypeCheck,
+        "unknown identifier i" );
+      ( "map duplicate bindings",
+        "fn f(fvec2 v) -> fvec2 = map each x of v indexed by x { 1.0 };",
+        Analysis.Semantic,
+        "duplicate binding x" );
+      ( "map break",
+        "fn f(fvec2 v) -> fvec2 = map each x of v { break; x };",
+        Analysis.Semantic,
+        "break is not permitted in a map body" );
+      ( "map nested continue",
+        "fn f(fvec2 v) -> fvec2 = map each x of v { iter each i of 0:1 { \
+         continue; }; x };",
+        Analysis.Semantic,
+        "continue is not permitted in a map body" );
+      ( "map return",
+        "fn f(fvec2 v) -> fvec2 = map each x of v { ret v; x };",
+        Analysis.Semantic,
+        "ret is not permitted in a map body" );
+    ];
+  List.iter
+    (fun (label, source, category, message) ->
+      check_iteration_error label source category message)
+    [
+      ( "fold scalar source",
+        "fn f() -> i32 = fold each value of 3 with acc = 0 { acc + value };",
+        Analysis.TypeCheck,
+        "value iteration requires a vector, matrix or fixed array" );
+      ( "fold body mismatch",
+        "fn f(fvec2 v) -> i32 = fold each value of v with acc = 0 { v };",
+        Analysis.Semantic,
+        "fold body result type does not match the accumulator" );
+      ( "fold seed annotation mismatch",
+        "fn f(fvec2 v) -> i32 = fold each value of v with i32 acc = v { acc };",
+        Analysis.Semantic,
+        "let initializer type does not match" );
+      ( "fold accumulator immutable",
+        "fn f(fvec2 v) -> float = fold each value of v with acc = 0.0 { acc = \
+         value; acc };",
+        Analysis.Semantic,
+        "assignment to immutable binding acc" );
+      ( "fold value immutable",
+        "fn f(fvec2 v) -> float = fold each value of v with acc = 0.0 { value \
+         = 2.0; acc };",
+        Analysis.Semantic,
+        "assignment to immutable binding value" );
+      ( "fold bindings distinct",
+        "fn f(fvec2 v) -> float = fold each value of v with value = 0.0 { \
+         value };",
+        Analysis.Semantic,
+        "duplicate binding value" );
+      ( "fold accumulator scope",
+        "fn f(fvec2 v) -> float { let x = fold each value of v with acc = 0.0 \
+         { acc + value }; acc }",
+        Analysis.TypeCheck,
+        "unknown identifier acc" );
+      ( "fold seed cannot see current value",
+        "fn f(fvec2 v) -> float = fold each value of v with acc = value { acc \
+         };",
+        Analysis.TypeCheck,
+        "unknown identifier value" );
+      ( "fold break",
+        "fn f(fvec2 v) -> float = fold each value of v with acc = 0.0 { break; \
+         acc };",
+        Analysis.Semantic,
+        "break is not permitted in a fold body" );
+      ( "fold continue",
+        "fn f(fvec2 v) -> float = fold each value of v with acc = 0.0 { \
+         continue; acc };",
+        Analysis.Semantic,
+        "continue is not permitted in a fold body" );
+      ( "fold ret in branch",
+        "fn f(fvec2 v) -> float = fold each value of v with acc = 0.0 { if \
+         value { ret 2.0; }; acc };",
+        Analysis.Semantic,
+        "ret is not permitted in a fold body" );
+      ( "fold nested-loop break",
+        "fn f(fvec2 v) -> float = fold each value of v with acc = 0.0 { iter \
+         each i of 0:1 { break; }; acc };",
+        Analysis.Semantic,
+        "break is not permitted in a fold body" );
+    ];
+  List.iter
+    (fun (label, source) ->
+      let p = parse_to_core source |> Analysis.Pipeline.run_core in
+      assert_no_diagnostics (label ^ " typing") p.typing.diagnostics;
+      assert_no_diagnostics (label ^ " semantics") p.semantic.diagnostics)
+    [
+      ( "typed small accumulator",
+        "fn f(i8[2] v) -> i8 = fold each value of v with i8 acc = 0 { acc + \
+         value };" );
+      ( "vector accumulator over matrix rows",
+        "fn f(mat2x3 m, fvec3 seed) -> fvec3 = fold each row of m with acc = \
+         seed { acc + row };" );
+      ( "fold inside ordinary loop allows outer controls",
+        "fn f(fvec2 v) -> float { iter each i of 0:1 { let x = fold each value \
+         of v with acc = 0.0 { acc + value }; break; }; 0.0 }" );
+    ];
+  let missing_fold_result =
+    parse_to_core
+      "fn f(i32[0] v) -> i32 = fold each value of v with acc = 7 { acc + \
+       value; };"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_true "fold body needs a value even for empty source"
+    (List.exists
+       (fun (d : Analysis.diagnostic) ->
+         d.category = Analysis.Semantic
+         && string_contains d.message
+              "fold body must produce an accumulator value")
+       missing_fold_result.semantic.diagnostics);
+  List.iter
+    (fun (label, source) ->
+      check_iteration_error label source Analysis.TypeCheck
+        "value iteration requires a vector, matrix or fixed array")
+    [
+      ("scalar iteration", "fn main() -> void { iter each value of 3 {}; }");
+      ( "string iteration",
+        "fn main() -> void { iter each value of \"abc\" {}; }" );
+      ( "pointer iteration",
+        "fn main(fvec3* p) -> void { iter each value of p {}; }" );
+      ( "struct is not an aggregate iterable",
+        "type S = struct { i32 rows; i32 dim; }; fn main(S s) -> void { iter \
+         each value of s {}; }" );
+    ];
+  check_iteration_error "value is immutable"
+    "fn main() -> void { iter each value of Vec<1.0> { value = 2.0; }; }"
+    Analysis.Semantic "assignment to immutable binding value";
+  check_iteration_error "matrix row is an immutable value copy"
+    "fn main() -> void { iter each row of Mat<Vec<1.0, 2.0>> { row[0] = 2.0; \
+     }; }"
+    Analysis.Semantic "assignment to immutable binding row";
+  check_iteration_error "ordinal is immutable"
+    "fn main() -> void { iter each value of Vec<1.0> indexed by index { index \
+     = 2; }; }"
+    Analysis.Semantic "assignment to immutable binding index";
+  check_iteration_error "duplicate iteration binding"
+    "fn main() -> void { iter each value of Vec<1.0> indexed by value {}; }"
+    Analysis.Semantic "duplicate binding value";
+  check_iteration_error "iteration binding cannot escape"
+    "fn main() -> float { iter each value of Vec<1.0> {}; value }"
+    Analysis.TypeCheck "unknown identifier value";
+  check_iteration_error "range counter cannot escape"
+    "fn main() -> i32 { iter each i of 0:1 {}; i }" Analysis.TypeCheck
+    "unknown identifier i";
+  check_iteration_error "ordinal binding cannot escape"
+    "fn main() -> u32 { iter each value of Vec<1.0> indexed by index {}; index \
+     }"
+    Analysis.TypeCheck "unknown identifier index";
+  check_iteration_error "expression body return mismatch"
+    "fn bad() -> i32 = Vec<1.0, 2.0>;" Analysis.Semantic
+    "returned value does not match the function return type";
+
+  List.iter
+    (fun source ->
+      check_iteration_error "void return rules stay identical" source
+        Analysis.Semantic "void function cannot return a value")
+    [ "fn empty() -> void = {};"; "fn empty() -> void { {} }" ];
+
   let duplicate_function_pipeline =
     parse_to_core
       "fn duplicate() -> i32 { 1 }\n\

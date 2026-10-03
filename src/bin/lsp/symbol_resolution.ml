@@ -495,6 +495,7 @@ and walk_expression state env (expr : Core.expression) =
       | Core.Enum enum_lit -> enum_literal_hover state expr enum_lit
       | _ -> ())
   | Nil | Zero -> ()
+  | Fill inner
   | ToBool inner
   | SizeExpr inner
   | BoxExpr inner
@@ -799,6 +800,7 @@ let rec highlight_expression state env (expr : Core.expression) =
                    enum_lit.value.enum_variant.value))
       | _ -> ())
   | Nil | Zero -> ()
+  | Fill inner
   | ToBool inner
   | SizeExpr inner
   | BoxExpr inner

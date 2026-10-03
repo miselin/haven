@@ -55,6 +55,10 @@ module Specialize = struct
       else target_ty
     in
     match (target_ty, field.value.field.value) with
+    | ( Some
+          ( ResolvedVec _ | ResolvedMatrix _ | ResolvedArray _ | ResolvedVecHole
+          | ResolvedMatrixHole ),
+        "$iter.count" )
     | Some (ResolvedVec _ | ResolvedVecHole), "dim"
     | Some (ResolvedMatrix _ | ResolvedMatrixHole), ("rows" | "cols") ->
         true
@@ -164,13 +168,27 @@ module Specialize = struct
 
   let clone_identifier (id : Core.identifier) value = { id with value }
 
+  let rewritten_scope state original =
+    match (state.analysis_scope, original) with
+    | None, scope -> scope
+    | Some scope, None -> Some scope
+    | Some scope, Some local ->
+        if
+          String.equal scope local
+          || Haven_token.Token.starts_with ~prefix:(scope ^ "/") local
+        then Some local
+        else Some (scope ^ "/" ^ local)
+
   let literal_int loc value =
     mk_expr loc (Core.Literal (mk_literal loc (Core.Integer value)))
 
   let rec rewrite_expression state annotations (expr : Core.expression) :
       Core.expression =
     let rewritten = rewrite_expression_value state annotations expr in
-    { rewritten with analysis_scope = state.analysis_scope }
+    {
+      rewritten with
+      analysis_scope = rewritten_scope state expr.analysis_scope;
+    }
 
   and rewrite_expression_value state annotations (expr : Core.expression) :
       Core.expression =
@@ -209,6 +227,11 @@ module Specialize = struct
         }
     | Core.Block block ->
         { expr with value = Core.Block (rewrite_block state annotations block) }
+    | Core.Fill inner ->
+        {
+          expr with
+          value = Core.Fill (rewrite_expression state annotations inner);
+        }
     | Core.ToBool inner ->
         {
           expr with
@@ -535,7 +558,7 @@ module Specialize = struct
           Core.Let
             {
               binding with
-              analysis_scope = state.analysis_scope;
+              analysis_scope = rewritten_scope state binding.analysis_scope;
               value =
                 {
                   binding.value with
@@ -564,14 +587,19 @@ module Specialize = struct
             }
       | (Core.Break | Core.Continue) as value -> value
     in
-    { stmt with value; analysis_scope = state.analysis_scope }
+    {
+      stmt with
+      value;
+      analysis_scope = rewritten_scope state stmt.analysis_scope;
+    }
 
   and rewrite_block state annotations (block : Core.block) =
     {
       block with
-      analysis_scope = state.analysis_scope;
+      analysis_scope = rewritten_scope state block.analysis_scope;
       value =
         {
+          block.value with
           Core.statements =
             List.map
               (rewrite_statement state annotations)

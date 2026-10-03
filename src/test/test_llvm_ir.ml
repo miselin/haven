@@ -52,7 +52,8 @@ let assign_stmt target value =
 let let_stmt ~mut name init_expr =
   node (Core.Let (node { Core.mut; ty = None; name = ident name; init_expr }))
 
-let block ?result statements = node { Core.statements; result }
+let block ?result statements =
+  node { Core.statements; result; fold_body = false; map_body = false }
 
 let fn_decl ?(public = false) ?(impure = false) ?(definition = None)
     ?(params = []) ?(return_type = Some ty_void) name =
@@ -95,6 +96,90 @@ let emit_core_ir program =
   Haven.Ast.Llvm_ir.emit_ir_string pipeline
 
 let run () =
+  let hint_pipeline =
+    parse_to_core
+      {|pub fn sugar(i32 x) -> i32 = x + 1;
+      pub fn braced(i32 x) -> i32 { x + 1 }
+      pub fn statements(i32 x) -> i32 { let value = x + 1; value }
+      pub fn nested_statements(i32 x) -> i32 = { let value = x + 1; value };
+      pub impure fn imported(i32 x) -> i32;
+      pub impure fn call_import(i32 x) -> i32 = imported(x);
+      fn scaled(fvec? v) = v * 2.0;
+      pub fn small(fvec2 v) -> fvec2 = scaled(v);
+      pub fn wide(fvec3 v) -> fvec3 = scaled(v);|}
+    |> Analysis.Pipeline.run_core
+  in
+  assert_no_diagnostics "inline hint typing" hint_pipeline.typing.diagnostics;
+  assert_no_diagnostics "inline hint semantics"
+    hint_pipeline.semantic.diagnostics;
+  let hint_module = Haven.Ast.Llvm_ir.compile hint_pipeline in
+  let has_attribute name attribute =
+    let fn = Option.get (Llvm.lookup_function name hint_module.llmodule) in
+    Array.exists
+      (fun attr ->
+        match Llvm.repr_of_attr attr with
+        | Llvm.AttrRepr.Enum (kind, _) -> kind = Llvm.enum_attr_kind attribute
+        | _ -> false)
+      (Llvm.function_attrs fn Llvm.AttrIndex.Function)
+  in
+  List.iter
+    (fun name ->
+      assert_true
+        (name ^ " has advisory inlinehint")
+        (has_attribute name "inlinehint");
+      assert_true
+        (name ^ " does not force inlining")
+        (not (has_attribute name "alwaysinline")))
+    [
+      "sugar";
+      "braced";
+      "call_import";
+      "scaled__spec__fvec2";
+      "scaled__spec__fvec3";
+    ];
+  List.iter
+    (fun name ->
+      assert_true
+        (name ^ " must not receive a body-shape hint")
+        (not (has_attribute name "inlinehint")))
+    [ "statements"; "nested_statements"; "imported" ];
+  assert_true
+    "braced and expression bodies use equivalent advisory IR attributes"
+    (has_attribute "sugar" "inlinehint" = has_attribute "braced" "inlinehint");
+
+  let iteration_ir =
+    emit_ir
+      {|pub impure fn obtain() -> fvec3;
+      pub impure fn walk() -> float {
+        let mut total = 0.0;
+        iter each value of obtain() { total = total + value; };
+        total
+      }|}
+  in
+  assert_true "iteration evaluates its impure aggregate producer once"
+    (count_occurrences iteration_ir "call <3 x float> @obtain()" = 1);
+  assert_true "iteration lowers to ordinary eager loop instructions"
+    (string_contains iteration_ir "icmp ult i32"
+    && string_contains iteration_ir "loop.cond");
+  let fold_ir =
+    emit_ir
+      {|pub impure fn obtain_fold() -> fvec3;
+    pub impure fn seed_fold() -> float;
+    pub impure fn step_fold(float acc, float value) -> float;
+    pub impure fn fold_sum() -> float = fold each value of obtain_fold() with acc = seed_fold() { step_fold(acc, value) };|}
+  in
+  assert_true "fold source and seed calls each occur once"
+    (count_occurrences fold_ir "call <3 x float> @obtain_fold()" = 1
+    && count_occurrences fold_ir "call float @seed_fold()" = 1);
+  assert_true "fold step resides in the ordinary sequential loop"
+    (count_occurrences fold_ir "call float @step_fold(" = 1
+    && string_contains fold_ir "icmp ult i32");
+  assert_true "fold lowering is not eligible as a statement-free body"
+    (not (string_contains fold_ir "inlinehint"));
+  let expression_ir = emit_ir "pub fn add(i32 x) -> i32 = x + 1;" in
+  assert_true "expression body emits arithmetic directly in the called function"
+    (string_contains expression_ir "add i32");
+
   let main_ir = emit_ir "pub fn main() -> i32 { 7 }" in
   assert_true "main IR should define main"
     (string_contains main_ir "define i32 @main()");
@@ -320,7 +405,7 @@ pub fn main() -> void {}
     emit_ir
       "fn dot(fvec? a, fvec? b) -> float {\n\
       \  let product = a * b; let mut total = 0.0;\n\
-      \  iter 0:(a.dim - 1) i { total = total + product[i]; }; total\n\
+      \  iter each i of 0:(a.dim - 1) { total = total + product[i]; }; total\n\
        }\n\
        pub fn main() -> float {\n\
       \  dot(Vec<1.0, 2.0>, Vec<3.0, 4.0>) +\n\

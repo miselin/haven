@@ -46,6 +46,7 @@ module Cleanup = struct
             | Some result -> result.value
             | None -> Core.Block block
           else Core.Block block
+      | Core.Fill inner -> Core.Fill (clean_expression typed inner)
       | Core.ToBool inner ->
           let inner : Core.expression = clean_expression typed inner in
           let inner_is_bool =
@@ -201,6 +202,7 @@ module Cleanup = struct
       block with
       value =
         {
+          block.value with
           Core.statements =
             List.map (clean_statement typed) block.value.statements;
           result = Option.map (clean_expression typed) block.value.result;

@@ -211,7 +211,7 @@ module Ownership = struct
     if not (resolved_contains_ownership state expr.loc expected) then ()
     else
       match expr.value with
-      | Core.Nil | Core.Zero -> ()
+      | Core.Nil | Core.Zero | Core.Fill _ -> ()
       | Core.BoxExpr _ | Core.BoxType _ | Core.BoxConstruct _ -> ()
       | Core.Call call ->
           emit_retains_for_expected_enum_call state reason expected call
@@ -299,6 +299,7 @@ module Ownership = struct
         | Core.Integer _ | Core.Bool _ | Core.Float _ | Core.String _
         | Core.Char _ ->
             ())
+    | Core.Fill inner
     | Core.ToBool inner
     | Core.SizeExpr inner
     | Core.BoxExpr inner

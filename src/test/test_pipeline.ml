@@ -1,6 +1,225 @@
 open Test_support
 
 let run () =
+  List.iter
+    (fun (label, prefix, operand, expect_type) ->
+      let source =
+        prefix
+        ^ "pub impure fn boundary(fvec2 vector) -> float = fold each value of \
+           unbox box " ^ operand ^ " with acc = 0.0 { acc + value };"
+      in
+      let core = parse_to_core source in
+      let fn = find_named_function "boundary" core in
+      (match
+         (Option.get (Option.get fn.value.definition).value.result).value
+       with
+      | Core.Block
+          {
+            value = { statements = { value = Core.Let snapshot; _ } :: _; _ };
+            _;
+          } -> (
+          match snapshot.value.init_expr.value with
+          | Core.Unbox boxed -> (
+              match (boxed.value, expect_type) with
+              | Core.BoxExpr { value = Core.Identifier id; _ }, false ->
+                  assert_true
+                    (label ^ " boxes the variable value")
+                    (id.value = "vector")
+              | Core.BoxType { value = Core.CustomType custom; _ }, true ->
+                  assert_true
+                    (label ^ " resolves the registered type after parsing")
+                    (custom.name.value = "Vector")
+              | _ -> failwith (label ^ " incorrect boxing lowering"))
+          | _ -> failwith "expected unboxed snapshot")
+      | _ -> failwith "expected fold source snapshot");
+      let pipeline = Analysis.Pipeline.run_core core in
+      List.iter
+        (assert_no_diagnostics label)
+        [
+          pipeline.typing.diagnostics;
+          pipeline.semantic.diagnostics;
+          pipeline.verify.diagnostics;
+          pipeline.ownership.diagnostics;
+        ])
+    [
+      ("fold WITH/value boundary", "", "vector", false);
+      ("fold WITH/type boundary", "type Vector = fvec2;\n", "Vector", true);
+    ];
+  let fold_source =
+    "fn fold_sum(fvec3 v) -> float = fold each value of v with acc = 0.0 { acc \
+     + value };"
+  in
+  let fold_core = parse_to_core fold_source in
+  let fold_fn = find_named_function "fold_sum" fold_core in
+  (match
+     (Option.get (Option.get fold_fn.value.definition).value.result).value
+   with
+  | Core.Block outer -> (
+      match (outer.value.statements, outer.value.result) with
+      | ( [
+            { value = Core.Let source; _ };
+            { value = Core.Let seed; _ };
+            { value = Core.Loop loop; _ };
+          ],
+          Some result ) -> (
+          assert_true "fold snapshots source before seed outside the loop"
+            (source.value.name.value <> seed.value.name.value
+            && seed.value.mut && (not source.value.mut)
+            && List.length loop.value.init = 1);
+          (match result.value with
+          | Core.Identifier name ->
+              assert_true "fold returns its final private accumulator"
+                (name.value = seed.value.name.value)
+          | _ -> failwith "expected fold final accumulator reference");
+          match loop.value.body.value.statements with
+          | [
+           { value = Core.Let value; _ };
+           { value = Core.Let accumulator; _ };
+           { value = Core.Expression update; _ };
+          ] -> (
+              assert_true
+                "fold value and current accumulator are immutable copies"
+                ((not value.value.mut) && not accumulator.value.mut);
+              assert_true
+                "fold generated bindings have distinct analysis identities"
+                (Analysis.binding_id source <> Analysis.binding_id seed
+                && Analysis.binding_id value <> Analysis.binding_id accumulator
+                );
+              match update.value with
+              | Core.Assign
+                  { value = { value = { value = Core.Block body; _ }; _ }; _ }
+                ->
+                  assert_true
+                    "fold control region metadata marks only the original body"
+                    (body.value.fold_body
+                    && (not loop.value.body.value.fold_body)
+                    && not outer.value.fold_body);
+                  assert_true "fold body preserves its source braces"
+                    (body.loc.start_pos.pos_cnum = String.index fold_source '{'
+                    && body.loc.end_pos.pos_cnum
+                       = String.index fold_source '}' + 1)
+              | _ -> failwith "expected ordinary fold accumulator assignment")
+          | _ -> failwith "expected immutable fold bindings and one update")
+      | _ -> failwith "expected source, seed, loop and result")
+  | _ -> failwith "fold must lower to an ordinary Core value block");
+  let fold_generic =
+    parse_to_core
+      {|fn total(mat? m) -> float = fold each row of m with acc = 0.0 {
+    acc + (fold each value of row with subtotal = 0.0 { subtotal + value })
+  };
+  pub fn first() -> float = total(Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>);
+  pub fn second() -> float = total(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>, Vec<5.0, 6.0>>);|}
+    |> Analysis.Pipeline.run_core
+  in
+  List.iter
+    (assert_no_diagnostics "generic nested fold")
+    [
+      fold_generic.typing.diagnostics;
+      fold_generic.semantic.diagnostics;
+      fold_generic.verify.diagnostics;
+      fold_generic.purity.diagnostics;
+      fold_generic.ownership.diagnostics;
+    ];
+  let fold_printed =
+    Haven.Ast.Pretty.core_program_to_string fold_generic.cleaned
+  in
+  assert_true
+    "nested folds instantiate both matrix shapes without internal cardinality \
+     fields"
+    (string_contains fold_printed "total__spec__mat2x3"
+    && string_contains fold_printed "total__spec__mat3x2"
+    && not (string_contains fold_printed "$iter.count"));
+  let truthiness =
+    parse_to_core "fn choose(i32 value) -> i32 = if value { 1 } else { 0 };"
+  in
+  let choose = find_named_function "choose" truthiness in
+  (match
+     (Option.get (Option.get choose.value.definition).value.result).value
+   with
+  | Core.Match m -> (
+      match m.value.expr.value with
+      | Core.ToBool inner ->
+          assert_true
+            "Boolean conversion and scalar keep distinct analysis identities"
+            (Analysis.expr_id m.value.expr <> Analysis.expr_id inner);
+          assert_true "Boolean conversion keeps the condition diagnostic span"
+            (m.value.expr.loc = inner.loc)
+      | _ -> failwith "expected Boolean conversion")
+  | _ -> failwith "expected conditional lowering");
+
+  let foreach_core =
+    parse_to_core
+      "fn walk(fvec3 v) -> void { iter each value of v indexed by index {}; }"
+  in
+  let walk = find_named_function "walk" foreach_core in
+  (match (Option.get walk.value.definition).value.statements with
+  | [ { value = Core.Loop loop; _ } ] ->
+      assert_true "iteration source and private counter are initialized once"
+        (List.length loop.value.init = 2);
+      (match loop.value.cond.value with
+      | Core.Binary comparison ->
+          assert_true
+            "value iteration uses a strict bound, safe for an empty array"
+            (comparison.value.op = Core.LessThan)
+      | _ -> failwith "expected cardinality comparison");
+      assert_true "loop body binds a copied value and immutable ordinal"
+        (List.for_all
+           (fun (stmt : Core.statement) ->
+             match stmt.value with
+             | Core.Let binding -> not binding.value.mut
+             | _ -> false)
+           loop.value.body.value.statements)
+  | _ -> failwith "expected ordinary Core loop lowering");
+  let foreach_generic =
+    parse_to_core
+      {|fn total(mat? m) -> float {
+        let mut result = 0.0;
+        iter each row of m { iter each value of row { result = result + value; }; };
+        result
+      }
+      pub fn first() -> float = total(Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>);
+      pub fn second() -> float = total(Mat<Vec<1.0, 2.0>, Vec<3.0, 4.0>, Vec<5.0, 6.0>>);|}
+    |> Analysis.Pipeline.run_core
+  in
+  List.iter
+    (assert_no_diagnostics "generic nested value iteration")
+    [
+      foreach_generic.typing.diagnostics;
+      foreach_generic.verify.diagnostics;
+      foreach_generic.semantic.diagnostics;
+      foreach_generic.purity.diagnostics;
+      foreach_generic.ownership.diagnostics;
+    ];
+  let snapshots =
+    List.filter_map
+      (fun (decl : Core.top_decl) ->
+        match decl.value with
+        | Core.FDecl fn when fn.analysis_scope <> None -> (
+            let body = Option.get fn.value.definition in
+            match body.value.statements with
+            | _ :: { value = Core.Loop loop; _ } :: _ -> (
+                match loop.value.init with
+                | { value = Core.Let binding; _ } :: _ -> Some binding
+                | _ -> None)
+            | _ -> None)
+        | _ -> None)
+      foreach_generic.core.program.value.decls
+  in
+  (match snapshots with
+  | [ a; b ] ->
+      assert_true
+        "generated snapshot source spans remain unchanged across clones"
+        (a.loc = b.loc);
+      assert_true "generated snapshot IDs distinguish clones"
+        (Analysis.binding_id a <> Analysis.binding_id b);
+      List.iter
+        (fun (binding : Core.let_stmt) ->
+          let scope = Option.get binding.analysis_scope in
+          assert_true "local generated identity survives specialization"
+            (string_contains scope "/$foreach.node."))
+        snapshots
+  | _ -> failwith "expected two matrix iteration specializations");
+
   let typed_program =
     parse_to_core "pub fn main() -> void { let x = 5; }" |> Analysis.Typing.run
   in

@@ -107,6 +107,13 @@ and pp_expression fmt expr =
       fprintf fmt "Unary(%a, %a)" pp_unary_op u.op pp_expression u.inner
   | Literal lit -> fprintf fmt "Literal(%a)" pp_literal lit
   | Block block -> pp_block fmt block
+  | Fold fold ->
+      fprintf fmt
+        "Fold(source=%a, value=%a, accumulator=%a, type=%a, seed=%a, body=%a)"
+        pp_expression fold.value.source pp_identifier fold.value.var
+        pp_identifier fold.value.accumulator (pp_print_option pp_type)
+        fold.value.accumulator_type pp_expression fold.value.seed pp_block
+        fold.value.body
   | ParenthesizedExpression e ->
       fprintf fmt "@[<hv 2>Parenthesized(@,%a@,)@]" pp_expression e
   | Identifier s -> fprintf fmt "Ident(%a)" pp_identifier s
@@ -119,6 +126,12 @@ and pp_expression fmt expr =
   | SizeType t -> fprintf fmt "SizeType(%a)" pp_type t
   | Nil -> fprintf fmt "Nil"
   | Zero -> fprintf fmt "Zero"
+  | Fill inner -> fprintf fmt "Fill(%a)" pp_expression inner
+  | Map map ->
+      fprintf fmt "Map(source=%a, value=%a, index=%a, body=%a)" pp_expression
+        map.value.source pp_identifier map.value.var
+        (pp_print_option pp_identifier)
+        map.value.index pp_block map.value.body
   | If i -> pp_if_expr fmt i
   | Match m -> pp_match_expr fmt m
   | BoxExpr e -> fprintf fmt "Box(expr=%a)" pp_expression e
@@ -213,6 +226,12 @@ and pp_statement fmt stmt =
         i.range.value.range_end
         (pp_print_option pp_expression)
         i.range.value.range_incr pp_block i.body
+  | Foreach i_node ->
+      let i = unwrap i_node in
+      fprintf fmt "Foreach(source=%a, var=%a, index=%a, body=%a)" pp_expression
+        i.source pp_identifier i.var
+        (pp_print_option pp_identifier)
+        i.index pp_block i.body
   | While w_node ->
       let w = unwrap w_node in
       fprintf fmt "@[<hv 2>While(@,cond=%a,@ body=%a@,)@]" pp_expression w.cond

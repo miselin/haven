@@ -413,6 +413,16 @@ and cst_statement_to_surface (stmt : Cst.statement) : Surface.statement option =
                   var = cst_identifier_to_surface iter.value.var;
                   body = cst_block_to_surface iter.value.body;
                 }))
+    | Cst.Foreach iter ->
+        Some
+          (Surface.Foreach
+             (mk_surface iter.loc
+                {
+                  Surface.source = cst_expr_to_surface iter.value.source;
+                  var = cst_identifier_to_surface iter.value.var;
+                  index = Option.map cst_identifier_to_surface iter.value.index;
+                  body = cst_block_to_surface iter.value.body;
+                }))
     | Cst.While while_stmt ->
         Some
           (Surface.While
@@ -447,6 +457,28 @@ and cst_expr_to_surface (expr : Cst.expression) : Surface.expression =
         | Cst.Unary u -> Surface.Unary (cst_unary_to_surface u)
         | Cst.Literal lit -> Surface.Literal (cst_literal_to_surface lit)
         | Cst.Block block -> Surface.Block (cst_block_to_surface block)
+        | Cst.Map map ->
+            Surface.Map
+              (mk_surface map.loc
+                 {
+                   Surface.source = cst_expr_to_surface map.value.source;
+                   var = cst_identifier_to_surface map.value.var;
+                   index = Option.map cst_identifier_to_surface map.value.index;
+                   body = cst_block_to_surface map.value.body;
+                 })
+        | Cst.Fold fold ->
+            Surface.Fold
+              (mk_surface fold.loc
+                 {
+                   Surface.source = cst_expr_to_surface fold.value.source;
+                   var = cst_identifier_to_surface fold.value.var;
+                   accumulator =
+                     cst_identifier_to_surface fold.value.accumulator;
+                   accumulator_type =
+                     Option.map cst_type_to_surface fold.value.accumulator_type;
+                   seed = cst_expr_to_surface fold.value.seed;
+                   body = cst_block_to_surface fold.value.body;
+                 })
         | Cst.ParenthesizedExpression _ -> assert false
         | Cst.Identifier id -> Surface.Identifier (cst_identifier_to_surface id)
         | Cst.Initializer init -> Surface.Initializer (cst_init_to_surface init)
@@ -455,6 +487,7 @@ and cst_expr_to_surface (expr : Cst.expression) : Surface.expression =
         | Cst.SizeType ty -> Surface.SizeType (cst_type_to_surface ty)
         | Cst.Nil -> Surface.Nil
         | Cst.Zero -> Surface.Zero
+        | Cst.Fill inner -> Surface.Fill (cst_expr_to_surface inner)
         | Cst.If ifx -> Surface.If (cst_if_expr_to_surface ifx)
         | Cst.Match m -> Surface.Match (cst_match_expr_to_surface m)
         | Cst.BoxExpr inner -> Surface.BoxExpr (cst_expr_to_surface inner)
@@ -1194,17 +1227,25 @@ and surface_block_to_core st ~context (block : Surface.block) : Core.block =
   | `Value, result ->
       mk_core_block block.loc
         {
-          Core.statements;
+          Core.fold_body = false;
+          map_body = false;
+          statements;
           result = Option.map (surface_expr_to_core st) result;
         }
   | `Statement, None ->
-      mk_core_block block.loc { Core.statements; result = None }
+      mk_core_block block.loc
+        { Core.statements; result = None; fold_body = false; map_body = false }
   | `Statement, Some expr ->
       let expr_stmt =
         mk_core_stmt expr.loc (Core.Expression (surface_expr_to_core st expr))
       in
       mk_core_block block.loc
-        { Core.statements = statements @ [ expr_stmt ]; result = None }
+        {
+          Core.statements = statements @ [ expr_stmt ];
+          result = None;
+          fold_body = false;
+          map_body = false;
+        }
 
 and surface_statement_to_core st (stmt : Surface.statement) :
     Core.statement list =
@@ -1263,8 +1304,301 @@ and surface_statement_to_core st (stmt : Surface.statement) :
   | Surface.Break -> [ mk_core_stmt stmt.loc Core.Break ]
   | Surface.Continue -> [ mk_core_stmt stmt.loc Core.Continue ]
   | Surface.Iter iter -> [ lower_iter_statement st stmt.loc iter ]
+  | Surface.Foreach iter -> [ lower_foreach_statement st stmt.loc iter ]
+
+and lower_foreach_statement st loc (iter : Surface.foreach_stmt) :
+    Core.statement =
+  (* Generated nodes retain the source span, with separate analysis identities.
+     Each specialization must retain these local identities inside its clone scope. *)
+  let generated loc value : _ Core.node =
+    { Core.value; loc; analysis_scope = Some (fresh_name st "foreach.node") }
+  in
+  let source = fresh_identifier st "foreach.source" iter.value.source.loc in
+  let counter = fresh_identifier st "foreach.index" iter.loc in
+  let reference name = generated name.Core.loc (Core.Identifier name) in
+  let literal value =
+    generated loc (Core.Literal (generated loc (Core.Integer value)))
+  in
+  let binary op left right =
+    generated loc (Core.Binary (generated loc { Core.op; left; right }))
+  in
+  let binding ?ty ~mut name init_expr =
+    generated name.Core.loc
+      (Core.Let (generated name.Core.loc { Core.mut; ty; name; init_expr }))
+  in
+  let unsigned =
+    mk_core_type loc
+      (Core.NumericType { signedness = Haven_token.Token.Unsigned; bits = 32 })
+  in
+  let count =
+    generated iter.value.source.loc
+      (Core.Field
+         (generated iter.value.source.loc
+            {
+              Core.target = reference source;
+              arrow = false;
+              field = mk_core_ident iter.value.source.loc "$iter.count";
+            }))
+  in
+  let element =
+    generated iter.value.var.loc
+      (Core.Index
+         (generated iter.value.var.loc
+            { Core.target = reference source; index = reference counter }))
+  in
+  let value_binding =
+    binding ~mut:false (surface_identifier_to_core iter.value.var) element
+  in
+  let index_binding =
+    Option.to_list
+      (Option.map
+         (fun name ->
+           binding ~ty:unsigned ~mut:false
+             (surface_identifier_to_core name)
+             (reference counter))
+         iter.value.index)
+  in
+  let body = surface_block_to_core st ~context:`Statement iter.value.body in
+  let body =
+    {
+      body with
+      value =
+        {
+          body.value with
+          statements = (value_binding :: index_binding) @ body.value.statements;
+        };
+    }
+  in
+  let increment =
+    generated loc
+      (Core.Expression
+         (generated loc
+            (Core.Assign
+               (generated loc
+                  {
+                    Core.target = reference counter;
+                    value = binary Core.Add (reference counter) (literal 1);
+                  }))))
+  in
+  generated loc
+    (Core.Loop
+       (generated iter.loc
+          {
+            Core.init =
+              [
+                binding ~mut:false source
+                  (surface_expr_to_core st iter.value.source);
+                binding ~ty:unsigned ~mut:true counter (literal 0);
+              ];
+            cond = binary Core.LessThan (reference counter) count;
+            body;
+            step = [ increment ];
+            iteration_hint = None;
+          }))
+
+and lower_map_expression st (map : Surface.map_expr) : Core.block =
+  let generated loc value : _ Core.node =
+    { Core.value; loc; analysis_scope = Some (fresh_name st "map.node") }
+  in
+  let result = fresh_identifier st "map.result" map.loc in
+  let reference (name : Core.identifier) =
+    generated name.loc (Core.Identifier name)
+  in
+  let body = surface_block_to_core st ~context:`Value map.value.body in
+  let body = { body with value = { body.value with map_body = true } } in
+  let iteration =
+    mk_surface map.loc
+      {
+        Surface.source = map.value.source;
+        var = map.value.var;
+        index = map.value.index;
+        body =
+          mk_surface_block map.value.body.loc
+            { Surface.statements = []; result = None };
+      }
+  in
+  match (lower_foreach_statement st map.loc iteration).value with
+  | Core.Loop loop -> (
+      match loop.value.init with
+      | ({ value = Core.Let source; _ } as source_binding)
+        :: ({ value = Core.Let counter; _ } :: _ as counter_bindings) ->
+          (* Copy the snapshot to fix the result shape and element type. Each body
+           result replaces exactly one slot; no user source is written. *)
+          let result_binding =
+            generated map.loc
+              (Core.Let
+                 (generated map.loc
+                    {
+                      Core.mut = true;
+                      ty = None;
+                      name = result;
+                      init_expr = reference source.value.name;
+                    }))
+          in
+          let update =
+            generated map.value.body.loc
+              (Core.Expression
+                 (generated map.value.body.loc
+                    (Core.Assign
+                       (generated map.value.body.loc
+                          {
+                            Core.target =
+                              generated map.loc
+                                (Core.Index
+                                   (generated map.loc
+                                      {
+                                        Core.target = reference result;
+                                        index = reference counter.value.name;
+                                      }));
+                            value =
+                              generated map.value.body.loc (Core.Block body);
+                          }))))
+          in
+          let loop_body =
+            {
+              loop.value.body with
+              value =
+                {
+                  loop.value.body.value with
+                  statements = loop.value.body.value.statements @ [ update ];
+                };
+            }
+          in
+          let loop =
+            {
+              loop with
+              value =
+                { loop.value with init = counter_bindings; body = loop_body };
+            }
+          in
+          generated map.loc
+            {
+              Core.statements =
+                [
+                  source_binding;
+                  result_binding;
+                  generated map.loc (Core.Loop loop);
+                ];
+              result = Some (reference result);
+              fold_body = false;
+              map_body = false;
+            }
+      | _ -> invalid_arg "map lowering requires the foreach source and counter")
+  | _ -> invalid_arg "map lowering requires the foreach loop"
+
+and lower_fold_expression st (fold : Surface.fold_expr) : Core.block =
+  let generated loc value : _ Core.node =
+    { Core.value; loc; analysis_scope = Some (fresh_name st "fold.node") }
+  in
+  let accumulator =
+    fresh_identifier st "fold.accumulator" fold.value.accumulator.loc
+  in
+  let reference name = generated name.Core.loc (Core.Identifier name) in
+  let seed_binding =
+    generated fold.value.seed.loc
+      (Core.Let
+         (generated fold.loc
+            {
+              Core.mut = true;
+              ty = Option.map surface_type_to_core fold.value.accumulator_type;
+              name = accumulator;
+              init_expr = surface_expr_to_core st fold.value.seed;
+            }))
+  in
+  let current_binding =
+    generated fold.value.accumulator.loc
+      (Core.Let
+         (generated fold.value.accumulator.loc
+            {
+              Core.mut = false;
+              ty = None;
+              name = surface_identifier_to_core fold.value.accumulator;
+              init_expr = reference accumulator;
+            }))
+  in
+  let body = surface_block_to_core st ~context:`Value fold.value.body in
+  let body = { body with value = { body.value with fold_body = true } } in
+  let update =
+    generated fold.value.body.loc
+      (Core.Expression
+         (generated fold.value.body.loc
+            (Core.Assign
+               (generated fold.value.body.loc
+                  {
+                    Core.target = reference accumulator;
+                    value = generated fold.value.body.loc (Core.Block body);
+                  }))))
+  in
+  let empty_body =
+    mk_surface_block fold.value.body.loc
+      { Surface.statements = []; result = None }
+  in
+  let iteration =
+    mk_surface fold.loc
+      {
+        Surface.source = fold.value.source;
+        var = fold.value.var;
+        index = None;
+        body = empty_body;
+      }
+  in
+  match (lower_foreach_statement st fold.loc iteration).value with
+  | Core.Loop loop -> (
+      match loop.value.init with
+      | source_binding :: counter_bindings ->
+          (* Snapshot the source first, then evaluate the seed, and update exactly
+             once per visited element using the ordinary assignment type rules. *)
+          let loop_body =
+            {
+              loop.value.body with
+              value =
+                {
+                  loop.value.body.value with
+                  statements =
+                    loop.value.body.value.statements
+                    @ [ current_binding; update ];
+                };
+            }
+          in
+          let loop =
+            {
+              loop with
+              value =
+                { loop.value with init = counter_bindings; body = loop_body };
+            }
+          in
+          generated fold.loc
+            {
+              Core.statements =
+                [
+                  source_binding;
+                  seed_binding;
+                  generated fold.loc (Core.Loop loop);
+                ];
+              result = Some (reference accumulator);
+              fold_body = false;
+              map_body = false;
+            }
+      | [] -> invalid_arg "fold lowering requires the foreach source snapshot")
+  | _ -> invalid_arg "fold lowering requires the foreach loop"
 
 and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
+  (* Generated direction branches, bounds and updates can share a source span.
+     Keep independent identities so analysis does not merge Boolean conditions
+     with numeric counters or match results, including inside generic clones. *)
+  let generated loc value : _ Core.node =
+    { Core.value; loc; analysis_scope = Some (fresh_name st "iter.node") }
+  in
+  let reference (name : Core.identifier) =
+    generated name.loc (Core.Identifier name)
+  in
+  let integer loc value =
+    generated loc (Core.Literal (generated loc (Core.Integer value)))
+  in
+  let binary loc op left right =
+    generated loc (Core.Binary (generated loc { Core.op; left; right }))
+  in
+  let arm loc pattern expr = generated loc { Core.pattern; expr } in
   let end_name = fresh_identifier st "iter.end" iter.loc in
   let step_name = fresh_identifier st "iter.step" iter.loc in
   let index_name = surface_identifier_to_core iter.value.var in
@@ -1273,12 +1607,12 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
   let step_expr =
     match iter.value.range.value.range_incr with
     | Some expr -> surface_expr_to_core st expr
-    | None -> core_int_literal_expr iter.loc 1
+    | None -> integer iter.loc 1
   in
   let end_stmt =
-    mk_core_stmt loc
+    generated loc
       (Core.Let
-         (mk_core loc
+         (generated loc
             {
               Core.mut = false;
               ty = Some (default_iter_type end_name.loc);
@@ -1287,9 +1621,9 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
             }))
   in
   let step_stmt_binding =
-    mk_core_stmt loc
+    generated loc
       (Core.Let
-         (mk_core loc
+         (generated loc
             {
               Core.mut = false;
               ty = Some (default_iter_type step_name.loc);
@@ -1298,9 +1632,9 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
             }))
   in
   let index_stmt =
-    mk_core_stmt loc
+    generated loc
       (Core.Let
-         (mk_core iter.value.var.loc
+         (generated iter.value.var.loc
             {
               Core.mut = true;
               ty = Some (default_iter_type index_name.loc);
@@ -1308,49 +1642,50 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
               init_expr = start_expr;
             }))
   in
-  let index_expr = core_identifier_expr index_name in
-  let end_ref = core_identifier_expr end_name in
-  let step_ref = core_identifier_expr step_name in
+  let index_expr = reference index_name in
+  let end_ref = reference end_name in
+  let step_ref = reference step_name in
   let cond =
     match
       Option.bind iter.value.range.value.range_incr const_int_of_surface_expr
     with
     | Some step when step < 0 ->
-        core_binary_expr loc Core.GreaterThanOrEqual index_expr end_ref
+        binary loc Core.GreaterThanOrEqual index_expr end_ref
     | (Some _ | None) when Option.is_none iter.value.range.value.range_incr ->
-        core_binary_expr loc Core.LessThanOrEqual index_expr end_ref
-    | Some _ -> core_binary_expr loc Core.LessThanOrEqual index_expr end_ref
+        binary loc Core.LessThanOrEqual index_expr end_ref
+    | Some _ -> binary loc Core.LessThanOrEqual index_expr end_ref
     | None ->
-        let direction =
-          core_binary_expr loc Core.LessThan step_ref
-            (core_int_literal_expr loc 0)
-        in
+        let direction = binary loc Core.LessThan step_ref (integer loc 0) in
         let non_negative_arm =
-          core_match_arm loc
-            (mk_core_pattern loc
-               (Core.PatternLiteral (mk_core_literal loc (Core.Integer 0))))
-            (core_binary_expr loc Core.LessThanOrEqual index_expr end_ref)
+          arm loc
+            (generated loc
+               (Core.PatternLiteral (generated loc (Core.Bool false))))
+            (binary loc Core.LessThanOrEqual index_expr end_ref)
         in
         let negative_arm =
-          core_match_arm loc
-            (mk_core_pattern loc Core.PatternDefault)
-            (core_binary_expr loc Core.GreaterThanOrEqual index_expr end_ref)
+          arm loc
+            (generated loc Core.PatternDefault)
+            (binary loc Core.GreaterThanOrEqual index_expr end_ref)
         in
-        mk_core_expr loc
+        generated loc
           (Core.Match
-             (mk_core loc
+             (generated loc
                 {
-                  Core.expr = direction;
+                  Core.expr =
+                    {
+                      (generated loc (Core.ToBool direction)) with
+                      analysis_scope = Some (fresh_name st "iter.direction");
+                    };
                   arms = [ non_negative_arm; negative_arm ];
                 }))
   in
-  let next_value = core_binary_expr loc Core.Add index_expr step_ref in
+  let next_value = binary loc Core.Add index_expr step_ref in
   let increment =
-    mk_core_stmt loc
+    generated loc
       (Core.Expression
-         (mk_core_expr loc
+         (generated loc
             (Core.Assign
-               (mk_core loc { Core.target = index_expr; value = next_value }))))
+               (generated loc { Core.target = index_expr; value = next_value }))))
   in
   let body = surface_block_to_core st ~context:`Statement iter.value.body in
   let iteration_hint =
@@ -1358,9 +1693,9 @@ and lower_iter_statement st loc (iter : Surface.iter_stmt) : Core.statement =
       (fun n -> mk_core_iteration_hint iter.loc (Core.KnownTripCount n))
       (trip_count_of_range iter.value.range)
   in
-  mk_core_stmt loc
+  generated loc
     (Core.Loop
-       (mk_core iter.loc
+       (generated iter.loc
           {
             Core.init = [ end_stmt; step_stmt_binding; index_stmt ];
             cond;
@@ -1407,6 +1742,8 @@ and surface_expr_to_core st (expr : Surface.expression) : Core.expression =
         Core.Literal (surface_literal_to_core (surface_expr_to_core st) lit)
     | Surface.Block block ->
         Core.Block (surface_block_to_core st ~context:`Value block)
+    | Surface.Map map -> Core.Block (lower_map_expression st map)
+    | Surface.Fold fold -> Core.Block (lower_fold_expression st fold)
     | Surface.Identifier id -> Core.Identifier (surface_identifier_to_core id)
     | Surface.Initializer init ->
         Core.Initializer
@@ -1425,6 +1762,7 @@ and surface_expr_to_core st (expr : Surface.expression) : Core.expression =
     | Surface.SizeType ty -> Core.SizeType (surface_type_to_core ty)
     | Surface.Nil -> Core.Nil
     | Surface.Zero -> Core.Zero
+    | Surface.Fill inner -> Core.Fill (surface_expr_to_core st inner)
     | Surface.If ifx -> lower_if_expr st expr.loc ifx
     | Surface.Match m ->
         Core.Match
@@ -1493,7 +1831,14 @@ and lower_if_expr st loc (ifx : Surface.if_expr) : Core.expression_desc =
       (match ifx.value.else_branch with
       | None ->
           mk_core_expr loc
-            (Core.Block (mk_core_block loc { statements = []; result = None }))
+            (Core.Block
+               (mk_core_block loc
+                  {
+                    statements = [];
+                    result = None;
+                    fold_body = false;
+                    map_body = false;
+                  }))
       | Some block ->
           mk_core_expr block.loc
             (Core.Block (surface_block_to_core st ~context:`Value block)))
@@ -1510,8 +1855,12 @@ and lower_if_expr st loc (ifx : Surface.if_expr) : Core.expression_desc =
     (mk_core loc
        {
          Core.expr =
-           mk_core_expr ifx.value.cond.loc
-             (Core.ToBool (surface_expr_to_core st ifx.value.cond));
+           {
+             (mk_core_expr ifx.value.cond.loc
+                (Core.ToBool (surface_expr_to_core st ifx.value.cond)))
+             with
+             analysis_scope = Some (fresh_name st "if.condition");
+           };
          arms = [ true_arm; false_arm ];
        })
 

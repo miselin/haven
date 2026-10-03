@@ -27,6 +27,11 @@ let keywords =
          ("mut", Grammar.MUT);
          ("fn", Grammar.FN);
          ("iter", Grammar.ITER);
+         ("fill", Grammar.FILL);
+         ("map", Grammar.MAP);
+         ("fold", Grammar.FOLD);
+         ("each", Grammar.EACH);
+         ("of", Grammar.OF);
          ("load", Grammar.LOAD);
          ("ret", Grammar.RET);
          ("struct", Grammar.STRUCT);

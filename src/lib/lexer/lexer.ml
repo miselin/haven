@@ -278,14 +278,40 @@ let should_split_rshift rest =
 
 let split_closing_rshifts tokens =
   let gt_of tok = { tok with tok = Symbol Gt } in
-  let rec loop acc = function
-    | [] -> List.rev acc
-    | ({ tok = Symbol RShift; _ } as tok) :: rest when should_split_rshift rest
-      ->
-        loop (gt_of tok :: gt_of tok :: acc) rest
-    | tok :: rest -> loop (tok :: acc) rest
+  (* A foreach binding can follow Mat<Vec<...>> directly. Track aggregate
+     literal delimiters so its closing >> is not mistaken for a shift whose
+     right operand is the binding. Shifts inside parenthesized lanes remain
+     ordinary operators. *)
+  let pop_literal depth = function
+    | head :: rest when head = depth -> rest
+    | rest -> rest
   in
-  loop [] tokens
+  let rec loop acc depth literals = function
+    | [] -> List.rev acc
+    | ({ tok = Symbol RShift; _ } as tok) :: rest
+      when should_split_rshift rest
+           ||
+           match literals with
+           | a :: b :: _ -> a = depth && b = depth
+           | _ -> false ->
+        let literals = pop_literal depth (pop_literal depth literals) in
+        loop (gt_of tok :: gt_of tok :: acc) depth literals rest
+    | ({ tok = Ident ("Vec" | "Mat"); _ } as tok) :: rest ->
+        let literals =
+          match next_significant_token rest with
+          | Some { tok = Symbol Lt; _ } -> depth :: literals
+          | _ -> literals
+        in
+        loop (tok :: acc) depth literals rest
+    | ({ tok = Symbol Gt; _ } as tok) :: rest ->
+        loop (tok :: acc) depth (pop_literal depth literals) rest
+    | ({ tok = Symbol (LParen | LBracket | LBrace); _ } as tok) :: rest ->
+        loop (tok :: acc) (depth + 1) literals rest
+    | ({ tok = Symbol (RParen | RBracket | RBrace); _ } as tok) :: rest ->
+        loop (tok :: acc) (depth - 1) literals rest
+    | tok :: rest -> loop (tok :: acc) depth literals rest
+  in
+  loop [] 0 [] tokens
 
 let rec lex buf acc =
   match%sedlex buf with

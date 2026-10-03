@@ -127,6 +127,20 @@ and pp_surface_expression fmt (expr : Surface.expression) =
         pp_surface_expression unary.value.inner
   | Literal lit -> fprintf fmt "Literal(%a)" pp_surface_literal lit
   | Block block -> pp_surface_block fmt block
+  | Map map ->
+      fprintf fmt "Map(source=%a, value=%a, index=%a, body=%a)"
+        pp_surface_expression map.value.source pp_surface_identifier
+        map.value.var
+        (pp_print_option pp_surface_identifier)
+        map.value.index pp_surface_block map.value.body
+  | Fold fold ->
+      fprintf fmt
+        "Fold(source=%a, value=%a, accumulator=%a, type=%a, seed=%a, body=%a)"
+        pp_surface_expression fold.value.source pp_surface_identifier
+        fold.value.var pp_surface_identifier fold.value.accumulator
+        (pp_print_option pp_surface_type)
+        fold.value.accumulator_type pp_surface_expression fold.value.seed
+        pp_surface_block fold.value.body
   | Identifier id -> fprintf fmt "Ident(%a)" pp_surface_identifier id
   | Initializer init ->
       fprintf fmt "Initializer(%a)"
@@ -139,6 +153,7 @@ and pp_surface_expression fmt (expr : Surface.expression) =
   | SizeType ty -> fprintf fmt "SizeType(%a)" pp_surface_type ty
   | Nil -> fprintf fmt "Nil"
   | Zero -> fprintf fmt "Zero"
+  | Fill inner -> fprintf fmt "Fill(%a)" pp_surface_expression inner
   | If ifx ->
       fprintf fmt "@[<hv 2>If(@,cond=%a,@ then=%a,@ else=%a@,)@]"
         pp_surface_expression ifx.value.cond pp_surface_block
@@ -209,6 +224,12 @@ and pp_surface_statement fmt (stmt : Surface.statement) =
         iter.value.range.value.range_end
         (pp_print_option pp_surface_expression)
         iter.value.range.value.range_incr pp_surface_block iter.value.body
+  | Foreach iter ->
+      fprintf fmt "Foreach(source=%a, var=%a, index=%a, body=%a)"
+        pp_surface_expression iter.value.source pp_surface_identifier
+        iter.value.var
+        (pp_print_option pp_surface_identifier)
+        iter.value.index pp_surface_block iter.value.body
   | While while_stmt ->
       fprintf fmt "While(cond=%a, body=%a)" pp_surface_expression
         while_stmt.value.cond pp_surface_block while_stmt.value.body
@@ -404,6 +425,7 @@ and pp_core_expression fmt (expr : Core.expression) =
   | SizeType ty -> fprintf fmt "SizeType(%a)" pp_core_type ty
   | Nil -> fprintf fmt "Nil"
   | Zero -> fprintf fmt "Zero"
+  | Fill inner -> fprintf fmt "Fill(%a)" pp_core_expression inner
   | Match m ->
       fprintf fmt "@[<hv 2>Match(@,expr=%a,@ arms=%a@,)@]" pp_core_expression
         m.value.expr

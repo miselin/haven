@@ -92,6 +92,7 @@ module Verify = struct
     let verify_subexprs () =
       match expr.value with
       | Core.Identifier _ | Core.Literal _ | Core.Nil | Core.Zero -> ()
+      | Core.Fill inner
       | Core.ToBool inner
       | Core.SizeExpr inner
       | Core.BoxExpr inner

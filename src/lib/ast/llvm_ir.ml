@@ -696,6 +696,20 @@ let rec constant_of_expr t (expr : Core.expression) =
   | Core.Nil when Analysis.resolved_is_pointerish resolved ->
       Some (Llvm.const_null (llvm_type_of_resolved t resolved))
   | Core.Zero -> Some (zero_constant t resolved)
+  | Core.Fill inner ->
+      Option.bind (constant_of_expr t inner) (fun value ->
+          Option.map
+            (fun scalar ->
+              let count =
+                match resolved with
+                | Analysis.ResolvedVec vec -> vec.dimension
+                | Analysis.ResolvedMatrix mat -> mat.rows * mat.columns
+                | _ -> fail ~loc:expr.loc "invalid fill target"
+              in
+              Llvm.const_vector (Array.make count scalar))
+            (constant_cast t value
+               (expr_resolved_type t inner)
+               Analysis.ResolvedFloat))
   | Core.As cast ->
       Option.bind (constant_of_expr t cast.value.inner) (fun value ->
           constant_cast t value (expr_resolved_type t cast.value.inner) resolved)
@@ -728,6 +742,8 @@ and constant_of_literal t loc resolved (lit : Core.literal) =
         (Llvm.const_int
            (Llvm.integer_type t.context bits)
            (if value then 1 else 0))
+  | Core.Integer value, Analysis.ResolvedFloat ->
+      Some (Llvm.const_float (float_type t) (float_of_int value))
   | Core.Float value, Analysis.ResolvedFloat ->
       Some (Llvm.const_float (float_type t) value)
   | Core.Char value, Analysis.ResolvedInt (_, bits) ->
@@ -2249,6 +2265,29 @@ and emit_expr t (expr : Core.expression) =
     | Core.Nil ->
         Llvm.const_null (llvm_type_of_resolved t (expr_resolved_type t expr))
     | Core.Zero -> zero_constant t (expr_resolved_type t expr)
+    | Core.Fill inner ->
+        let scalar = emit_expr t inner in
+        let scalar =
+          emit_cast t scalar (expr_resolved_type t inner) Analysis.ResolvedFloat
+        in
+        let target = expr_resolved_type t expr in
+        let count =
+          match target with
+          | Analysis.ResolvedVec vec -> vec.dimension
+          | Analysis.ResolvedMatrix mat -> mat.rows * mat.columns
+          | _ -> fail ~loc:expr.loc "invalid fill target"
+        in
+        let initial =
+          Llvm.build_insertelement
+            (Llvm.undef (llvm_type_of_resolved t target))
+            scalar
+            (Llvm.const_int (i32_type t) 0)
+            "fill.scalar" t.builder
+        in
+        let mask =
+          Llvm.const_vector (Array.make count (Llvm.const_int (i32_type t) 0))
+        in
+        Llvm.build_shufflevector initial initial mask "fill" t.builder
     | Core.Match match_expr -> emit_match t expr match_expr
     | Core.BoxExpr inner -> emit_box_expr t expr inner
     | Core.BoxType ty -> emit_box_type_expr t expr ty
@@ -2584,6 +2623,12 @@ and emit_block_statements t (block : Core.block) =
     emit_block_exit_actions t block);
   pop_scope t
 
+let rec single_expression_body (body : Core.block) =
+  match (body.value.statements, body.value.result) with
+  | [], Some { value = Core.Block nested; _ } -> single_expression_body nested
+  | [], Some _ -> true
+  | _ -> false
+
 let declare_function_symbol t (fn : Core.function_decl) =
   let resolved = function_resolved_type t fn in
   match resolved with
@@ -2624,6 +2669,15 @@ let declare_function_symbol t (fn : Core.function_decl) =
                else Llvm.Linkage.Internal)
               fn_value;
             Llvm.set_function_call_conv Llvm.CallConv.c fn_value;
+            (* Advisory only: body shape, not source spelling, controls the hint.
+               Declaration-only imports have no body and retain their attributes. *)
+            if
+              Option.fold ~none:false ~some:single_expression_body
+                fn.value.definition
+            then
+              Llvm.add_function_attr fn_value
+                (Llvm.create_enum_attr t.context "inlinehint" 0L)
+                Llvm.AttrIndex.Function;
             fn_value
       in
       let symbol =

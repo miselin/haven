@@ -3,7 +3,7 @@ fn dot(fvec? a, fvec? b) -> float {
     @assert a.dim == b.dim, "dot dimensions must match";
     let product = a * b;
     let mut total = 0.0;
-    iter 0:(a.dim - 1) i { total = total + product[i]; };
+    iter each i of 0:(a.dim - 1) { total = total + product[i]; };
     total
 }
 fn scale(fvec? v, float factor) { let result = v / factor; result }

@@ -1,6 +1,31 @@
 open Test_support
 
 let run () =
+  List.iter
+    (fun (label, source) ->
+      let pipeline = parse_to_core source |> Analysis.Pipeline.run_core in
+      assert_diagnostic_category label Analysis.Purity
+        pipeline.purity.diagnostics;
+      assert_any_diagnostic_message_contains
+        (label ^ " names the caller")
+        "bad" pipeline.purity.diagnostics)
+    [
+      ( "fill evaluates impure operand",
+        "impure fn effect() -> float; fn bad() -> fvec2 = fill effect();" );
+      ( "map evaluates impure body",
+        "impure fn effect() -> float; fn bad(fvec2 v) -> fvec2 = map each x of \
+         v { effect() + x };" );
+    ];
+  let expression_purity =
+    parse_to_core "impure fn effect() -> i32; fn bad() -> i32 = effect();"
+    |> Analysis.Pipeline.run_core
+  in
+  assert_diagnostic_category "expression body retains the purity rule"
+    Analysis.Purity expression_purity.purity.diagnostics;
+  assert_any_diagnostic_message_contains
+    "expression body purity names its caller" "bad"
+    expression_purity.purity.diagnostics;
+
   let foreign_pipeline =
     Haven.Parser.parse_string
       {|

@@ -136,6 +136,7 @@ module Assert = struct
       | Core.SizeType _ -> "size<type>"
       | Core.Nil -> "nil"
       | Core.Zero -> "zero"
+      | Core.Fill inner -> "fill " ^ render_expression inner
     in
     if self_prec < ctx_prec then "(" ^ rendered ^ ")" else rendered
 
@@ -180,6 +181,8 @@ module Assert = struct
         Printf.sprintf "%s[%s]"
           (render_specialized_expression ~ctx_prec:12 state index.value.target)
           (render_specialized_expression state index.value.index)
+    | Core.Fill inner ->
+        Printf.sprintf "fill (%s)" (render_specialized_expression state inner)
     | Core.ToBool inner ->
         Printf.sprintf "bool(%s)" (render_specialized_expression state inner)
     | Core.As cast ->
@@ -262,6 +265,7 @@ module Assert = struct
         Option.bind (constant_of_expr state binary.value.left) (fun left ->
             Option.bind (constant_of_expr state binary.value.right)
               (fun right -> ConstantFold.fold_binary binary.value.op left right))
+    | Core.Fill _ -> None
     | Core.ToBool inner ->
         Option.bind
           (constant_of_expr state inner)

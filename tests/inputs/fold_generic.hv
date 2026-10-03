@@ -1,0 +1,16 @@
+fn sum(fvec? v) -> float = fold each value of v with acc = 0.0 { acc + value };
+fn total(mat? m) -> float = fold each row of m with acc = 0.0 { acc + sum(row) };
+fn rows(mat? m, fvec? initial) = fold each row of m with acc = initial { acc + row };
+fn nested(mat? m) -> float = fold each row of m with acc = 0.0 {
+    acc + (fold each value of row with subtotal = 0.0 { subtotal + value })
+};
+pub fn sut() -> i32 {
+    if sum(Vec<7.0>) != 7.0 || sum(Vec<1.0, 2.0>) != 3.0 || sum(Vec<3.0, 4.0, 5.0>) != 12.0 { ret 1; };
+    let wide = Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>;
+    let tall = Mat<Vec<7.0, 8.0>, Vec<9.0, 10.0>, Vec<11.0, 12.0>>;
+    if total(wide) != 21.0 || nested(tall) != 57.0 || nested(wide) != 21.0 || total(tall) != 57.0 { ret 2; };
+    let a = rows(wide, Vec<0.0, 0.0, 0.0>);
+    let b = rows(tall, Vec<1.0, 2.0>);
+    if a.x != 5.0 || a.z != 9.0 || b.x != 28.0 || b.y != 32.0 { ret 3; };
+    0
+}

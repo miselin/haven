@@ -1,0 +1,39 @@
+impure fn scalar(i32* order, i32 digit, float value) -> float = { order := load order * 10 + digit; value };
+impure fn source(i32* order, fvec3* original) -> fvec3 = { order := load order * 10 + 1; load original };
+impure fn step(i32* order, float value) -> float = { order := load order * 10 + as<i32>(value) + 1; value * 2.0 };
+impure fn deferred(i32* count, float value) -> float { defer { count := load count + 1; }; value + 1.0 }
+impure fn integer(i32* count) -> i32 = { count := load count + 1; 5 };
+pub impure fn sut() -> i32 {
+    let mut order = 0;
+    let fvec3 v = fill scalar(ref order, 1, 2.0);
+    let mat2x3 m = fill scalar(ref order, 2, 3.0);
+    if order != 12 || v.z != 2.0 || m[1].z != 3.0 { ret 1; };
+    order = 0;
+    let mut original = Vec<1.0, 2.0, 3.0>;
+    let mapped = map each x of source(ref order, ref original) indexed by i {
+        original[2] = 100.0;
+        step(ref order, x)
+    };
+    if order != 1234 || mapped.x != 2.0 || mapped.y != 4.0 || mapped.z != 6.0 || original.z != 100.0 { ret 2; };
+    let i32[0] empty = zero;
+    let result = map each x of { order = order * 10 + 5; empty } { order = order * 10 + 6; x };
+    if order != 12345 || size(result) != 0 { ret 3; };
+    let mut count = 0;
+    let called = map each x of Vec<1.0, 2.0> { deferred(ref count, x) };
+    if count != 2 || called.y != 3.0 { ret 4; };
+    // An explicit user write is legal; the map's future reads still use its snapshot.
+    let mut values = Vec<4.0, 5.0>;
+    values = map each x of values { values[1] = 99.0; x + 1.0 };
+    if values.x != 5.0 || values.y != 6.0 { ret 5; };
+    count = 0;
+    let fvec3 integers = fill integer(ref count);
+    if count != 1 || integers.z != 5.0 { ret 6; };
+    // Existing shallow box-element copies retain their ordinary ownership.
+    let mut i32^[2] boxes = {box as<i32>(3), box as<i32>(4)};
+    let copied = map each b of boxes { b };
+    boxes[0] = nil;
+    if unbox copied[0] != 3 || unbox copied[1] != 4 { ret 7; };
+    copied[1] := 8;
+    if unbox boxes[1] != 8 { ret 8; };
+    0
+}

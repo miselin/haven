@@ -7,6 +7,8 @@ module Semantic = struct
   type state = {
     typed : typing_result;
     mutable diagnostics_rev : diagnostic list;
+    mutable fold_body_depth : int;
+    mutable map_body_depth : int;
     type_env : type_env;
     functions : Core.function_decl String_map.t;
   }
@@ -257,6 +259,18 @@ module Semantic = struct
 
   let rec check_block state env loop_depth ~return_expected (block : Core.block)
       =
+    let previous_map_depth = state.map_body_depth in
+    if block.value.map_body then (
+      state.map_body_depth <- previous_map_depth + 1;
+      if Option.is_none block.value.result then
+        add_diagnostic state Error block.loc
+          "map body must produce an element value");
+    let previous_fold_depth = state.fold_body_depth in
+    if block.value.fold_body then (
+      state.fold_body_depth <- previous_fold_depth + 1;
+      if Option.is_none block.value.result then
+        add_diagnostic state Error block.loc
+          "fold body must produce an accumulator value");
     let env = push_scope env in
     let env =
       List.fold_left
@@ -276,6 +290,8 @@ module Semantic = struct
               "returned value does not match the function return type"
         | _ -> ())
       block.value.result;
+    state.fold_body_depth <- previous_fold_depth;
+    state.map_body_depth <- previous_map_depth;
     env
 
   and check_statement state env loop_depth ~return_expected
@@ -288,6 +304,12 @@ module Semantic = struct
         check_expression state env loop_depth compile_assert.value.cond;
         env
     | Core.Return expr ->
+        if state.fold_body_depth > 0 then
+          add_diagnostic state Error stmt.loc
+            "ret is not permitted in a fold body";
+        if state.map_body_depth > 0 then
+          add_diagnostic state Error stmt.loc
+            "ret is not permitted in a map body";
         Option.iter (check_expression state env loop_depth) expr;
         (match (return_expected, expr) with
         | Some ResolvedVoid, Some returned ->
@@ -307,10 +329,22 @@ module Semantic = struct
         check_expression state env loop_depth expr;
         env
     | Core.Break ->
+        if state.fold_body_depth > 0 then
+          add_diagnostic state Error stmt.loc
+            "break is not permitted in a fold body";
+        if state.map_body_depth > 0 then
+          add_diagnostic state Error stmt.loc
+            "break is not permitted in a map body";
         if loop_depth = 0 then
           add_diagnostic state Error stmt.loc "break used outside of a loop";
         env
     | Core.Continue ->
+        if state.fold_body_depth > 0 then
+          add_diagnostic state Error stmt.loc
+            "continue is not permitted in a fold body";
+        if state.map_body_depth > 0 then
+          add_diagnostic state Error stmt.loc
+            "continue is not permitted in a map body";
         if loop_depth = 0 then
           add_diagnostic state Error stmt.loc "continue used outside of a loop";
         env
@@ -406,6 +440,7 @@ module Semantic = struct
     | Core.Identifier _ | Core.Literal _ | Core.Nil | Core.Zero
     | Core.SizeType _ ->
         ()
+    | Core.Fill inner -> check_expression state env loop_depth inner
     | Core.ToBool inner ->
         check_expression state env loop_depth inner;
         check_scalar_truthy inner
@@ -886,7 +921,12 @@ module Semantic = struct
             Some { resolved_type = Some actual; _ } )
           when not (resolved_compatible actual expected) ->
             add_diagnostic state Error write.value.value.loc
-              "assignment value type does not match the target"
+              (match write.value.value.value with
+              | Core.Block body when body.value.fold_body ->
+                  "fold body result type does not match the accumulator"
+              | Core.Block body when body.value.map_body ->
+                  "map body result type does not match the source element"
+              | _ -> "assignment value type does not match the target")
         | Some { resolved_type = Some expected; _ }, _ -> (
             match write.value.value.value with
             | Core.Initializer init ->
@@ -958,6 +998,8 @@ module Semantic = struct
       {
         typed;
         diagnostics_rev = [];
+        fold_body_depth = 0;
+        map_body_depth = 0;
         type_env = type_env_of_program typed.program.program;
         functions = collect_functions typed.program.program;
       }

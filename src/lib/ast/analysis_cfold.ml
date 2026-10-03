@@ -264,6 +264,7 @@ module ConstantFold = struct
             }
       | Core.Block block -> Core.Block (fold_block block)
       | Core.ToBool inner -> Core.ToBool (fold_expression inner)
+      | Core.Fill inner -> Core.Fill (fold_expression inner)
       | Core.Initializer init ->
           Core.Initializer
             {
@@ -355,9 +356,9 @@ module ConstantFold = struct
     | Core.Block block when block.value.statements = [] -> (
         match block.value.result with Some result -> result | None -> expr)
     | Core.ToBool inner -> (
-        match constant_of_expr inner with
-        | Some constant -> (
-            match literal_of_constant expr.loc constant with
+        match Option.bind (constant_of_expr inner) truthy_of_constant with
+        | Some value -> (
+            match literal_of_constant expr.loc (ConstantBool value) with
             | Some folded -> { expr with value = folded.value }
             | None -> expr)
         | None -> expr)
@@ -444,6 +445,7 @@ module ConstantFold = struct
       block with
       value =
         {
+          block.value with
           statements = List.map fold_statement block.value.statements;
           result = Option.map fold_expression block.value.result;
         };

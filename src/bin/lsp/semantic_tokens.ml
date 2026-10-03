@@ -148,6 +148,8 @@ let keyword_strings =
     "mut";
     "fn";
     "iter";
+    "fill";
+    "map";
     "load";
     "ret";
     "struct";

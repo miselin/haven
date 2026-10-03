@@ -1,0 +1,25 @@
+impure fn source(i32* order, fvec3* original) -> fvec3 = { order := load order * 10 + 1; load original };
+impure fn seed(i32* order, fvec3* original) -> i32 = { order := load order * 10 + 2; original := Vec<9.0, 9.0, 9.0>; 0 };
+impure fn step(i32* order, i32 acc, float value) -> i32 = { order := load order * 10 + as<i32>(value) + 2; acc * 10 + as<i32>(value) };
+impure fn deferred_step(i32* count, float acc, float value) -> float { defer { count := load count + 1; }; acc + value }
+pub impure fn sut() -> i32 {
+    let mut order = 0;
+    let mut original = Vec<1.0, 2.0, 3.0>;
+    let result = fold each value of source(ref order, ref original) with acc = seed(ref order, ref original) {
+        original[2] = 100.0;
+        step(ref order, acc, value)
+    };
+    if order != 12345 || result != 123 || original.z != 100.0 { ret 1; };
+    let i32[0] empty = zero;
+    let kept = fold each value of { order = order * 10 + 6; empty } with acc = { order = order * 10 + 7; 42 } {
+        order = order * 10 + 8;
+        acc + value
+    };
+    if kept != 42 || order != 1234567 { ret 2; };
+    let mut deferred = 0;
+    let x = fold each value of Vec<1.0, 2.0> with acc = 0.0 {
+        deferred_step(ref deferred, acc, value)
+    };
+    if deferred != 2 || x != 3.0 { ret 3; };
+    0
+}

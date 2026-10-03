@@ -47,6 +47,7 @@ let rec walk_expression typing type_env query_range acc (expr : Core.expression)
       walk_expression typing type_env query_range acc unary.value.inner
   | Block block -> walk_block typing type_env query_range acc block
   | Literal _ | Identifier _ | Nil | Zero -> acc
+  | Fill inner
   | ToBool inner
   | SizeExpr inner
   | BoxExpr inner

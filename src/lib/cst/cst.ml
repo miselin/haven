@@ -136,6 +136,7 @@ and function_decl_desc = {
   impure : bool;
   name : identifier;
   definition : block option;
+  expression_body : bool;
   intrinsic : intrinsic option;
   params : param_list;
   return_type : haven_type option;
@@ -217,6 +218,7 @@ and statement_desc =
   | Return of expression option
   | Defer of expression
   | Iter of iter_stmt
+  | Foreach of foreach_stmt
   | While of while_stmt
   | Break
   | Continue
@@ -242,14 +244,37 @@ and iter_range_desc = {
 and iter_range = iter_range_desc node
 and iter_stmt_desc = { range : iter_range; var : identifier; body : block }
 and iter_stmt = iter_stmt_desc node
+
+and foreach_stmt_desc = {
+  source : expression;
+  var : identifier;
+  index : identifier option;
+  body : block;
+}
+
+and foreach_stmt = foreach_stmt_desc node
 and while_stmt_desc = { cond : expression; body : block }
 and while_stmt = while_stmt_desc node
+
+and fold_expr_desc = {
+  source : expression;
+  var : identifier;
+  accumulator : identifier;
+  accumulator_type : haven_type option;
+  seed : expression;
+  body : block;
+}
+
+and fold_expr = fold_expr_desc node
+and map_expr = foreach_stmt
 
 and expression_desc =
   | Binary of binary
   | Unary of unary
   | Literal of literal
   | Block of block
+  | Fold of fold_expr
+  | Map of map_expr
   | ParenthesizedExpression of expression
   | Identifier of identifier
   | Initializer of init_list
@@ -258,6 +283,7 @@ and expression_desc =
   | SizeType of haven_type
   | Nil
   | Zero
+  | Fill of expression
   | If of if_expr
   | Match of match_expr
   | BoxExpr of expression

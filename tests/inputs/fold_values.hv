@@ -1,0 +1,35 @@
+// Scalar, row-vector, array, empty and nested accumulator results.
+fn sum(fvec? v) -> float = fold each value of v with acc = 0.0 { acc + value };
+type Vector = fvec2;
+pub impure fn sut() -> i32 {
+    if sum(Vec<1.0, 2.0, 3.0>) != 6.0 { ret 1; };
+    let i32[3] values = { 1, 2, 3 };
+    let ordered = fold each value of values with acc = 0 { acc * 10 + value };
+    if ordered != 123 { ret 2; };
+    let i32[0] empty = zero;
+    if (fold each value of empty with i32 acc = 77 { acc + value }) != 77 { ret 3; };
+    let i8[3] small = { 1, 2, 3 };
+    let i8 narrow = fold each value of small with i8 acc = 10 { acc + value };
+    if narrow != 16 { ret 4; };
+    let matrix = Mat<Vec<1.0, 2.0, 3.0>, Vec<4.0, 5.0, 6.0>>;
+    let vector = fold each row of matrix with acc = Vec<10.0, 20.0, 30.0> { acc + row };
+    if vector.x != 15.0 || vector.y != 27.0 || vector.z != 39.0 { ret 5; };
+    let digits = fold each row of matrix with acc = 0 {
+        fold each value of row with subtotal = acc { subtotal * 10 + as<i32>(value) }
+    };
+    if digits != 123456 { ret 6; };
+    let fvec2[2] vectors = { Vec<1.0, 2.0>, Vec<3.0, 4.0> };
+    if (fold each v of vectors with acc = 0.0 { acc + sum(v) }) != 10.0 { ret 7; };
+    let seed = 99;
+    if (fold each x of values with seed = seed { seed - x }) != 93 { ret 8; };
+    let nonassociative = fold each value of Vec<100000000000000000000.0, -100000000000000000000.0, 3.0> with acc = 0.0 { acc + value };
+    if nonassociative != 3.0 { ret 9; };
+    // BOX identifier reaches the existing value/type boundary on fold's WITH.
+    let fold_input = Vec<2.0, 4.0>;
+    let boxed_value = fold each value of unbox box fold_input with acc = 0.0 { acc + value };
+    let boxed_type = fold each value of unbox box Vector with acc = 3.0 { acc + value };
+    let builtin_type = fold each value of unbox box fvec2 with acc = 3.0 { acc + value };
+    let parenthesized = fold each value of unbox box (fold_input) with acc = 0.0 { acc + value };
+    if boxed_value != 6.0 || boxed_type != 3.0 || builtin_type != boxed_type || parenthesized != boxed_value { ret 10; };
+    0
+}

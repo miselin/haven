@@ -127,7 +127,7 @@ let rec emit_expression ?(ctx_prec = 0) ~indent ~comments fmt expr =
   let self_prec =
     match expr.value with
     | Binary b -> binary_precedence (unwrap b).op
-    | Unary _ | BoxExpr _ | BoxType _ | Unbox _ | Ref _ | Load _ ->
+    | Fill _ | Unary _ | BoxExpr _ | BoxType _ | Unbox _ | Ref _ | Load _ ->
         unary_precedence
     | Call _ | Index _ | Field _ -> postfix_precedence
     | _ -> primary_precedence
@@ -153,6 +153,18 @@ let rec emit_expression ?(ctx_prec = 0) ~indent ~comments fmt expr =
         u.inner
   | Literal lit -> emit_literal ~comments fmt lit
   | Block block -> emit_block ~indent ~comments fmt block
+  | Fold fold ->
+      fprintf fmt "fold each %a of %a with " emit_identifier fold.value.var
+        (emit_expression ~ctx_prec:0 ~indent ~comments)
+        fold.value.source;
+      Option.iter
+        (fun ty -> fprintf fmt "%a " emit_type ty)
+        fold.value.accumulator_type;
+      fprintf fmt "%a = %a %a" emit_identifier fold.value.accumulator
+        (emit_expression ~ctx_prec:0 ~indent ~comments)
+        fold.value.seed
+        (emit_block ~indent ~comments)
+        fold.value.body
   | ParenthesizedExpression e ->
       fprintf fmt "(%a)" (emit_expression ~ctx_prec:0 ~indent ~comments) e
   | Identifier s -> emit_identifier fmt s
@@ -167,6 +179,18 @@ let rec emit_expression ?(ctx_prec = 0) ~indent ~comments fmt expr =
   | SizeType t -> fprintf fmt "size<%a>" emit_type t
   | Nil -> fprintf fmt "nil"
   | Zero -> fprintf fmt "zero"
+  | Fill inner ->
+      fprintf fmt "fill %a"
+        (emit_expression ~ctx_prec:unary_precedence ~indent ~comments)
+        inner
+  | Map map ->
+      fprintf fmt "map each %a of %a" emit_identifier map.value.var
+        (emit_expression ~ctx_prec:0 ~indent ~comments)
+        map.value.source;
+      Option.iter
+        (fun index -> fprintf fmt " indexed by %a" emit_identifier index)
+        map.value.index;
+      fprintf fmt " %a" (emit_block ~indent ~comments) map.value.body
   | If i -> emit_if_expr ~indent ~comments fmt i
   | Match m -> emit_match_expr ~indent ~comments fmt m
   | BoxExpr e ->
@@ -431,7 +455,7 @@ and emit_statement ~indent ~comments fmt stmt =
       flush_inline_on_line ~line:stmt.loc.start_pos.pos_lnum comments fmt
   | Iter i_node ->
       let i = unwrap i_node in
-      fprintf fmt "iter %a:%a"
+      fprintf fmt "iter each %a of %a:%a" emit_identifier i.var
         (emit_expression ~ctx_prec:0 ~indent ~comments)
         i.range.value.range_start
         (emit_expression ~ctx_prec:0 ~indent ~comments)
@@ -441,7 +465,15 @@ and emit_statement ~indent ~comments fmt stmt =
              (emit_expression ~ctx_prec:0 ~indent ~comments)
              incr))
         fmt i.range.value.range_incr;
-      fprintf fmt " %a" emit_identifier i.var;
+      fprintf fmt " %a;" (emit_block ~indent ~comments) i.body
+  | Foreach i_node ->
+      let i = unwrap i_node in
+      fprintf fmt "iter each %a of %a" emit_identifier i.var
+        (emit_expression ~ctx_prec:0 ~indent ~comments)
+        i.source;
+      Option.iter
+        (fun index -> fprintf fmt " indexed by %a" emit_identifier index)
+        i.index;
       fprintf fmt " %a;" (emit_block ~indent ~comments) i.body
   | While w_node ->
       let w = unwrap w_node in
@@ -538,6 +570,15 @@ let emit_fdecl ~comments fmt (decl : function_decl) =
   (pp_print_option (fun fmt i -> fprintf fmt " %a" emit_intrinsic i))
     fmt decl.intrinsic;
   match decl.definition with
+  | Some block when decl.expression_body -> (
+      match block.value.items with
+      | [ { value = BlockExpression expr; _ } ] ->
+          fprintf fmt " = %a;"
+            (emit_expression ~ctx_prec:0 ~indent:0 ~comments)
+            expr
+      | _ ->
+          invalid_arg
+            "expression-bodied function must have one result expression")
   | Some block ->
       fprintf fmt " ";
       emit_block ~indent:0 ~comments fmt block

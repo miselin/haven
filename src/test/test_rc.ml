@@ -8,6 +8,16 @@ type opt_case = { label : string; opt_level : Llvm_ir.opt_level }
 let rc_cases =
   [
     { name = "simplest"; expected_rc = 0 };
+    { name = "expression_eager"; expected_rc = 0 };
+    { name = "truthy_condition"; expected_rc = 0 };
+    { name = "fold_values"; expected_rc = 0 };
+    { name = "fill_map_values"; expected_rc = 0 };
+    { name = "fill_map_effects"; expected_rc = 0 };
+    { name = "fold_effects"; expected_rc = 0 };
+    { name = "fold_generic"; expected_rc = 0 };
+    { name = "iteration_values"; expected_rc = 0 };
+    { name = "iteration_generic"; expected_rc = 0 };
+    { name = "iteration_control"; expected_rc = 0 };
     { name = "add"; expected_rc = 6 };
     { name = "prec1"; expected_rc = 90 };
     { name = "prec2"; expected_rc = 0 };

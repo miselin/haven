@@ -98,6 +98,7 @@ module Purity = struct
     | Core.Nil | Core.Zero ->
         ()
     | Core.BoxConstruct box -> List.iter (visit env) box.value.args
+    | Core.Fill inner
     | Core.ToBool inner
     | Core.SizeExpr inner
     | Core.BoxExpr inner

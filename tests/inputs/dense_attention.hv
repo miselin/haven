@@ -7,7 +7,7 @@ fn vector_dim(fvec? v) -> i32 { as<i32>(v.dim) }
 fn matrix_extent(mat? m) -> i32 { as<i32>(m.rows * 100 + m.cols) }
 fn sum(fvec? v) -> float {
     let mut total = 0.0;
-    iter 0:(v.dim - 1) i { total = total + v[i]; };
+    iter each i of 0:(v.dim - 1) { total = total + v[i]; };
     total
 }
 fn dense(fvec? x, mat? weights, fvec? bias) {
@@ -17,15 +17,15 @@ fn dense(fvec? x, mat? weights, fvec? bias) {
 }
 fn relu(fvec? v) {
     let mut out = v;
-    iter 0:(v.dim - 1) i { if out[i] < 0.0 { out[i] = 0.0; }; };
+    iter each i of 0:(v.dim - 1) { if out[i] < 0.0 { out[i] = 0.0; }; };
     out
 }
 fn softmax(fvec? values) {
     let mut maximum = values[0];
-    iter 1:(values.dim - 1) i { if values[i] > maximum { maximum = values[i]; }; };
+    iter each i of 1:(values.dim - 1) { if values[i] > maximum { maximum = values[i]; }; };
     let mut out = values;
     let mut denominator = 0.0;
-    iter 0:(values.dim - 1) i {
+    iter each i of 0:(values.dim - 1) {
         out[i] = expf(values[i] - maximum);
         denominator = denominator + out[i];
     };
@@ -35,8 +35,8 @@ fn transpose_into(mat? src, mat? destination) {
     @assert src.rows == destination.cols, "transpose output columns mismatch";
     @assert src.cols == destination.rows, "transpose output rows mismatch";
     let mut out = destination;
-    iter 0:(src.rows - 1) row {
-        iter 0:(src.cols - 1) col { out[col][row] = src[row][col]; };
+    iter each row of 0:(src.rows - 1) {
+        iter each col of 0:(src.cols - 1) { out[col][row] = src[row][col]; };
     };
     out
 }
@@ -45,7 +45,7 @@ fn attention(mat? query, mat? transposed_key, mat? value) {
     @assert transposed_key.cols == value.rows, "attention value rows mismatch";
     let scores = (query * transposed_key) * (1.0 / sqrtf(as<float>(query.cols)));
     let mut probabilities = scores;
-    iter 0:(scores.rows - 1) row { probabilities[row] = softmax(scores[row]); };
+    iter each row of 0:(scores.rows - 1) { probabilities[row] = softmax(scores[row]); };
     probabilities * value
 }
 

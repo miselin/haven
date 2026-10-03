@@ -146,7 +146,15 @@ and intrinsic_desc = { name : string node; types : haven_type list }
 and intrinsic = intrinsic_desc node
 and foreign_desc = { lib : string node; decls : function_decl list }
 and foreign = foreign_desc node
-and block_desc = { statements : statement list; result : expression option }
+
+and block_desc = {
+  statements : statement list;
+  result : expression option;
+  (* Preserve result-producing bodies' control restrictions through specialization. *)
+  fold_body : bool;
+  map_body : bool;
+}
+
 and block = block_desc node
 and compile_assert_desc = { cond : expression; message : string node }
 and compile_assert = compile_assert_desc node
@@ -197,6 +205,7 @@ and expression_desc =
   | SizeType of haven_type
   | Nil
   | Zero
+  | Fill of expression
   | Match of match_expr
   | BoxExpr of expression
   | BoxType of haven_type

@@ -1,0 +1,20 @@
+// Scalar truthiness is eager and Boolean before switch lowering, with either body form.
+pub impure fn sut_runtime_input(i32 value) -> i32;
+fn braced(i32 value) -> i32 { if value { 1 } else { 0 } }
+fn expression(i32 value) -> i32 = if value { 1 } else { 0 };
+fn float_condition(float value) -> i32 = if value { 1 } else { 0 };
+fn pointer_condition(i32* value) -> i32 = if value { 1 } else { 0 };
+fn constant_true() -> i32 = if 2 { 1 } else { 0 };
+fn constant_false() -> i32 = if 0 { 1 } else { 0 };
+pub impure fn sut() -> i32 {
+    let one = sut_runtime_input(1);
+    let two = sut_runtime_input(2);
+    let none = sut_runtime_input(0);
+    if braced(one) != 1 || braced(two) != 1 || braced(none) != 0 { ret 1; };
+    if expression(one) != 1 || expression(two) != 1 || expression(none) != 0 || expression(-two) != 1 { ret 2; };
+    if float_condition(as<float>(two)) != 1 || float_condition(-2.0) != 1 || float_condition(0.0) != 0 { ret 3; };
+    let mut value = 0;
+    if pointer_condition(ref value) != 1 || pointer_condition(nil) != 0 { ret 4; };
+    if constant_true() != 1 || constant_false() != 0 { ret 5; };
+    0
+}
