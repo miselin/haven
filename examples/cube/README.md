@@ -52,3 +52,8 @@ nix flake check -L
 ```
 
 The runner checks that the executable exits successfully, every PPM frame is complete, and 96 distinct poses were emitted. Image inspection is still necessary: different hashes alone do not prove correct rendering.
+
+Single-expression helpers now use `fn … = expression;` with unchanged eager evaluation. `iter each value of source` visits vector components or matrix rows; an optional `indexed by index` clause exposes a zero-based `u32` ordinal. Numeric ranges use `iter each i of start:end[:step]`, retaining their inclusive endpoints, cached bounds and mutable `i32` counter. Legacy headers remain temporarily accepted, but the formatter emits the sentence form. Iteration copies the source once and binds immutable value copies, so mutable results are written explicitly by index. Existing range loops remain useful for raster bounds and framebuffer writes. See `docs/language.md` for the complete semantics.
+
+
+Natural reductions now use `fold each value of source with acc = 0.0 { acc + value }`. The source snapshot runs first, then the seed once; each eager body result supplies the next accumulator. Bindings are immutable, empty fixed arrays return the seed, and fold bodies reject `break`, `continue` and `ret`. An annotation follows ordinary type-first bindings, such as `with float acc = 0.0`. The classifier sum is shape-generic; camera and cube dot products fold the component-wise product. See `docs/language.md` for semantics and limits.

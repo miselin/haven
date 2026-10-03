@@ -6,3 +6,11 @@
 !cube/
 !cube/README.md
 !cube/run.py
+!classifier/
+!classifier/README.md
+!classifier/run.py
+!classifier/reference.py
+!camera/
+!camera/README.md
+!camera/run.py
+!camera/reference.py

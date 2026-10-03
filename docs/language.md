@@ -1,4 +1,8 @@
-# Haven Language Overview
+# Haven Programmer Reference
+
+This reference describes the maintained OCaml compiler in `src/`. The parser and compiler tests are the authority for accepted syntax; the legacy C and experimental self-hosted compilers are separate implementations.
+
+Recent aggregate and function forms: [expression bodies](#function-declarations), [value and range iteration](#iter), [contextual fill](#fill-expression), [shape-preserving map](#map-expression), [fold](#fold-expression), and [shape specialization](#specialized-vector-functions). Native working examples live in `examples/cube`, `examples/camera`, and `examples/classifier`. The HTML viewers package native outputs; they do not execute Haven or train a model in the browser.
 
 ## Key Characteristics
 
@@ -129,7 +133,7 @@ Inside specialized matrix functions:
 
 ### Strings
 
-The `str` type carries string data. It is essentially a `const char *` under the hood.
+The current `str` representation is a pointer to bytes, equivalent to a C `const char *` in imported interfaces. String literals are emitted with a trailing NUL in static module storage. A copied `str` copies that pointer, not the bytes; the type carries no length, capacity, encoding validation or ownership metadata. It is not a growable native string. A pointer supplied from elsewhere must satisfy the receiving C function’s storage and terminator requirements.
 
 ### Type Aliasing
 
@@ -224,22 +228,24 @@ fn thing() -> Result::<i32> {
 
 ### Arrays
 
-Arrays can be defined by adding a dimension to a type.
+`T[N]` is a fixed-size inline aggregate containing exactly `N` elements of `T`. The count is part of the type, not a runtime length or capacity descriptor. Whole-array assignment, parameter passing and return copy the aggregate value. Pointer or box elements keep their ordinary shallow value and ownership semantics; copying an array does not copy pointed-to storage.
 
-```
-i32[2] arr = {
-    0,
-    1
-};
+```haven
+fn pair() -> i32[2] = { 10, 20 };
+fn first(i32[2] values) -> i32 = values[0];
+
+fn sample() -> i32 {
+    let i32[2] values = pair();
+    let mut i32[1] single = zero;
+    single[0] = first(values);
+    let i32[0] empty = zero;
+    single[0]
+}
 ```
 
-A single-element array requires a trailing `,`:
+A multi-element brace initializer must supply exactly the declared number of elements. A lone `{ expression }` is a value block, and a trailing comma is not accepted by the maintained parser. For one-element or empty arrays, use a typed `zero` and explicit indexed assignment as needed.
 
-```
-i32[1] arr = {
-    0,
-};
-```
+Indexing uses the existing array/pointer operations; this compiler does not provide automatic bounds checks or a borrow/lifetime checker. `ref values` points to the whole fixed array (`T[N]*`), while `ref values[0]` points to one element (`T*`). A pointer copied from a local aggregate does not extend its storage lifetime. No growable native array, borrowed slice or dictionary type is implied by these forms.
 
 ### Zero Initialization
 
@@ -368,8 +374,7 @@ import "vec.hv";
 
 A C import declaration parses a C header file and retains declarations for the purpose of C interopability.
 
-You need to pass `--bootstrap` to the compiler as C imports are currently primarily implemented for the
-compiler bootstrap phases. They may become more readily available once a few ergonomics issues are worked out.
+The maintained compiler uses Clang to read the requested header. Use `-I` for include paths and `-isysroot` when a platform SDK is required. Imported C calls retain their foreign/impure behavior; no `--bootstrap` flag is required.
 
 ```
 cimport "stdio.h";
@@ -474,7 +479,23 @@ Functions can be forward-declared without a body.
 ```
 [visibility] [impure] fn <ident>(<arg-list>) -> <ret-ty>;
 [visibility] [impure] fn <ident>(<arg-list>) -> <ret-ty> { <body> }
+[visibility] [impure] fn <ident>(<arg-list>) -> <ret-ty> = <expression>;
 ```
+
+A function with one result expression can use an expression body:
+
+```haven
+fn scale(fvec3 v, float factor) -> fvec3 = v * factor;
+fn absolute(float x) -> float = if x < 0.0 { -x } else { x };
+fn generic_scale(fvec? v, float factor) = v * factor;
+```
+
+`fn … = expression;` lowers to the same function body as `fn … { expression }`. The semicolon ends the declaration; it does not discard the expression's result. Existing return-type inference remains limited to shape-specialized functions. Existing visibility, purity, return checks and function-pointer behavior also apply. As with a trailing result in a braced body, an expression body supplies a return value; `void` functions continue to use braced statement bodies.
+
+Evaluation is **strict and eager**. Calling an expression-bodied function evaluates its arguments once, from left to right, even if a parameter is unused, then evaluates the body. `if`, `&&` and `||` retain their existing conditional/short-circuit evaluation. A declaration does not run its body. An expression body introduces no lazy value, thunk, memoization or implicit closure; this is syntax for an ordinary function call.
+
+
+The LLVM backend adds advisory `inlinehint` to defined functions whose normalized body has no statements and one result expression, for either spelling. Statement-bearing nested blocks are not eligible. Generic specializations follow the same rule; declaration-only imports do not receive this hint. The optimizer can decline it: the attribute is not `alwaysinline`, does not change argument/effect evaluation, and does not promise removal of a private symbol when its address or linkage is required. See [LLVM 18's attribute definition](https://releases.llvm.org/18.1.8/docs/LangRef.html#function-attributes).
 
 Specifying external `pub` on declarations that have no definitions will create an external reference to the function. A `pub(module)` declaration without a definition remains module-visible and is not exported at linker scope.
 
@@ -538,21 +559,103 @@ let i32 typed = 7;
 
 ### iter
 
-The `iter` statement iterates over a range.
+The `iter` statement supports inclusive ranges and value iteration over vectors, row-major matrices and fixed arrays.
 
-```
-iter 0:10 i {
+```haven
+iter each i of 0:10 {
     printf("%d\n", i);
 };
 ```
 
-Ranges are inclusive; the above range will visit values `0` and `10` during iteration.
+Ranges are inclusive; the above range will visit values `0` and `10` during iteration. They retain the existing mutable `i32` counter and evaluate the end expression, step expression (or default `1`), and start expression once, in that order, before testing the first iteration. End and step values are cached. A zero step keeps its existing behavior; this syntax adds no generator or range object.
 
 A constant step can be provided:
 
+```haven
+iter each i of 10:0:-1 {};
 ```
-iter 10:0:-1 i {};
+
+Value iteration removes explicit shape arithmetic:
+
+```haven
+let mut sum = 0.0;
+iter each value of vector { sum = sum + value; };
+
+// A matrix yields whole row-vector values, in row order.
+iter each row of matrix indexed by r {
+    iter each value of row indexed by c { transposed[c][r] = value; };
+};
 ```
+
+The canonical forms are `iter each <value-name> of <source-expression> { <body> };` and `iter each <value-name> of <source-expression> indexed by <index-name> { <body> };`. The index clause is optional for aggregate value iteration; the numeric-range form is `iter each <counter-name> of start:end[:step] { … };`. A range already binds its numeric counter, so it does not introduce a second ordinal binding.
+
+`indexed by` is a contextual clause: `indexed` and `by` remain ordinary identifiers outside this position. There is no comma shorthand in the sentence form. The old `iter source value[, index] { … };` and `iter start:end[:step] counter { … };` forms remain temporarily accepted for compatibility, but the formatter emits only the canonical sentence form. No removal date is set.
+
+- The source expression runs exactly once before the loop. Its result is stored as an ordinary Haven aggregate value, forming a snapshot for this traversal.
+- Vectors yield float components at indices `0` through `dim - 1`. Matrices yield row-vector values at indices `0` through `rows - 1`; a row has the matrix's column width. Fixed arrays yield element values at indices `0` through `count - 1`. Nested row iteration therefore visits cells in row-major order.
+- The value binding and optional zero-based `u32` ordinal are immutable, scoped to the body and rebound each iteration. Neither is an implicit reference. Use `let mut copy = value` to change a local copy, or write an explicitly indexed mutable result. Reassigning elements of the original source does not change the values subsequently read from the snapshot.
+- Copying follows ordinary Haven value semantics; it does not deep-copy pointees or objects reachable through pointer/box elements. Existing purity and ownership rules continue to govern explicit references and loads.
+- Shape specialization resolves generic `fvec?` and `mat?` cardinalities and row types before LLVM lowering. A zero-length fixed array evaluates its source once and executes no body; a strict `index < count` bound avoids unsigned underflow. Empty vector/matrix literal syntax is not introduced.
+- `break`, `continue` and `ret` use existing loop semantics. `continue` advances to the next value; `break` leaves the current loop.
+- Scalars, strings, structs, pointers and boxes are not implicit iterable containers. Explicitly load a pointer to an aggregate when needed. The copied source can have a cost for large arrays; existing range loops let code address such arrays directly.
+
+This is value iteration over existing fixed aggregates, not a generator, new collection protocol or a reference-iteration/ownership model.
+
+### fill expression
+
+`fill <scalar>` constructs a vector or matrix of the expected type, evaluating the numeric scalar **once** and replicating its float value across every cell. For example:
+
+```haven
+let fvec3 ones = fill 1.0;
+let mat2x3 weights = fill (scale + 1.0);
+fn repeat(float x) -> fvec3 = fill x;
+```
+
+An explicit binding type, assignment target, function return type or typed argument can supply the context, as with `zero`. `let v = fill 1.0` has insufficient context. This version supports vectors and matrices, including concrete shapes obtained by specialization; it does not fill structs or fixed arrays. `fill` is a reserved prefix operator with unary precedence: parenthesize an arithmetic operand. In a generic body, a vector/matrix context may carry an existing `?` shape hole; specialization must resolve it before code generation. Integer scalars use the ordinary float conversion.
+
+### map expression
+
+```haven
+fn ones(fvec? v) = map each value of v { 1.0 };
+fn offset(fvec? v) = map each value of v indexed by i { value + as<float>(i) };
+fn shift(mat? m) = map each row of m { map each value of row { value + 1.0 } };
+```
+
+`map each <value-name> of <source-expression> [indexed by <index-name>] { <body-result> }` eagerly constructs a new aggregate. `map` is reserved; `indexed by` retains the contextual clause used by `iter`.
+
+- The source is evaluated once and captured before the first body evaluation. Elements are visited sequentially in ascending order. Vectors yield float cells, matrices yield row vectors, and fixed arrays yield their existing element type. Empty arrays still evaluate the source once and execute no body evaluations.
+- The result preserves **both source shape and element type**. Each body result must match the source element under existing assignment compatibility, including ordinary numeric conversion. A float result in an integer array remains an integer element after conversion; the array is not widened. A matrix body must return a row of the same width; use nested maps for scalar-cell transforms. This is not type-changing map, broadcasting or a collection protocol.
+- Values and optional zero-based `u32` indices are immutable and scoped to the body. The result is a distinct aggregate value; the map performs no implicit write to its source. Explicit body effects follow ordinary Haven rules. Changes to the original aggregate do not alter future reads from the snapshot. Pointer/box elements keep existing shallow value semantics.
+- Every body must supply a result, even for an empty source. `break`, `continue` and `ret` are rejected throughout the body, including nested loops, because each visited element must supply one output. Called functions retain ordinary return behavior. `defer` retains its existing function-exit semantics.
+- Lowering uses existing Core value copies, indexed assignment and bounded loops. There are no lambdas, implicit in-place updates, parallel execution or allocator changes. Optimizers may eliminate copies or unroll loops; the language makes no blanket allocation or in-place guarantee.
+
+### fold expression
+
+`fold` combines the values of a vector, row-major matrix or fixed array using exactly one accumulator binding:
+
+```haven
+fn sum(fvec? v) -> float =
+    fold each value of v with acc = 0.0 { acc + value };
+
+// A matrix yields row vectors; folds can be nested to visit its cells.
+fn total(mat? matrix) -> float =
+    fold each row of matrix with acc = 0.0 {
+        acc + (fold each value of row with subtotal = 0.0 { subtotal + value })
+    };
+
+let i32 total = fold each value of integers with i32 acc = 0 { acc + value };
+```
+
+The form is `fold each <value-name> of <source-expression> with [<type>] <accumulator-name> = <seed-expression> { <body-result> }`. An optional annotation uses Haven's existing type-first binding order: `with i32 acc = 0`, rather than `with acc i32 = 0`. `fold`, `each` and `of` are reserved words. There is one value binding and one accumulator binding; no ordinal or multiple-accumulator syntax is introduced.
+
+- Evaluation is strict and sequential: evaluate and snapshot the source first, evaluate the seed once second, then execute the body once for each element in ascending ordinal order. The body result becomes the next accumulator automatically. The expression returns the final accumulator; an empty fixed array returns the seed without executing the body. There is no parallel reduction or reassociation; normal strict floating-point order applies.
+- Sources and snapshot/copy semantics are the same as value iteration: vectors yield float cells, matrices yield rows, and fixed arrays yield their element type. Mutating the original source in the seed or body cannot change the captured aggregate. Pointer/box elements retain ordinary shallow value semantics.
+- The value and current accumulator are immutable, body-scoped value bindings. The compiler keeps the changing accumulator privately. Both names must be distinct. They are not visible in the source or seed expressions (an outer binding with the same name remains visible there). Explicitly copy into a `let mut` local when useful; return the next value through the body's final expression.
+- The accumulator type comes from the seed or explicit annotation and stays fixed throughout the fold. Each body result must be compatible under ordinary Haven assignment rules, including existing numeric conversions. Use `0.0` or an explicit `float` accumulator for floating-point sums; an integer seed does not automatically widen the accumulator based on later elements. Aggregate dimensions and fixed-array sizes must match. The body is checked even for an empty input and must produce a value.
+- `break`, `continue` and `ret` are rejected anywhere inside a fold body, including its nested loops or blocks. This first version requires every visited element to supply a next accumulator. Called functions use their own normal return rules; ordinary loops outside the fold retain their controls. `defer` retains its existing function-exit behavior; use ordinary calls/statements for effects that must happen per element.
+- Generic vector/matrix shapes are specialized before LLVM emission. Fold lowers to ordinary Core blocks, lets, indexing, assignment and a bounded loop, so existing purity, ownership and optimization rules apply. A fold's lowered loop is statement-bearing and does not become eligible for `inlinehint` merely because the source function uses `=`.
+
+Parenthesize a fold when that makes an enclosing arithmetic expression clearer. Multi-statement fold bodies can declare locals and perform permitted effects; their final expression still supplies exactly one next accumulator.
 
 ### while
 
@@ -607,7 +710,7 @@ pub fn main() -> i32 {
 
     printf("Hello, world!\n");
 
-    as i32 0
+    as<i32>(0)
 }
 ```
 
@@ -657,8 +760,10 @@ Note that parenthesis (`(` `)`) may be used to control order of operations.
 
 Logical operators (`||` and `&&`) short-circuit their operation:
 
-- if the left side is true-ish, and the operator is `&&`, the right side will not be evaluated
-- if the left side is false-ish, and the operator is `||`, the right side will not be evaluated
+- `&&` skips the right side when the left side is false; otherwise it evaluates the right side once.
+- `||` skips the right side when the left side is true; otherwise it evaluates the right side once.
+
+Scalar conditions use zero/nonzero conversion: integers and floats compare against zero; supported pointer-like values compare against `nil`. Conditions produce a Boolean `u1` result. Vectors, matrices, arrays and structures are not scalar conditions. `if`, `while`, `until`, logical operators and `!` use the same conversion. Comparisons are explicitly converted even when the input is a wider integer; an integer value is not used directly as an LLVM branch condition.
 
 ### Variable References
 
@@ -722,8 +827,7 @@ let z = ~0; // (all bits set to one)
 let sign = if x >= 0 { 0 } else { 1 };
 ```
 
-> ![NOTE]
-> The braces are not required for an `if` expression. It is legal to use _any_ expression, including those not wrapped in a block, in the `then` or `else` blocks of an `if` expression.
+Branches use braced blocks in the maintained parser. Each value branch ends in a result expression; an `else if` chains another conditional.
 
 #### As a Statement
 

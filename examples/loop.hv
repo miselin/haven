@@ -1,10 +1,10 @@
 pub fn printf(str fmt, *) -> i32;
 
 pub fn main() -> i32 {
-    iter 0:4 i {
+    iter each i of 0:4 {
         printf("%d\n", i);
     };
-    iter 4:0:-1 i {
+    iter each i of 4:0:-1 {
         printf("%d\n", i);
     };
     0

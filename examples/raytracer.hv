@@ -78,11 +78,11 @@ pub impure fn main() -> i32 {
         mul + g
     };
 
-    iter ydim:0:-1 y {
-        iter xdim:0:-1 x {
+    iter each y of ydim:0:-1 {
+        iter each x of xdim:0:-1 {
             let mut p = Vec<13.0, 13.0, 13.0>;
 
-            iter 0:63 r {
+            iter each r of 0:63 {
                 let t = {
                     {
                         let r = R() - 0.5;
@@ -209,8 +209,8 @@ impure fn T(fvec3 o, fvec3 d) -> TraceResult {
         result = TraceResult::Ground(inner);
     };
 
-    iter 0:18 k {
-        iter 0:8 j {
+    iter each k of 0:18 {
+        iter each j of 0:8 {
             let bit = 1 << k;
             let lookup = as<i64>(G[j]);
 

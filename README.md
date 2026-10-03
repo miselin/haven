@@ -1,6 +1,6 @@
 # The Haven Programming Language
 
-[Language Overview](docs/language.md)
+[Programmer Reference](docs/language.md)
 
 ## Why Haven?
 

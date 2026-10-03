@@ -56,7 +56,7 @@ pub impure fn main() -> i32 {
     let mut point = Vec<0.0, 0.0>;
     let mut points = as<Image *>(calloc(1, 640000));
 
-    iter 0:100000000 i {
+    iter each i of 0:100000000 {
         let choice = cdf_random(cdf);
         let xform = match choice {
             0 => ref stem,
@@ -78,8 +78,8 @@ pub impure fn main() -> i32 {
 
     printf("P6 800 800 255 ");
 
-    iter 0:799 y {
-        iter 0:799 x {
+    iter each y of 0:799 {
+        iter each x of 0:799 {
             let idx = x + (y * 800);
 
             if points->pixels[idx] == as<i8>(1) {

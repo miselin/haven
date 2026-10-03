@@ -1,0 +1,152 @@
+// A 2 -> 3 -> 1 sigmoid network, full-batch XOR, explicit backpropagation.
+cimport "stdio.h";
+cimport "stdlib.h";
+pub fn expf(float x) -> float intrinsic "llvm.exp" float;
+pub fn logf(float x) -> float intrinsic "llvm.log" float;
+data fvec2[4] INPUTS = { Vec<0.0, 0.0>, Vec<0.0, 1.0>, Vec<1.0, 0.0>, Vec<1.0, 1.0> };
+data fvec1[4] TARGETS = { Vec<0.0>, Vec<1.0>, Vec<1.0>, Vec<0.0> };
+type Network = struct { mat2x3 w1; fvec3 b1; mat3x1 w2; fvec1 b2; };
+type Cache = struct { fvec3 hidden; fvec1 output; float logit; };
+
+fn abs_value(float x) -> float = if x < 0.0 { -x } else { x };
+fn sum(fvec? v) -> float = fold each value of v with acc = 0.0 { acc + value };
+fn ones(fvec? v) = map each value of v { 1.0 };
+fn sigmoid(fvec? v) = map each value of v { 1.0 / (1.0 + expf(-value)) };
+fn dense(fvec? x, mat? w, fvec? b) {
+    @assert x.dim == w.rows, "dense input width";
+    @assert b.dim == w.cols, "dense output width";
+    x * w + b
+}
+fn transpose_into(mat? source, mat? destination) {
+    @assert source.rows == destination.cols, "transpose columns";
+    @assert source.cols == destination.rows, "transpose rows";
+    let mut result = destination;
+    iter each row of source indexed by r {
+        iter each value of row indexed by c { result[c][r] = value; };
+    };
+    result
+}
+fn outer_into(fvec? left, fvec? right, mat? destination) {
+    @assert left.dim == destination.rows, "outer product rows";
+    @assert right.dim == destination.cols, "outer product columns";
+    let mut result = destination;
+    iter each value of left indexed by r { result[r] = right * value; };
+    result
+}
+fn forward(Network n, fvec2 input) -> Cache {
+    let hidden = sigmoid(dense(input, n.w1, n.b1));
+    let logit = dense(hidden, n.w2, n.b2);
+    { hidden, sigmoid(logit), sum(logit) }
+}
+fn sample_loss(Network n, fvec2 input, fvec1 target) -> float {
+    let z = forward(n, input).logit;
+    let positive = if z > 0.0 { z } else { 0.0 };
+    positive + logf(1.0 + expf(-abs_value(z))) - sum(target) * z
+}
+fn loss(Network n) -> float {
+    let mut total = 0.0;
+    iter each input of INPUTS indexed by sample { total = total + sample_loss(n, input, TARGETS[sample]); };
+    total * 0.25
+}
+fn input_gradient(Network n, fvec2 input, fvec1 target) -> fvec2 {
+    let cache = forward(n, input);
+    let mat1x3 second_blank = zero;
+    let mat3x2 first_blank = zero;
+    let d2 = cache.output - target;
+    let d1 = (d2 * transpose_into(n.w2, second_blank)) * cache.hidden * (ones(cache.hidden) - cache.hidden);
+    d1 * transpose_into(n.w1, first_blank)
+}
+fn gradient(Network n) -> Network {
+    let mut Network g = zero;
+    let mat1x3 transposed = zero;
+    let wt = transpose_into(n.w2, transposed);
+    let mat2x3 first_blank = zero;
+    let mat3x1 second_blank = zero;
+    iter each input of INPUTS indexed by sample {
+        let cache = forward(n, input);
+        let d2 = cache.output - TARGETS[sample];
+        let d1 = (d2 * wt) * cache.hidden * (ones(cache.hidden) - cache.hidden);
+        g.w1 = g.w1 + outer_into(input, d1, first_blank) * 0.25;
+        g.b1 = g.b1 + d1 * 0.25;
+        g.w2 = g.w2 + outer_into(cache.hidden, d2, second_blank) * 0.25;
+        g.b2 = g.b2 + d2 * 0.25;
+    };
+    g
+}
+fn parameter(Network n, i32 index) -> float {
+    if index < 6 { n.w1[index / 3][index % 3] }
+    else { if index < 9 { n.b1[index - 6] }
+    else { if index < 12 { n.w2[index - 9][0] } else { n.b2[0] } } }
+}
+fn perturb(Network n, i32 index, float delta) -> Network {
+    let mut result = n;
+    if index < 6 { result.w1[index / 3][index % 3] = result.w1[index / 3][index % 3] + delta; }
+    else { if index < 9 { result.b1[index - 6] = result.b1[index - 6] + delta; }
+    else { if index < 12 { result.w2[index - 9][0] = result.w2[index - 9][0] + delta; }
+    else { result.b2[0] = result.b2[0] + delta; }; }; };
+    result
+}
+fn initialize(u32 seed) -> Network {
+    let mut rng_state = seed;
+    let mut Network result = zero;
+    iter each index of 0:12 {
+        rng_state = rng_state * 1664525 + 1013904223;
+        let value = as<float>(rng_state % 65536) / 32768.0 - 1.0;
+        result = perturb(result, as<i32>(index), value);
+    };
+    result
+}
+fn update(Network n, Network g) -> Network = { n.w1 - g.w1, n.b1 - g.b1, n.w2 - g.w2, n.b2 - g.b2 };
+pub impure fn main(i32 argc, str* argv) -> i32 {
+    let seed = if argc > 1 { as<u32>(atoi(argv[1])) } else { as<u32>(1337) };
+    let mut n = initialize(seed);
+    let analytic = gradient(n);
+    let mut maximum_error = 0.0;
+    iter each index of 0:12 {
+        let i = as<i32>(index);
+        let numeric = (loss(perturb(n, i, 0.01)) - loss(perturb(n, i, -0.01))) / 0.02;
+        let a = parameter(analytic, i);
+        let error = abs_value(a - numeric);
+        if error > maximum_error { maximum_error = error; };
+        printf("gradient %d %.9g %.9g\n", i, a, numeric);
+    };
+    printf("gradient_max_error %.9g\n", maximum_error);
+    if maximum_error > 0.00003 { ret 2; };
+    printf("gradient_bias_norm2 %.9g\n", sum(analytic.b1 * analytic.b1) + sum(analytic.b2 * analytic.b2));
+    let input = Vec<0.35, 0.65>;
+    let fvec1 target = fill 1.0;
+    let input_grad = input_gradient(n, input, target);
+    iter each axis of 0:1 {
+        let mut plus = input;
+        let mut minus = input;
+        plus[axis] = plus[axis] + 0.01;
+        minus[axis] = minus[axis] - 0.01;
+        let numeric = (sample_loss(n, plus, target) - sample_loss(n, minus, target)) / 0.02;
+        printf("input_gradient %d %.9g %.9g\n", as<i32>(axis), input_grad[axis], numeric);
+        if abs_value(numeric - input_grad[axis]) > 0.00003 { ret 5; };
+    };
+    printf("history %d %.9g\n", 0, loss(n));
+    iter each epoch of 1:20000 {
+        n = update(n, gradient(n));
+        if epoch == 1000 || epoch == 5000 || epoch == 10000 || epoch == 20000 {
+            printf("history %d %.9g\n", as<i32>(epoch), loss(n));
+        };
+    };
+    iter each sample of 0:3 {
+        let prediction = sum(forward(n, INPUTS[sample]).output);
+        printf("prediction %d %.9g\n", as<i32>(sample), prediction);
+        if abs_value(prediction - sum(TARGETS[sample])) > 0.01 { ret 3; };
+    };
+    iter each index of 0:12 { printf("parameter %d %.9g\n", as<i32>(index), parameter(n, as<i32>(index))); };
+    if loss(n) > 0.001 { ret 4; };
+    if argc > 2 {
+        iter each gy of 0:60 {
+            iter each gx of 0:60 {
+                let x = -0.25 + as<float>(gx) * 0.025;
+                let y = -0.25 + as<float>(gy) * 0.025;
+                printf("grid %d %d %.9g\n", as<i32>(gx), as<i32>(gy), sum(forward(n, Vec<x, y>).output));
+            };
+        };
+    };
+    0
+}

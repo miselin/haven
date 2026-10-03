@@ -16,7 +16,7 @@ fn vdot(fvec? a, fvec? b) -> float {
     let mult = a * b;
     let mut accum = 0.0;
 
-    iter 0:(a.dim - 1) i {
+    iter each i of 0:(a.dim - 1) {
         accum = accum + mult[i];
     };
 

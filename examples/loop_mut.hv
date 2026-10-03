@@ -1,7 +1,7 @@
 pub fn main() -> i32 {
     let mut i64 x = 0;
     // (((0 + 1) + 2) + 3) = 1 + 2 + 3 = 6
-    iter 0:4 i {
+    iter each i of 0:4 {
         x = x + i;
     };
     as<i32>(x)

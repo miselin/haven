@@ -1,0 +1,288 @@
+// Moving camera, three objects, camera-space near clipping and perspective-correct color.
+cimport "stdio.h";
+cimport "stdlib.h";
+pub fn sinf(float x) -> float intrinsic "llvm.sin" float;
+pub fn cosf(float x) -> float intrinsic "llvm.cos" float;
+pub fn sqrtf(float x) -> float intrinsic "llvm.sqrt" float;
+data i32 WIDTH = 480;
+data i32 HEIGHT = 360;
+data i32 FRAMES = 96;
+data fvec4[8] VERTICES = {
+    Vec<-1.0, -1.0, -1.0, 1.0>, Vec<1.0, -1.0, -1.0, 1.0>,
+    Vec<1.0, 1.0, -1.0, 1.0>, Vec<-1.0, 1.0, -1.0, 1.0>,
+    Vec<-1.0, -1.0, 1.0, 1.0>, Vec<1.0, -1.0, 1.0, 1.0>,
+    Vec<1.0, 1.0, 1.0, 1.0>, Vec<-1.0, 1.0, 1.0, 1.0>
+};
+data i32[36] INDICES = {
+    0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
+    0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5,
+    3, 7, 6, 3, 6, 2, 0, 1, 5, 0, 5, 4
+};
+data fvec3[6] COLORS = {
+    Vec<0.20, 0.75, 0.95>, Vec<0.18, 0.90, 0.72>,
+    Vec<0.55, 0.40, 0.95>, Vec<0.95, 0.45, 0.28>,
+    Vec<0.95, 0.78, 0.30>, Vec<0.35, 0.55, 0.95>
+};
+
+data float NEAR = 1.0;
+type Framebuffer = struct { u8[518400] pixels; float[172800] depth; };
+type Vertex = struct { fvec3 position; fvec3 color; };
+type Polygon = struct { Vertex[4] vertices; i32 count; };
+type Screen = struct { fvec3 xyq; fvec3 colorq; };
+type Stats = struct { i32 clipped; i32 rejected; i32 quads; i32 writes; i32 invalid; };
+fn xyz(fvec4 v) -> fvec3 = Vec<v.x, v.y, v.z>;
+fn point(fvec3 v) -> fvec4 = Vec<v.x, v.y, v.z, 1.0>;
+fn dot(fvec3 a, fvec3 b) -> float = fold each component of a * b with acc = 0.0 { acc + component };
+fn cross(fvec3 a, fvec3 b) -> fvec3 = Vec<(a.y * b.z - a.z * b.y), (a.z * b.x - a.x * b.z), (a.x * b.y - a.y * b.x)>;
+fn unit(fvec3 v) -> fvec3 = v / sqrtf(dot(v, v));
+fn abs_value(float v) -> float = if v < 0.0 { -v } else { v };
+fn min_value(float a, float b) -> float = if a < b { a } else { b };
+fn max_value(float a, float b) -> float = if a > b { a } else { b };
+fn clamp(float v) -> float = max_value(0.0, min_value(1.0, v));
+fn eye(float angle) -> fvec3 = Vec<(0.55 * sinf(angle)), (0.18 * cosf(angle)), (0.2 * sinf(angle))>;
+fn view(float angle) -> mat4x4 {
+    let origin = eye(angle);
+    let forward = unit(Vec<0.0, 0.1, 4.0> - origin);
+    let right = unit(cross(Vec<0.0, 1.0, 0.0>, forward));
+    let up = cross(forward, right);
+    Mat<Vec<right.x, up.x, forward.x, 0.0>, Vec<right.y, up.y, forward.y, 0.0>,
+        Vec<right.z, up.z, forward.z, 0.0>, Vec<-dot(origin, right), -dot(origin, up), -dot(origin, forward), 1.0>>
+}
+fn model(float angle, float scale, fvec3 center) -> mat4x4 {
+    let cx = cosf(0.4 + 0.3 * sinf(angle));
+    let sx = sinf(0.4 + 0.3 * sinf(angle));
+    let cy = cosf(angle);
+    let sy = sinf(angle);
+    let rx = Mat<Vec<1.0, 0.0, 0.0, 0.0>, Vec<0.0, cx, sx, 0.0>,
+                 Vec<0.0, -sx, cx, 0.0>, Vec<0.0, 0.0, 0.0, 1.0>>;
+    let ry = Mat<Vec<cy, 0.0, -sy, 0.0>, Vec<0.0, 1.0, 0.0, 0.0>,
+                 Vec<sy, 0.0, cy, 0.0>, Vec<0.0, 0.0, 0.0, 1.0>>;
+    let st = Mat<Vec<scale, 0.0, 0.0, 0.0>, Vec<0.0, scale, 0.0, 0.0>,
+                 Vec<0.0, 0.0, scale, 0.0>, Vec<center.x, center.y, center.z, 1.0>>;
+    rx * ry * st
+}
+fn vertex(fvec3 position, fvec3 color) -> Vertex = { position, color };
+fn intersection(Vertex a, Vertex b) -> Vertex {
+    let t = (NEAR - a.position.z) / (b.position.z - a.position.z);
+    let mut p = a.position + (b.position - a.position) * t;
+    // Pin the plane coordinate to avoid float32 roundoff reclassifying an intersection.
+    p.z = NEAR;
+    { p, a.color + (b.color - a.color) * t }
+}
+fn clip(Vertex a, Vertex b, Vertex c) -> Polygon {
+    let Vertex[3] input = { a, b, c };
+    let mut Polygon result = zero;
+    let mut previous = c;
+    iter each current of input {
+        if current.position.z >= NEAR {
+            if previous.position.z < NEAR {
+                result.vertices[result.count] = intersection(previous, current);
+                result.count = result.count + 1;
+            };
+            result.vertices[result.count] = current;
+            result.count = result.count + 1;
+        } else {
+            if previous.position.z >= NEAR {
+                result.vertices[result.count] = intersection(previous, current);
+                result.count = result.count + 1;
+            };
+        };
+        previous = current;
+    };
+    result
+}
+fn project(Vertex v) -> Screen {
+    let q = 1.0 / v.position.z;
+    { Vec<(240.0 + v.position.x * q * 270.0), (180.0 - v.position.y * q * 270.0), q>, v.color * q }
+}
+fn edge(fvec3 a, fvec3 b, float x, float y) -> float = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+fn top_left(fvec3 a, fvec3 b) -> i32 = if b.y < a.y || (b.y == a.y && b.x > a.x) { 1 } else { 0 };
+fn covered(float e, i32 inclusive) -> i32 = if e > 0.0 || (e == 0.0 && inclusive == 1) { 1 } else { 0 };
+impure fn triangle(Framebuffer* fb, Stats* stats, Screen a, Screen input_b, Screen input_c) -> void {
+    let mut b = input_b;
+    let mut c = input_c;
+    let mut area = edge(a.xyq, b.xyq, c.xyq.x, c.xyq.y);
+    if area < 0.0 { b = input_c; c = input_b; area = -area; };
+    if area > 0.0001 {
+        let left = as<i32>(max_value(0.0, min_value(a.xyq.x, min_value(b.xyq.x, c.xyq.x))));
+        let right = as<i32>(min_value(479.0, max_value(a.xyq.x, max_value(b.xyq.x, c.xyq.x)) + 1.0));
+        let top = as<i32>(max_value(0.0, min_value(a.xyq.y, min_value(b.xyq.y, c.xyq.y))));
+        let bottom = as<i32>(min_value(359.0, max_value(a.xyq.y, max_value(b.xyq.y, c.xyq.y)) + 1.0));
+        // An off-screen box can be empty. Do not enter an inclusive range with reversed bounds.
+        if left <= right && top <= bottom {
+            let e0 = top_left(b.xyq, c.xyq);
+            let e1 = top_left(c.xyq, a.xyq);
+            let e2 = top_left(a.xyq, b.xyq);
+            iter each y of top:bottom {
+                iter each x of left:right {
+                    let px = as<float>(x) + 0.5;
+                    let py = as<float>(y) + 0.5;
+                    let w0 = edge(b.xyq, c.xyq, px, py);
+                    let w1 = edge(c.xyq, a.xyq, px, py);
+                    let w2 = edge(a.xyq, b.xyq, px, py);
+                    if covered(w0, e0) == 1 && covered(w1, e1) == 1 && covered(w2, e2) == 1 {
+                        let weights = Vec<(w0 / area), (w1 / area), (w2 / area)>;
+                        let q = dot(weights, Vec<a.xyq.z, b.xyq.z, c.xyq.z>);
+                        let offset = y * WIDTH + x;
+                        if q > fb->depth[offset] {
+                            let color = (a.colorq * weights.x + b.colorq * weights.y + c.colorq * weights.z) / q;
+                            fb->depth[offset] = q;
+                            fb->pixels[offset * 3] = as<u8>(clamp(color.x) * 255.0);
+                            fb->pixels[offset * 3 + 1] = as<u8>(clamp(color.y) * 255.0);
+                            fb->pixels[offset * 3 + 2] = as<u8>(clamp(color.z) * 255.0);
+                            stats->writes = stats->writes + 1;
+                        };
+                    };
+                };
+            };
+        };
+    };
+}
+impure fn clip_draw(Framebuffer* fb, Stats* stats, Vertex a, Vertex b, Vertex c) -> void {
+    if a.position.z < NEAR || b.position.z < NEAR || c.position.z < NEAR { stats->clipped = stats->clipped + 1; };
+    let poly = clip(a, b, c);
+    if poly.count == 0 { stats->rejected = stats->rejected + 1; };
+    if poly.count == 4 { stats->quads = stats->quads + 1; };
+    if poly.count >= 3 {
+        iter each i of 0:(poly.count - 1) {
+            let p = poly.vertices[i].position;
+            if p.z < NEAR || p.x != p.x || p.y != p.y || p.z != p.z || abs_value(p.x) > 1000000.0 || abs_value(p.y) > 1000000.0 || abs_value(p.z) > 1000000.0 {
+                stats->invalid = stats->invalid + 1;
+            };
+        };
+        iter each i of 1:(poly.count - 2) { triangle(fb, stats, project(poly.vertices[0]), project(poly.vertices[i]), project(poly.vertices[i + 1])); };
+    };
+}
+impure fn clear(Framebuffer* fb) -> void {
+    iter each y of 0:(HEIGHT - 1) {
+        iter each x of 0:(WIDTH - 1) {
+            let offset = y * WIDTH + x;
+            fb->depth[offset] = 0.0;
+            fb->pixels[offset * 3] = as<u8>(12 + y / 36);
+            fb->pixels[offset * 3 + 1] = as<u8>(20 + y / 24);
+            fb->pixels[offset * 3 + 2] = as<u8>(34 + y / 18);
+        };
+    };
+}
+impure fn object(Framebuffer* fb, Stats* stats, mat4x4 m, mat4x4 camera, i32 palette_shift) -> void {
+    let mv = m * camera;
+    iter each face of 0:11 {
+        let va = VERTICES[INDICES[face * 3]];
+        let vb = VERTICES[INDICES[face * 3 + 1]];
+        let vc = VERTICES[INDICES[face * 3 + 2]];
+        let normal = unit(cross(xyz((vb - va) * m), xyz((vc - va) * m)));
+        let light = 0.25 + 0.75 * abs_value(dot(normal, Vec<0.35, 0.65, -0.675>));
+        let base = COLORS[(face / 2 + palette_shift) % 6] * light;
+        let ca = base * (Vec<0.6, 0.6, 0.6> + xyz(va) * 0.2);
+        let cb = base * (Vec<0.6, 0.6, 0.6> + xyz(vb) * 0.2);
+        let cc = base * (Vec<0.6, 0.6, 0.6> + xyz(vc) * 0.2);
+        clip_draw(fb, stats, vertex(xyz(va * mv), ca), vertex(xyz(vb * mv), cb), vertex(xyz(vc * mv), cc));
+    };
+}
+impure fn render(Framebuffer* fb, Stats* stats, float angle) -> void {
+    clear(fb);
+    let camera = view(angle);
+    object(fb, stats, model(angle, 0.7, Vec<-1.15, 0.1, 4.6>), camera, 0);
+    object(fb, stats, model(-angle + 0.7, 0.85, Vec<1.25, 0.25, 5.1>), camera, 2);
+    object(fb, stats, model(angle * 2.0, 0.42, Vec<-0.35, -0.28, (1.2 + 0.4 * cosf(angle))>), camera, 4);
+}
+fn fixture(i32 kind) -> Polygon {
+    let mut a = vertex(Vec<-0.3, -0.2, 2.0>, Vec<1.0, 0.0, 0.0>);
+    let mut b = vertex(Vec<0.5, -0.2, 3.0>, Vec<0.0, 1.0, 0.0>);
+    let mut c = vertex(Vec<0.0, 0.6, 4.0>, Vec<0.0, 0.0, 1.0>);
+    if kind == 1 || kind == 2 || kind == 3 || kind == 6 { a.position.z = 0.5; };
+    if kind == 2 || kind == 3 || kind == 6 { b.position.z = 0.5; };
+    if kind == 3 { c.position.z = 0.5; };
+    if kind == 4 { a.position.z = 1.0; b.position.z = 1.0; c.position.z = 1.0; };
+    if kind == 5 { a.position.z = 1.0; b.position.z = 0.5; c.position.z = 2.0; };
+    if kind == 6 { c.position.z = 2.0; };
+    if kind == 7 { a.position.z = -1.0; b.position.z = 0.0; c.position.z = -0.5; };
+    if kind == 8 { b.position = a.position; };
+    let mut Polygon result = zero;
+    result.vertices[0] = a; result.vertices[1] = b; result.vertices[2] = c; result.count = 3;
+    result
+}
+impure fn checks() -> i32 {
+    iter each kind of 0:8 {
+        let t = fixture(as<i32>(kind));
+        let p = clip(t.vertices[0], t.vertices[1], t.vertices[2]);
+        printf("clip %d %d\n", as<i32>(kind), p.count);
+        if p.count < 0 || p.count > 4 { ret 2; };
+        if p.count > 0 {
+            iter each i of 0:(p.count - 1) {
+                let v = p.vertices[i];
+                printf("vertex %d %d %.9g %.9g %.9g %.9g %.9g %.9g\n", as<i32>(kind), as<i32>(i), v.position.x, v.position.y, v.position.z, v.color.x, v.color.y, v.color.z);
+                if v.position.z < NEAR { ret 3; };
+            };
+        };
+    };
+    iter each frame of 0:95 {
+        let angle = as<float>(frame) * 6.283185307 / 96.0;
+        let camera = view(angle);
+        let e = point(eye(angle)) * camera;
+        let t = Vec<0.0, 0.1, 4.0, 1.0> * camera;
+        printf("camera %d %.9g %.9g %.9g %.9g %.9g %.9g\n", as<i32>(frame), e.x, e.y, e.z, t.x, t.y, t.z);
+        if abs_value(e.x) > 0.000002 || abs_value(e.y) > 0.000002 || abs_value(e.z) > 0.000002 || abs_value(t.x) > 0.000002 || abs_value(t.y) > 0.000002 || t.z <= 0.0 { ret 4; };
+    };
+    0
+}
+fn screen_vertex(float x, float y, float z, fvec3 color) -> Vertex = { Vec<((x - 240.0) * z / 270.0), ((180.0 - y) * z / 270.0), z>, color };
+impure fn fixture_render(Framebuffer* fb, Stats* stats, i32 kind) -> void {
+    clear(fb);
+    let a = screen_vertex(180.0, 110.0, 2.0, Vec<1.0, 0.0, 0.0>);
+    let b = screen_vertex(320.0, 130.0, 4.0, Vec<0.0, 1.0, 0.0>);
+    let c = screen_vertex(230.0, 270.0, 3.0, Vec<0.0, 0.0, 1.0>);
+    let d = screen_vertex(170.0, 100.0, 5.0, Vec<0.9, 0.8, 0.1>);
+    let e = screen_vertex(330.0, 140.0, 5.0, Vec<0.9, 0.8, 0.1>);
+    let f = screen_vertex(225.0, 280.0, 5.0, Vec<0.9, 0.8, 0.1>);
+    if kind == 0 { clip_draw(fb, stats, a, b, c); clip_draw(fb, stats, d, e, f); };
+    if kind == 1 { clip_draw(fb, stats, d, e, f); clip_draw(fb, stats, a, b, c); };
+    if kind >= 2 && kind <= 5 {
+        let fixture_kind = if kind == 2 { 1 } else { if kind == 3 { 2 } else { if kind == 4 { 3 } else { 4 } } };
+        let t = fixture(fixture_kind);
+        clip_draw(fb, stats, t.vertices[0], t.vertices[1], t.vertices[2]);
+    };
+    if kind == 6 {
+        let color = Vec<0.6, 0.8, 0.2>;
+        let p0 = screen_vertex(200.0, 140.0, 2.0, color);
+        let p1 = screen_vertex(280.0, 140.0, 2.0, color);
+        let p2 = screen_vertex(280.0, 220.0, 2.0, color);
+        let p3 = screen_vertex(200.0, 220.0, 2.0, color);
+        clip_draw(fb, stats, p0, p1, p2); clip_draw(fb, stats, p0, p2, p3);
+    };
+    if kind == 7 {
+        clip_draw(fb, stats, screen_vertex(600.0, 150.0, 2.0, Vec<1.0, 0.0, 0.0>),
+                  screen_vertex(650.0, 150.0, 2.0, Vec<0.0, 1.0, 0.0>),
+                  screen_vertex(600.0, 250.0, 2.0, Vec<0.0, 0.0, 1.0>));
+    };
+    if kind == 8 { clip_draw(fb, stats, a, a, b); };
+    if kind == 9 { let t = fixture(7); clip_draw(fb, stats, t.vertices[0], t.vertices[1], t.vertices[2]); };
+
+}
+impure fn validate_depth(Framebuffer* fb) -> i32 {
+    iter each i of 0:172799 {
+        let q = fb->depth[i];
+        if q != q || q < 0.0 || q > 1.000002 { ret 1; };
+    };
+    0
+}
+impure fn emit(Framebuffer* fb, Stats stats, i32 frame) -> void {
+    printf("P6\n# frame %d clipped %d rejected %d quads %d writes %d invalid %d\n%d %d\n255\n", frame, stats.clipped, stats.rejected, stats.quads, stats.writes, stats.invalid, WIDTH, HEIGHT);
+    iter each i of 0:518399 { putchar(as<i32>(fb->pixels[i])); };
+}
+pub impure fn main(i32 argc, str* argv) -> i32 {
+    let mode = if argc > 1 { atoi(argv[1]) } else { 0 };
+    if mode == 1 { ret checks(); };
+    let fb = as<Framebuffer*>(malloc(size<Framebuffer>));
+    if fb == nil { ret 1; };
+    defer { free(as<void*>(fb)); };
+    let count = if mode == 2 { 10 } else { FRAMES };
+    iter each frame of 0:(count - 1) {
+        let mut Stats stats = zero;
+        if mode == 2 { fixture_render(fb, ref stats, as<i32>(frame)); }
+        else { render(fb, ref stats, as<float>(frame) * 6.283185307 / as<float>(FRAMES)); };
+        if stats.invalid != 0 || validate_depth(fb) != 0 { ret 5; };
+        emit(fb, stats, as<i32>(frame));
+    };
+    0
+}

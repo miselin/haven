@@ -1,3 +1,4 @@
+// Maintained OCaml syntax summary; src/lib/parser/grammar.mly is authoritative.
 start ::= module
 
 module ::= top_decl+
@@ -23,7 +24,7 @@ fn_decl ::= fn_definition
 
 fn_intrinsic_decl ::= fn_header fn_intrinsic ';'
 fn_forward_decl ::= fn_header ';'
-fn_definition ::= fn_header block
+fn_definition ::= fn_header (block | '=' expr ';')
 
 fn_header ::= visibility? fn_purity 'fn' IDENT '(' params? ')' return_type?
 fn_purity ::= 'impure'?
@@ -85,7 +86,9 @@ typed_binding ::= type IDENT '=' expr
 
 ret_stmt ::= 'ret' expr?
 defer_stmt ::= 'defer' expr
-iter_stmt ::= 'iter' iter_range IDENT block
+iter_stmt ::= 'iter' 'each' IDENT 'of' ( iter_range | expr ( 'indexed' 'by' IDENT )? ) block
+// Legacy iter_range IDENT and expr IDENT (',' IDENT)? remain accepted.
+// indexed/by are contextual identifiers; the formatter emits the canonical form.
 iter_range ::= expr ':' expr (':' expr)?
 while_stmt ::= 'while' expr block
 break_stmt ::= 'break'
@@ -115,7 +118,7 @@ equality_operator ::= '==' | '!='
 
 unary ::= unary_prefix unary
        | primary postfix_part*
-unary_prefix ::= '!' | '-' | '~' | 'load' | 'unbox' | 'ref' | 'box'
+unary_prefix ::= '!' | '-' | '~' | 'load' | 'unbox' | 'ref' | 'box' | 'fill'
 
 postfix_part ::= '(' args? ')'
               | '[' expr ']'
@@ -127,6 +130,8 @@ args ::= expr (',' expr)*
 primary ::= literal
          | enum_variant_literal
          | block
+         | fold_expr
+         | map_expr
          | '(' expr ')'
          | initializer
          | if_expr
@@ -134,6 +139,7 @@ primary ::= literal
          | as_expr
          | size_expr
          | 'nil'
+         | 'zero'
          | IDENT
 
 as_expr ::= 'as' '<' type '>' '(' expr ')'
@@ -152,6 +158,10 @@ vec_literal_tail ::= ',' unary (',' unary)*
 
 initializer ::= '{' initializer_list '}'
 initializer_list ::= expr (',' expr)*
+
+map_expr ::= 'map' 'each' IDENT 'of' expr ('indexed' 'by' IDENT)? block
+
+fold_expr ::= 'fold' 'each' IDENT 'of' expr 'with' binding block
 
 if_expr ::= 'if' expr block ( 'else' ( if_expr | block ) )?
 

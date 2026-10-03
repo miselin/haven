@@ -31,17 +31,12 @@ type Framebuffer = struct {
     float[172800] depth;
 };
 
-fn dot(fvec3 a, fvec3 b) -> float {
-    let p = a * b;
-    p.x + p.y + p.z
-}
-fn cross(fvec3 a, fvec3 b) -> fvec3 {
-    Vec<(a.y * b.z - a.z * b.y), (a.z * b.x - a.x * b.z), (a.x * b.y - a.y * b.x)>
-}
-fn xyz(fvec4 v) -> fvec3 { Vec<v.x, v.y, v.z> }
-fn min(float a, float b) -> float { if a < b { a } else { b } }
-fn max(float a, float b) -> float { if a > b { a } else { b } }
-fn abs_value(float a) -> float { if a < 0.0 { -a } else { a } }
+fn dot(fvec3 a, fvec3 b) -> float = fold each component of a * b with acc = 0.0 { acc + component };
+fn cross(fvec3 a, fvec3 b) -> fvec3 = Vec<(a.y * b.z - a.z * b.y), (a.z * b.x - a.x * b.z), (a.x * b.y - a.y * b.x)>;
+fn xyz(fvec4 v) -> fvec3 = Vec<v.x, v.y, v.z>;
+fn min(float a, float b) -> float = if a < b { a } else { b };
+fn max(float a, float b) -> float = if a > b { a } else { b };
+fn abs_value(float a) -> float = if a < 0.0 { -a } else { a };
 
 // Row-vector convention: v * Rx * Ry * translation * projection.
 fn rotation(float angle) -> mat4x4 {
@@ -69,9 +64,7 @@ fn project(fvec4 v, mat4x4 mvp) -> fvec3 {
     Vec<(240.0 + clip.x * inv_z * 240.0),
         (180.0 - clip.y * inv_z * 180.0), inv_z>
 }
-fn edge(fvec3 a, fvec3 b, float x, float y) -> float {
-    (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)
-}
+fn edge(fvec3 a, fvec3 b, float x, float y) -> float = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
 
 impure fn triangle(Framebuffer *fb, fvec3 a, fvec3 b, fvec3 c, fvec3 color) -> void {
     let area = edge(a, b, c.x, c.y);
@@ -80,8 +73,8 @@ impure fn triangle(Framebuffer *fb, fvec3 a, fvec3 b, fvec3 c, fvec3 color) -> v
         let right = as<i32>(min(479.0, max(a.x, max(b.x, c.x)) + 1.0));
         let top = as<i32>(max(0.0, min(a.y, min(b.y, c.y))));
         let bottom = as<i32>(min(359.0, max(a.y, max(b.y, c.y)) + 1.0));
-        iter top:bottom y {
-            iter left:right x {
+        iter each y of top:bottom {
+            iter each x of left:right {
                 let px = as<float>(x) + 0.5;
                 let py = as<float>(y) + 0.5;
                 let wa = edge(b, c, px, py) / area;
@@ -103,8 +96,8 @@ impure fn triangle(Framebuffer *fb, fvec3 a, fvec3 b, fvec3 c, fvec3 color) -> v
 }
 
 impure fn render(Framebuffer *fb, float angle) -> void {
-    iter 0:(HEIGHT - 1) y {
-        iter 0:(WIDTH - 1) x {
+    iter each y of 0:(HEIGHT - 1) {
+        iter each x of 0:(WIDTH - 1) {
             let offset = y * WIDTH + x;
             fb->depth[offset] = 0.0;
             fb->pixels[offset * 3] = as<u8>(12 + y / 36);
@@ -114,7 +107,7 @@ impure fn render(Framebuffer *fb, float angle) -> void {
     };
     let model = rotation(angle);
     let mvp = projection(model);
-    iter 0:11 face {
+    iter each face of 0:11 {
         let va = VERTICES[INDICES[face * 3]];
         let vb = VERTICES[INDICES[face * 3 + 1]];
         let vc = VERTICES[INDICES[face * 3 + 2]];
@@ -128,11 +121,11 @@ pub impure fn main() -> i32 {
     let framebuffer = as<Framebuffer*>(malloc(size<Framebuffer>));
     if framebuffer == nil { ret 1; };
     defer { free(as<void*>(framebuffer)); };
-    iter 0:(FRAMES - 1) frame {
+    iter each frame of 0:(FRAMES - 1) {
         let angle = as<float>(frame) * 6.283185307 / as<float>(FRAMES);
         render(framebuffer, angle);
         printf("P6\n%d %d\n255\n", WIDTH, HEIGHT);
-        iter 0:518399 i { putchar(as<i32>(framebuffer->pixels[i])); };
+        iter each i of 0:518399 { putchar(as<i32>(framebuffer->pixels[i])); };
     };
     0
 }
