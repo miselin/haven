@@ -262,7 +262,9 @@ let compile_case_to_object ~source ~output_path opt_level =
 let link_case_executable ~harness_obj ~sut_obj ~output_path =
   let linker_args =
     [ harness_obj; sut_obj ]
-    @ (if Platform_defaults_common.is_linux_host () then [ "-no-pie" ] else [])
+    (* LLVM math intrinsics may lower to libm calls, especially at O0. *)
+    @ (if Platform_defaults_common.is_linux_host () then [ "-no-pie"; "-lm" ]
+       else [])
     @ [ "-o"; output_path ]
   in
   let result = run_command_capture ~prog:"cc" ~args:linker_args in

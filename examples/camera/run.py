@@ -88,7 +88,7 @@ def main():
     reports=[];executables={};fixture_hashes=None
     for opt in OPTS:
         exe=output/('camera-'+opt);executables[opt]=exe
-        subprocess.run([str(args.compiler.resolve()),'--'+opt,str(here/'camera.hv'),'-o',str(exe)],check=True)
+        subprocess.run([str(args.compiler.resolve()),'--'+opt,str(here/'camera.hv'), '--Xl', '-lm','-o',str(exe)],check=True)
         math_report=check_math(exe);frames=list(ppm(io.BytesIO(subprocess.check_output([str(exe),'2']))));assert len(frames)==10
         assert frames[0][1]==frames[1][1], 'depth must be independent of draw order'
         assert all(frames[k][1]==reference.background() and frames[k][0]['writes']==0 for k in (4,7,8,9))

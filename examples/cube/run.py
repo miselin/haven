@@ -27,7 +27,7 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     executable = output / 'cube'
-    subprocess.run([str(args.compiler.resolve()), '--O2', str(root / 'examples/cube/cube.hv'),
+    subprocess.run([str(args.compiler.resolve()), '--O2', str(root / 'examples/cube/cube.hv'), '--Xl', '-lm',
                     '-o', str(executable)], check=True)
     frames = []
     hashes = []

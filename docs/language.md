@@ -385,6 +385,8 @@ cimport "stdio.h";
 When introducing dependencies on external libraries, you may opt to use the `--Xl -lm` style of command line
 flag to present the correct libraries for linking.
 
+LLVM math intrinsics such as `llvm.exp`, `llvm.sin` and `llvm.cos` may lower to system math functions. On Linux, link `libm` explicitly with `--Xl -lm`; the maintained demo runners do so.
+
 Alternatively, Haven offers the `foreign` declaration to simplify this end-to-end:
 
 ```

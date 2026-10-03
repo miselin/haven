@@ -25,3 +25,5 @@ Single-expression helpers now use `fn … = expression;` with unchanged eager ev
 Natural reductions now use `fold each value of source with acc = 0.0 { acc + value }`. The source snapshot runs first, then the seed once; each eager body result supplies the next accumulator. Bindings are immutable, empty fixed arrays return the seed, and fold bodies reject `break`, `continue` and `ret`. An annotation follows ordinary type-first bindings, such as `with float acc = 0.0`. The classifier sum is shape-generic; camera and cube dot products fold the component-wise product. See `docs/language.md` for semantics and limits.
 
 `ones` and `sigmoid` use eager shape-preserving `map`; the gradient-check target uses contextual `fill`. `sum` keeps `fold … with`. Map bodies return one scalar per vector lane; a matrix map visits rows, with nested maps for cell transforms.
+
+The runner links the system math library explicitly (`--Xl -lm`), since LLVM trigonometric/exponential intrinsics may become `libm` calls on Linux, including at O0.

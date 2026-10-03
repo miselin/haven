@@ -80,7 +80,7 @@ def main():
     refs = {seed: reference.train(seed) for seed in SEEDS}
     for opt in OPTS:
         exe = output/('classifier-'+opt)
-        subprocess.run([str(args.compiler.resolve()), '--'+opt, str(here/'classifier.hv'), '-o', str(exe)], check=True)
+        subprocess.run([str(args.compiler.resolve()), '--'+opt, str(here/'classifier.hv'), '--Xl', '-lm', '-o', str(exe)], check=True)
         for seed in SEEDS:
             start = time.perf_counter()
             run = subprocess.run([str(exe),str(seed),'grid'], capture_output=True,text=True,check=True)
